@@ -33,7 +33,7 @@ export class AuditLogsController {
   constructor(private readonly auditLogsService: AuditLogsService) {}
 
   @Get()
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.OWNER)
   @Permissions('audit:read')
   @ApiOperation({ summary: 'Get all audit logs with filtering and pagination' })
   @ApiResponse({ status: 200, description: 'Audit logs retrieved successfully' })
@@ -43,7 +43,7 @@ export class AuditLogsController {
   }
 
   @Get('statistics')
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.OWNER)
   @Permissions('audit:read')
   @ApiOperation({ summary: 'Get audit log statistics' })
   @ApiResponse({ status: 200, description: 'Statistics retrieved successfully' })
@@ -55,7 +55,7 @@ export class AuditLogsController {
   }
 
   @Get('export')
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.OWNER)
   @Permissions('audit:export')
   @ApiOperation({ summary: 'Export audit logs' })
   @ApiResponse({ status: 200, description: 'Logs exported successfully' })
@@ -68,7 +68,7 @@ export class AuditLogsController {
   }
 
   @Get('export/json')
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.OWNER)
   @Permissions('audit:export')
   @ApiOperation({ summary: 'Export audit logs as JSON' })
   @ApiResponse({ status: 200, description: 'Logs exported successfully' })
@@ -77,7 +77,7 @@ export class AuditLogsController {
   }
 
   @Get('entity/:entity/:entityId')
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.DOCTOR)
+  @Roles(UserRole.ADMIN, UserRole.OWNER, UserRole.DOCTOR)
   @Permissions('audit:read')
   @ApiOperation({ summary: 'Get audit logs for a specific entity' })
   @ApiResponse({ status: 200, description: 'Entity audit logs retrieved' })
@@ -89,7 +89,7 @@ export class AuditLogsController {
   }
 
   @Get('user/:userId')
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.OWNER)
   @Permissions('audit:read')
   @ApiOperation({ summary: 'Get audit logs for a specific user' })
   @ApiResponse({ status: 200, description: 'User audit logs retrieved' })
@@ -111,7 +111,7 @@ export class AuditLogsController {
   }
 
   @Get(':id')
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.OWNER)
   @Permissions('audit:read')
   @ApiOperation({ summary: 'Get a specific audit log by ID' })
   @ApiResponse({ status: 200, description: 'Audit log retrieved' })

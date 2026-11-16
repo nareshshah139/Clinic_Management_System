@@ -30,7 +30,7 @@ export function PurchaseHelp({ label, children }: { label: string; children: Rea
 
 export function PurchaseStatusCue({ tone = "neutral", children }: { tone?: "neutral" | "warning" | "success"; children: ReactNode }) {
   const Icon = tone === "success" ? CheckCircle2 : tone === "warning" ? AlertTriangle : CircleDashed;
-  return <span className={`inline-flex items-center gap-2 text-sm font-medium ${tone === "success" ? "text-green-800 dark:text-green-300" : tone === "warning" ? "text-amber-800 dark:text-amber-300" : "text-muted-foreground"}`}>
+  return <span className={`inline-flex items-center gap-2 text-sm font-medium ${tone === "success" ? "text-success-text dark:text-success-text" : tone === "warning" ? "text-warning-text dark:text-warning-text" : "text-muted-foreground"}`}>
     <Icon aria-hidden="true" className="h-4 w-4 shrink-0" />{children}
   </span>;
 }

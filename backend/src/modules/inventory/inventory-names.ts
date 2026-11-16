@@ -1,3 +1,4 @@
+import { formatMedicineName, type MedicineNameFields } from '@cms/shared-types/medicine-name';
 export function inventoryNameAliases(metadata: Record<string, any>): string[] {
   const aliases = metadata.nameNormalization?.aliases;
   return Array.isArray(aliases) ? aliases.filter((v): v is string => typeof v === 'string' && !!v.trim()) : [];
@@ -7,13 +8,13 @@ export function inventoryNameAliases(metadata: Record<string, any>): string[] {
  * @cc [owner:nareshshah139,label:product] inventory-reviewed-name-is-presentation
  * An explicitly reviewed inventory name MUST be displayed. Naming MUST NOT establish product
  * identity, combine batches, change selling units, or rename the drug catalogue. Loose
- * tablet/capsule labels MUST remain visible.
+ * dispensing settings MUST remain stored separately from patient-facing names.
  */
-export function inventoryProductName(item: { name: string; drugs?: { name: string }[] }, metadata: Record<string, any>): string {
-  const linkedName = item.drugs?.length === 1 ? item.drugs[0].name : undefined;
-  if (metadata.nameNormalization?.version !== 1) return linkedName || item.name;
-  const looseLabel = linkedName?.match(/ \(loose (?:tablets|capsules)\)$/i)?.[0];
-  return item.name + (looseLabel && !/\(loose (?:tablets|capsules)\)$/i.test(item.name) ? looseLabel : '');
+export function inventoryProductName(item: MedicineNameFields & { name: string; drugs?: ({ name: string } & MedicineNameFields)[] }, metadata: Record<string, any>): string {
+  const drug = item.drugs?.length === 1 ? item.drugs[0] : undefined;
+  const reviewed = metadata.nameNormalization?.version === 1;
+  const name = reviewed ? item.name : drug?.name || item.name;
+  return formatMedicineName(name, reviewed ? { ...item, brandName: undefined } : item.brandName ? item : drug || item);
 }
 
 export function retainPreviousInventoryName(metadata: Record<string, any>, previousName: string): void {

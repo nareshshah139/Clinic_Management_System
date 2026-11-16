@@ -6,6 +6,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { PrismaService } from '../../shared/database/prisma.service';
+import { appointmentBillingInclude, withAppointmentBilling } from './appointment-billing';
 import {
   CreateAppointmentDto,
   RescheduleAppointmentDto,
@@ -348,6 +349,7 @@ export class AppointmentsService {
       this.prisma.appointment.findMany({
         where,
         include: {
+          ...appointmentBillingInclude(branchId),
           patient: {
             select: { id: true, name: true, phone: true, gender: true },
           },
@@ -368,7 +370,7 @@ export class AppointmentsService {
     ]);
 
     return {
-      appointments,
+      appointments: appointments.map(withAppointmentBilling),
       pagination: {
         total,
         page,
@@ -414,6 +416,11 @@ export class AppointmentsService {
     return appointment;
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product] appointment-edit-conflict-check
+   * Room changes and reactivation MUST reject observed doctor or room overlaps in the branch,
+   * excluding the appointment being edited; unrelated edits need no schedule check.
+   */
   async update(
     id: string,
     updateAppointmentDto: UpdateAppointmentDto,
@@ -434,6 +441,16 @@ export class AppointmentsService {
       if (!room) {
         throw new NotFoundException('Room not found or inactive');
       }
+    }
+
+    const roomId = updateAppointmentDto.roomId !== undefined ? updateAppointmentDto.roomId : appointment.roomId;
+    const nextStatus = updateAppointmentDto.status ?? appointment.status;
+    const roomChanged = updateAppointmentDto.roomId !== undefined && updateAppointmentDto.roomId !== appointment.roomId;
+    const reactivating = appointment.status === AppointmentStatus.CANCELLED && nextStatus !== AppointmentStatus.CANCELLED;
+    if (nextStatus !== AppointmentStatus.CANCELLED && (roomChanged || reactivating)) {
+      const date = new Date(appointment.date).toISOString().slice(0, 10);
+      const conflicts = await this.checkSchedulingConflicts(appointment.doctorId, roomId ?? null, date, appointment.slot, branchId, id);
+      if (conflicts.length > 0) throw new ConflictException({ message: 'Scheduling conflict detected', conflicts });
     }
 
     const updatedAppointment = await this.prisma.appointment.update({
@@ -791,9 +808,7 @@ export class AppointmentsService {
         room: {
           select: { id: true, name: true, type: true },
         },
-        visit: {
-          select: { id: true },
-        },
+        ...appointmentBillingInclude(branchId),
       },
       orderBy: {
         slot: 'asc',
@@ -804,7 +819,7 @@ export class AppointmentsService {
       doctorId,
       doctorName: `${doctor.firstName} ${doctor.lastName}`.trim(),
       date,
-      appointments,
+      appointments: appointments.map(withAppointmentBilling),
     };
   }
 
@@ -837,9 +852,7 @@ export class AppointmentsService {
         doctor: {
           select: { id: true, firstName: true, lastName: true },
         },
-        visit: {
-          select: { id: true },
-        },
+        ...appointmentBillingInclude(branchId),
       },
       orderBy: {
         slot: 'asc',
@@ -851,7 +864,7 @@ export class AppointmentsService {
       roomName: room.name,
       roomType: room.type,
       date,
-      appointments,
+      appointments: appointments.map(withAppointmentBilling),
     };
   }
 

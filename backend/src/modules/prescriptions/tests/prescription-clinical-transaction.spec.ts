@@ -78,7 +78,7 @@ describe('Saved clinical details in history', () => {
     const full = { ...payload, followUpInstructions: 'Full guidance', clinicalData: {
       ...payload.clinicalData,
       complaints: [{ complaint: 'First complaint' }, { complaint: 'Second complaint' }],
-      history: { pastHistory: 'Detailed past history', medicationHistory: 'Prior medicines', menstrualHistory: 'Recorded detail', triggers: 'New trigger', priorTreatments: 'Prior treatment' },
+      history: { pastHistory: 'Detailed past history', personalHistory: 'Diet, sleep, habits, occupation and products', medicationHistory: 'Prior medicines', menstrualHistory: 'Recorded detail', triggers: 'New trigger', priorTreatments: 'Prior treatment' },
       examination: { generalAppearance: 'Observed finding', dermatology: { skinType: 'III', morphology: ['Finding'] } },
       treatmentPlan: { investigations: ['Investigation'], finalNotes: 'Final detail', followUpDate: '2026-10-01', dermatology: { medicationPlan: [{ drugName: 'Draft medicine' }] } },
       scribeJson: { customSections: [{ title: 'Additional note', content: 'Full custom detail' }] },

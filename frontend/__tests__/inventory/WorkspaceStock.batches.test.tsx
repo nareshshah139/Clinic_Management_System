@@ -14,7 +14,7 @@ it('defaults to all batches, colors depleted history and keeps the existing sear
   expect(apiClient.get).toHaveBeenCalledWith(expect.stringContaining('batchView=ALL'));
   expect(screen.getAllByText('100 Gm')).toHaveLength(2);
   expect(screen.getByText('Old batch').closest('tr')).toHaveClass('bg-muted/60');
-  expect(screen.getByText('Max Rich Yu Cream').closest('tr')).toHaveClass('bg-emerald-50/60');
+  expect(screen.getByText('Max Rich Yu Cream').closest('tr')).toHaveClass('bg-success-soft/60');
   fireEvent.click(screen.getByRole('button', { name: 'Previous / depleted' }));
   expect(props.navigate).toHaveBeenCalledWith(expect.objectContaining({ batchView: 'EMPTY', page: '1' }));
   expect(props.navigate.mock.calls[0][0]).not.toHaveProperty('search');
@@ -34,4 +34,29 @@ it('preserves explicit low/zero-stock deep links rather than hiding their result
   render(<WorkspaceStock {...props} query={{ stock: 'ZERO' }} />);
   await screen.findByText('Max Rich Yu Cream');
   expect(apiClient.get).toHaveBeenCalledWith(expect.stringContaining('batchView=ALL'));
+});
+it('defaults an applied search to best match and explains typo suggestions without replacing the query', async () => {
+  (apiClient.get as jest.Mock).mockResolvedValue({...result,rows:[{...result.rows[0],searchMatch:{kind:'fuzzy',corrections:['maxrcih → maxrich']}}]});
+  render(<WorkspaceStock {...props} query={{search:'maxrcih'}}/>);
+  await screen.findByText('Similar spelling: maxrcih → maxrich');
+  expect(screen.getByDisplayValue('maxrcih')).toBeInTheDocument();
+  expect(screen.getByRole('combobox',{name:'Sort'})).toHaveValue('relevance');
+  fireEvent.change(screen.getByRole('combobox',{name:'Sort'}),{target:{value:'name'}});
+  expect(props.navigate).toHaveBeenCalledWith({sortBy:'name',page:'1',item:''});
+});
+
+it('shows an unverified ledger and submits confirmed identity recovery with its revision', async () => {
+  const item = { ...result.rows[0], metadata: {}, updatedAt: '2026-10-24T00:00:00.000Z', drugs: [{ id: 'correct', name: 'Verified cream' }, { id: 'wrong', name: 'Other cream' }] };
+  (apiClient.get as jest.Mock).mockResolvedValue({ item, batches: [item], movements: [], history: [], purchases: [], holds: [], ledger: { status: 'UNVERIFIED', checkpoint: null } });
+  render(<WorkspaceStock {...props} itemId={item.id} />);
+  await screen.findByText('Resolve this batch’s product identity');
+  fireEvent.change(screen.getByLabelText('Verified product'), { target: { value: 'correct' } });
+  fireEvent.change(screen.getByLabelText('Reason'), { target: { value: 'Checked the physical pack' } });
+  fireEvent.click(screen.getByLabelText(/I verified the physical product/));
+  fireEvent.click(screen.getByRole('button', { name: 'Resolve product identity' }));
+  await waitFor(() => expect(apiClient.post).toHaveBeenCalledWith('/inventory/workspace/stocktake/resolve-identity', {
+    itemId: item.id, productId: 'correct', updatedAt: item.updatedAt, reason: 'Checked the physical pack', confirmed: true,
+  }));
+  fireEvent.click(screen.getByRole('button', { name: 'Ledger' }));
+  expect(screen.getByText(/Ledger unverified: record a physical stock count/)).toBeInTheDocument();
 });

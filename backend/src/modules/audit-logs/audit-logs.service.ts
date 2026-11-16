@@ -200,6 +200,12 @@ export class AuditLogsService {
     };
   }
 
+  /**
+   * @cc [owner:nareshshah139] audit-export-shape
+   * CSV export MUST return encoded text; JSON export MUST retain structured records.
+   */
+  async exportLogs(query: QueryAuditLogsDto, format: 'csv'): Promise<string>;
+  async exportLogs(query: QueryAuditLogsDto, format?: 'json'): Promise<Awaited<ReturnType<AuditLogsService['findAll']>>['data']>;
   async exportLogs(query: QueryAuditLogsDto, format: 'json' | 'csv' = 'json') {
     const result = await this.findAll({ ...query, limit: 10000 }); // Max export limit
 

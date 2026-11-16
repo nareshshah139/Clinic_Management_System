@@ -193,7 +193,6 @@ describe('VisitsController (Integration)', () => {
       const createVisitDto = {
         patientId: 'patient-123',
         doctorId: 'doctor-123',
-        complaints: [], // Empty complaints array
       };
 
       const mockPatient = { id: 'patient-123', name: 'John Doe' };

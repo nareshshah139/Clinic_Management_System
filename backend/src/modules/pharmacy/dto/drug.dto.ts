@@ -30,6 +30,27 @@ const toOptionalNumber = ({ value }: { value: unknown }) => {
 };
 
 export class CreateDrugDto {
+  @IsOptional()
+  @IsString()
+  brandName?: string;
+
+  @IsOptional()
+  @IsString()
+  itemCode?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  combinationProduct?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  dispenseLoose?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  requiresPrescription?: boolean;
+
+
   @ApiProperty({
     description: 'Drug name',
     example: 'Paracetamol 500mg Tablet',
@@ -174,6 +195,27 @@ export class CreateDrugDto {
 }
 
 export class UpdateDrugDto {
+  @IsOptional()
+  @IsString()
+  brandName?: string;
+
+  @IsOptional()
+  @IsString()
+  itemCode?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  combinationProduct?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  dispenseLoose?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  requiresPrescription?: boolean;
+
+
   @ApiPropertyOptional({
     description: 'Drug name',
     example: 'Paracetamol 500mg Tablet',
@@ -447,6 +489,11 @@ export class QueryDrugDto {
 }
 
 export class DrugAutocompleteDto {
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true')
+  @IsBoolean()
+  clinicInventoryOnly?: boolean;
+
   @ApiPropertyOptional({ description: 'Search query', example: 'para' })
   @IsOptional()
   @IsString()
@@ -472,9 +519,20 @@ export class DrugAutocompleteDto {
 }
 
 export class DrugInventoryChangeItemDto {
-  @ApiProperty({ description: 'Drug ID', example: 'clx123' })
+  @ApiPropertyOptional({ description: 'Drug ID for legacy product-total edits', example: 'clx123' })
+  @IsOptional()
   @IsString()
-  drugId: string;
+  drugId?: string;
+
+  @ApiPropertyOptional({ enum: ['BATCH'], description: 'Edit the exact clinic batch instead of the product total' })
+  @IsOptional()
+  @IsIn(['BATCH'])
+  scope?: 'BATCH';
+
+  @ApiPropertyOptional({ description: 'Batch revision displayed when editing' })
+  @IsOptional()
+  @IsString()
+  expectedUpdatedAt?: string;
 
   @ApiPropertyOptional({
     description: 'Linked inventory item ID to adjust stock against',

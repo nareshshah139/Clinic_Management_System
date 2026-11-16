@@ -474,3 +474,9 @@ export class UpdateRoleDto {
   @IsOptional()
   isActive?: boolean;
 }
+
+export enum TextSize { NORMAL = 'NORMAL', LARGE = 'LARGE', EXTRA_LARGE = 'EXTRA_LARGE' }
+export class UpdateTextSizeDto {
+  @IsEnum(TextSize)
+  textSize: TextSize;
+}

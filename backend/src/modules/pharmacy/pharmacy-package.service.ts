@@ -8,6 +8,7 @@ import {
   PharmacyPackageListResponseDto
 } from './dto/pharmacy-package.dto';
 import { Prisma } from '@prisma/client';
+import { loadInventoryGstRates } from './pharmacy-inventory-gst';
 
 @Injectable()
 export class PharmacyPackageService {
@@ -249,8 +250,13 @@ export class PharmacyPackageService {
         this.prisma.pharmacyPackage.count({ where }),
       ]);
 
-      const formattedPackages = packages.map(pkg => 
-        this.formatPackageResponse(pkg, pkg.items)
+      const gstRates = await loadInventoryGstRates(
+        this.prisma, packages.flatMap(pkg => pkg.items.map(item => item.drugId)), branchId,
+      );
+      const formattedPackages = packages.map(pkg =>
+        this.formatPackageResponse(pkg, pkg.items.map(item => ({
+          ...item, drug: { ...item.drug, gstRate: gstRates.get(item.drugId) ?? null },
+        })))
       );
 
       return {
@@ -311,7 +317,12 @@ export class PharmacyPackageService {
         throw new ForbiddenException('You do not have access to this package');
       }
 
-      return this.formatPackageResponse(package_, package_.items);
+      const gstRates = await loadInventoryGstRates(
+        this.prisma, package_.items.map(item => item.drugId), branchId,
+      );
+      return this.formatPackageResponse(package_, package_.items.map(item => ({
+        ...item, drug: { ...item.drug, gstRate: gstRates.get(item.drugId) ?? null },
+      })));
     } catch (error) {
       if (error instanceof NotFoundException || error instanceof ForbiddenException) {
         throw error;
@@ -598,6 +609,7 @@ export class PharmacyPackageService {
           id: item.drug.id,
           name: item.drug.name,
           price: item.drug.price,
+          gstRate: item.drug.gstRate ?? null,
           manufacturerName: item.drug.manufacturerName,
           packSizeLabel: item.drug.packSizeLabel,
           category: item.drug.category,
@@ -607,4 +619,4 @@ export class PharmacyPackageService {
       }))
     };
   }
-} 
+}

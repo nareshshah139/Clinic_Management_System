@@ -1,5 +1,6 @@
 "use client";
 
+import { Spinner } from '@/components/ui/spinner';
 import { PurchaseDocumentActions } from "@/components/inventory/PurchaseDocumentActions";
 import {
   useCallback,
@@ -14,15 +15,11 @@ import {
   ArrowLeft,
   CheckCircle2,
   FileSearch,
-  Loader2,
-  PackagePlus,
   Plus,
   RefreshCw,
-  Save,
   Send,
   Trash2,
   Truck,
-  Upload,
 } from "lucide-react";
 import {
   PurchaseSourceContext,
@@ -39,11 +36,16 @@ import {
   PurchaseProductDetails,
   type PurchaseProductCatalog,
 } from "./PurchaseProductDetails";
+import { PurchaseManualMatchSearch } from "./PurchaseManualMatchSearch";
 import { PurchaseSupplierReview } from "./PurchaseSupplierReview";
 import { PurchaseOcrChecklist } from "./PurchaseOcrChecklist";
+import { PurchaseReviewSummary } from "./PurchaseReviewSummary";
+import { PurchaseHelp, PurchaseStatusCue } from "./PurchaseHelp";
 import {
+  focusPurchaseField,
   groupPurchaseOcrFlags,
   purchaseBlockingIssues,
+  purchaseInvoiceStatusLabel,
   purchaseReviewIssue,
   uniquePurchaseReviewIssues,
 } from "@/lib/purchase-invoice-review";
@@ -129,6 +131,7 @@ type HeaderForm = {
 };
 
 type LineForm = {
+  productKind?: PurchaseProductCatalog["productKind"];
   ocrSourceRef?: string;
   localId: string;
   serialNumber: string;
@@ -234,6 +237,7 @@ type PurchaseListResponse = {
 };
 
 type ExtractedPurchaseLine = Partial<{
+  productKind: PurchaseProductCatalog["productKind"];
   ocrSourceRef: string;
   serialNumber: number | string;
   productName: string;
@@ -296,22 +300,30 @@ type MasterDrug = {
   packSizeLabel: string;
   composition1?: string | null;
   category?: string | null;
+  brandName?: string | null; itemCode?: string | null; combinationProduct?: boolean; dispenseLoose?: boolean;
   dosageForm?: string | null;
   strength?: string | null;
 };
 
 type MasterCandidate = {
   drug: MasterDrug;
+  inInventory?: boolean;
+  sameBrand?: boolean;
+  mismatches?: string[];
   score: number;
   confidence: "HIGH" | "MEDIUM" | "LOW";
   reasons?: string[];
 };
 
 type MasterMatch = {
+  matchLabel?: "Same product" | "Possible match" | "Not in inventory" | "Remembered match" | "Review existing item";
+  alternatives?: MasterCandidate[];
+  sameBrandExists?: boolean;
+  automaticMatch?: { drug: MasterDrug; linePatch: MasterConfirmationResponse["linePatch"] };
   lineIndex: number;
   ocr: Record<string, unknown>;
   candidates: MasterCandidate[];
-  recommendedAction: "MATCH_EXISTING" | "CREATE_NEW";
+  recommendedAction: "MATCH_EXISTING" | "REVIEW_MATCHES" | "CREATE_NEW";
 };
 
 type MasterMatchResponse = {
@@ -838,6 +850,7 @@ function lineFromExtracted(
   return {
     ...base,
     ocrSourceRef: item.ocrSourceRef,
+    productKind: item.productKind,
     serialNumber: formString(item.serialNumber, String(index + 1)),
     productName: formString(item.productName),
     manufacturer: formString(item.manufacturer),
@@ -901,10 +914,6 @@ function formatDate(value?: string | null) {
   });
 }
 
-function statusLabel(status?: string) {
-  return String(status || "DRAFT").replaceAll("_", " ");
-}
-
 function manualReviewOnlyIssue(raw: string) {
   const issue = raw.replace(/^AUTO:\s*/i, "").trim();
   return (
@@ -933,6 +942,11 @@ function canResumeManualReview(invoice: PurchaseInvoice) {
   );
 }
 
+/**
+ * @cc [owner:nareshshah139] receipt-correction-stock-intent
+ * Editable purchases MUST allow selecting a posted receipt; removing an existing link MUST
+ * explicitly confirm that posting will add stock. Locked or uncertain invoices cannot edit it.
+ */
 export function PurchaseInvoiceWorkbench({
   invoiceId,
   receiptId,
@@ -990,6 +1004,26 @@ export function PurchaseInvoiceWorkbench({
  * Acceptance: INV-41. Validation and open gaps:
  * docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
  */
+/**
+ * @cc [owner:nareshshah139,label:product] purchase-match-labels-and-fallback
+ * Unmatched lines MUST expose manual search and review alternatives without labelling unrelated
+ * products as matches. Same-brand records MUST suppress creation; otherwise creation MUST remain
+ * available to authorized editors and require explicit confirmation. Suggestions use plain identity
+ * labels, not numeric confidence. Editing a name or pack, or removing a line, MUST discard stale
+ * suggestions and confirmations before reuse.
+ */
+/**
+ * @cc [owner:nareshshah139,label:product] purchase-check-before-stock
+ * Scanning and Save draft MUST retain a reviewable draft without adding stock.
+ * Save & add stock MUST require final human confirmation before saving, reviewing and posting.
+ * Automatic processing MUST stay an explicit secondary choice. Editing reviewed values MUST
+ * clear the final human confirmation.
+ */
+/**
+ * @cc [owner:nareshshah139,label:product] purchase-ocr-summary-current-checks
+ * Scan-summary warnings MUST reflect unresolved header checks. Confirmed checks MUST disappear
+ * from the summary, including after draft recovery, without erasing the original extraction flags.
+ */
 function PurchaseInvoiceEditor({
   recoveryKey,
   invoiceId,
@@ -1025,6 +1059,9 @@ function PurchaseInvoiceEditor({
   const [serverDraft, setServerDraft] = useState<any>(null);
   const [serverDrafts, setServerDrafts] = useState<any[]>([]);
   const [workflowReceiptId, setWorkflowReceiptId] = useState("");
+  const [receiptOptions, setReceiptOptions] = useState<any[]>([]);
+  const [receiptSearch, setReceiptSearch] = useState("");
+  const [reopenRequest, setReopenRequest] = useState<{ invoiceId: string; reason: string } | null>(null);
   const draftRequestKey = useRef("");
   const [recoveryReady, setRecoveryReady] = useState(false);
   const [recoveryError, setRecoveryError] = useState<string | null>(null);
@@ -1053,6 +1090,7 @@ function PurchaseInvoiceEditor({
   const [uploadListError, setUploadListError] = useState<string | null>(null);
   const saveLock = useRef(false);
   const processLock = useRef(false);
+  const postingLock = useRef(false);
   const [manualReviewCandidateId, setManualReviewCandidateId] = useState<
     string | null
   >(null);
@@ -1077,6 +1115,7 @@ function PurchaseInvoiceEditor({
   const [ocrSummary, setOcrSummary] = useState<
     OcrExtractionResponse["extraction"] | null
   >(null);
+  const matchRequestVersion = useRef(0);
   const [masterMatches, setMasterMatches] = useState<MasterMatch[]>([]);
   const [masterConfirming, setMasterConfirming] = useState<string | null>(null);
   const [masterRefreshing, setMasterRefreshing] = useState(false);
@@ -1089,6 +1128,7 @@ function PurchaseInvoiceEditor({
   );
   const [selectedSourceId, setSelectedSourceId] = useState("invoice-number");
   const [showIntakeHome, setShowIntakeHome] = useState(false);
+  const [manualEntry, setManualEntry] = useState(false);
   const workbenchRef = useRef<HTMLDivElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const [reviewDate, setReviewDate] = useState(todayInput());
@@ -1146,13 +1186,13 @@ function PurchaseInvoiceEditor({
         setSourceDocument(saved.sourceDocument || null);
         setHeaderFlags((splitFlags(saved.headerFlags || "") || []).join(", "));
         setOcrSummary(saved.ocrSummary || null);
-        setNotice(
-          "Restored your unfinished purchase draft from this tab. Save Draft stores it on the server.",
-        );
+        if (saved.editingId || saved.sourceDocument || saved.header.invoiceNumber || saved.header.distributorName || saved.lines.some((line: LineForm) => !!line.productName)) {
+          setNotice("Restored your unfinished purchase draft from this tab. Save draft stores it on the server.");
+        }
       }
     } catch {
       setRecoveryError(
-        "Draft recovery is unavailable in this browser. Keep this tab open until Save Draft succeeds.",
+        "Draft recovery is unavailable in this browser. Keep this tab open until Save draft succeeds.",
       );
     }
     setRecoveryReady(true);
@@ -1181,7 +1221,7 @@ function PurchaseInvoiceEditor({
       );
     } catch {
       setRecoveryError(
-        "Draft recovery is unavailable in this browser. Keep this tab open until Save Draft succeeds.",
+        "Draft recovery is unavailable in this browser. Keep this tab open until Save draft succeeds.",
       );
     }
   }, [
@@ -1273,6 +1313,17 @@ function PurchaseInvoiceEditor({
   }, [activeInvoice?.id, editingId]);
 
   const updateHeader = (key: keyof HeaderForm, value: string) => {
+    if (["distributorName", "distributorGstin"].includes(key)) {
+      matchRequestVersion.current++;
+      setLines(current => current.map((line, index) => {
+        const match = masterMatches.find(row => row.lineIndex === index);
+        return masterStatuses[index]?.message === "Remembered match" && match ? { ...line,
+          productName: formString(match.ocr.productName), packSize: formString(match.ocr.packSize),
+          manufacturer: formString(match.ocr.manufacturer), packUnitType: formString(match.ocr.packUnitType),
+        } : line;
+      }));
+      setMasterMatches([]); setMasterStatuses({});
+    }
     setManualReviewCandidateId(null);
     setReviewAccepted(false);
     if (key === "goodsReceivedDate") setReviewDate(value);
@@ -1286,6 +1337,12 @@ function PurchaseInvoiceEditor({
   const updateLine = (localId: string, key: keyof LineForm, value: string) => {
     setManualReviewCandidateId(null);
     setReviewAccepted(false);
+    matchRequestVersion.current++;
+    if (key === "productKind") setMasterStatuses({});
+    if (["productName", "packSize", "packUnitType"].includes(key)) {
+      setMasterMatches([]);
+      setMasterStatuses({});
+    }
     setLines((current) =>
       current.map((line) =>
         line.localId === localId ? { ...line, [key]: value } : line,
@@ -1300,9 +1357,12 @@ function PurchaseInvoiceEditor({
   };
 
   const removeLine = (localId: string) => {
+    matchRequestVersion.current++;
     setManualReviewCandidateId(null);
     if (lines.length <= 1) return;
     const removedIndex = lines.findIndex((line) => line.localId === localId);
+    setMasterMatches([]);
+    setMasterStatuses({});
     setOriginalAmounts((current) =>
       current && Array.isArray(current.items)
         ? {
@@ -1326,6 +1386,7 @@ function PurchaseInvoiceEditor({
     lineIndex?: number,
   ) => {
     setManualReviewCandidateId(null);
+    setReviewAccepted(false);
     setOriginalAmounts((current) => {
       if (!current) return current;
       if (lineIndex === undefined) return { ...current, [key]: value };
@@ -1340,7 +1401,9 @@ function PurchaseInvoiceEditor({
   };
 
   const resetDraft = () => {
+    matchRequestVersion.current++;
     setShowIntakeHome(false);
+    setManualEntry(false);
     setManualReviewCandidateId(null);
     setActiveInvoice(null);
     setUnknownStockInvoiceId(null);
@@ -1380,6 +1443,7 @@ function PurchaseInvoiceEditor({
     extraction?: OcrExtractionResponse["extraction"],
     matches?: MasterMatchResponse,
   ) => {
+    matchRequestVersion.current++;
     const defaults = defaultHeader();
     setShowIntakeHome(false);
     setManualReviewCandidateId(null);
@@ -1461,15 +1525,14 @@ function PurchaseInvoiceEditor({
         : [emptyLine(1)],
     );
     setOcrSummary(extraction || null);
-    setMasterMatches(matches?.matches || []);
-    setMasterStatuses({});
+    acceptMasterMatches(matches?.matches || []);
     setValidationErrors([]);
   };
 
   const linePayload = (line: LineForm) => {
     const payload = buildDraftPayload(header, [line]);
     const item = Array.isArray(payload.items) ? payload.items[0] : undefined;
-    return item as Record<string, unknown>;
+    return { ...item as Record<string, unknown>, productKind: line.productKind || undefined };
   };
 
   const applyLinePatch = (
@@ -1510,8 +1573,25 @@ function PurchaseInvoiceEditor({
     );
   };
 
+  /**
+   * @cc [owner:nareshshah139,label:product] purchase-remembered-selection
+   * Only server-validated supplier memory MAY preselect a product. Ordinary suggestions MUST wait
+   * for confirmation. Applying memory MUST keep invoice quantities and prices unchanged.
+   */
+  const acceptMasterMatches = (matches: MasterMatch[]) => {
+    setMasterMatches(matches);
+    const statuses: Record<number, MasterStatus> = {};
+    for (const match of matches) {
+      if (!match.automaticMatch) continue;
+      applyLinePatch(match.lineIndex, match.automaticMatch.linePatch);
+      statuses[match.lineIndex] = { action: "MATCH_EXISTING", drug: match.automaticMatch.drug, message: "Remembered match" };
+    }
+    setMasterStatuses(statuses);
+  };
+
   const refreshMasterMatches = async () => {
     if (!access.create) return;
+    const requestVersion = ++matchRequestVersion.current;
     setMasterRefreshing(true);
     setError(null);
     try {
@@ -1519,10 +1599,11 @@ function PurchaseInvoiceEditor({
         await apiClient.suggestPharmacyPurchaseMasterMatches<MasterMatchResponse>(
           {
             items: lines.map(linePayload),
+            distributorName: header.distributorName, distributorGstin: header.distributorGstin,
           },
         );
-      setMasterMatches(response.matches || []);
-      setMasterStatuses({});
+      if (requestVersion !== matchRequestVersion.current) return;
+      acceptMasterMatches(response.matches || []);
       setNotice(
         `Refreshed drug master suggestions for ${lines.length} line${lines.length === 1 ? "" : "s"}.`,
       );
@@ -1534,9 +1615,10 @@ function PurchaseInvoiceEditor({
   };
 
   /**
-   * @cc [owner:nareshshah139,label:state] master-confirmation-current-line
-   * Cancelling a master match MUST leave the line unchanged. If the invoice or lines change
-   * while confirmation is open, no master request may use the previously displayed line.
+   * @cc [owner:nareshshah139,label:product] purchase-mismatch-warning-before-retry
+   * A server-reported product mismatch MUST display the different-products warning and both
+   * identities before retrying with acknowledgement. Cancelling MUST leave the line unchanged.
+   * If the line changes while awaiting confirmation, no creation or acknowledged retry may run.
    */
   const confirmMasterLine = async (
     match: MasterMatch,
@@ -1555,32 +1637,43 @@ function PurchaseInvoiceEditor({
 
     if (action === "CREATE_NEW" && !access.catalogDetails)
       return "Product details are not available yet. Reload after the update completes.";
-    const confirmed =
-      action === "CREATE_NEW" ||
-      (await confirmAction({ title: "Confirm master match?", description: `Confirm this DB master match for ${line.productName || "this OCR line"}?`, confirmLabel: "Confirm match", variant: "default" }));
-    if (!confirmed) return;
-
-    const current = confirmationState.current;
-    if (current.lines !== lines || current.activeInvoice !== activeInvoice || !current.canCreate) {
-      const message = "The line changed. Refresh matches and try again.";
-      setError(message);
-      return message;
+    const confirmVersion = matchRequestVersion.current;
+    if (action === "CREATE_NEW") {
+      if (match.sameBrandExists) return "A same-brand item already exists. Select an existing item.";
+      if (!(await confirmAction({ title: "Create inventory item?", description: `Create a new inventory item?\n${line.productName} · ${line.packSize}\nConfirm that this product is not already saved.`, confirmLabel: "Create item", variant: "default" }))) return "New item was not created.";
     }
-
+    if (confirmVersion !== matchRequestVersion.current) return "The line changed. Refresh matches and try again.";
     const key = `${match.lineIndex}:${action}`;
     setMasterConfirming(key);
     setNotice(null);
     setError(null);
     try {
-      const response =
-        await apiClient.confirmPharmacyPurchaseMaster<MasterConfirmationResponse>(
-          {
+      const payload = {
             action,
+            creationConfirmed: action === "CREATE_NEW" ? true : undefined,
+            distributorName: header.distributorName, distributorGstin: header.distributorGstin,
             drugId: candidate?.drug.id,
             catalog,
             item: linePayload(line),
-          },
-        );
+          };
+      let response: MasterConfirmationResponse;
+      try {
+        response = await apiClient.confirmPharmacyPurchaseMaster<MasterConfirmationResponse>(payload);
+      } catch (err) {
+        const conflict = err as { status?: number; body?: { code?: string; mismatches?: string[] } };
+        if (action !== "MATCH_EXISTING" || conflict.status !== 409 || conflict.body?.code !== "PURCHASE_PRODUCT_MISMATCH") throw err;
+        if (confirmVersion !== matchRequestVersion.current) return "The line changed. Refresh matches and try again.";
+        const confirmed = (await confirmAction({ title: "Confirm different products?", description: [
+          "These look like different products. Confirm anyway?",
+          `Invoice: ${line.productName} · ${line.packSize}${line.productKind ? ` · ${line.productKind}` : ""}`,
+          `Saved product: ${candidate?.drug.name} · ${candidate?.drug.packSizeLabel} · ${candidate?.drug.productKind || candidate?.drug.type || "Kind not recorded"}`,
+          ...(conflict.body.mismatches || []),
+        ].join("\n"), confirmLabel: "Confirm match", variant: "default" }));
+        if (!confirmed) return;
+        if (confirmVersion !== matchRequestVersion.current) return "The line changed. Refresh matches and try again.";
+        response = await apiClient.confirmPharmacyPurchaseMaster<MasterConfirmationResponse>({ ...payload, mismatchAcknowledged: true });
+      }
+      if (confirmVersion !== matchRequestVersion.current) return "The line changed. Refresh matches to use the saved confirmation.";
       applyLinePatch(match.lineIndex, response.linePatch);
       setMasterStatuses((current) => ({
         ...current,
@@ -1710,7 +1803,7 @@ function PurchaseInvoiceEditor({
    * docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
    */
   const processSavedInvoice = async () => {
-    if (!access.automate || processLock.current || draftWriteBlocked) return;
+    if (!access.automate || processLock.current || postingLock.current || unknownStockInvoiceId || draftWriteBlocked) return;
     processLock.current = true;
     setProcessing(true);
     let targetInvoiceId = activeInvoice?.id;
@@ -1719,7 +1812,7 @@ function PurchaseInvoiceEditor({
     setNotice(null);
     try {
       if (reviewAccepted && canReview && access.commit) {
-        await reviewAndCommit();
+        await saveAndPostInvoice();
         return;
       }
       let savedForReview: PurchaseInvoice | undefined;
@@ -1764,7 +1857,7 @@ function PurchaseInvoiceEditor({
       ) {
         setManualReviewCandidateId(savedForReview.id);
         setNotice(
-          `Invoice ${savedForReview.invoiceNumber} saved. Automatic intake needs a human review; check the original, confirm the review below, then choose Save & Process.`,
+          `Invoice ${savedForReview.invoiceNumber} saved. Automatic intake needs a human review; check the original, confirm the review, then choose Save & add stock.`,
         );
       }
     } catch (err) {
@@ -1837,6 +1930,11 @@ function PurchaseInvoiceEditor({
       }
 
       applyExtractedDraft(draft, data.extraction, data.masterMatches);
+      if (!automate) {
+        setHeader(current => ({ ...current, goodsReceivedDate: importReceivedDate }));
+        setReviewDate(importReceivedDate);
+        setShowIntakeHome(false);
+      }
       setSourceDocument(data.sourceDocument || null);
       setAdditionalSourceIds(
         (data as any).sourceDocuments?.map((d: any) => d.id) || [],
@@ -1873,7 +1971,7 @@ function PurchaseInvoiceEditor({
   };
 
   const saveDraft = async () => {
-    if (!access.create || saveLock.current || extracting || draftWriteBlocked)
+    if (!access.create || saveLock.current || extracting || unknownStockInvoiceId || draftWriteBlocked)
       return;
     setNotice(null);
     setError(null);
@@ -1933,7 +2031,9 @@ function PurchaseInvoiceEditor({
       setSourceDocument(created.documents?.[0] || sourceDocument);
       void loadUnlinkedUploads();
       setNotice(
-        `Purchase invoice ${created.invoiceNumber} saved as ${statusLabel(created.status)}.`,
+        created.status === "STOCK_COMMITTED" || created.stockCommittedAt
+          ? `Invoice ${created.invoiceNumber}: ${purchaseInvoiceStatusLabel(created)}.`
+          : `Invoice ${created.invoiceNumber} saved. Stock not added. Check the bill before adding stock.`,
       );
       return created;
     } catch (err) {
@@ -1993,51 +2093,34 @@ function PurchaseInvoiceEditor({
   };
 
   /**
-   * @cc [owner:nareshshah139,label:state] stock-confirmation-current-invoice
-   * Stock commit MUST wait for explicit acceptance and reject a changed, blocked or no-longer
-   * authorized invoice after the wait. A pending confirmation or commit MUST not submit twice.
+   * @cc [owner:nareshshah139] reviewed-bill-recovery-ui
+   * Reopening MUST submit the saved revision and operator reason; an uncertain response MUST
+   * refresh server status before permitting further edits or stock commit.
    */
-  const commitStock = async () => {
-    if (!activeInvoice || draftWriteBlocked || busy || !access.commit || stockCommitLock.current) return;
-    stockCommitLock.current = true;
-    let started = false;
+  const reopenReviewed = async () => {
+    if (!activeInvoice || busy || stockStatusUnknown || !access.create || !access.review) return;
+    if (reopenRequest?.invoiceId !== activeInvoice.id) return;
+    const reason = reopenRequest.reason.trim();
+    if (!reason) {
+      setError("Enter a reason for reopening this bill.");
+      return;
+    }
+    setReviewing(true);
+    setError(null);
     try {
-      const confirmed = (await confirmAction({ title: "Commit stock?", description: `Commit stock for purchase invoice ${activeInvoice.invoiceNumber}? This updates branch inventory and cannot be undone from this screen.`, confirmLabel: "Commit stock", variant: "default" }));
-      if (!confirmed) return;
-      const current = confirmationState.current;
-      if (current.activeInvoice !== activeInvoice || current.draftWriteBlocked || current.busy || !current.canCommit) {
-        setError("The purchase changed while confirmation was open. Review it again before posting.");
-        return;
-      }
-      started = true;
-      setNotice(null);
-      setError(null);
-      setCommitting(true);
-      const committed =
-        await apiClient.commitPharmacyPurchaseInvoiceStock<PurchaseInvoice>(
-          activeInvoice.id,
-        );
-      if (
-        committed?.id !== activeInvoice.id ||
-        (committed.status !== "STOCK_COMMITTED" && !committed.stockCommittedAt)
-      ) {
-        throw new Error(
-          "Stock commit did not return a confirmed outcome. Checking the saved record.",
-        );
-      }
-      setActiveInvoice(committed);
-      setNotice(
-        `Stock committed for ${committed.invoiceNumber}${committed.stockCommitReference ? ` (${committed.stockCommitReference})` : ""}.`,
-      );
+      const reopened = await apiClient.post<PurchaseInvoice>(`/pharmacy/purchase-invoices/${activeInvoice.id}/reopen`, {
+        reason: reason.trim(), expectedUpdatedAt: activeInvoice.updatedAt,
+      });
+      editSavedDraft(reopened);
+      setReopenRequest(null);
+      setNotice("Bill reopened. Correct its details, then review it again before posting.");
       await loadRecent();
-      window.dispatchEvent(new CustomEvent("pharmacy-dashboard-refresh"));
     } catch (err) {
       setError(getErrorMessage(err));
-      if (activeInvoice) await refreshStockStatus(activeInvoice.id);
+      await refreshStockStatus(activeInvoice.id);
     } finally {
-      stockCommitLock.current = false;
-      setCommitting(false);
-      if (started) focusActionFeedback();
+      setReviewing(false);
+      focusActionFeedback();
     }
   };
 
@@ -2065,10 +2148,12 @@ function PurchaseInvoiceEditor({
         ),
       );
       setUnknownStockInvoiceId(null);
-      if (invoice.status === "STOCK_COMMITTED" || invoice.stockCommittedAt) {
+      if (invoice.status === "STOCK_COMMITTED") {
         setError(null);
         setNotice(
-          `Stock added for ${invoice.invoiceNumber}. The saved record confirms the operation completed.`,
+          invoice.workflowReceiptId
+            ? `Bill ${invoice.invoiceNumber} posted. Stock received earlier · 0 added again.`
+            : `Stock added for ${invoice.invoiceNumber}. The saved record confirms the operation completed.`,
         );
         window.dispatchEvent(new CustomEvent("pharmacy-dashboard-refresh"));
       }
@@ -2105,7 +2190,7 @@ function PurchaseInvoiceEditor({
   };
 
   const saveIncompleteDraft = async () => {
-    if (!access.create || saving || draftWriteBlocked) return;
+    if (!access.create || saving || postingLock.current || unknownStockInvoiceId || draftWriteBlocked) return;
     setSaving(true);
     setError(null);
     try {
@@ -2321,42 +2406,87 @@ function PurchaseInvoiceEditor({
       cancelled = true;
     };
   }, [access.create, receiptId, recoveryReady]);
-  const reviewAndCommit = async () => {
-    if (
-      !activeInvoice ||
-      !access.review ||
-      !access.commit ||
-      !reviewAccepted ||
-      draftWriteBlocked
-    )
+  /**
+   * @cc [owner:nareshshah139,label:product] purchase-explicit-posting
+   * Explicit posting MUST save new or editable corrections, review the saved invoice and commit
+   * once after human confirmation. Reviewed invoices MUST resume at commit without saving again.
+   * Unresolved checks, historical holds, missing permissions or stale revisions MUST block posting.
+   */
+  /**
+   * @cc [owner:nareshshah139,label:state] purchase-posting-exact-id-recovery
+   * An uncertain review or commit MUST refresh the ID returned by the successful save. Failed
+   * refresh MUST block writes; only confirmed STOCK_COMMITTED may report success or refresh stock.
+   */
+  const saveAndPostInvoice = async () => {
+    if (postingLock.current || saveLock.current || unknownStockInvoiceId || draftWriteBlocked || !access.commit) return;
+    const alreadyReviewed = activeInvoice?.status === "REVIEWED";
+    if (alreadyReviewed) {
+      postingLock.current = true;
+      try {
+        if (!(await confirmAction({ title: "Post purchase invoice?", description: activeInvoice.workflowReceiptId
+          ? `Post bill ${activeInvoice.invoiceNumber} against the earlier stock receipt? No stock will be added again.`
+          : `Add stock for purchase invoice ${activeInvoice.invoiceNumber}? This updates branch inventory.`, confirmLabel: "Post invoice", variant: "default" }))) return;
+        const current = confirmationState.current;
+        if (current.activeInvoice !== activeInvoice || current.draftWriteBlocked || current.unknownStockInvoiceId || !current.canCommit) {
+          setError("The purchase changed while confirmation was open. Review it again before posting.");
+          return;
+        }
+      } finally {
+        postingLock.current = false;
+      }
+    } else if (!access.create || !access.review || !reviewAccepted || !reviewDate || historicalStockHold ||
+      splitFlags(headerFlags)?.length || lines.some(line => splitFlags(line.ocrFlags)?.length) ||
+      (activeInvoice && (!editingSelectedInvoice || ["STOCK_COMMITTED", "CANCELLED"].includes(activeInvoice.status)))) {
       return;
-    setReviewing(true);
+    }
+    postingLock.current = true;
+    let phase: { kind: "saving" } | { kind: "reviewing" | "committing"; invoiceId: string } = { kind: "saving" };
+    setReviewing(!alreadyReviewed);
+    setNotice(null);
     setError(null);
     try {
-      const saved =
-        editingId === activeInvoice.id ? await saveDraft() : activeInvoice;
-      if (!saved) return;
-      await apiClient.reviewPharmacyPurchaseInvoice(saved.id, {
-        goodsReceivedDate: reviewDate,
-        handwrittenNotes: saved.handwrittenNotes || undefined,
-      });
-      const committed =
-        await apiClient.commitPharmacyPurchaseInvoiceStock<PurchaseInvoice>(
-          saved.id,
-        );
-      if (committed.status !== "STOCK_COMMITTED")
-        throw new Error("Stock status was not confirmed");
+      let invoice = alreadyReviewed ? activeInvoice : await saveDraft();
+      if (!invoice) return;
+      if (!alreadyReviewed && invoice.status !== "STOCK_COMMITTED") {
+        const issues = purchaseBlockingIssues(invoice.reconciliationIssues || []);
+        if (invoice.unresolvedOcrFlags || purchaseBlockingIssues(invoice.ocrFlags || []).length ||
+          invoice.items?.some(item => purchaseBlockingIssues(item.ocrFlags || []).length) ||
+          !((invoice.status === "DRAFT" && issues.length === 0) || canResumeManualReview(invoice))) {
+          setError(`Invoice saved. Stock not added. ${issues.join(" ") || "Resolve the remaining invoice checks before adding stock."}`);
+          return;
+        }
+        phase = { kind: "reviewing", invoiceId: invoice.id };
+        const reviewed = await apiClient.reviewPharmacyPurchaseInvoice<PurchaseInvoice>(invoice.id, {
+          goodsReceivedDate: reviewDate,
+          handwrittenNotes: invoice.handwrittenNotes || undefined,
+        });
+        if (reviewed?.id !== invoice.id || reviewed.status !== "REVIEWED")
+          throw new Error("Review did not return a confirmed outcome. Checking the saved record.");
+        invoice = reviewed;
+        setActiveInvoice(reviewed);
+        setDraftServerRevision(reviewed.updatedAt || null);
+      }
+      phase = { kind: "committing", invoiceId: invoice.id };
+      setReviewing(false);
+      setCommitting(true);
+      const committed = invoice.status === "STOCK_COMMITTED"
+        ? invoice
+        : await apiClient.commitPharmacyPurchaseInvoiceStock<PurchaseInvoice>(invoice.id);
+      if (committed?.id !== invoice.id || committed.status !== "STOCK_COMMITTED")
+        throw new Error("Stock commit did not return a confirmed outcome. Checking the saved record.");
       setActiveInvoice(committed);
-      setNotice(
-        `Stock added for ${committed.invoiceNumber}. Reference: ${committed.stockCommitReference}.`,
-      );
+      setNotice(committed.workflowReceiptId
+        ? `Bill ${committed.invoiceNumber} posted. Stock received earlier · 0 added again.`
+        : `Stock added for ${committed.invoiceNumber}${committed.stockCommitReference ? ` (${committed.stockCommitReference})` : ""}.`);
       await loadRecent();
       window.dispatchEvent(new CustomEvent("pharmacy-dashboard-refresh"));
     } catch (err) {
       setError(getErrorMessage(err));
-      if (activeInvoice) await refreshStockStatus(activeInvoice.id);
+      if (phase.kind !== "saving") await refreshStockStatus(phase.invoiceId);
     } finally {
+      postingLock.current = false;
       setReviewing(false);
+      setCommitting(false);
       focusActionFeedback();
     }
   };
@@ -2375,6 +2505,10 @@ function PurchaseInvoiceEditor({
   }, [importedDraft]);
   const editingSelectedInvoice =
     !!activeInvoice && editingId === activeInvoice.id;
+  const hasDraftContent = !!sourceDocument || !!activeInvoice || !!header.invoiceNumber || !!header.distributorName || lines.some(line => !!line.productName);
+  const confirmationState = useRef({ activeInvoice, workflowReceiptId, draftWriteBlocked, unknownStockInvoiceId, canCommit: access.commit });
+  confirmationState.current = { activeInvoice, workflowReceiptId, draftWriteBlocked, unknownStockInvoiceId, canCommit: access.commit };
+
   const busy =
     saving ||
     extracting ||
@@ -2385,9 +2519,6 @@ function PurchaseInvoiceEditor({
     savingSupplier ||
     masterConfirming !== null ||
     masterRefreshing;
-  const stockCommitLock = useRef(false);
-  const confirmationState = useRef({ lines, activeInvoice, draftWriteBlocked, busy, canCreate: access.create, canCommit: access.commit });
-  confirmationState.current = { lines, activeInvoice, draftWriteBlocked, busy, canCreate: access.create, canCommit: access.commit };
   const stockStatusUnknown =
     !!activeInvoice && unknownStockInvoiceId === activeInvoice.id;
   const stockAdded =
@@ -2402,6 +2533,9 @@ function PurchaseInvoiceEditor({
     activeInvoice?.reconciliationIssues || [],
   );
   const activeOcrFlags = activeInvoice?.unresolvedOcrFlags || 0;
+  const historicalStockHold = activeIssues.some(
+    (issue) => purchaseReviewIssue(issue).category === "historical",
+  );
   const awaitingManualReview =
     !!activeInvoice && manualReviewCandidateId === activeInvoice.id;
   const canReview =
@@ -2619,6 +2753,7 @@ function PurchaseInvoiceEditor({
         0,
       )
     : activeOcrFlags;
+  const postingLabel = workflowReceiptId ? "Save & post bill" : "Save & add stock";
   const reviewChecklist = (
     <section
       id="purchase-review-checklist"
@@ -2629,11 +2764,12 @@ function PurchaseInvoiceEditor({
         <h4 id="purchase-review-checklist-title" className="font-semibold">
           Check before adding stock
         </h4>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {editingChecks
-            ? `${confirmationCount} field confirmation${confirmationCount === 1 ? "" : "s"} remaining. Check the original, correct the value, then confirm it here.`
-            : "Choose Review issues to open the invoice fields and confirmation controls."}
-        </p>
+        <div className="mt-1 flex items-center gap-1">
+          <PurchaseStatusCue tone={confirmationCount || otherReviewIssues.length ? "warning" : "success"}>
+            {editingChecks ? `${confirmationCount + correctionIssues.length + manualConfidenceLines.length} checks to finish` : "Open Review issues to continue"}
+          </PurchaseStatusCue>
+          <PurchaseHelp label="Review checks">Compare flagged values with the original, correct them if needed, then confirm each check. Corrections and field confirmations are separate from the final stock review.</PurchaseHelp>
+        </div>
       </div>
       <PurchaseSupplierReview
         name={
@@ -2650,14 +2786,9 @@ function PurchaseInvoiceEditor({
         canSave={!!access.saveSupplier}
         readOnly={!editingChecks}
         disabled={busy}
-        nextAction={
-          access.automate
-            ? "Save & Process"
-            : access.review
-              ? "Mark Reviewed"
-              : "Save corrections"
-        }
+        nextAction={postingLabel}
         onChange={(distributorName, distributorGstin) => {
+          setReviewAccepted(false);
           setManualReviewCandidateId(null);
           setHeader((current) => ({
             ...current,
@@ -2740,19 +2871,13 @@ function PurchaseInvoiceEditor({
                 : issue.target);
             return (
               <li key={issue.key} className="space-y-2 py-3 first:pt-0">
-                <p className="font-medium">{issue.message}</p>
-                <p className="max-w-prose text-muted-foreground">
-                  {issue.help}
-                </p>
-                <p className="font-medium">
-                  {issue.requiresUpload
-                    ? "Upload the complete invoice to resolve this check."
-                    : "Correct the value, then Save & Process. This check cannot be dismissed with a confirmation."}
-                </p>
-                {editingChecks && (
+                <div className="flex items-start gap-1"><PurchaseStatusCue tone="warning">{issue.message}</PurchaseStatusCue><PurchaseHelp label={`${issue.lineIndex === undefined ? '' : `Line ${issue.lineIndex + 1} `}${issue.label} correction`}>This check needs a correction and cannot be dismissed with a confirmation.</PurchaseHelp></div>
+                {issue.category === "historical" ? <p className="max-w-prose text-muted-foreground">{issue.help}</p> : <details><summary className="cursor-pointer text-muted-foreground">How to fix</summary><p className="mt-2 max-w-prose text-muted-foreground">{issue.help}</p></details>}
+                {editingChecks && target && (
                   <a
                     className="inline-block underline underline-offset-4"
-                    href={`#${target || "distributor-name"}`}
+                    onClick={() => focusPurchaseField(target)}
+                    href={`#${target}`}
                   >
                     Go to {issue.label}
                   </a>
@@ -2764,116 +2889,105 @@ function PurchaseInvoiceEditor({
       )}
       {manualConfidenceLines.length > 0 && (
         <div className="space-y-2 border-t pt-3 text-sm">
-          <p className="font-semibold">Manual review required</p>
-          {manualConfidenceLines.length > 0 && (
-            <p>
-              Check the OCR reading on line
-              {manualConfidenceLines.length === 1 ? "" : "s"}{" "}
-              {manualConfidenceLines.join(", ")} against the original. Keep the
-              recorded confidence scores unchanged.
-            </p>
-          )}
-          <p className="font-medium">
-            After resolving the fields above, confirm your review below and
-            choose Save & Process. This records your review and commits stock
-            together from this screen.
-          </p>
+          <PurchaseStatusCue tone="warning">Manual review: line{manualConfidenceLines.length === 1 ? "" : "s"} {manualConfidenceLines.join(", ")}</PurchaseStatusCue>
+          <p className="text-muted-foreground">Check these products against the bill, confirm the invoice, then choose {postingLabel}.</p>
+          <details><summary className="cursor-pointer">Why a check is needed</summary>
+          {manualConfidenceLines.map((lineNumber) => {
+            const confidence = activeInvoice?.items?.[lineNumber - 1]?.ocrConfidence;
+            return typeof confidence === "number" && Number.isFinite(confidence) && confidence >= 0 && confidence <= 1
+              ? <p key={lineNumber}>Line {lineNumber}: {numberFormat.format(Math.floor(confidence * 10000) / 100)}% reading confidence; automatic intake requires at least 98%.</p>
+              : null;
+          })}
+          <p className="max-w-prose text-muted-foreground">Check these lines against the original. Retrying keeps the same confidence score. Resolve the corrections above, then confirm the final review to continue.</p>
+          </details>
         </div>
-      )}
-      {editingChecks && canReview && access.commit && (
-        <label className="flex items-start gap-3 rounded-md border p-4 text-sm">
-          <input
-            type="checkbox"
-            className="mt-1"
-            checked={reviewAccepted}
-            disabled={busy}
-            onChange={(e) => setReviewAccepted(e.target.checked)}
-          />
-          <span>
-            I checked the supplier, product matches, batches, expiry, paid/free
-            quantities and totals against the original. Save &amp; Process may
-            add this stock.
-          </span>
-        </label>
       )}
       {editingChecks &&
         confirmationCount === 0 &&
         otherReviewIssues.length === 0 && (
-          <p className="text-sm">
-            No outstanding OCR checks. Verify the invoice details, quantities,
-            rates and totals before continuing.
-          </p>
+          <PurchaseStatusCue tone="success">No outstanding OCR checks</PurchaseStatusCue>
         )}
     </section>
   );
 
-  const invoiceActions = activeInvoice && (
-    <div className="flex flex-wrap items-center gap-2">
-      {stockStatusUnknown ? (
-        <Button
-          variant="outline"
-          onClick={() => refreshStockStatus(activeInvoice.id)}
-          disabled={busy}
-        >
-          Refresh stock status
-        </Button>
-      ) : stockAdded ||
-        activeInvoice.status === "CANCELLED" ? null : activeInvoice.status ===
-        "REVIEWED" ? (
-        <Button onClick={commitStock} disabled={!canCommit || busy}>
-          {committing ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <PackagePlus className="h-4 w-4" />
-          )}
-          Commit Stock
-        </Button>
-      ) : canReview && !access.commit ? (
-        <Button onClick={reviewInvoice} disabled={busy}>
-          Mark Reviewed
-        </Button>
-      ) : editingSelectedInvoice ? (
-        <Button
-          disabled={savedFormLocked || busy || draftWriteBlocked}
-          onClick={() =>
-            reviewAccepted && canReview && access.commit
-              ? reviewAndCommit()
-              : access.automate
-                ? processSavedInvoice()
-                : saveDraft()
-          }
-        >
-          {(saving || processing) && (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          )}
-          {saving
-            ? "Saving…"
-            : processing
-              ? "Checking invoice…"
-              : access.automate
-                ? reviewAccepted && canReview
-                  ? "Review & Add stock"
-                  : "Save & Process"
-                : "Save corrections"}
-        </Button>
-      ) : (
-        <Button
-          disabled={!access.create || busy}
-          onClick={() => editSavedDraft(activeInvoice)}
-        >
-          Review issues
-        </Button>
+  const postingBlocker = stockStatusUnknown
+    ? "Refresh stock status before continuing."
+    : draftWriteBlocked
+      ? "Reload the saved invoice to resolve the revision conflict before posting."
+      : historicalStockHold
+        ? "An inventory administrator must check this bill against opening stock before posting."
+        : !access.commit || !access.review || !access.create
+          ? "Saving and adding stock requires create, review and stock permissions."
+          : confirmationCount > 0
+            ? "Finish the highlighted invoice checks before adding stock."
+            : !reviewDate
+              ? "Enter the goods received date before adding stock."
+              : null;
+  const invoiceActions = (
+    <section aria-label="Invoice actions" className="sticky bottom-0 z-20 space-y-2 border-t bg-background py-3">
+      {!stockAdded && activeInvoice?.status !== "CANCELLED" && activeInvoice?.status !== "REVIEWED" &&
+        !postingBlocker && (!activeInvoice || editingSelectedInvoice) && (
+        <label className="flex items-start gap-2 text-sm">
+          <input type="checkbox" className="mt-1 h-4 w-4 shrink-0" checked={reviewAccepted} disabled={busy}
+            onChange={e => setReviewAccepted(e.target.checked)} />
+          <span>I verified the invoice against the original. {workflowReceiptId ? "I approve posting this bill against the earlier stock receipt." : "I approve adding the received quantities to stock."}</span>
+          <PurchaseHelp label="Final stock review">Verify the supplier, product matches, batches, expiry, paid/free quantities and totals against the original before confirming.</PurchaseHelp>
+        </label>
       )}
-      {editingSelectedInvoice && !stockAdded && !savedFormLocked && (
-        <Button
-          variant="outline"
-          onClick={saveIncompleteDraft}
-          disabled={busy || draftWriteBlocked}
-        >
-          Save draft for later
-        </Button>
+      <div className="flex flex-wrap items-center gap-2">
+        {stockStatusUnknown && activeInvoice ? (
+          <Button variant="outline" onClick={() => refreshStockStatus(activeInvoice.id)} disabled={busy}>Refresh stock status</Button>
+        ) : stockAdded || activeInvoice?.status === "CANCELLED" ? null : activeInvoice?.status === "REVIEWED" ? (
+          <>
+            <Button onClick={saveAndPostInvoice} disabled={!canCommit || busy}>
+              {committing && <Spinner className="h-4 w-4 " />}
+              {activeInvoice.workflowReceiptId ? "Post bill" : "Add stock"}
+            </Button>
+            {access.create && access.review && (
+              reopenRequest?.invoiceId === activeInvoice.id ? (
+                <form className="flex flex-wrap items-end gap-2" onSubmit={event => { event.preventDefault(); void reopenReviewed(); }}>
+                  <label className="grid gap-1 text-sm">Reason for reopening
+                    <Input autoFocus required disabled={busy} value={reopenRequest.reason} onChange={event => setReopenRequest({ invoiceId: activeInvoice.id, reason: event.target.value })} />
+                  </label>
+                  <Button type="submit" variant="outline" disabled={busy}>Reopen bill</Button>
+                  <Button type="button" variant="ghost" disabled={busy} onClick={() => setReopenRequest(null)}>Cancel</Button>
+                </form>
+              ) : <Button variant="outline" onClick={() => setReopenRequest({ invoiceId: activeInvoice.id, reason: "" })} disabled={busy}>Reopen for correction</Button>
+            )}
+          </>
+        ) : canReview && !access.commit ? (
+          <Button onClick={reviewInvoice} disabled={busy}>Mark Reviewed</Button>
+        ) : !activeInvoice || editingSelectedInvoice ? (
+          <Button onClick={saveAndPostInvoice} disabled={busy || !!postingBlocker || !reviewAccepted} aria-describedby="purchase-posting-guidance">
+            {busy && <Spinner className="h-4 w-4 " />}
+            {postingLabel}
+          </Button>
+        ) : (
+          <Button disabled={!access.create || busy} onClick={() => editSavedDraft(activeInvoice)}>Review issues</Button>
+        )}
+        {!stockAdded && !savedFormLocked && (!activeInvoice || editingSelectedInvoice) && (
+          <>
+            <Button variant="outline" disabled={busy || draftWriteBlocked} onClick={() =>
+              validateDraft(header, lines).length || reportedAmountErrors(originalAmounts).length
+                ? saveIncompleteDraft() : saveDraft()}>Save draft</Button>
+            {access.automate && <details className="relative text-sm">
+              <summary className="cursor-pointer py-2">More options</summary>
+              <div className="absolute bottom-full left-0 w-64 space-y-2 rounded-md border bg-background p-3">
+                <p className="text-muted-foreground">Automatic processing saves corrections and adds stock if every check passes.</p>
+                <Button variant="outline" disabled={busy || draftWriteBlocked} onClick={processSavedInvoice}>{saving ? "Saving…" : processing ? "Checking invoice…" : "Save & Process"}</Button>
+              </div>
+            </details>}
+          </>
+        )}
+        <span className="text-sm text-muted-foreground">{stockAdded ? committedLabel : workflowReceiptId ? "Stock received earlier · 0 added again" : activeInvoice ? purchaseInvoiceStatusLabel(activeInvoice) : "Not saved · stock not added"}</span>
+      </div>
+      {!stockAdded && activeInvoice?.status !== "CANCELLED" && activeInvoice?.status !== "REVIEWED" && (
+        <p id="purchase-posting-guidance" className="text-sm text-muted-foreground">
+          {postingBlocker || (!reviewAccepted ? "Confirm the invoice against the original to enable posting." : workflowReceiptId ? "Posts the bill against stock received earlier. No stock is added again." : "Saves the invoice and adds the received quantities after review.")}{" "}
+          {!!postingBlocker && <a className="underline underline-offset-4" href="#purchase-review-checklist">Review checks</a>}
+        </p>
       )}
-    </div>
+    </section>
   );
 
   const recentInvoices = (
@@ -2893,9 +3007,7 @@ function PurchaseInvoiceEditor({
             disabled={loadingList}
             aria-label="Refresh purchase invoices"
           >
-            <RefreshCw
-              className={`h-4 w-4 ${loadingList ? "animate-spin" : ""}`}
-            />
+            {loadingList ? <Spinner className="h-4 w-4" /> : <RefreshCw className="h-4 w-4" />}
           </Button>
         </div>
       </div>
@@ -2938,7 +3050,7 @@ function PurchaseInvoiceEditor({
                     </p>
                   </div>
                   <Badge variant={statusVariant(invoice.status)}>
-                    {statusLabel(invoice.status)}
+                    {purchaseInvoiceStatusLabel(invoice)}
                   </Badge>
                 </div>
                 <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
@@ -2990,6 +3102,40 @@ function PurchaseInvoiceEditor({
             verified against that receipt before the bill is posted.
           </p>
         )}
+        {activeInvoice && editingSelectedInvoice && !savedFormLocked && access.create && (
+          <details open={!!workflowReceiptId} className="space-y-2 rounded-md border p-3 text-sm">
+            <summary className="cursor-pointer font-medium">{workflowReceiptId ? "Correct the earlier stock receipt" : "Link stock received earlier"}</summary>
+            <p>Choose the posted receipt for these goods. Removing a receipt link will make this bill add stock when posted.</p>
+            <div className="flex flex-wrap items-end gap-2">
+              <label>Receipt reference
+                <input className="ml-2 rounded-md border p-2" value={receiptSearch} onChange={e => setReceiptSearch(e.target.value)} />
+              </label>
+              <Button type="button" variant="outline" disabled={busy} onClick={async () => {
+                try {
+                  const result = await apiClient.get<any>(`/inventory/workspace/documents?kind=INWARD_CHALLAN&status=POSTED&limit=100&search=${encodeURIComponent(receiptSearch)}`);
+                  setReceiptOptions(result.rows || []);
+                  if (!result.rows?.length) setNotice("No matching posted receipts. Check the reference and your receipt access.");
+                } catch (err) { setError(getErrorMessage(err)); }
+              }}>Find posted receipts</Button>
+              {!!receiptOptions.length && <label>Posted receipt
+                <select className="ml-2 rounded-md border p-2" value={workflowReceiptId} disabled={busy} onChange={e => {
+                  setWorkflowReceiptId(e.target.value); setReviewAccepted(false);
+                }}>
+                  <option value="" disabled>Select the receipt for these goods</option>
+                  {!receiptOptions.some(r => r.id === workflowReceiptId) && workflowReceiptId && <option value={workflowReceiptId}>Current receipt</option>}
+                  {receiptOptions.map(receipt => <option key={receipt.id} value={receipt.id}>{receipt.reference} · {receipt.supplierGstin}</option>)}
+                </select>
+              </label>}
+              {workflowReceiptId && <Button type="button" variant="outline" disabled={busy} onClick={async () => {
+                if ((await confirmAction({ title: "Remove receipt link?", description: "Remove the receipt link only if these goods have not already been added to inventory. Posting this bill will add stock. Continue?", confirmLabel: "Remove link", variant: "destructive" }))) {
+                  const current = confirmationState.current;
+                  if (current.activeInvoice !== activeInvoice || current.workflowReceiptId !== workflowReceiptId || current.draftWriteBlocked || current.unknownStockInvoiceId || postingLock.current || saveLock.current) return;
+                  setWorkflowReceiptId(""); setReviewAccepted(false);
+                }
+              }}>Remove incorrect receipt link</Button>}
+            </div>
+          </details>
+        )}
         {!activeInvoice && serverDrafts.length > 0 && (
           <section className="space-y-2">
             <h4 className="font-semibold">Saved unfinished intake</h4>
@@ -3027,7 +3173,7 @@ function PurchaseInvoiceEditor({
               aria-label="Stock status"
               className="min-w-0 text-sm"
             >
-              <p className="font-semibold">
+              <PurchaseStatusCue tone={stockAdded ? "success" : stockStatusUnknown ? "warning" : "neutral"}>
                 {stockStatusUnknown
                   ? "Stock status unknown"
                   : committing
@@ -3037,7 +3183,7 @@ function PurchaseInvoiceEditor({
                       : stockAdded
                         ? committedLabel
                         : "Stock not added"}
-              </p>
+              </PurchaseStatusCue>
               {stockAdded && activeInvoice.stockCommitReference && (
                 <p className="break-all text-xs text-muted-foreground">
                   Reference: {activeInvoice.stockCommitReference}
@@ -3052,16 +3198,6 @@ function PurchaseInvoiceEditor({
                 View source
               </a>
             )}
-            {editingSelectedInvoice &&
-              !stockAdded &&
-              activeInvoice.status !== "REVIEWED" && (
-                <a
-                  className="text-sm underline underline-offset-4"
-                  href="#purchase-review-checklist"
-                >
-                  Review checklist
-                </a>
-              )}
             <Button
               variant="outline"
               onClick={() => {
@@ -3072,12 +3208,11 @@ function PurchaseInvoiceEditor({
             >
               New invoice
             </Button>
-            {invoiceActions}
           </nav>
         )}
         {stockAdded && activeInvoice?.committedItems?.length && (
           <section
-            className="space-y-2 rounded-md border border-green-600 p-4"
+            className="space-y-2 rounded-md border border-success-border p-4"
             aria-label="Confirmed receipt"
           >
             <h4 className="font-semibold">
@@ -3107,15 +3242,6 @@ function PurchaseInvoiceEditor({
             </ul>
           </section>
         )}
-        {activeInvoice && !showIntakeHome && (
-          <PurchaseDocumentActions
-            invoice={activeInvoice}
-            onRefresh={() => refreshStockStatus(activeInvoice.id)}
-            onEdit={
-              !savedFormLocked ? () => editSavedDraft(activeInvoice) : undefined
-            }
-          />
-        )}
         {permissionsLoading && (
           <p role="status">Loading invoice permissions…</p>
         )}
@@ -3140,13 +3266,13 @@ function PurchaseInvoiceEditor({
               tabIndex={-1}
               className="text-xl font-semibold tracking-tight"
             >
-              {showIntakeHome ? "Invoice OCR" : "Purchase Invoice Intake"}
+              Scan or enter bill
             </h3>
             <p className="text-sm text-muted-foreground">
-              Upload a bill or continue a saved invoice.
+              Upload every page. Check the reading. Add stock when ready.
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div hidden={!hasDraftContent && !manualEntry} className="flex flex-wrap gap-2">
             <Button
               variant="outline"
               onClick={() => {
@@ -3157,34 +3283,7 @@ function PurchaseInvoiceEditor({
             >
               New invoice
             </Button>
-            {!activeInvoice && (
-              <Button
-                variant="outline"
-                onClick={saveIncompleteDraft}
-                disabled={busy || savedFormLocked}
-              >
-                {saving ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <Save className="h-4 w-4 mr-2" />
-                )}
-                Save Draft
-              </Button>
-            )}
-            {!activeInvoice && access.create && (
-              <Button
-                disabled={busy || draftWriteBlocked}
-                onClick={() =>
-                  access.automate ? processSavedInvoice() : saveDraft()
-                }
-              >
-                {processing
-                  ? "Saving and checking…"
-                  : access.automate
-                    ? "Save & Process"
-                    : "Save invoice"}
-              </Button>
-            )}
+
           </div>
         </div>
 
@@ -3194,9 +3293,7 @@ function PurchaseInvoiceEditor({
               <p className="break-words text-sm font-medium">
                 {activeInvoice.invoiceNumber} · {activeInvoice.distributorName}
               </p>
-              <p className="text-sm text-muted-foreground">
-                Your place and any unsaved corrections are kept in this tab.
-              </p>
+              <PurchaseStatusCue>Draft kept in this tab</PurchaseStatusCue>
             </div>
             <Button
               variant="outline"
@@ -3209,6 +3306,13 @@ function PurchaseInvoiceEditor({
         )}
 
         {!showIntakeHome && !activeInvoice && recentInvoices}
+        {!showIntakeHome && <PurchaseReviewSummary
+          hasContent={hasDraftContent}
+          saved={activeInvoice?.status === "REVIEWED"} committed={stockAdded} cancelled={activeInvoice?.status === "CANCELLED"} unknown={stockStatusUnknown}
+          checks={confirmationCount + correctionIssues.length + manualConfidenceLines.length} lines={sourceLines.length}
+          calculated={viewingSavedInvoice ? calculateTotals(sourceHeader as HeaderForm, sourceLines).netPayable : totals.netPayable}
+          printed={sourceAmounts?.netPayable} />}
+
 
         <div
           ref={actionFeedbackRef}
@@ -3282,16 +3386,12 @@ function PurchaseInvoiceEditor({
                     </p>
                   </div>
                   <Badge variant={statusVariant(activeInvoice.status)}>
-                    {canResumeManualReview(activeInvoice)
-                      ? "MANUAL REVIEW NEEDED"
-                      : statusLabel(activeInvoice.status)}
+                    {purchaseInvoiceStatusLabel(activeInvoice)}
                   </Badge>
                 </div>
                 {activeInvoice.status === "STOCK_COMMITTED" ? (
                   <p className="text-sm">
-                    {stockReceivedEarlier
-                      ? "This invoice is posted against its inward receipt. Stock was received earlier; posting this bill adds no duplicate stock."
-                      : "This invoice has already added stock. It cannot be committed again."}
+                    {stockReceivedEarlier ? "Bill posted. Stock was received earlier." : "Stock added. To fix a saved quantity, price or product detail, open the batch below."}
                   </p>
                 ) : activeInvoice.status === "CANCELLED" ? (
                   <p className="text-sm">
@@ -3303,14 +3403,10 @@ function PurchaseInvoiceEditor({
                       {stockStatusUnknown
                         ? "The request was interrupted. Refresh stock status to confirm the saved outcome before continuing."
                         : activeInvoice.status === "REVIEWED"
-                          ? "Next: Commit Stock. Review is complete; stock has not been added yet."
-                          : awaitingManualReview
-                            ? "Next: confirm your review below, then Save & Process to add stock. Your corrections are saved."
-                            : editingSelectedInvoice && access.automate
-                              ? "Save & Process saves your corrections, checks the invoice and adds stock when every automatic check passes."
-                              : canReview
-                                ? "Next: confirm your review, then Save & Process. Stock has not been added yet."
-                                : "Check the highlighted details against the original, then save your corrections."}
+                          ? "Review complete. Choose Add stock when ready."
+                          : historicalStockHold
+                            ? "Check this bill against opening stock with an inventory administrator before proceeding."
+                          : `Check the highlighted details, confirm the invoice, then choose ${postingLabel}.`}
                     </p>
                     <div className="flex flex-wrap items-end justify-between gap-4">
                       <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
@@ -3372,6 +3468,7 @@ function PurchaseInvoiceEditor({
                         >
                           Totals
                         </a>
+                        <a className="underline underline-offset-4" href="#purchase-document-actions">Files &amp; history</a>
                       </nav>
                     )}
                     {!access.review && (
@@ -3441,13 +3538,11 @@ function PurchaseInvoiceEditor({
                   <summary className="cursor-pointer text-sm font-medium">
                     {editingSelectedInvoice && !showIntakeHome
                       ? "Replace invoice file"
-                      : "Upload invoice"}
+                      : "Scan a bill"}
                   </summary>
-                  <div className="mt-3">
-                    <CardDescription>
-                      Import saves the original and adds stock only when every
-                      check passes.
-                    </CardDescription>
+                  <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                    <PurchaseStatusCue>Scan only · stock stays unchanged</PurchaseStatusCue>
+                    <PurchaseHelp label="Invoice import">Scanning keeps the original and fills in the details for you to check. You can correct any misread value before saving.</PurchaseHelp>
                   </div>
                   <div className="mt-3 space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_auto] gap-3">
@@ -3468,8 +3563,7 @@ function PurchaseInvoiceEditor({
                           disabled={extracting || saving || processing}
                         />
                         <p className="mt-1 text-xs text-muted-foreground">
-                          PDF, JPG, PNG or WebP. Select all pages of one invoice
-                          in page order (up to 10 files).
+                          PDF or photos · Up to 10 files · One invoice, in page order
                         </p>
                       </div>
                       <div className="flex flex-col gap-3">
@@ -3487,45 +3581,17 @@ function PurchaseInvoiceEditor({
                             disabled={extracting || saving || processing}
                           />
                         </div>
-                        <Button
-                          type="button"
-                          onClick={() => extractFromInvoiceFile(true)}
-                          disabled={
-                            !access.automate ||
-                            extracting ||
-                            saving ||
-                            processing ||
-                            !ocrFile ||
-                            !importReceivedDate
-                          }
-                          className="w-full md:w-auto"
-                        >
-                          {extracting ? (
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          ) : (
-                            <Upload className="h-4 w-4 mr-2" />
-                          )}
-                          {extracting
-                            ? "Processing Invoice"
-                            : "Import & Add Stock"}
+                        <Button type="button" onClick={() => extractFromInvoiceFile(false)}
+                          disabled={!access.create || busy || !ocrFile || !importReceivedDate} className="w-full md:w-auto">
+                          {extracting ? <Spinner className="h-4 w-4 " /> : <FileSearch className="h-4 w-4" />}
+                          {extracting ? "Reading bill…" : "Scan bill"}
                         </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          onClick={() => extractFromInvoiceFile(false)}
-                          disabled={
-                            !access.create ||
-                            extracting ||
-                            saving ||
-                            processing ||
-                            !ocrFile
-                          }
-                        >
-                          Extract Draft
-                        </Button>
-                        <p className="max-w-xs text-xs text-muted-foreground">
-                          Extract Draft previews details without adding stock.
-                        </p>
+                        <a href="#distributor-name" className="text-center text-sm underline underline-offset-4" onClick={() => { setShowIntakeHome(false); setManualEntry(true); requestAnimationFrame(() => focusPurchaseField('distributor-name')); }}>Type instead</a>
+                        {access.automate && <details className="text-sm">
+                          <summary className="cursor-pointer py-2">Automatic import</summary>
+                          <p className="my-2 text-muted-foreground">Adds stock if every automatic check passes.</p>
+                          <Button type="button" variant="outline" onClick={() => extractFromInvoiceFile(true)} disabled={busy || !ocrFile || !importReceivedDate}>Import &amp; Add Stock</Button>
+                        </details>}
                       </div>
                     </div>
 
@@ -3553,9 +3619,9 @@ function PurchaseInvoiceEditor({
                           {(ocrSummary.includedPageCount || 1) === 1 ? "" : "s"}
                           .
                         </span>
-                        {ocrSummary.flags?.length ? (
+                        {currentHeaderFlags.length ? (
                           <div className="mt-2 flex flex-wrap gap-2">
-                            {ocrSummary.flags.map((flag) => (
+                            {currentHeaderFlags.map((flag) => (
                               <Badge key={flag} variant="destructive">
                                 {flag.replaceAll("_", " ")}
                               </Badge>
@@ -3570,10 +3636,10 @@ function PurchaseInvoiceEditor({
                 {showIntakeHome && recentInvoices}
 
                 <section
-                  hidden={showIntakeHome}
+                  hidden={showIntakeHome || (!hasDraftContent && !manualEntry)}
                   aria-label="Invoice details and products"
                 >
-                  {!activeInvoice && reviewChecklist}
+                  {!activeInvoice && (hasDraftContent || manualEntry) && reviewChecklist}
                   <fieldset
                     disabled={savedFormLocked || busy}
                     className="mt-4 space-y-5 min-w-0"
@@ -3584,10 +3650,6 @@ function PurchaseInvoiceEditor({
                           <Truck className="h-5 w-5" />
                           Distributor Bill
                         </CardTitle>
-                        <CardDescription>
-                          Review extracted values or enter the distributor bill
-                          manually.
-                        </CardDescription>
                       </CardHeader>
                       <CardContent className="space-y-5">
                         {headerFlags && (
@@ -3872,13 +3934,9 @@ function PurchaseInvoiceEditor({
                               <div>
                                 <CardTitle className="flex items-center gap-2">
                                   <FileSearch className="h-5 w-5" />
-                                  Product matching and details
+                                  Product matching
+                                  <PurchaseHelp label="Product matching">Clinic inventory appears first, followed by catalog products. Check the product and pack before confirming. Matches are remembered for this supplier. Loose dispensing is managed separately in inventory.</PurchaseHelp>
                                 </CardTitle>
-                                <CardDescription>
-                                  Match each invoice line to the correct saved
-                                  product and pack before adding stock.
-                                  Manufacturer is optional.
-                                </CardDescription>
                               </div>
                               <Button
                                 type="button"
@@ -3893,7 +3951,7 @@ function PurchaseInvoiceEditor({
                                 }
                               >
                                 {masterRefreshing ? (
-                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                  <Spinner className="h-4 w-4 mr-2 " />
                                 ) : (
                                   <RefreshCw className="h-4 w-4 mr-2" />
                                 )}
@@ -3904,320 +3962,61 @@ function PurchaseInvoiceEditor({
                           <CardContent className="space-y-3">
                             {masterMatches.length === 0 && (
                               <p className="text-sm text-muted-foreground">
-                                Choose Refresh Matches to find saved products.
-                                Confirm a match to fill its manufacturer and
-                                pack details, then enter the stock unit (Bottle,
-                                Tube or Strip) if it is still missing.
+                                Refresh Matches to find saved products.
                               </p>
                             )}
                             {masterMatches.map((match) => {
                               if (!access.create) return;
                               const line = lines[match.lineIndex];
-                              const best = match.candidates[0];
+                              const best = match.recommendedAction === "CREATE_NEW" ? undefined : match.candidates[0];
                               const status = masterStatuses[match.lineIndex];
-                              const confirmMatchKey = `${match.lineIndex}:MATCH_EXISTING`;
                               const savedProduct = status?.drug || best?.drug;
+                              const choices = match.recommendedAction === "CREATE_NEW" ? [] : [...match.candidates, ...(match.alternatives || []).filter(candidate => candidate.sameBrand)].slice(0, 5);
                               return (
-                                <div
-                                  key={`${match.lineIndex}-${fieldValue(match.ocr?.productName)}`}
-                                  className="rounded-md border p-3"
-                                >
-                                  <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-                                    <div>
-                                      <p className="text-sm font-medium">
-                                        Line {match.lineIndex + 1}:{" "}
-                                        {line?.productName ||
-                                          fieldValue(match.ocr?.productName)}
-                                      </p>
-                                      <p className="text-xs text-muted-foreground">
-                                        Recommended:{" "}
-                                        {match.recommendedAction
-                                          .replaceAll("_", " ")
-                                          .toLowerCase()}
-                                      </p>
+                                <section key={`${match.lineIndex}-${fieldValue(match.ocr?.productName)}`} aria-label={`Product matching for line ${match.lineIndex + 1}`} className="space-y-3 border-t py-4 first:border-t-0 first:pt-0">
+                                  <div className="flex flex-wrap items-start justify-between gap-2">
+                                    <div className="min-w-0">
+                                      <p className="text-sm font-medium break-words">Line {match.lineIndex + 1}: {fieldValue(match.ocr?.productName) || line?.productName}</p>
+                                      <p className="text-sm text-muted-foreground">{line?.packSize || fieldValue(match.ocr?.packSize)} · MRP {currency.format(numeric(String(line?.mrp || match.ocr?.mrp || 0)))} · Batch {line?.batchNumber || fieldValue(match.ocr?.batchNumber)}</p>
                                     </div>
-                                    {status ? (
-                                      <Badge variant="default">
-                                        {masterActionLabel(status.action)}{" "}
-                                        {status.drug.name}
-                                      </Badge>
-                                    ) : best ? (
-                                      <Badge
-                                        variant={
-                                          best.confidence === "LOW"
-                                            ? "outline"
-                                            : "secondary"
-                                        }
-                                      >
-                                        {best.confidence} ·{" "}
-                                        {numberFormat.format(best.score)}
-                                      </Badge>
-                                    ) : (
-                                      <Badge variant="outline">
-                                        No close match
-                                      </Badge>
-                                    )}
+                                    <Badge variant={status ? "default" : "outline"}>{status ? status.message === "Remembered match" ? "Remembered match" : masterActionLabel(status.action) : match.matchLabel || (best ? "Possible match" : "Not in inventory")}</Badge>
                                   </div>
-
-                                  <div className="grid grid-cols-1 gap-3">
-                                    <div className="rounded-md bg-muted/40 p-3">
-                                      <p className="mb-2 text-xs font-medium uppercase text-muted-foreground">
-                                        OCR / Draft Line
-                                      </p>
-                                      <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
-                                        <Detail
-                                          label="Product"
-                                          value={
-                                            line?.productName ||
-                                            match.ocr?.productName
-                                          }
-                                        />
-                                        <Detail
-                                          label="Manufacturer"
-                                          value={
-                                            line?.manufacturer ||
-                                            match.ocr?.manufacturer
-                                          }
-                                        />
-                                        <Detail
-                                          label="Pack"
-                                          value={
-                                            line?.packSize ||
-                                            match.ocr?.packSize
-                                          }
-                                        />
-                                        <Detail
-                                          label="MRP"
-                                          value={line?.mrp || match.ocr?.mrp}
-                                          currencyValue
-                                        />
-                                        <Detail
-                                          label="Rate"
-                                          value={
-                                            line?.purchaseRate ||
-                                            match.ocr?.purchaseRate
-                                          }
-                                          currencyValue
-                                        />
-                                        <Detail
-                                          label="Batch"
-                                          value={
-                                            line?.batchNumber ||
-                                            match.ocr?.batchNumber
-                                          }
-                                        />
-                                      </dl>
-                                    </div>
-
-                                    <div className="rounded-md bg-muted/40 p-3">
-                                      <p className="mb-2 text-xs font-medium uppercase text-muted-foreground">
-                                        Saved product
-                                      </p>
-                                      {savedProduct ? (
-                                        <>
-                                          <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
-                                            <Detail
-                                              label="Product"
-                                              value={savedProduct.name}
-                                            />
-                                            <Detail
-                                              label="Manufacturer"
-                                              value={
-                                                savedProduct.manufacturerName
-                                              }
-                                            />
-                                            <Detail
-                                              label="Pack"
-                                              value={savedProduct.packSizeLabel}
-                                            />
-                                            <Detail
-                                              label="MRP"
-                                              value={savedProduct.price}
-                                              currencyValue
-                                            />
-                                            <Detail
-                                              label="Product kind"
-                                              value={
-                                                savedProduct.productKind ||
-                                                savedProduct.type
-                                              }
-                                            />
-                                            <Detail
-                                              label="Prescription required"
-                                              value={
-                                                savedProduct.requiresPrescription ==
-                                                null
-                                                  ? "Not recorded"
-                                                  : savedProduct.requiresPrescription
-                                                    ? "Yes"
-                                                    : "No"
-                                              }
-                                            />
-                                            <Detail
-                                              label="Composition"
-                                              value={savedProduct.composition1}
-                                            />
-                                            <Detail
-                                              label="Strength"
-                                              value={savedProduct.strength}
-                                            />
-                                          </dl>
-                                          {!status && best?.reasons?.length ? (
-                                            <div className="mt-3 flex flex-wrap gap-2">
-                                              {best.reasons.map((reason) => (
-                                                <Badge
-                                                  key={reason}
-                                                  variant="outline"
-                                                >
-                                                  {reason}
-                                                </Badge>
-                                              ))}
-                                            </div>
-                                          ) : null}
-                                        </>
-                                      ) : (
-                                        <p className="text-sm text-muted-foreground">
-                                          Choose a product kind below and save
-                                          its known details. Clinical fields are
-                                          optional for cosmetics and
-                                          consumables.
-                                        </p>
-                                      )}
-                                    </div>
-                                  </div>
-
-                                  <div className="mt-3 flex flex-col gap-2 md:flex-row md:justify-end">
-                                    {best && !status && (
-                                      <Button
-                                        type="button"
-                                        variant="outline"
-                                        onClick={() =>
-                                          confirmMasterLine(
-                                            match,
-                                            "MATCH_EXISTING",
-                                            best,
-                                          )
-                                        }
-                                        disabled={
-                                          !access.create ||
-                                          busy ||
-                                          masterConfirming !== null
-                                        }
-                                      >
-                                        {masterConfirming ===
-                                          confirmMatchKey && (
-                                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                        )}
-                                        Confirm Match
-                                      </Button>
-                                    )}
-                                  </div>
-                                  {savedProduct && access.catalogDetails && (
-                                    <details
-                                      className="mt-3"
-                                      open={
-                                        !!savedProduct.catalogIssues?.length &&
-                                        (status ||
-                                          match.recommendedAction ===
-                                            "MATCH_EXISTING")
-                                          ? true
-                                          : undefined
-                                      }
-                                    >
-                                      <summary className="cursor-pointer text-sm font-medium">
-                                        Check or correct saved product details
-                                      </summary>
-                                      {!!savedProduct.catalogIssues?.length && (
-                                        <p
-                                          role="alert"
-                                          className="my-2 text-sm text-destructive"
-                                        >
-                                          Complete the saved product details:{" "}
-                                          {savedProduct.catalogIssues.join(
-                                            ", ",
-                                          )}
-                                          . Choose the correct product kind if
-                                          this is a cosmetic or consumable.
-                                        </p>
-                                      )}
-                                      {access.editProduct ? (
-                                        <PurchaseProductDetails
-                                          key={JSON.stringify(savedProduct)}
-                                          id={`product-${match.lineIndex}-edit`}
-                                          product={savedProduct}
-                                          disabled={
-                                            busy || masterConfirming !== null
-                                          }
-                                          onSave={(catalog) =>
-                                            saveProductDetails(
-                                              savedProduct,
-                                              catalog,
-                                            )
-                                          }
-                                        />
-                                      ) : (
-                                        <p className="mt-2 text-sm">
-                                          Staff with product-edit permission
-                                          must correct this saved record.
-                                        </p>
-                                      )}
-                                    </details>
-                                  )}
-                                  {!status &&
-                                    (access.catalogDetails ? (
-                                      best ? (
-                                        <details
-                                          className="mt-3"
-                                          open={
-                                            match.recommendedAction ===
-                                              "CREATE_NEW" || undefined
-                                          }
-                                        >
-                                          <summary className="cursor-pointer text-sm">
-                                            This is a different product: create
-                                            a new record
-                                          </summary>
-                                          <PurchaseProductDetails
-                                            id={`product-${match.lineIndex}-new`}
-                                            disabled={
-                                              busy || masterConfirming !== null
-                                            }
-                                            onSave={(catalog) =>
-                                              confirmMasterLine(
-                                                match,
-                                                "CREATE_NEW",
-                                                undefined,
-                                                catalog,
-                                              )
-                                            }
-                                          />
-                                        </details>
-                                      ) : (
-                                        <div className="mt-3">
-                                          <PurchaseProductDetails
-                                            id={`product-${match.lineIndex}-new`}
-                                            disabled={
-                                              busy || masterConfirming !== null
-                                            }
-                                            onSave={(catalog) =>
-                                              confirmMasterLine(
-                                                match,
-                                                "CREATE_NEW",
-                                                undefined,
-                                                catalog,
-                                              )
-                                            }
-                                          />
+                                  {status ? <p className="text-sm font-medium">{status.drug.name} · {status.drug.packSizeLabel}</p> : <>
+                                    <div className="divide-y" aria-label="Product candidates">
+                                      {choices.map((candidate, index) => <div key={candidate.drug.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
+                                        <div className="min-w-0 flex-1 basis-48">
+                                          <p className="font-medium break-words">{candidate.drug.name}</p>
+                                          <p className="text-muted-foreground">{[candidate.drug.packSizeLabel, candidate.drug.manufacturerName].filter(Boolean).join(" · ")}</p>
+                                          {!!candidate.mismatches?.filter(reason => reason !== "Product names differ").length && <p className="text-warning-text dark:text-warning-text">{candidate.mismatches.filter(reason => reason !== "Product names differ").join(" · ")}</p>}
                                         </div>
-                                      )
-                                    ) : (
-                                      <p className="mt-3 text-sm">
-                                        Product creation requires the updated
-                                        backend. Reload after the update
-                                        completes.
-                                      </p>
-                                    ))}
-                                </div>
+                                        <div className="flex items-center gap-1">
+                                          <span className="text-xs text-muted-foreground">{candidate.inInventory ? "In inventory" : "Catalog"}</span>
+                                          <PurchaseHelp label={`Line ${match.lineIndex + 1} candidate ${index + 1}`}>{[...(candidate.reasons || []), ...(candidate.mismatches || [])].join(". ") || "Check the product and pack before matching."}</PurchaseHelp>
+                                          <Button type="button" size="sm" variant={index === 0 && best ? "default" : "outline"} disabled={busy || masterConfirming !== null} onClick={() => confirmMasterLine(match, "MATCH_EXISTING", candidate)}>{index === 0 && best ? "Confirm Match" : "Select"}</Button>
+                                        </div>
+                                      </div>)}
+                                    </div>
+                                    {match.sameBrandExists && !best && <p role="status" className="text-sm">Same-brand item found. Review its pack before matching.</p>}
+                                  </>}
+                                  <PurchaseManualMatchSearch key={line?.localId || match.lineIndex} lineNumber={match.lineIndex + 1} disabled={busy || masterConfirming !== null} onSelect={drug => { void confirmMasterLine(match, "MATCH_EXISTING", { drug, score: 0, confidence: "LOW" }); }} />
+                                  {!status && <details className="text-sm">
+                                    <summary className="cursor-pointer text-muted-foreground">Invoice details</summary>
+                                    <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                                      <Detail label="Manufacturer" value={line?.manufacturer || match.ocr?.manufacturer} />
+                                      <Detail label="Rate" value={line?.purchaseRate || match.ocr?.purchaseRate} currencyValue />
+                                      <label>Invoice product kind<select className="mt-1 block w-full rounded-md border bg-background p-2" value={line?.productKind || ""} disabled={busy || masterConfirming !== null} onChange={event => { if (line) updateLine(line.localId, "productKind", event.target.value); }}><option value="">Not recorded</option><option value="MEDICINE">Medicine</option><option value="COSMETIC">Cosmetic / skin care</option><option value="CONSUMABLE">Other consumable</option></select></label>
+                                    </div>
+                                  </details>}
+                                  {savedProduct && access.catalogDetails && <details className="text-sm" open={!!savedProduct.catalogIssues?.length && !!status ? true : undefined}>
+                                    <summary className="cursor-pointer">Check or correct saved product details</summary>
+                                    {!!savedProduct.catalogIssues?.length && <p role="alert" className="my-2 text-destructive">Complete the saved product details: {savedProduct.catalogIssues.join(", ")}.</p>}
+                                    {access.editProduct ? <PurchaseProductDetails key={JSON.stringify(savedProduct)} id={`product-${match.lineIndex}-edit`} product={savedProduct} disabled={busy || masterConfirming !== null} onSave={catalog => saveProductDetails(savedProduct, catalog)} /> : <p className="mt-2">Staff with product-edit permission must correct this saved record.</p>}
+                                  </details>}
+                                  {!status && !match.sameBrandExists && (access.catalogDetails ? <details className="text-sm" open={match.recommendedAction === "CREATE_NEW"}>
+                                    <summary className="cursor-pointer font-semibold">Create new item</summary>
+                                    <PurchaseProductDetails id={`product-${match.lineIndex}-new`} createLabel="Create new item" onKindChange={kind => { if (line) updateLine(line.localId, "productKind", kind); }} disabled={busy || masterConfirming !== null} onSave={catalog => confirmMasterLine(match, "CREATE_NEW", undefined, catalog)} />
+                                  </details> : <p className="text-sm">Product creation requires the updated backend. Reload after the update completes.</p>)}
+                                </section>
                               );
                             })}
                           </CardContent>
@@ -4226,7 +4025,7 @@ function PurchaseInvoiceEditor({
 
                     <section id="purchase-line-items" className="space-y-3">
                       <div className="flex items-center justify-between">
-                        <h4 className="font-semibold">Line Items</h4>
+                        <h4 className="font-semibold">Products on this bill</h4>
                         <div className="flex gap-2">
                           <Button variant="outline" onClick={addLine}>
                             <Plus className="h-4 w-4 mr-2" />
@@ -4677,7 +4476,7 @@ function PurchaseInvoiceEditor({
                     <Card>
                       <CardHeader>
                         <CardTitle id="purchase-totals" className="text-base">
-                          Invoice Totals
+                          Check bill total
                         </CardTitle>
                       </CardHeader>
                       <CardContent className="space-y-4">
@@ -4685,13 +4484,7 @@ function PurchaseInvoiceEditor({
                           <summary className="cursor-pointer text-sm font-medium">
                             Reported discounts, TCS &amp; rounding
                           </summary>
-                          <p className="my-3 text-sm text-muted-foreground">
-                            Trade, special, cash, damage, visibility and
-                            credit/debit amounts are reported summaries already
-                            included in line taxable values. To change the
-                            payable, adjust the line discounts or scheme
-                            amounts. TCS and rounding apply to the bill total.
-                          </p>
+                          <div className="my-2 flex items-center gap-1 text-sm text-muted-foreground"><span>Change line discounts to adjust the payable.</span><PurchaseHelp label="Discounts and adjustments">Trade, special, cash, damage, visibility and credit/debit amounts are summaries already included in line taxable values. Adjust line discounts or scheme amounts to change the payable. TCS and rounding apply to the bill total.</PurchaseHelp></div>
                           <div className="grid grid-cols-2 gap-3">
                             <Field
                               id="trade-discount"
@@ -4833,9 +4626,11 @@ function PurchaseInvoiceEditor({
                           <SummaryValue
                             label="Received stock units"
                             value={String(receiptSummary.received)}
+                            help="Paid plus free quantities in each line’s declared stock unit. Pack contents are not multiplied into this count."
                           />
                           <SummaryValue
                             label="Indicative margin at MRP"
+                            help="Margin as a percentage of sales at each unit’s MRP, before selling discounts. GST is excluded from sales and purchase cost; TCS and rounding are excluded. Missing MRP makes margin unknown."
                             value={
                               receiptSummary.marginPercent === null
                                 ? "Unknown"
@@ -4843,14 +4638,6 @@ function PurchaseInvoiceEditor({
                             }
                           />
                         </div>
-                        <p className="text-sm text-muted-foreground">
-                          Quantities count each line’s declared stock units,
-                          including free units, without multiplying by pack
-                          contents. Margin is a percentage of sales at each
-                          unit’s MRP before selling discounts: GST is excluded
-                          from sales and purchase cost; TCS and rounding are
-                          excluded. Missing MRP makes margin unknown.
-                        </p>
                         <ReportedAmountsEditor
                           id="invoice"
                           values={originalAmounts}
@@ -4928,7 +4715,7 @@ function PurchaseInvoiceEditor({
                             onClick={() => {
                               setSourceDocument(document);
                               setNotice(
-                                "Original selected for this draft. Save Draft links the file to the invoice.",
+                                "Original selected for this draft. Save draft links the file to the invoice.",
                               );
                             }}
                           >
@@ -5060,6 +4847,14 @@ function PurchaseInvoiceEditor({
             />
           )}
         </div>
+        {(!showIntakeHome || !activeInvoice) && (hasDraftContent || manualEntry) && invoiceActions}
+        {activeInvoice && !showIntakeHome && (
+          <div id="purchase-document-actions">
+            <PurchaseDocumentActions invoice={activeInvoice}
+              onRefresh={() => refreshStockStatus(activeInvoice.id)}
+              onEdit={!savedFormLocked ? () => editSavedDraft(activeInvoice) : undefined} />
+          </div>
+        )}
       </div>
     </PurchaseSourceContext.Provider>
   );
@@ -5105,11 +4900,7 @@ function ReportedAmountsEditor({
       <summary className="cursor-pointer text-sm font-medium">
         Amounts read from invoice
       </summary>
-      <p className="my-3 text-xs text-muted-foreground">
-        Check these amounts against the invoice and correct any reading errors.
-        Printed amounts stay unchanged when quantities, rates or taxes change.
-        Correct these fields only against the original invoice.
-      </p>
+      <div className="my-2 flex items-center gap-1 text-xs text-muted-foreground"><span>Correct only against the original.</span><PurchaseHelp label="Amounts read from invoice">These are the printed amounts. They stay unchanged when quantities, rates or taxes change. Correct only OCR reading errors after checking the original.</PurchaseHelp></div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {fields.map(([key, label]) => (
           <Field
@@ -5142,7 +4933,7 @@ function Field({ id, label, className, ...props }: FieldProps) {
         {...props}
         className={
           source.enabled && source.selectedId === id
-            ? "outline-2 outline-amber-600 bg-amber-50 dark:bg-amber-950"
+            ? "outline-2 outline-amber-600 bg-warning-soft dark:bg-warning"
             : undefined
         }
       />
@@ -5170,14 +4961,16 @@ function SummaryValue({
   label,
   value,
   strong,
+  help,
 }: {
   label: string;
   value: string;
   strong?: boolean;
+  help?: string;
 }) {
   return (
     <div className="rounded-md border px-3 py-2">
-      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="flex items-center gap-1 text-xs text-muted-foreground">{label}{help && <PurchaseHelp label={label}>{help}</PurchaseHelp>}</p>
       <p
         className={`break-words text-base tabular-nums ${strong ? "font-semibold" : "font-medium"}`}
       >

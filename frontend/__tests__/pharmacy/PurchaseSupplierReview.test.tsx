@@ -55,6 +55,18 @@ it('selects an existing supplier instead of creating a duplicate identity', asyn
   expect(api.post).not.toHaveBeenCalled();
 });
 
+it('shows both GSTINs before selecting a same-name supplier with different details', async () => {
+  api.get.mockResolvedValue([supplier]);
+  const callbacks = props();
+  render(<PurchaseSupplierReview {...callbacks} gstNumber="36AAICV6140M1ZW" />);
+  expect(await screen.findByText('Supplier GSTIN needs correction')).toBeVisible();
+  expect(screen.getByText('36AAICV6140M1ZW')).toBeVisible();
+  expect(screen.getByText(supplier.gstNumber)).toBeVisible();
+  expect(screen.getByText(/Selecting a supplier replaces the invoice name and GSTIN/)).toBeVisible();
+  expect(screen.queryByText('Or continue without saving a supplier.')).not.toBeInTheDocument();
+  expect(callbacks.onChange).not.toHaveBeenCalled();
+});
+
 it('distinguishes list failure from an empty directory and supports retry', async () => {
   api.get.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce([supplier]);
   render(<PurchaseSupplierReview {...props()} />);
@@ -68,7 +80,7 @@ it('keeps supplier creation unavailable without permission and explains the manu
   render(<PurchaseSupplierReview {...props()} canSave={false} />);
   await screen.findByText(/directory is empty/);
   expect(screen.queryByRole('button', { name: 'Save verified supplier' })).not.toBeInTheDocument();
-  expect(screen.getByText(/Your permissions allow invoice entry but not saving suppliers/)).toBeVisible();
+  expect(screen.getByText('Supplier creation needs an authorised staff member.')).toBeVisible();
   expect(screen.getByText(/continue without saving a supplier/)).toBeVisible();
 });
 

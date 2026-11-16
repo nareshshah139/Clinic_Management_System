@@ -30,6 +30,11 @@ export function stockStatus(item: any, quantity = item.currentStock) {
     ? 'LOW_STOCK'
     : 'IN_STOCK';
 }
+/**
+ * @cc [owner:nareshshah139] historical-movement-direction
+ * A recorded signed quantityDelta or notes.delta MUST take precedence over movement type.
+ * Legacy adjustments and transfers without a signed delta MUST return null, never a guessed sign.
+ */
 export function movementDelta(row: any): number | null {
   if (Number.isFinite(row.quantityDelta)) return row.quantityDelta;
   const info = jsonObject(row.notes);
@@ -59,6 +64,7 @@ export async function writeStockMovement(
     unitPrice?: number;
     notes?: string;
     location?: string;
+    customer?: string;
     consumeHeld?: number;
     metadata?: Record<string, unknown>;
   },
@@ -123,6 +129,7 @@ export async function writeStockMovement(
       expiryDate: item.expiryDate,
       supplier: item.supplier,
       location: input.location ?? item.storageLocation,
+      customer: input.customer,
       notes: JSON.stringify({
         costPerStockUnit: money(item.costPrice),
         accountingCategory:

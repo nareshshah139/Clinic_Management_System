@@ -1,5 +1,7 @@
 "use client";
 
+import { Spinner } from '@/components/ui/spinner';
+
 import {
   useCallback,
   useEffect,
@@ -170,9 +172,9 @@ function SummaryMetric({
 }) {
   const toneClass =
     tone === "good"
-      ? "text-emerald-700"
+      ? "text-success-text"
       : tone === "warn"
-        ? "text-amber-700"
+        ? "text-warning-text"
         : "text-foreground";
   return (
     <div className="min-w-0 rounded-md border bg-background p-3">
@@ -308,7 +310,7 @@ export function ComplianceCenter({
               onClick={loadGstSummary}
               disabled={loading.gst}
             >
-              <RefreshCw className={loading.gst ? "animate-spin" : ""} />
+              {loading.gst ? <Spinner className="size-4" /> : <RefreshCw className="size-4" />}
               Refresh
             </Button>
           </div>
@@ -402,7 +404,7 @@ export function ComplianceCenter({
               onClick={loadMonthlyReport}
               disabled={loading.monthly}
             >
-              <RefreshCw className={loading.monthly ? "animate-spin" : ""} />
+              {loading.monthly ? <Spinner className="size-4" /> : <RefreshCw className="size-4" />}
               Refresh
             </Button>
           </div>
@@ -541,7 +543,7 @@ export function ComplianceCenter({
                   onClick={loadExpiryReturns}
                   disabled={loading.expiry}
                 >
-                  <RefreshCw className={loading.expiry ? "animate-spin" : ""} />
+                  {loading.expiry ? <Spinner className="size-4" /> : <RefreshCw className="size-4" />}
                   Refresh
                 </Button>
               </div>
@@ -837,7 +839,7 @@ function ReportRecords({ title, report }: { title: string; report: any }) {
                 <td className="p-2">{r.status}</td>
                 <td className="p-2">{currency.format(r.taxableAmount)}</td>
                 <td className="p-2">{currency.format(r.gstAmount)}</td>
-                <td className="p-2">{currency.format(r.totalAmount)}</td>
+                <td className="p-2 text-right tabular-nums">{currency.format(r.totalAmount)}</td>
               </tr>
             ))}
           </tbody>

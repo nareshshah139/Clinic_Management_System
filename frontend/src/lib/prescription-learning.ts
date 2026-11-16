@@ -6,6 +6,8 @@ export interface LearnedPlanSuggestion {
   supportingLabel?: string;
   diagnosisText: string;
   confidence: number;
+  // Describes record similarity, not clinical suitability or diagnostic certainty.
+  autoApplyEligible: boolean;
   evidenceCount: number;
   items: Array<Record<string, unknown>>;
   investigations: string[];
@@ -82,12 +84,11 @@ const DIAGNOSIS_ALIAS_REPLACEMENTS: Array<{ pattern: RegExp; replacement: string
   { pattern: /\bpih\b/g, replacement: 'post inflammatory hyperpigmentation' },
   { pattern: /\bpost acne marks\b/g, replacement: 'post inflammatory hyperpigmentation' },
   { pattern: /\bav\b/g, replacement: 'acne vulgaris' },
-  { pattern: /\bacne\b/g, replacement: 'acne vulgaris' },
+  { pattern: /\bacne\b(?!\s+vulgaris)/g, replacement: 'acne vulgaris' },
   { pattern: /\bad\b/g, replacement: 'atopic dermatitis' },
   { pattern: /\bsd\b/g, replacement: 'seborrheic dermatitis' },
   { pattern: /\bseb[\s-]*derm(?:atitis)?\b/g, replacement: 'seborrheic dermatitis' },
   { pattern: /\blp\b/g, replacement: 'lichen planus' },
-  { pattern: /\btinea\b/g, replacement: 'tinea corporis' },
 ];
 
 function parseUnknown(value: unknown): unknown {
@@ -143,27 +144,11 @@ function uniqCaseInsensitive(values: string[]): string[] {
 }
 
 function expandDiagnosisAliases(value: string): string {
-  let expanded = normalizeText(value);
+  let expanded = normalizeText(value).replace(/-/g, ' ');
   for (const { pattern, replacement } of DIAGNOSIS_ALIAS_REPLACEMENTS) {
     expanded = expanded.replace(pattern, replacement);
   }
   return expanded.replace(/\s+/g, ' ').trim();
-}
-
-function buildDiagnosisVariants(value: string): string[] {
-  const normalized = normalizeWhitespace(value);
-  if (!normalized) return [];
-  const withoutParens = normalized.replace(/\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim();
-  return uniqCaseInsensitive(
-    [normalized, withoutParens]
-      .filter(Boolean)
-      .flatMap((entry) => {
-        const expanded = expandDiagnosisAliases(entry);
-        return expanded && expanded !== normalizeText(entry)
-          ? [entry, expanded]
-          : [entry];
-      })
-  );
 }
 
 function toWordSet(value: string): Set<string> {
@@ -176,13 +161,15 @@ function toWordSet(value: string): Set<string> {
 }
 
 function splitDiagnosisPhrases(value: unknown): string[] {
-  const normalized = normalizeWhitespace(value);
-  if (!normalized) return [];
-  const phrases = normalized
+  const phrases = String(value || '')
     .split(DIAGNOSIS_DELIMITER)
-    .map((part) => part.trim())
+    .map((part) => expandDiagnosisAliases(part))
     .filter(Boolean);
-  return uniqCaseInsensitive([normalized, ...phrases].flatMap((entry) => buildDiagnosisVariants(entry)));
+  return uniqCaseInsensitive(phrases);
+}
+
+export function diagnosisLearningKey(value: string): string {
+  return splitDiagnosisPhrases(value).sort().join('; ');
 }
 
 function toDiagnosisText(value: unknown): string {
@@ -212,33 +199,40 @@ export function scoreDiagnosisMatch(query: string, candidate: string): number {
   const queryPhrases = splitDiagnosisPhrases(query);
   const candidatePhrases = splitDiagnosisPhrases(candidate);
   if (!queryPhrases.length || !candidatePhrases.length) return 0;
+  // Conservative text guard: uncertain/negated documentation is not an
+  // affirmative diagnosis. This is intentionally not a clinical NLP classifier.
+  const uncertain = /\b(no|not|without|denies|denied|ruled? out|possible|suspected|versus|vs|history of)\b|\br\s*\/\s*o\b|\?/i;
+  if (uncertain.test(query) || uncertain.test(candidate)) return 0;
+  if (diagnosisLearningKey(query) === diagnosisLearningKey(candidate)) return 1;
 
-  let best = 0;
-  for (const left of queryPhrases) {
-    for (const right of candidatePhrases) {
-      const a = expandDiagnosisAliases(left);
-      const b = expandDiagnosisAliases(right);
-      if (!a || !b) continue;
-      if (a === b) return 1;
+  const phraseScore = (left: string, right: string) => {
+    const a = expandDiagnosisAliases(left);
+    const b = expandDiagnosisAliases(right);
+    if (!a || !b) return 0;
+    if (a === b) return 1;
 
-      const aWords = toWordSet(a);
-      const bWords = toWordSet(b);
-      const intersection = [...aWords].filter((word) => bWords.has(word)).length;
-      const union = new Set([...aWords, ...bWords]).size || 1;
-      const jaccard = intersection / union;
-      const containment = intersection / Math.max(1, Math.min(aWords.size || 1, bWords.size || 1));
-      const hasSubstring = a.includes(b) || b.includes(a);
-      const lengthDistance = Math.abs(a.length - b.length) / Math.max(a.length, b.length, 1);
-      const lengthScore = 1 - lengthDistance;
+    const aWords = toWordSet(a);
+    const bWords = toWordSet(b);
+    const intersection = [...aWords].filter((word) => bWords.has(word)).length;
+    if (!intersection) return 0;
+    const union = new Set([...aWords, ...bWords]).size || 1;
+    const jaccard = intersection / union;
+    const containment = intersection / Math.max(1, Math.min(aWords.size || 1, bWords.size || 1));
+    const hasSubstring = a.includes(b) || b.includes(a);
+    const lengthDistance = Math.abs(a.length - b.length) / Math.max(a.length, b.length, 1);
+    const lengthScore = 1 - lengthDistance;
 
-      let score = jaccard * 0.55 + containment * 0.25 + lengthScore * 0.08;
-      if (hasSubstring) score += 0.18;
-      if (intersection > 0 && containment === 1) score += 0.08;
-      best = Math.max(best, Math.min(1, score));
-    }
-  }
-
-  return Number(best.toFixed(4));
+    let score = jaccard * 0.55 + containment * 0.25 + lengthScore * 0.08;
+    if (hasSubstring) score += 0.18;
+    if (intersection > 0 && containment === 1) score += 0.08;
+    return Math.min(0.95, score);
+  };
+  // Both sides must be covered: one shared diagnosis must not make a
+  // multi-diagnosis regimen an exact match for a single condition.
+  const coverage = (left: string[], right: string[]) => left.reduce(
+    (sum, phrase) => sum + Math.max(...right.map(other => phraseScore(phrase, other))), 0
+  ) / left.length;
+  return Number(Math.min(0.95, (coverage(queryPhrases, candidatePhrases) + coverage(candidatePhrases, queryPhrases)) / 2).toFixed(4));
 }
 
 function normalizeInvestigations(value: unknown): string[] {
@@ -267,8 +261,11 @@ function extractPrescriptionDiagnosis(record: Record<string, unknown>): string {
   const fromMetadata = toDiagnosisText(metadata.diagnosis);
   if (fromMetadata) return fromMetadata;
 
-  const note = normalizeWhitespace(record.pharmacistNotes || record.notes || '');
-  const match = note.match(/\bDx\s*:\s*(.+)$/i);
+  const fromVisit = toDiagnosisText(asObject(record.visit).diagnosis);
+  if (fromVisit) return fromVisit;
+
+  const note = String(record.pharmacistNotes || record.notes || '');
+  const match = note.match(/\bDx\s*:\s*([^\n\r]+)/i);
   return match ? match[1].trim() : '';
 }
 
@@ -286,7 +283,7 @@ function extractFollowUpText(record: Record<string, unknown>, fallback?: string)
 function parseReviewDaysFromText(value: string): number | null {
   const text = normalizeText(value);
   if (!text) return null;
-  const match = text.match(/(\d+)\s*(day|days|d|week|weeks|w|month|months|mo)\b/);
+  const match = text.match(/\b(?:follow[\s-]*up|review|recheck|return|revisit)\s+(?:(?:in|after|at)\s+)?(\d+)\s*(day|days|d|week|weeks|w|month|months|mo)\b/);
   if (!match) return null;
   const amount = Number(match[1]);
   if (!Number.isFinite(amount) || amount <= 0) return null;
@@ -303,18 +300,9 @@ function parseDateMs(value: unknown): number {
 }
 
 function inferReviewDays(input: {
-  createdAt?: unknown;
-  validUntil?: unknown;
   followUpInstructions?: string;
   followUpText?: string;
 }): number | null {
-  const createdAtMs = parseDateMs(input.createdAt);
-  const validUntilMs = parseDateMs(input.validUntil);
-  if (createdAtMs > 0 && validUntilMs > createdAtMs) {
-    const diffDays = Math.round((validUntilMs - createdAtMs) / DAY_MS);
-    if (diffDays > 0 && diffDays <= 365) return diffDays;
-  }
-
   const textual = [
     input.followUpInstructions || '',
     input.followUpText || '',
@@ -330,14 +318,15 @@ function extractDrugName(raw: unknown): string {
 }
 
 function normalizeDrugKey(value: unknown): string {
-  return normalizeText(value).replace(/\s+/g, ' ').trim();
+  // Preserve decimal points, %, and strength punctuation: 0.1 and 01 differ.
+  return normalizeWhitespace(value).toLowerCase();
 }
 
 function drugNamesMatch(left: unknown, right: unknown): boolean {
   const a = normalizeDrugKey(left);
   const b = normalizeDrugKey(right);
   if (!a || !b) return false;
-  return a === b || a.includes(b) || b.includes(a);
+  return a === b;
 }
 
 function normalizeItems(value: unknown): Array<Record<string, unknown>> {
@@ -348,10 +337,7 @@ function normalizeItems(value: unknown): Array<Record<string, unknown>> {
 }
 
 function buildSignature(items: Array<Record<string, unknown>>): string {
-  const names = uniqCaseInsensitive(items.map((entry) => extractDrugName(entry)).filter(Boolean))
-    .map((entry) => normalizeText(entry))
-    .sort();
-  return names.join('|');
+  return JSON.stringify(items.map(buildMedicationSignature).sort());
 }
 
 function extractComboDrugNames(items: Array<Record<string, unknown>>): string[] {
@@ -359,66 +345,36 @@ function extractComboDrugNames(items: Array<Record<string, unknown>>): string[] 
 }
 
 function buildMedicationSignature(item: Record<string, unknown>): string {
-  const durationRaw = item.duration;
-  const duration =
-    typeof durationRaw === 'number'
-      ? String(durationRaw)
-      : normalizeWhitespace(durationRaw);
-  return [
-    normalizeDrugKey(extractDrugName(item)),
-    normalizeWhitespace(item.dosage),
-    normalizeText(item.dosageUnit),
-    normalizeText(item.frequency),
-    normalizeText(item.dosePattern),
-    normalizeText(item.timing),
-    duration,
-    normalizeText(item.durationUnit),
-    normalizeText(item.instructions),
-    normalizeText(item.route),
-  ].join('|');
+  const fields = ['dosage', 'dosageUnit', 'frequency', 'dosePattern', 'timing',
+    'duration', 'durationUnit', 'instructions', 'route', 'quantity', 'notes',
+    'applicationSite', 'applicationAmount', 'dayPart', 'leaveOn', 'washOffAfterMinutes',
+    'taperSchedule', 'weightMgPerKgPerDay', 'calculatedDailyDoseMg',
+    'pregnancyWarning', 'photosensitivityWarning', 'foodInstructions', 'pulseRegimen'];
+  return JSON.stringify([normalizeDrugKey(extractDrugName(item)), ...fields.map(key => {
+    const value = item[key];
+    return value == null ? '' : normalizeWhitespace(String(value)).toLowerCase();
+  })]);
 }
 
-function mostCommonString(values: string[]): string {
-  const counts = new Map<string, { value: string; count: number }>();
-  for (const raw of values) {
-    const value = normalizeWhitespace(raw);
-    if (!value) continue;
-    const key = value.toLowerCase();
-    const current = counts.get(key);
-    if (current) current.count += 1;
-    else counts.set(key, { value, count: 1 });
-  }
-  return [...counts.values()].sort((a, b) => b.count - a.count)[0]?.value || '';
+function patientDiagnosis(visit: Record<string, unknown>): string {
+  return toDiagnosisText(visit.diagnosis)
+    || extractPrescriptionDiagnosis(asObject(visit.prescriptionMeta))
+    || extractPrescriptionDiagnosis(asObject(visit.prescription));
 }
 
-function mostCommonNumber(values: Array<number | null>): number | null {
-  const counts = new Map<number, number>();
-  for (const value of values) {
-    if (!Number.isFinite(value) || value == null || value <= 0) continue;
-    counts.set(value, (counts.get(value) || 0) + 1);
-  }
-  const winner = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
-  return winner ? winner[0] : null;
-}
-
-function mergeInvestigations(records: FlatPlanRecord[]): string[] {
-  const counts = new Map<string, { value: string; count: number }>();
-  for (const record of records) {
-    for (const value of uniqCaseInsensitive(record.investigations)) {
-      const key = value.toLowerCase();
-      const current = counts.get(key);
-      if (current) current.count += 1;
-      else counts.set(key, { value, count: 1 });
-    }
-  }
-
-  const threshold = records.length >= 3 ? Math.ceil(records.length / 2) : 1;
-  const picked = [...counts.values()]
-    .filter((entry) => entry.count >= threshold)
-    .sort((a, b) => b.count - a.count)
-    .map((entry) => entry.value);
-
-  return picked.length ? picked : (records[0]?.investigations || []);
+function eligibleDoctorPrescriptions(records: unknown[], currentVisitId?: string | null, doctorId?: string): unknown[] {
+  const seen = new Set<string>();
+  return records.filter(entry => {
+    const record = asObject(entry);
+    const visit = asObject(record.visit);
+    if (currentVisitId && normalizeWhitespace(record.visitId || visit.id) === currentVisitId) return false;
+    const recordDoctor = normalizeWhitespace(record.doctorId || visit.doctorId || asObject(record.doctor).id);
+    if (doctorId && recordDoctor && recordDoctor !== doctorId) return false;
+    const id = normalizeWhitespace(record.id);
+    if (id && seen.has(id)) return false;
+    if (id) seen.add(id);
+    return true;
+  });
 }
 
 function buildPatientRecord(
@@ -431,7 +387,7 @@ function buildPatientRecord(
   const items = normalizeItems(visit.prescriptionItems || visit.items);
   if (!items.length) return null;
 
-  const diagnosisText = toDiagnosisText(visit.diagnosis);
+  const diagnosisText = patientDiagnosis(visit);
   const diagnosisScore = scoreDiagnosisMatch(diagnosis, diagnosisText);
   if (diagnosisScore < MIN_DIAGNOSIS_SCORE) return null;
 
@@ -445,8 +401,6 @@ function buildPatientRecord(
     ''
   );
   const reviewDays = inferReviewDays({
-    createdAt: visit.createdAt,
-    validUntil: prescriptionMeta.validUntil,
     followUpInstructions,
     followUpText: normalizeWhitespace(planSummary.followUp),
   });
@@ -460,8 +414,8 @@ function buildPatientRecord(
   return {
     sourceKind: 'patient-last-plan',
     sourceLabel: sameDoctor
-      ? 'Auto-filled from this patient’s last similar plan'
-      : 'Auto-filled from this patient’s similar visit history',
+      ? 'Matched from this patient’s last similar plan'
+      : 'Matched from this patient’s similar visit history',
     diagnosisText,
     diagnosisScore,
     confidence: Math.min(0.99, diagnosisScore * 0.78 + recentBoost + (sameDoctor ? 0.08 : 0) + Math.min(0.08, items.length * 0.02)),
@@ -497,8 +451,8 @@ function buildTemplateRecord(
   return {
     sourceKind: 'doctor-template',
     sourceLabel: normalizeWhitespace(template.name)
-      ? `Auto-filled from saved order set: ${normalizeWhitespace(template.name)}`
-      : 'Auto-filled from a saved order set',
+      ? `Matched from saved order set: ${normalizeWhitespace(template.name)}`
+      : 'Matched from a saved order set',
     diagnosisText,
     diagnosisScore,
     confidence: Math.min(0.94, diagnosisScore * 0.82 + Math.min(0.1, items.length * 0.025)),
@@ -546,8 +500,6 @@ function buildDoctorPatternRecords(
         investigations: normalizeInvestigations(metadata.investigations),
         followUpInstructions,
         reviewDays: inferReviewDays({
-          createdAt: record.createdAt || asObject(record.visit).createdAt,
-          validUntil: record.validUntil,
           followUpInstructions,
         }),
         comboDrugNames: extractComboDrugNames(items),
@@ -559,7 +511,7 @@ function buildDoctorPatternRecords(
 
   const grouped = new Map<string, FlatPlanRecord[]>();
   for (const record of rawRecords) {
-    const key = record.signature || `single:${record.createdAtMs}`;
+    const key = `${diagnosisLearningKey(record.diagnosisText)}::${record.signature}`;
     const bucket = grouped.get(key) || [];
     bucket.push(record);
     grouped.set(key, bucket);
@@ -572,15 +524,13 @@ function buildDoctorPatternRecords(
         return b.createdAtMs - a.createdAtMs;
       })[0];
       const avgScore = group.reduce((sum, record) => sum + record.diagnosisScore, 0) / group.length;
-      const followUpInstructions = mostCommonString(group.map((record) => record.followUpInstructions)) || representative.followUpInstructions;
-      const reviewDays = mostCommonNumber(group.map((record) => record.reviewDays)) ?? representative.reviewDays;
       const evidenceCount = group.length;
 
       return {
         ...representative,
         sourceLabel: evidenceCount > 1
           ? `Learned from ${evidenceCount} similar prescriptions`
-          : 'Auto-filled from your most recent similar prescription',
+          : 'Matched from your most recent similar prescription',
         confidence: Math.min(
           0.96,
           avgScore * 0.62 +
@@ -588,12 +538,10 @@ function buildDoctorPatternRecords(
             Math.min(0.08, representative.items.length * 0.02)
         ),
         evidenceCount,
-        followUpInstructions,
-        reviewDays,
-        investigations: mergeInvestigations(group),
       };
     })
     .sort((a, b) => {
+      if ((a.diagnosisScore === 1) !== (b.diagnosisScore === 1)) return b.diagnosisScore - a.diagnosisScore;
       if (b.confidence !== a.confidence) return b.confidence - a.confidence;
       return b.createdAtMs - a.createdAtMs;
     });
@@ -611,7 +559,7 @@ function buildPatientMedicationRecords(input: {
     .filter((entry): entry is Record<string, unknown> => Boolean(entry))
     .flatMap((visit) => {
       if (normalizeWhitespace(visit.id) === normalizeWhitespace(input.currentVisitId || '')) return [];
-      const diagnosisText = toDiagnosisText(visit.diagnosis);
+      const diagnosisText = patientDiagnosis(visit);
       const diagnosisScore = scoreDiagnosisMatch(input.diagnosis, diagnosisText);
       if (diagnosisScore < MIN_DIAGNOSIS_SCORE) return [];
 
@@ -638,6 +586,7 @@ function buildPatientMedicationRecords(input: {
         }));
     })
     .sort((a, b) => {
+      if ((a.diagnosisScore === 1) !== (b.diagnosisScore === 1)) return b.diagnosisScore - a.diagnosisScore;
       if (b.confidence !== a.confidence) return b.confidence - a.confidence;
       return b.createdAtMs - a.createdAtMs;
     });
@@ -674,7 +623,7 @@ function buildDoctorMedicationRecords(input: {
 
   const grouped = new Map<string, FlatMedicationRecord[]>();
   for (const record of rawRecords) {
-    const key = record.signature || `single:${record.createdAtMs}`;
+    const key = `${diagnosisLearningKey(record.diagnosisText)}::${record.signature}`;
     const bucket = grouped.get(key) || [];
     bucket.push(record);
     grouped.set(key, bucket);
@@ -703,6 +652,7 @@ function buildDoctorMedicationRecords(input: {
       } satisfies FlatMedicationRecord;
     })
     .sort((a, b) => {
+      if ((a.diagnosisScore === 1) !== (b.diagnosisScore === 1)) return b.diagnosisScore - a.diagnosisScore;
       if (b.confidence !== a.confidence) return b.confidence - a.confidence;
       return b.createdAtMs - a.createdAtMs;
     });
@@ -719,10 +669,10 @@ function rankCandidate(candidate: FlatPlanRecord): number {
 }
 
 function buildSupportingLabel(primary: FlatPlanRecord, pattern: FlatPlanRecord | null, template: FlatPlanRecord | null): string | undefined {
-  if (primary.sourceKind !== 'doctor-pattern' && pattern && pattern.evidenceCount > 1 && pattern.diagnosisScore >= 0.6) {
+  if (primary.sourceKind !== 'doctor-pattern' && pattern && pattern.signature === primary.signature && diagnosisLearningKey(pattern.diagnosisText) === diagnosisLearningKey(primary.diagnosisText) && pattern.evidenceCount > 1) {
     return `Also aligns with ${pattern.evidenceCount} recent prescriptions for similar diagnoses.`;
   }
-  if (primary.sourceKind !== 'doctor-template' && template && template.diagnosisScore >= 0.72) {
+  if (primary.sourceKind !== 'doctor-template' && template && template.signature === primary.signature && diagnosisLearningKey(template.diagnosisText) === diagnosisLearningKey(primary.diagnosisText)) {
     return 'Saved order-set history also points to the same pattern.';
   }
   return undefined;
@@ -741,8 +691,8 @@ export function buildLearnedPrescriptionPlan(input: {
   currentVisitId?: string | null;
   doctorId?: string;
 }): LearnedPlanSuggestion | null {
-  const diagnosis = normalizeWhitespace(input.diagnosis);
-  if (diagnosis.length < 3) return null;
+  const diagnosis = String(input.diagnosis || '').trim();
+  if (expandDiagnosisAliases(diagnosis).length < 3) return null;
 
   const patientCandidate = (input.patientVisits || [])
     .map((entry) => (entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : null))
@@ -750,6 +700,7 @@ export function buildLearnedPrescriptionPlan(input: {
     .map((visit) => buildPatientRecord(visit, diagnosis, input.currentVisitId, input.doctorId))
     .filter((entry): entry is FlatPlanRecord => Boolean(entry))
     .sort((a, b) => {
+      if ((a.diagnosisScore === 1) !== (b.diagnosisScore === 1)) return b.diagnosisScore - a.diagnosisScore;
       if (b.confidence !== a.confidence) return b.confidence - a.confidence;
       return b.createdAtMs - a.createdAtMs;
     })[0] || null;
@@ -760,32 +711,23 @@ export function buildLearnedPrescriptionPlan(input: {
     .map((template) => buildTemplateRecord(template, diagnosis))
     .filter((entry): entry is FlatPlanRecord => Boolean(entry))
     .sort((a, b) => {
+      if ((a.diagnosisScore === 1) !== (b.diagnosisScore === 1)) return b.diagnosisScore - a.diagnosisScore;
       if (b.confidence !== a.confidence) return b.confidence - a.confidence;
       return b.createdAtMs - a.createdAtMs;
     })[0] || null;
 
-  const doctorPatternCandidate = buildDoctorPatternRecords(input.doctorPrescriptions || [], diagnosis)[0] || null;
+  const doctorPatternCandidate = buildDoctorPatternRecords(eligibleDoctorPrescriptions(input.doctorPrescriptions || [], input.currentVisitId, input.doctorId), diagnosis)[0] || null;
 
   const candidates = [patientCandidate, doctorPatternCandidate, templateCandidate]
     .filter((entry): entry is FlatPlanRecord => Boolean(entry))
-    .sort((a, b) => rankCandidate(b) - rankCandidate(a));
+    .sort((a, b) => Number(b.diagnosisScore === 1) - Number(a.diagnosisScore === 1) || rankCandidate(b) - rankCandidate(a));
 
   const primary = candidates[0];
-  if (!primary || primary.confidence < 0.52) return null;
+  if (!primary || (primary.confidence < 0.52 && primary.diagnosisScore < 0.72)) return null;
 
-  const fallbackFields = candidates.filter((entry) => entry.signature !== primary.signature);
-  const followUpInstructions =
-    primary.followUpInstructions ||
-    fallbackFields.map((entry) => entry.followUpInstructions).find(Boolean) ||
-    '';
-  const reviewDays =
-    primary.reviewDays ??
-    fallbackFields.map((entry) => entry.reviewDays).find((entry) => entry != null) ??
-    null;
-  const investigations =
-    primary.investigations.length > 0
-      ? primary.investigations
-      : (fallbackFields.map((entry) => entry.investigations).find((entry) => entry.length > 0) || []);
+  // Keep the selected plan intact. Combining independent prescriptions can
+  // attach investigations and follow-up instructions to the wrong regimen.
+  const { followUpInstructions, reviewDays, investigations } = primary;
 
   return {
     sourceKind: primary.sourceKind,
@@ -793,6 +735,7 @@ export function buildLearnedPrescriptionPlan(input: {
     supportingLabel: buildSupportingLabel(primary, doctorPatternCandidate, templateCandidate),
     diagnosisText: primary.diagnosisText,
     confidence: Number(primary.confidence.toFixed(2)),
+    autoApplyEligible: primary.diagnosisScore === 1,
     evidenceCount: primary.evidenceCount,
     items: primary.items,
     investigations,
@@ -819,8 +762,8 @@ export function buildLearnedMedicationSuggestion(input: {
   doctorId?: string;
 }): LearnedMedicationSuggestion | null {
   const drugName = normalizeWhitespace(input.drugName);
-  const diagnosis = normalizeWhitespace(input.diagnosis);
-  if (drugName.length < 2 || diagnosis.length < 3) return null;
+  const diagnosis = String(input.diagnosis || '').trim();
+  if (drugName.length < 2 || expandDiagnosisAliases(diagnosis).length < 3) return null;
 
   const patientCandidate = buildPatientMedicationRecords({
     visits: input.patientVisits || [],
@@ -831,16 +774,16 @@ export function buildLearnedMedicationSuggestion(input: {
   })[0] || null;
 
   const doctorCandidate = buildDoctorMedicationRecords({
-    prescriptions: input.doctorPrescriptions || [],
+    prescriptions: eligibleDoctorPrescriptions(input.doctorPrescriptions || [], input.currentVisitId, input.doctorId),
     diagnosis,
     drugName,
   })[0] || null;
 
   const primary = [patientCandidate, doctorCandidate]
     .filter((entry): entry is FlatMedicationRecord => Boolean(entry))
-    .sort((a, b) => rankMedicationCandidate(b) - rankMedicationCandidate(a))[0];
+    .sort((a, b) => Number(b.diagnosisScore === 1) - Number(a.diagnosisScore === 1) || rankMedicationCandidate(b) - rankMedicationCandidate(a))[0];
 
-  if (!primary || primary.confidence < 0.58) return null;
+  if (!primary || primary.confidence < 0.58 || primary.diagnosisScore !== 1) return null;
 
   return {
     sourceKind: primary.sourceKind,

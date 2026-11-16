@@ -1,9 +1,10 @@
 import { NestFactory } from '@nestjs/core';
-import { Logger, ValidationPipe } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { ExpressAdapter } from '@nestjs/platform-express';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import * as express from 'express';
 import { join } from 'path';
+import { diagnosticValidationPipe, installHttpObservability } from './shared/logging/http-observability';
 
 // Ensure iconv-lite encodings are available at runtime (workaround for raw-body/iconv-lite packaging issues)
 import 'iconv-lite/encodings';
@@ -16,13 +17,14 @@ async function bootstrap() {
 
   if (useMinimal) {
     const mod = (await import(
-      './app.minimal.module'
-    )) as typeof import('./app.minimal.module');
+      './app.minimal.module.js'
+    )) as typeof import('./app.minimal.module.js');
     logger.log('Starting Clinic Management System backend (minimal mode)');
     const app = await NestFactory.create(
       mod.AppMinimalModule,
       new ExpressAdapter(),
     );
+    installHttpObservability(app);
     app.enableCors({
       origin: [
         /^http:\/\/localhost:(3000|3001|3002)$/,
@@ -31,11 +33,10 @@ async function bootstrap() {
       ],
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key', 'X-Request-Id', 'X-Request-Attempt'],
+      exposedHeaders: ['X-Request-Id', 'Retry-After'],
     });
-    app.useGlobalPipes(
-      new ValidationPipe({ transform: true, whitelist: true }),
-    );
+    app.useGlobalPipes(diagnosticValidationPipe());
 
     // Serve uploads
     app.use('/uploads', express.static(join(process.cwd(), 'uploads')));
@@ -60,9 +61,10 @@ async function bootstrap() {
     return;
   }
 
-  const mod = (await import('./app.module')) as typeof import('./app.module');
+  const mod = (await import('./app.module.js')) as typeof import('./app.module.js');
   logger.log('Starting Clinic Management System backend');
   const app = await NestFactory.create(mod.AppModule, new ExpressAdapter());
+  installHttpObservability(app);
   app.enableCors({
     origin: [
       /^http:\/\/localhost:(3000|3001|3002)$/,
@@ -71,9 +73,10 @@ async function bootstrap() {
     ],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key', 'X-Request-Id', 'X-Request-Attempt'],
+    exposedHeaders: ['X-Request-Id', 'Retry-After'],
   });
-  app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
+  app.useGlobalPipes(diagnosticValidationPipe());
   app.enableShutdownHooks();
 
   // Serve uploads

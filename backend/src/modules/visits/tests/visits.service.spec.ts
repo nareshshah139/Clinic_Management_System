@@ -261,8 +261,8 @@ describe('VisitsService', () => {
       );
     });
 
-    it('should throw BadRequestException if no complaints provided', async () => {
-      const invalidDto = {
+    it('creates a visit without complaints and leaves saved visits untouched', async () => {
+      const emptyComplaintDto = {
         ...createVisitDto,
         complaints: [],
         appointmentId: undefined,
@@ -270,12 +270,11 @@ describe('VisitsService', () => {
 
       prismaMock.patient.findFirst.mockResolvedValue(mockPatient);
       prismaMock.user.findFirst.mockResolvedValue(mockDoctor);
-      // Mock appointment check to return null for this test
-      prismaMock.appointment.findFirst.mockResolvedValue(null);
+      prismaMock.visit.create.mockImplementation(async ({ data }) => ({ id: 'new-visit', ...data }));
 
-      await expect(service.create(invalidDto, mockBranchId)).rejects.toThrow(
-        new BadRequestException('At least one complaint is required'),
-      );
+      await expect(service.create(emptyComplaintDto, mockBranchId)).resolves.toMatchObject({ id: 'new-visit', complaints: '[]' });
+      expect(prismaMock.visit.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ complaints: '[]' }) }));
+      expect(prismaMock.visit.update).not.toHaveBeenCalled();
     });
   });
 
@@ -546,7 +545,7 @@ describe('VisitsService', () => {
       });
       expect(result.vitals).toEqual(JSON.stringify(updateDto.vitals));
       expect(prismaMock.visit.update).toHaveBeenCalledWith({
-        where: { id: 'visit-123' },
+        where: { id: 'visit-123', consultationType: undefined, teleVideoConsentById: null, teleVideoConsentAt: null },
         data: expect.objectContaining({
           plan: expect.stringMatching(/notes/),
         }),

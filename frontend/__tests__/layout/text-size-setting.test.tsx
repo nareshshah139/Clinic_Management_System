@@ -1,0 +1,32 @@
+import React from 'react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { TextSizeSetting } from '@/components/layout/text-size-setting';
+import { apiClient } from '@/lib/api';
+let mockUser = { id: 'text-user', metadata: { textSize: 'NORMAL' } };
+jest.mock('@/components/layout/dashboard-user-context', () => ({ useDashboardUser: () => ({ user: mockUser }) }));
+jest.mock('@/lib/api', () => ({ apiClient: { patch: jest.fn() } }));
+it('loads per-user size, saves a choice and retains it on failure', async () => {
+  const api = apiClient.patch as jest.Mock;
+  api.mockResolvedValue({ textSize: 'LARGE' });
+  render(<TextSizeSetting />);
+  expect(document.documentElement.dataset.clinicTextSize).toBe('NORMAL');
+  fireEvent.change(screen.getByLabelText('Text size'), { target: { value: 'LARGE' } });
+  await waitFor(() => expect(document.documentElement.dataset.clinicTextSize).toBe('LARGE'));
+  expect(api).toHaveBeenCalledWith('/users/text-user/text-size', { textSize: 'LARGE' });
+  api.mockRejectedValue(new Error('offline'));
+  fireEvent.change(screen.getByLabelText('Text size'), { target: { value: 'EXTRA_LARGE' } });
+  expect(await screen.findByRole('alert')).toHaveTextContent('not saved');
+  expect(document.documentElement.dataset.clinicTextSize).toBe('LARGE');
+});
+it('does not apply a delayed save to the next signed-in user', async () => {
+  mockUser = { id: 'first-user', metadata: { textSize: 'NORMAL' } };
+  let resolve!: (value: unknown) => void;
+  (apiClient.patch as jest.Mock).mockReturnValue(new Promise(done => { resolve = done; }));
+  const { rerender } = render(<TextSizeSetting />);
+  fireEvent.change(screen.getByLabelText('Text size'), { target: { value: 'LARGE' } });
+  mockUser = { id: 'second-user', metadata: { textSize: 'EXTRA_LARGE' } };
+  rerender(<TextSizeSetting />);
+  await act(async () => resolve({ textSize: 'LARGE' }));
+  expect(document.documentElement.dataset.clinicTextSize).toBe('EXTRA_LARGE');
+  expect(screen.getByLabelText('Text size')).toHaveValue('EXTRA_LARGE');
+});

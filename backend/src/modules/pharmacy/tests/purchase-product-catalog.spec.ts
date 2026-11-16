@@ -5,12 +5,12 @@ describe('Invoice product catalog correctness', () => {
   let db: any;
   const item = { productName: 'Example Cosmetic Serum', manufacturer: '', packSize: '30ML', packUnitType: 'Pack', hsnCode: '33049990', mrp: 4500, purchaseRate: 3051 };
   beforeEach(() => {
-    db = { drug: { findFirst: jest.fn().mockResolvedValue(null), findMany: jest.fn(),
+    db = { $executeRaw: jest.fn().mockResolvedValue(1), $transaction: jest.fn(async callback => callback(db)), $queryRaw: jest.fn().mockResolvedValue([]), drug: { findFirst: jest.fn().mockResolvedValue(null), findMany: jest.fn().mockResolvedValue([]),
       create: jest.fn().mockImplementation(async ({ data }) => ({ id: 'new-product', ...data })), update: jest.fn() },
-      inventoryItem: { findMany: jest.fn().mockResolvedValue([]), create: jest.fn().mockImplementation(async ({data}) => data) } };
+      inventoryItem: { findMany: jest.fn().mockResolvedValue([]), create: jest.fn().mockImplementation(async ({data}: { data: Record<string, unknown> }) => data) } };
     service = new PharmacyPurchaseInvoiceService(db);
   });
-  const create = (catalog?: any) => service.confirmMasterRecord({ action: 'CREATE_NEW', item, catalog } as any, 'branch-1');
+  const create = (catalog?: any) => service.confirmMasterRecord({ action: 'CREATE_NEW', creationConfirmed: true, item, catalog } as any, 'branch-1');
 
   it('creates a cosmetic with unknown clinical fields left null and prescription not required', async () => {
     const result = await create({ productKind: 'COSMETIC' });
@@ -47,7 +47,7 @@ describe('Invoice product catalog correctness', () => {
   });
   it('repairs only an active product in the authenticated branch without writing stock', async () => {
     db.drug.findFirst.mockResolvedValue({ id: 'old', type: 'allopathy' });
-    db.drug.update.mockImplementation(async ({data}) => ({ id: 'old', ...data }));
+    db.drug.update.mockImplementation(async ({data}: { data: Record<string, unknown> }) => ({ id: 'old', ...data }));
     const result = await service.updateProductCatalog('old', { productKind: 'COSMETIC' }, 'branch-1');
     expect(db.drug.findFirst).toHaveBeenCalledWith({ where: { id: 'old', branchId: 'branch-1', isActive: true, isDiscontinued: false } });
     expect(result).toMatchObject({ type: 'cosmetic', composition1: null, dosageForm: null, strength: null, requiresPrescription: false, catalogIssues: [] });
@@ -59,7 +59,7 @@ describe('Invoice product catalog correctness', () => {
   });
   it('preserves the existing medicine system when correcting verified medicine details', async () => {
     db.drug.findFirst.mockResolvedValue({ id: 'old', type: 'ayurveda' });
-    db.drug.update.mockImplementation(async ({data}) => ({ id: 'old', ...data }));
+    db.drug.update.mockImplementation(async ({data}: { data: Record<string, unknown> }) => ({ id: 'old', ...data }));
     const result = await service.updateProductCatalog('old', { productKind: 'MEDICINE', composition1: 'Test ingredient', category: 'Test category', dosageForm: 'Cream', strength: '1%', requiresPrescription: false }, 'branch-1');
     expect(result).toMatchObject({ type: 'ayurveda', requiresPrescription: false });
   });

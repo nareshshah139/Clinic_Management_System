@@ -517,7 +517,7 @@ describe('Visits E2E Tests', () => {
       const invalidDto = {
         patientId: 'invalid-id',
         doctorId: 'invalid-id',
-        complaints: [], // Empty complaints should fail
+        complaints: 'invalid', // Complaints must be an array; an empty array is valid.
       };
 
       await request(app.getHttpServer())
@@ -769,4 +769,4 @@ describe('Visits E2E Tests', () => {
       expect(searchResponse.body.visits.length).toBeGreaterThan(0);
     });
   });
-}); 
+});

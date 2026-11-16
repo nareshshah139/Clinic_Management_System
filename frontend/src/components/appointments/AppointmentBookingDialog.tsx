@@ -285,7 +285,7 @@ export default function AppointmentBookingDialog({
         
         <div className="space-y-6">
           {/* Appointment Details */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-background rounded-lg">
             <div><span className="font-medium">Patient:</span> {formatPatientName(patient)}</div>
             <div><span className="font-medium">Phone:</span> {patient?.phone || 'N/A'}</div>
             <div><span className="font-medium">Date:</span> {date}</div>
@@ -294,7 +294,7 @@ export default function AppointmentBookingDialog({
 
           {/* Duration selector */}
           <div>
-            <label className="text-sm font-medium text-gray-700 mb-2 block">Duration</label>
+            <label className="text-sm font-medium text-foreground mb-2 block">Duration</label>
             <Select value={String(durationMinutes)} onValueChange={(v: string) => setDurationMinutes(parseInt(v, 10))}>
               <SelectTrigger>
                 <SelectValue placeholder="Select duration" />
@@ -308,17 +308,17 @@ export default function AppointmentBookingDialog({
                 <SelectItem value="90">90 minutes</SelectItem>
               </SelectContent>
             </Select>
-            <p className="text-xs text-gray-500 mt-1">Adjusts end time and validates room availability for the new duration.</p>
+            <p className="text-xs text-muted-foreground mt-1">Adjusts end time and validates room availability for the new duration.</p>
           </div>
 
           {outOfHoursMessage && (
-            <div className="p-3 bg-amber-50 border border-amber-200 rounded text-amber-800 text-sm">{outOfHoursMessage}</div>
+            <div className="p-3 bg-warning-soft border border-warning-border rounded-md text-warning-text text-sm">{outOfHoursMessage}</div>
           )}
 
           {/* Validation Errors */}
           {errors.length > 0 && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-              <div className="text-sm text-red-800">
+            <div className="p-3 bg-destructive-soft border border-destructive-border rounded-lg">
+              <div className="text-sm text-destructive-text">
                 <div className="font-medium mb-1">Please fix the following errors:</div>
                 <ul className="list-disc list-inside space-y-1">
                   {errors.map((error, index) => (
@@ -331,7 +331,7 @@ export default function AppointmentBookingDialog({
 
           {/* Appointment Type Selection */}
           <div>
-            <label className="text-sm font-medium text-gray-700 mb-2 block">Appointment Type *</label>
+            <label className="text-sm font-medium text-foreground mb-2 block">Appointment Type *</label>
             <Select value={visitType} onValueChange={(value: VisitType) => {
               setVisitType(value);
               setSelectedRoomId('');
@@ -347,7 +347,7 @@ export default function AppointmentBookingDialog({
                 <SelectItem value="TELEMED">Telemedicine</SelectItem>
               </SelectContent>
             </Select>
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-muted-foreground mt-1">
               {visitType === 'OPD' && 'Regular outpatient consultation'}
               {visitType === 'PROCEDURE' && 'Medical procedure or surgery - room selection required'}
               {visitType === 'TELEMED' && 'Virtual consultation via video call'}
@@ -356,13 +356,13 @@ export default function AppointmentBookingDialog({
 
           {visitType === 'PROCEDURE' && (
             <div>
-              <label className="text-sm font-medium text-gray-700 mb-2 block">Procedure Name</label>
+              <label className="text-sm font-medium text-foreground mb-2 block">Procedure Name</label>
               <Input
                 placeholder="e.g. Chemical Peel, Botox, Laser Hair Removal"
                 value={procedureName}
                 onChange={(e) => setProcedureName(e.target.value)}
               />
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-muted-foreground mt-1">
                 This will be shown on the calendar next to the patient name for quick reference.
               </p>
             </div>
@@ -371,7 +371,7 @@ export default function AppointmentBookingDialog({
           {/* Room Selection and Availability */}
           {visitType && (
             <div>
-              <label className="text-sm font-medium text-gray-700 mb-3 block">
+              <label className="text-sm font-medium text-foreground mb-3 block">
                 Room Availability for {visitType} {visitType === 'PROCEDURE' && '*'}
               </label>
               
@@ -380,7 +380,7 @@ export default function AppointmentBookingDialog({
               ) : fetchingSchedules ? (
                 <div className="text-center py-8">Loading room schedules...</div>
               ) : relevantRooms.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
+                <div className="text-center py-8 text-muted-foreground">
                   <p>No {visitType.toLowerCase()} rooms available</p>
                   <p className="text-xs mt-2">
                     You can still book this appointment. Room assignment can be done later.
@@ -398,10 +398,10 @@ export default function AppointmentBookingDialog({
                         key={room.id} 
                         className={`cursor-pointer transition-all ${
                           selectedRoomId === room.id 
-                            ? 'ring-2 ring-blue-500 bg-blue-50' 
+                            ? 'ring-2 ring-info-border bg-info-soft'
                             : isAvailable 
-                            ? 'hover:bg-gray-50' 
-                            : 'bg-red-50 border-red-200'
+                            ? 'hover:bg-background'
+                            : 'bg-destructive-soft border-destructive-border'
                         }`}
                         onClick={() => {
                           if (isAvailable) {
@@ -420,18 +420,18 @@ export default function AppointmentBookingDialog({
                               {isAvailable ? 'Available' : 'Occupied'}
                             </Badge>
                           </div>
-                          <p className="text-sm text-gray-600">{room.type} • Capacity: {room.capacity}</p>
+                          <p className="text-sm text-muted-foreground">{room.type} • Capacity: {room.capacity}</p>
                         </CardHeader>
                         <CardContent className="pt-0">
                           {!isAvailable && conflictingAppointment && (
-                            <div className="text-sm text-red-600">
+                            <div className="text-sm text-destructive-text">
                               <p className="font-medium">Conflict with:</p>
                               <p>{conflictingAppointment.patient.name}</p>
                               <p>Dr. {conflictingAppointment.doctor.firstName} {conflictingAppointment.doctor.lastName}</p>
                             </div>
                           )}
                           {isAvailable && (
-                            <p className="text-sm text-green-600">✓ Available for {derivedSlot}</p>
+                            <p className="text-sm text-success-text">✓ Available for {derivedSlot}</p>
                           )}
                         </CardContent>
                       </Card>
@@ -441,13 +441,13 @@ export default function AppointmentBookingDialog({
               )}
               
               {visitType === 'PROCEDURE' && relevantRooms.length > 0 && (
-                <p className="text-xs text-gray-500 mt-2">
+                <p className="text-xs text-muted-foreground mt-2">
                   * Room selection is required for procedures. Click on an available room to select it.
                 </p>
               )}
               
               {visitType !== 'PROCEDURE' && (
-                <p className="text-xs text-gray-500 mt-2">
+                <p className="text-xs text-muted-foreground mt-2">
                   Room selection is optional for {visitType.toLowerCase()} appointments.
                 </p>
               )}

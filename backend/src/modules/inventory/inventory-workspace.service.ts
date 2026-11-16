@@ -1,4 +1,7 @@
 import { inventoryRegimenDefaults } from './inventory-regimen-defaults';
+import { hasScopedPermission } from '../../shared/guards/scoped-permission';
+import { reconcileInventoryLedger } from './inventory-ledger';
+import { inventoryMovementQuery, InventoryMovementQuery } from './inventory-movements';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { PharmacyPurchaseLedgerService } from '../pharmacy/pharmacy-purchase-ledger.service';
@@ -7,13 +10,58 @@ import { InventoryWorkflowService } from './inventory-workflow.service';
 import { WorkflowActor } from './inventory-workflow.types';
 import { jsonObject, money, movementDelta, stockStatus, writeStockMovement } from './inventory-stock';
 import { inventoryNameAliases, inventoryProductName, retainPreviousInventoryName } from './inventory-names';
+import { checkedProductQuery, matchProductSearch } from '../../shared/search/product-search';
 
 @Injectable()
 export class InventoryWorkspaceService {
   constructor(private readonly prisma: PrismaService, private readonly workflow: InventoryWorkflowService) {}
   async require(actor: WorkflowActor, permission: string) {
     const p = await this.workflow.permissions(actor);
-    if (!p.has('*') && !p.has(permission)) throw new ForbiddenException(`This action requires ${permission}`);
+    if (!p.has('*') && !hasScopedPermission(p, permission)) throw new ForbiddenException(`This action requires ${permission}`);
+  }
+  /**
+   * @cc [owner:nareshshah139] authorized-movement-history
+   * History MUST require inventory-item read permission and return only the actor's branch.
+   */
+  /**
+   * @cc [owner:nareshshah139] honest-movement-history
+   * Rows MUST preserve unknown movement directions as null and MUST NOT infer running balances.
+   */
+  /**
+   * @cc [owner:nareshshah139] stable-movement-history
+   * Equal timestamps MUST have a stable ID order across history pages.
+   */
+  /**
+   * @cc [owner:nareshshah139] read-only-movement-history
+   * Reading movement history MUST NOT modify stock or history.
+   */
+  async movements(actor: WorkflowActor, query: InventoryMovementQuery) {
+    await this.require(actor, 'inventory:item:read');
+    const { where, page, limit } = inventoryMovementQuery(actor.branchId, query);
+    const [movements, total] = await Promise.all([
+      this.prisma.stockTransaction.findMany({
+        where, skip: (page - 1) * limit, take: limit,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        select: {
+          id: true, itemId: true, type: true, quantity: true, quantityDelta: true,
+          notes: true, reason: true, reference: true, batchNumber: true, createdAt: true,
+          item: { select: { name: true, batchNumber: true, unit: true } },
+          user: { select: { firstName: true, lastName: true } },
+        },
+      }),
+      this.prisma.stockTransaction.count({ where }),
+    ]);
+    return {
+      rows: movements.map(movement => ({
+        id: movement.id, itemId: movement.itemId, type: movement.type,
+        quantity: movement.quantity, delta: movementDelta(movement),
+        reference: movement.reference, reason: movement.reason,
+        batchNumber: movement.batchNumber || movement.item.batchNumber,
+        createdAt: movement.createdAt, itemName: movement.item.name, unit: movement.item.unit,
+        actorName: [movement.user.firstName, movement.user.lastName].filter(Boolean).join(' '),
+      })),
+      page, limit, total, totalPages: Math.ceil(total / limit),
+    };
   }
   private present(item: any) {
     const metadata = jsonObject(item.metadata), priceBasis = metadata.purchaseInvoice?.priceBasis || metadata.priceBasis;
@@ -71,18 +119,18 @@ export class InventoryWorkspaceService {
    */
   /**
    * @cc [owner:nareshshah139,label:product] inventory-search-not-identity
-   * Stock lookup MUST search retained aliases, source and linked product names and source codes with all query
-   * words in any order. Lookup MUST NOT merge records or infer product identity. An inventory:
-   * code MUST resolve only the exact branch item ID.
+   * Stock lookup MUST search retained aliases, source and linked names with shared product ranking,
+   * keeping every query word and labelled typo suggestions. Lookup MUST NOT merge records or infer
+   * product identity. An inventory: code MUST resolve only the exact branch item ID. Explicit filters
+   * and sorting MUST remain authoritative; default text-search ordering MUST be relevance first.
    */
   async stock(actor: WorkflowActor, q: Record<string, any> = {}) {
     await this.require(actor, 'inventory:item:read');
     const batchView = q.batchView || 'ALL';
     if (!['ALL','ON_HAND','EMPTY'].includes(batchView)) throw new BadRequestException('Unknown batch view');
-    const all = (await this.prisma.inventoryItem.findMany({where:{branchId:actor.branchId},include:{drugs:{select:{id:true,name:true,packSizeLabel:true}},_count:{select:{drugs:true}}},orderBy:[{name:'asc'},{expiryDate:'asc'},{id:'asc'}]})).map(i=>this.present(i));
+    const search = checkedProductQuery(q.search);
+    const all = (await this.prisma.inventoryItem.findMany({where:{branchId:actor.branchId},include:{drugs:{select:{id:true,name:true,packSizeLabel:true,composition1:true,composition2:true,manufacturerName:true,strength:true,dosageForm:true}},_count:{select:{drugs:true}}},orderBy:[{name:'asc'},{expiryDate:'asc'},{id:'asc'}]})).map(i=>this.present(i));
     const text = (s:any)=>String(s||'').toLowerCase();
-    const words = (s:any)=>text(s).replace(/[^\p{L}\p{N}.]+/gu,' ').trim().split(/\s+/).filter(Boolean);
-    const search = String(q.search || '').trim(), searchWords = words(search);
     const now = new Date(), expiryStart = new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate())), future = new Date(expiryStart);
     const months = Number(q.expiryMonths||0); if (![0,1,2,3,6].includes(months)) throw new BadRequestException('Expiry window must be 1, 2, 3 or 6 months');
     const day=future.getUTCDate(); future.setUTCDate(1);future.setUTCMonth(future.getUTCMonth()+months);future.setUTCDate(Math.min(day,new Date(Date.UTC(future.getUTCFullYear(),future.getUTCMonth()+1,0)).getUTCDate())); future.setUTCHours(23,59,59,999);
@@ -103,9 +151,17 @@ export class InventoryWorkspaceService {
       if (search.startsWith('inventory:')) {
         if (i.id !== search.slice('inventory:'.length)) return false;
       } else if (search) {
-        const values = [i.id,i.name,i.productName,i.genericName,i.brandName,i.batchNumber,i.barcode,i.sku,i.packLabel,i.metadata.sourceItemCode,...inventoryNameAliases(i.metadata),...(i.drugs||[]).map((d: { name: string })=>d.name)];
-        const haystack = values.map(v=>words(v).join(' '));
-        if (!values.some(v=>text(v).includes(text(search))) && (!searchWords.length || !searchWords.every(w=>haystack.some(v=>v.includes(w))))) return false;
+        const drugs = i.drugs || [];
+        const match = matchProductSearch(search, {
+          names: [i.name, i.productName, i.brandName, ...drugs.map((d:any)=>d.name)].filter(Boolean),
+          aliases: inventoryNameAliases(i.metadata), ingredients: [i.genericName, ...drugs.flatMap((d:any)=>[d.composition1,d.composition2])].filter(Boolean),
+          manufacturer: i.manufacturer || drugs[0]?.manufacturerName, category: i.category,
+          strength: drugs.length===1?drugs[0].strength:undefined,
+          details: [i.packLabel, ...drugs.flatMap((d:any)=>[d.packSizeLabel,d.strength,d.dosageForm])],
+          codes: [i.id,i.batchNumber,i.barcode,i.sku,i.metadata.sourceItemCode],
+        });
+        if (!match) return false;
+        (i as any).searchMatch = match;
       }
       if (fields.some(f=>q[f] && text((i as any)[f])!==text(q[f]))) return false;
       if (q.dosageForm && text(i.metadata.dosageForm)!==text(q.dosageForm)) return false;
@@ -133,12 +189,13 @@ export class InventoryWorkspaceService {
       if (q.audit==='COUNTED' && !i.metadata.lastCountAt) return false;
       return true;
     });
-    const sortBy=q.sortBy||'name'; const sorts=['name','currentStock','available','costPrice','mrp','expiryDate','storageLocation','updatedAt'];
+    const sortBy=q.sortBy||(search?'relevance':'name'); const sorts=['relevance','name','currentStock','available','costPrice','mrp','expiryDate','storageLocation','updatedAt'];
     if(!sorts.includes(sortBy)|| (q.sortOrder&&!['asc','desc'].includes(q.sortOrder))) throw new BadRequestException('Invalid stock sort');
-    rows.sort((a:any,b:any)=>{const av=a[sortBy],bv=b[sortBy]; const cmp=av==null?(bv==null?0:1):bv==null?-1:typeof av==='number'?av-bv:av instanceof Date?av.getTime()-new Date(bv).getTime():String(av).localeCompare(String(bv));return (q.sortOrder==='desc'?-cmp:cmp)||a.id.localeCompare(b.id);});
+    const sortOrder=q.sortOrder||(sortBy==='relevance'?'desc':'asc');
+    rows.sort((a:any,b:any)=>{const av=sortBy==='relevance'?a.searchMatch?.score||0:a[sortBy],bv=sortBy==='relevance'?b.searchMatch?.score||0:b[sortBy]; const cmp=av==null?(bv==null?0:1):bv==null?-1:typeof av==='number'?av-bv:av instanceof Date?av.getTime()-new Date(bv).getTime():String(av).localeCompare(String(bv));return (sortOrder==='desc'?-cmp:cmp)||(sortBy==='relevance'?a.name.localeCompare(b.name):0)||a.id.localeCompare(b.id);});
     const page=Math.max(1,Number(q.page)||1),limit=Math.min(100,Math.max(1,Number(q.limit)||30));
     const totals = (list:any[])=>({batches:list.length,units:list.reduce((n,i)=>n+i.currentStock,0),PTR:money(list.reduce((n,i)=>n+i.currentStock*i.costPrice,0)),MRP:money(list.reduce((n,i)=>n+i.currentStock*(i.mrp??i.sellingPrice),0)),MRPExcludingTax:money(list.reduce((n,i)=>n+(i.gstRate!=null?i.currentStock*(i.mrp??i.sellingPrice)/(1+i.gstRate/100):0),0)),MRPTaxUnknownBatches:list.filter(i=>i.gstRate==null).length,landingKnown:money(list.reduce((n,i)=>n+(i.metadata.landingCostPerStockUnit!=null?i.currentStock*i.metadata.landingCostPerStockUnit:0),0)),landingUnknownBatches:list.filter(i=>i.currentStock>0&&i.metadata.landingCostPerStockUnit==null).length});
-    return {filterScope:{batchView,asOf:now.toISOString(),expiryStart:expiryStart.toISOString(),expiryEnd:future.toISOString(),expiryBoundary:'Expiry dates remain valid through the entire UTC calendar day. Expired before expiryStart; upcoming through inclusive expiryEnd using clamped calendar months',priceBasis,sortBy,sortOrder:q.sortOrder||'asc'},rows:rows.slice((page-1)*limit,page*limit),total:rows.length,page,limit,totalPages:Math.ceil(rows.length/limit),
+    return {filterScope:{batchView,asOf:now.toISOString(),expiryStart:expiryStart.toISOString(),expiryEnd:future.toISOString(),expiryBoundary:'Expiry dates remain valid through the entire UTC calendar day. Expired before expiryStart; upcoming through inclusive expiryEnd using clamped calendar months',priceBasis,sortBy,sortOrder},rows:rows.slice((page-1)*limit,page*limit),total:rows.length,page,limit,totalPages:Math.ceil(rows.length/limit),
       facets:Object.fromEntries(fields.map(f=>[f,[...new Set(all.map(i=>(i as any)[f]).filter(Boolean))].sort()])),
       valuation:{current:totals(rows.filter(i=>!i.expiryDate||i.expiryDate>=expiryStart)),expired:totals(rows.filter(i=>i.expiryDate&&i.expiryDate<expiryStart))},
       quality:Object.fromEntries([...new Set(all.flatMap(i=>i.issues))].map(key=>[key,all.filter(i=>i.issues.includes(key)).length]))};
@@ -170,11 +227,18 @@ export class InventoryWorkspaceService {
     if(legacyPurchaseIds.length)purchases.push(...await this.prisma.pharmacyPurchaseInvoice.findMany({where:{branchId:actor.branchId,id:{in:legacyPurchaseIds}},include:{documents:{select:{id:true,fileName:true}},items:true},orderBy:{invoiceDate:'desc'}}));
     const caps=await this.workflow.capabilities(actor);
     const holds=['HOLD','SALES_RETURN'].some(k=>caps.kinds[k]?.read)?await this.holdSources(actor,{itemId:id,history:'true',internalAll:true}):{rows:[],restricted:true};
-    const sum=movements.reduce((n,m)=>n+(movementDelta(m)||0),0),unknown=movements.some(m=>movementDelta(m)==null);let closing=item.currentStock-sum;
-    return {holds:holds.rows,holdsPagination:{total:(holds as any).total||0,page:(holds as any).page||1,totalPages:(holds as any).totalPages||0},holdsRestricted:'restricted' in holds&&holds.restricted,identityBasis:item.drugs.length===1?'One linked product identity, stock unit and exact pack':item.drugs.length?'Ambiguous linked products; selected batch only until mapping is reviewed':'Unmapped batch only; link a verified product to group sibling batches',item:this.present(item),batches:batches.map(i=>this.present(i)),openingBalance:unknown?null:closing,
-      movements:movements.map(m=>{const delta=movementDelta(m);closing+=delta||0;return {...m,owner:owners.get(m.id)||null,correctionAllowed:!owners.has(m.id)&&!/^INV-|^PI-|^PINV-|^PURCHASE-|^WF-/.test(m.reference||''),delta,closing:unknown?null:closing};}),
+    const ledger = reconcileInventoryLedger(item, movements);
+    return {holds:holds.rows,holdsPagination:{total:(holds as any).total||0,page:(holds as any).page||1,totalPages:(holds as any).totalPages||0},holdsRestricted:'restricted' in holds&&holds.restricted,identityBasis:item.drugs.length===1?'One linked product identity, stock unit and exact pack':item.drugs.length?'Ambiguous linked products; selected batch only until mapping is reviewed':'Unmapped batch only; link a verified product to group sibling batches',item:this.present(item),batches:batches.map(i=>this.present(i)),openingBalance:null,
+      ledger: { ...ledger, movements: undefined },
+      movements:ledger.movements.map(m=>({...m,owner:owners.get(m.id)||null,correctionAllowed:!owners.has(m.id)&&!/^INV-|^PI-|^PINV-|^PURCHASE-|^WF-/.test(m.reference||'')})),
       history:effects.map(e=>({...e,document:{...e.document,totalAmount:Number(e.document.totalAmount)}})),purchases};
   }
+  /**
+   * @cc [owner:nareshshah139,label:product] batch-label-correction
+   * Changing a batch number or expiry MUST require a reason, the current revision and item-update
+   * permission. Expiry MUST be a real YYYY-MM-DD date and remain valid through that UTC day.
+   * Corrections MUST be audited atomically without changing quantities or original invoice rows.
+   */
   /**
    * @cc [owner:nareshshah139,label:product] workspace-item-metadata-audit
    * Metadata edits MUST compare the saved revision, reject conflicting SKU/barcode assignments,
@@ -194,6 +258,19 @@ export class InventoryWorkspaceService {
       const item=await tx.inventoryItem.findFirst({where:{id,branchId:actor.branchId}});if(!item)throw new NotFoundException('Batch not found');
       if(input.updatedAt!==item.updatedAt.toISOString())throw new ConflictException('Batch details changed. Reload before saving.');
       const data:any=inventoryRegimenDefaults(input,item),meta=jsonObject(item.metadata),reason=String(input.reason||'').trim();
+      if (input.batchNumber !== undefined) {
+        const batch = String(input.batchNumber).trim();
+        if (!batch) throw new BadRequestException('Enter the batch number shown on the pack');
+        if (batch !== item.batchNumber) data.batchNumber = batch;
+      }
+      if (input.expiryDate !== undefined) {
+        const date = String(input.expiryDate), parsed = new Date(`${date}T23:59:59.999Z`);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0,10) !== date)
+          throw new BadRequestException('Enter a valid expiry date shown on the pack');
+        if (date !== item.expiryDate?.toISOString().slice(0,10)) data.expiryDate = parsed;
+      }
+      if ((data.batchNumber !== undefined || data.expiryDate !== undefined) && !reason)
+        throw new BadRequestException('Enter a reason for correcting the batch number or expiry');
       for(const f of ['name','genericName','brandName','category','subCategory','manufacturer','supplier','hsnCode','storageLocation','storageConditions','barcode','sku'])if(input[f]!==undefined)data[f]=String(input[f]).trim()||null;
       if(input.name!==undefined&&!data.name)throw new BadRequestException('Product name is required');
       if(data.name && data.name!==item.name)retainPreviousInventoryName(meta,item.name);
@@ -231,8 +308,13 @@ export class InventoryWorkspaceService {
       return {updated:rows.length,location};
     });
   }
+  /**
+   * @cc [owner:nareshshah139,label:product] inventory-today-pending-edits
+   * Today MUST count all pending price/stock requests in the authenticated branch for users
+   * allowed to read the approval queue, without pagination or catalog-size limits.
+   */
   async overview(actor:WorkflowActor) {
-    const caps=await this.workflow.capabilities(actor),p=await this.workflow.permissions(actor),has=(x:string)=>p.has('*')||p.has(x);
+    const caps=await this.workflow.capabilities(actor),p=await this.workflow.permissions(actor),has=(x:string)=>p.has('*')||hasScopedPermission(p,x);
     const stock=has('inventory:item:read')?await this.stock(actor):null;
     const docs=(await this.workflow.documents(actor,{limit:100}));
     const active=await this.prisma.inventoryWorkflowDocument.groupBy({by:['kind','status'],where:{branchId:actor.branchId,kind:{in:Object.keys(caps.kinds).filter(k=>caps.kinds[k].read)}},_count:true});
@@ -242,7 +324,9 @@ export class InventoryWorkspaceService {
     const supplierAlerts=has('pharmacy:purchase-ledger:read')?await new PharmacyPurchaseLedgerService(this.prisma).getAlerts(actor.branchId):null;
     const supplierOverdue=supplierAlerts?{count:supplierAlerts.overdue.length,amount:money(supplierAlerts.overdue.reduce((n:number,r:any)=>n+r.outstanding,0)),asOf:supplierAlerts.asOfDate}:null;
     const pendingPurchase=purchases.filter((g:any)=>!['STOCK_COMMITTED','CANCELLED'].includes(g.status)).reduce((n:number,g:any)=>n+g._count,0);
-    return {pendingPurchase,supplierOverdue,branchId:actor.branchId,asOf:new Date().toISOString(),lowStock:low?.total,expiring:expiring?.total,capabilities:caps,stock:stock?{total:stock.total,quality:stock.quality,valuation:stock.valuation}:null,queues:active,purchases,unlinked,recent:docs.rows.slice(0,8)};
+    const pendingEdits = ['OWNER','ADMIN','DOCTOR','PHARMACIST'].includes(actor.role) && has('pharmacy:drug:inventory-change:read')
+      ? await this.prisma.drugInventoryChangeRequest.count({where:{branchId:actor.branchId,status:'PENDING'}}) : null;
+    return {pendingEdits,pendingPurchase,supplierOverdue,branchId:actor.branchId,asOf:new Date().toISOString(),lowStock:low?.total,expiring:expiring?.total,capabilities:caps,stock:stock?{total:stock.total,quality:stock.quality,valuation:stock.valuation}:null,queues:active,purchases,unlinked,recent:docs.rows.slice(0,8)};
   }
   async suppliers(actor:WorkflowActor){await this.require(actor,'inventory:item:read');return this.prisma.supplier.findMany({where:{branchId:actor.branchId},orderBy:{name:'asc'}});}
   async owners(actor:WorkflowActor){await this.workflow.permissions(actor);return this.prisma.user.findMany({where:{branchId:actor.branchId,isActive:true},select:{id:true,firstName:true,lastName:true,role:true},orderBy:{firstName:'asc'}});}

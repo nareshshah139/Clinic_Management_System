@@ -6,6 +6,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../../shared/database/prisma.service';
+import { writeStockMovement } from '../inventory/inventory-stock';
+import { availableStock, prescriptionNameKey, stockIdentityKey } from './pharmacy-stock-identity';
 import {
   CreatePartnerDailySaleDto,
   QueryPartnerDailySalesDto,
@@ -276,104 +278,116 @@ export class PharmacyPartnerSalesService {
     };
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product] partner-stock-commit-once
+   * A partner sale's claim, stock deductions and ledger MUST commit together at most once.
+   * Concurrent changes MUST abort the transaction; unmatched quantities remain discrepancies.
+   */
   async commitStock(id: string, user: any) {
     const branchId = this.requireBranchId(user);
     const userId = this.requireUserId(user);
     const access = this.getAccessContext(user);
     const prismaAny = this.prisma as any;
 
-    return prismaAny.$transaction(async (tx: any) => {
-      const sale = await tx.partnerDailySale.findFirst({
-        where: {
-          id,
-          branchId,
-          ...this.accessWhere(access),
-        },
-        include: this.saleInclude(),
-      });
-
-      if (!sale) {
-        throw new NotFoundException('Partner daily sale not found');
-      }
-      if (sale.status === 'CANCELLED') {
-        throw new BadRequestException(
-          'Cancelled partner sales cannot commit stock',
-        );
-      }
-      if (sale.stockCommittedAt) {
-        return this.formatSale(sale);
-      }
-
-      const claimedAt = new Date();
-      const claim = await tx.partnerDailySale.updateMany({
-        where: {
-          id,
-          branchId,
-          stockCommittedAt: null,
-        },
-        data: {
-          stockCommittedAt: claimedAt,
-          stockCommittedBy: userId,
-        },
-      });
-
-      if (claim.count !== 1) {
-        const current = await tx.partnerDailySale.findFirst({
-          where: { id, branchId },
+    try {
+      return await prismaAny.$transaction(async (tx: any) => {
+        const sale = await tx.partnerDailySale.findFirst({
+          where: {
+            id,
+            branchId,
+            ...this.accessWhere(access),
+          },
           include: this.saleInclude(),
         });
-        if (current?.stockCommittedAt) {
-          return this.formatSale(current);
+
+        if (!sale) {
+          throw new NotFoundException('Partner daily sale not found');
         }
-        throw new ConflictException(
-          'Partner sale changed while committing stock. Refresh and retry.',
+        if (sale.status === 'CANCELLED') {
+          throw new BadRequestException(
+            'Cancelled partner sales cannot commit stock',
+          );
+        }
+        if (sale.stockCommittedAt) {
+          return this.formatSale(sale);
+        }
+
+        const claimedAt = new Date();
+        const claim = await tx.partnerDailySale.updateMany({
+          where: {
+            id,
+            branchId,
+            stockCommittedAt: null,
+          },
+          data: {
+            stockCommittedAt: claimedAt,
+            stockCommittedBy: userId,
+          },
+        });
+
+        if (claim.count !== 1) {
+          const current = await tx.partnerDailySale.findFirst({
+            where: { id, branchId },
+            include: this.saleInclude(),
+          });
+          if (current?.stockCommittedAt) {
+            return this.formatSale(current);
+          }
+          throw new ConflictException(
+            'Partner sale changed while committing stock. Refresh and retry.',
+          );
+        }
+
+        const itemResults: CommitLineResult[] = [];
+        for (const item of sale.items || []) {
+          itemResults.push(
+            await this.commitSaleItem(tx, sale, item, branchId, userId),
+          );
+        }
+
+        const totalSold = (sale.items || []).reduce(
+          (sum: number, item: any) => sum + Number(item.quantitySold || 0),
+          0,
         );
-      }
-
-      const itemResults: CommitLineResult[] = [];
-      for (const item of sale.items || []) {
-        itemResults.push(
-          await this.commitSaleItem(tx, sale, item, branchId, userId),
+        const totalCommitted = itemResults.reduce(
+          (sum, item) => sum + item.committedQuantity,
+          0,
         );
-      }
-
-      const totalSold = (sale.items || []).reduce(
-        (sum: number, item: any) => sum + Number(item.quantitySold || 0),
-        0,
-      );
-      const totalCommitted = itemResults.reduce(
-        (sum, item) => sum + item.committedQuantity,
-        0,
-      );
-      const flags = Array.from(
-        new Set([
-          ...(this.parseFlags(
-            sale.discrepancyFlags,
-          ) as PartnerDiscrepancyFlag[]),
-          ...itemResults
-            .map((result) => result.discrepancyFlag)
-            .filter(Boolean),
-        ]),
-      ) as PartnerDiscrepancyFlag[];
-      const hasDiscrepancy = Boolean(sale.lateEntry || flags.length > 0);
-      const status = this.deriveCommittedStatus(
-        totalSold,
-        totalCommitted,
-        hasDiscrepancy,
-      );
-
-      const updated = await tx.partnerDailySale.update({
-        where: { id },
-        data: {
-          status,
+        const flags = Array.from(
+          new Set([
+            ...(this.parseFlags(
+              sale.discrepancyFlags,
+            ) as PartnerDiscrepancyFlag[]),
+            ...itemResults
+              .map((result) => result.discrepancyFlag)
+              .filter(Boolean),
+          ]),
+        ) as PartnerDiscrepancyFlag[];
+        const hasDiscrepancy = Boolean(sale.lateEntry || flags.length > 0);
+        const status = this.deriveCommittedStatus(
+          totalSold,
+          totalCommitted,
           hasDiscrepancy,
-          discrepancyFlags: this.stringifyFlags(flags),
-        },
-        include: this.saleInclude(),
-      });
+        );
 
-      return this.formatSale(updated);
-    });
+        const updated = await tx.partnerDailySale.update({
+          where: { id },
+          data: {
+            status,
+            hasDiscrepancy,
+            discrepancyFlags: this.stringifyFlags(flags),
+          },
+          include: this.saleInclude(),
+        });
+
+        return this.formatSale(updated);
+      }, { isolationLevel: 'Serializable' });
+    } catch (error) {
+      if (['P2025', 'P2034'].includes((error as any)?.code)) {
+        throw new ConflictException('Inventory or partner sale changed. Refresh and retry.');
+      }
+      throw error;
+    }
   }
 
   private async commitSaleItem(
@@ -391,27 +405,17 @@ export class PharmacyPartnerSalesService {
 
     for (const candidate of candidates) {
       if (remaining <= 0) break;
-      const available = Math.max(0, Number(candidate.currentStock || 0));
+      const available = availableStock(candidate);
       const quantity = Math.min(remaining, available);
       if (quantity <= 0) continue;
 
-      await this.decrementInventory(tx, candidate.id, quantity, branchId);
-      await tx.stockTransaction.create({
-        data: {
-          branchId,
-          itemId: candidate.id,
-          userId,
-          type: 'SALE',
-          quantity,
-          unitPrice: this.effectiveUnitPrice(item),
-          totalAmount: this.money(this.effectiveUnitPrice(item) * quantity),
-          reference: `PARTNER-SALE-${sale.id}`,
-          notes: `Partner daily sale ${sale.partnerOrganizationName}; source ${sale.source}; item ${item.medicineName}`,
-          batchNumber: candidate.batchNumber || item.batchNumber,
-          expiryDate: candidate.expiryDate || undefined,
-          customer: sale.partnerOrganizationName,
-          reason: 'PARTNER_DAILY_SYNC',
-        },
+      await writeStockMovement(tx, {
+        branchId, itemId: candidate.id, userId, type: 'SALE', delta: -quantity,
+        unitPrice: this.effectiveUnitPrice(item),
+        reference: `PARTNER-SALE-${sale.id}`,
+        notes: `Partner daily sale ${sale.partnerOrganizationName}; source ${sale.source}; item ${item.medicineName}`,
+        customer: sale.partnerOrganizationName,
+        reason: 'PARTNER_DAILY_SYNC',
       });
 
       committedQuantity += quantity;
@@ -448,140 +452,43 @@ export class PharmacyPartnerSalesService {
     return result;
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product] partner-exact-stock-identity
+   * Automatic deductions require both the exact medicine name and source batch in this branch,
+   * with one unambiguous product/unit/pack identity. Held, expired or inactive stock is excluded.
+   * A missing, ambiguous or mismatched identity MUST leave the sale unresolved without deductions.
+   */
   private async findCandidateBatches(tx: any, branchId: string, item: any) {
     const medicineName = String(item.medicineName || '').trim();
     const batchNumber = String(item.batchNumber || '').trim();
-    const activeStockWhere = {
-      branchId,
-      status: 'ACTIVE',
-      currentStock: { gt: 0 },
-    };
-    const include = { drugs: true };
-    const byBatch = batchNumber
-      ? await tx.inventoryItem.findMany({
-          where: {
-            ...activeStockWhere,
-            batchNumber,
-          },
-          include,
-          orderBy: [{ expiryDate: 'asc' }, { createdAt: 'asc' }],
-        })
-      : [];
-
-    const byName = medicineName
-      ? await tx.inventoryItem.findMany({
-          where: {
-            ...activeStockWhere,
-            OR: this.nameMatchWhere(medicineName),
-          },
-          include,
-          orderBy: [{ expiryDate: 'asc' }, { createdAt: 'asc' }],
-        })
-      : [];
-
-    const combined = [...byBatch, ...byName];
-    const seen = new Set<string>();
-    return combined
-      .filter((candidate: any) => {
-        if (seen.has(candidate.id)) return false;
-        seen.add(candidate.id);
-        return true;
-      })
-      .sort((a: any, b: any) => {
-        const aScore = this.matchScore(a, medicineName, batchNumber);
-        const bScore = this.matchScore(b, medicineName, batchNumber);
-        if (aScore !== bScore) return bScore - aScore;
-        return (
-          new Date(a.expiryDate || '9999-12-31').getTime() -
-          new Date(b.expiryDate || '9999-12-31').getTime()
-        );
-      });
-  }
-
-  private nameMatchWhere(medicineName: string) {
-    return [
-      { name: { contains: medicineName, mode: 'insensitive' } },
-      { brandName: { contains: medicineName, mode: 'insensitive' } },
-      { genericName: { contains: medicineName, mode: 'insensitive' } },
-      {
-        drugs: {
-          some: {
-            name: { contains: medicineName, mode: 'insensitive' },
-          },
-        },
-      },
-    ];
-  }
-
-  private matchScore(
-    candidate: any,
-    medicineName: string,
-    batchNumber: string,
-  ) {
-    let score = 0;
-    if (
-      batchNumber &&
-      String(candidate.batchNumber || '').toLowerCase() ===
-        batchNumber.toLowerCase()
-    ) {
-      score += 10;
-    }
-    const needle = medicineName.toLowerCase();
-    const names = [
-      candidate.name,
-      candidate.brandName,
-      candidate.genericName,
-      ...(candidate.drugs || []).map((drug: any) => drug.name),
-    ]
-      .filter(Boolean)
-      .map((value: string) => value.toLowerCase());
-    if (needle && names.some((name: string) => name === needle)) score += 5;
-    if (needle && names.some((name: string) => name.includes(needle)))
-      score += 3;
-    return score;
-  }
-
-  private async decrementInventory(
-    tx: any,
-    itemId: string,
-    quantity: number,
-    branchId: string,
-  ) {
-    const updated = await tx.inventoryItem.updateMany({
+    if (!medicineName || !batchNumber) return [];
+    const rows = await tx.inventoryItem.findMany({
       where: {
-        id: itemId,
-        branchId,
-        currentStock: { gte: quantity },
+        branchId, status: 'ACTIVE',
+        batchNumber: { equals: batchNumber, mode: 'insensitive' },
+        OR: [
+          { name: { equals: medicineName, mode: 'insensitive' } },
+          { drugs: { some: { name: { equals: medicineName, mode: 'insensitive' }, isActive: true, isDiscontinued: false } } },
+        ],
       },
-      data: {
-        currentStock: { decrement: quantity },
-      },
+      include: { drugs: true },
+      orderBy: [{ expiryDate: 'asc' }, { id: 'asc' }],
     });
-
-    if (updated.count !== 1) {
-      throw new ConflictException(
-        'Inventory changed while committing partner sale. Refresh and retry.',
-      );
-    }
-
-    const item = await tx.inventoryItem.findUnique({
-      where: { id: itemId },
-      select: {
-        currentStock: true,
-        minStockLevel: true,
-        reorderLevel: true,
-        expiryDate: true,
-      },
-    });
-    if (!item) {
-      throw new ConflictException(
-        'Inventory item disappeared while committing stock',
-      );
-    }
-    await tx.inventoryItem.update({
-      where: { id: itemId },
-      data: { stockStatus: this.deriveStockStatus(item) },
-    });
+    const nameKey = prescriptionNameKey(medicineName);
+    const batchKey = prescriptionNameKey(batchNumber);
+    const matches = rows.filter((row: any) =>
+      row.branchId === branchId && row.status === 'ACTIVE' &&
+      prescriptionNameKey(row.batchNumber || '') === batchKey &&
+      [row.name, ...(row.drugs || []).map((drug: any) => drug.name)]
+        .some((name: string) => name && prescriptionNameKey(name) === nameKey),
+    );
+    if (matches.some((row: any) => row.drugs.length > 1 || row.drugs.some((drug: any) =>
+      drug.branchId !== branchId || !drug.isActive || drug.isDiscontinued,
+    )) || new Set(matches.map(stockIdentityKey)).size !== 1) return [];
+    return matches.filter((row: any) => availableStock(row) > 0).sort((a: any, b: any) =>
+      new Date(a.expiryDate || '9999-12-31').getTime() - new Date(b.expiryDate || '9999-12-31').getTime() ||
+      a.id.localeCompare(b.id),
+    );
   }
 
   private deriveCommittedStatus(
@@ -805,27 +712,6 @@ export class PharmacyPartnerSalesService {
     } catch {
       return {};
     }
-  }
-
-  private deriveStockStatus(item: {
-    currentStock: number;
-    minStockLevel?: number | null;
-    reorderLevel?: number | null;
-    expiryDate?: Date | null;
-  }) {
-    if (item.expiryDate && new Date(item.expiryDate).getTime() < Date.now()) {
-      return 'EXPIRED';
-    }
-    if (item.currentStock <= 0) return 'OUT_OF_STOCK';
-    const threshold = item.reorderLevel ?? item.minStockLevel;
-    if (
-      threshold !== null &&
-      threshold !== undefined &&
-      item.currentStock <= threshold
-    ) {
-      return 'LOW_STOCK';
-    }
-    return 'IN_STOCK';
   }
 
   private requireBranchId(user: any) {

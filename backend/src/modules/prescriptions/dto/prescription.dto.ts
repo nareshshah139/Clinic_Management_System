@@ -75,6 +75,10 @@ export enum RefillStatus {
 export class PrescriptionItemDto {
   @IsOptional()
   @IsString()
+  inventoryItemId?: string;
+
+  @IsOptional()
+  @IsString()
   drugId?: string;
 
   @IsOptional()
@@ -132,10 +136,6 @@ export class PrescriptionItemDto {
   @IsNumber()
   @Min(0)
   quantity?: number;
-
-  @IsOptional()
-  @IsString()
-  notes?: string;
 
   @IsOptional()
   @IsBoolean()
@@ -370,6 +370,14 @@ export class DrugInteractionDto {
 // Template item DTO allows optional numeric fields so instruction-only
 // rows or partial items can be saved in templates without failing validation.
 export class PrescriptionTemplateItemDto {
+  @IsOptional()
+  @IsString()
+  drugId?: string;
+
+  @IsOptional()
+  @IsString()
+  inventoryItemId?: string;
+
   @IsOptional()
   @IsString()
   drugName?: string;

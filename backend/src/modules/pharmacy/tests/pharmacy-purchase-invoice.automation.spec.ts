@@ -25,7 +25,7 @@ describe('Automatic purchase invoice intake', () => {
       }],
     };
     prisma = {
-      auditLog: { create: jest.fn().mockResolvedValue({}) },
+      auditLog: { findMany: jest.fn().mockResolvedValue([]), create: jest.fn().mockResolvedValue({}) },
       pharmacyPurchaseInvoiceItem: { update: jest.fn().mockResolvedValue({}) },
       supplier: { findMany: jest.fn(async () => [{ id:'supplier-1', name:'Example Supplies', gstNumber:'36ABCDE1234F1Z5' }]) },
       pharmacyPurchaseInvoiceDocument: { updateMany: jest.fn(async () => ({ count: 1 })) },

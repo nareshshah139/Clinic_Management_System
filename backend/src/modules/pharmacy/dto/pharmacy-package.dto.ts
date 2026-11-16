@@ -251,6 +251,7 @@ export class PharmacyPackageItemResponseDto {
     id: string;
     name: string;
     price: number;
+    gstRate?: number | null;
     manufacturerName: string;
     packSizeLabel: string;
     category?: string;
@@ -341,4 +342,4 @@ export class PharmacyPackageListResponseDto {
 
   @ApiProperty({ description: 'Total pages', example: 2 })
   totalPages: number;
-} 
+}

@@ -1,3 +1,4 @@
+import { medicineNameIssues } from '@cms/shared-types/medicine-name';
 import { BadRequestException } from '@nestjs/common';
 import { PurchaseProductCatalogDto } from './dto/pharmacy-purchase-invoice.dto';
 
@@ -9,10 +10,10 @@ export function purchaseProductKind(type?: string | null) {
   return 'MEDICINE';
 }
 
-export function purchaseCatalogIssues(drug: { type?: string | null; composition1?: string | null; category?: string | null; dosageForm?: string | null; strength?: string | null }) {
+export function purchaseCatalogIssues(drug: { type?: string | null; composition1?: string | null; category?: string | null; dosageForm?: string | null; strength?: string | null; combinationProduct?: boolean }) {
   const fields = purchaseProductKind(drug.type) === 'MEDICINE'
     ? ['composition1', 'category', 'dosageForm', 'strength'] as const : ['category'] as const;
-  return fields.filter(field => !hasCatalogValue(drug[field]));
+  return fields.filter(field => !(field === 'strength' && !drug.strength?.trim() && !medicineNameIssues({ ...drug, brandName: 'Product' }).some(issue => issue.startsWith('Strength'))) && !hasCatalogValue(drug[field]));
 }
 
 export function purchaseCatalogData(catalog?: PurchaseProductCatalogDto) {
@@ -26,6 +27,10 @@ export function purchaseCatalogData(catalog?: PurchaseProductCatalogDto) {
     composition1: catalog.composition1?.trim() || null,
     dosageForm: catalog.dosageForm?.trim() || null,
     strength: catalog.strength?.trim() || null,
+    brandName: catalog.brandName?.trim() || null,
+    itemCode: catalog.itemCode?.trim() || null,
+    combinationProduct: catalog.combinationProduct === true,
+    dispenseLoose: catalog.dispenseLoose === true,
     requiresPrescription: medicine ? catalog.requiresPrescription : false,
   };
   const missing: string[] = purchaseCatalogIssues(data);

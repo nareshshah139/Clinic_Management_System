@@ -26,7 +26,7 @@ export class PatientsService {
   /**
    * Generate a unique patientCode with collision retries.
    */
-  private async createPatientWithCode(tx: Prisma.TransactionClient, data: CreatePatientDto & { branchId: string; dob?: Date | null; age?: number | null }) {
+  private async createPatientWithCode(tx: Prisma.TransactionClient, data: Omit<CreatePatientDto, 'dob' | 'age'> & { branchId: string; dob?: Date | null; age?: number | null }) {
     const maxAttempts = 5;
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       const code = generatePatientCode();

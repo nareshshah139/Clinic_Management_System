@@ -10,13 +10,13 @@ describe('Invoice product details', () => {
     expect(screen.getByRole('button', { name: 'Save new product' })).toBeDisabled();
     choose('Product kind', 'COSMETIC');
     fireEvent.click(screen.getByRole('button', { name: 'Save new product' }));
-    await waitFor(() => expect(save).toHaveBeenCalledWith({ productKind: 'COSMETIC', category: 'Cosmetic', composition1: '', dosageForm: '', strength: '', requiresPrescription: false }));
+    await waitFor(() => expect(save).toHaveBeenCalledWith({ productKind: 'COSMETIC', category: 'Cosmetic', composition1: '', dosageForm: '', strength: '', requiresPrescription: false, brandName: '', itemCode: '', combinationProduct: false, dispenseLoose: false }));
     expect(await screen.findByRole('status')).toHaveTextContent('Product details saved');
   });
   it('requires actual medicine fields and an explicit prescription choice', () => {
     render(<PurchaseProductDetails id="medicine" disabled={false} onSave={jest.fn()} />);
     choose('Product kind', 'MEDICINE');
-    for (const [name,value] of [['Category (required)','Test category'],['Composition (required)','Test ingredient'],['Dosage form (required)','Cream'],['Strength (required)','Review strength']]) choose(name,value);
+    for (const [name,value] of [['Category (required)','Test category'],['Composition (required)','Test ingredient'],['Dosage form (required)','Tablet'],['Strength (required)','Review strength']]) choose(name,value);
     choose('Prescription required','false');
     expect(screen.getByRole('button', { name: 'Save new product' })).toBeDisabled();
     choose('Strength (required)','1%');

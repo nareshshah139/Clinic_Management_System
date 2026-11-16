@@ -2,6 +2,38 @@ import { ValidationPipe } from '@nestjs/common';
 import { CreateVisitDto, UpdateVisitDto } from '../dto/create-visit.dto';
 import { VisitsService } from '../visits.service';
 
+it('creates an empty-complaint visit, clears an entered complaint, and retains legacy visits in history', async () => {
+  const legacy = { id: 'legacy', patientId: 'p', doctorId: 'd', createdAt: new Date('2026-09-01'), complaints: JSON.stringify([{ complaint: 'General consultation', notes: 'Saved annotation' }]), history: JSON.stringify({ pastHistory: 'Legacy history' }) };
+  const originalLegacy = structuredClone(legacy);
+  let current: any;
+  const db: any = {
+    patient: { findFirst: jest.fn().mockResolvedValue({ id: 'p' }) },
+    user: { findFirst: jest.fn().mockResolvedValue({ id: 'd' }) },
+    visit: {
+      create: jest.fn(async ({ data }) => (current = { ...data, id: 'new-visit', createdAt: new Date('2026-09-27') })),
+      update: jest.fn(async ({ data }) => (current = { ...current, ...data })),
+      findFirst: jest.fn(async () => current),
+      findMany: jest.fn(async () => [current, legacy]),
+    },
+    visitAttachment: { findMany: jest.fn().mockResolvedValue([]) },
+    $transaction: jest.fn(async fn => fn(db)),
+  };
+  const service = new VisitsService(db);
+  const pipe = new ValidationPipe({ transform: true, whitelist: true });
+  const create = await pipe.transform({ patientId: 'p', doctorId: 'd', complaints: [], history: { pastHistory: 'New visit history' } }, { type: 'body', metatype: CreateVisitDto });
+  await service.create(create, 'branch');
+  expect((await service.findOne('new-visit', 'branch')).complaints).toEqual([]);
+  await service.update('new-visit', { complaints: [{ complaint: 'Entered complaint' }] }, 'branch');
+  const clear = await pipe.transform({ complaints: [] }, { type: 'body', metatype: UpdateVisitDto });
+  await service.update('new-visit', clear, 'branch');
+  const history = await service.getPatientVisitHistory({ patientId: 'p' }, 'branch');
+  expect(history.visits).toEqual(expect.arrayContaining([
+    expect.objectContaining({ id: 'new-visit', complaints: [], history: { pastHistory: 'New visit history' } }),
+    expect.objectContaining({ id: 'legacy', complaints: [{ complaint: 'General consultation', notes: 'Saved annotation' }], history: { pastHistory: 'Legacy history' } }),
+  ]));
+  expect(legacy).toEqual(originalLegacy);
+});
+
 it('round-trips every clinical document through validation, create, update and history without losing saved fields', async () => {
   const documents = {
     complaints: [{ complaint: 'Rash', duration: 'Two weeks', severity: 'Mild', notes: 'Complaint note' }],

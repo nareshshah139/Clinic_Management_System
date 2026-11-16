@@ -1,3 +1,5 @@
+import { medicinePresentationData } from '../pharmacy/medicine-presentation';
+import { formatMedicineName } from '@cms/shared-types/medicine-name';
 import { inventoryRegimenDefaults } from './inventory-regimen-defaults';
 import { writeStockMovement, movementDelta, money } from './inventory-stock';
 import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
@@ -40,6 +42,7 @@ export class InventoryService {
 
   // Inventory Item Management
   async createInventoryItem(createItemDto: CreateInventoryItemDto, branchId: string) {
+    if (createItemDto.type === 'MEDICINE') Object.assign(createItemDto, medicinePresentationData(createItemDto));
     // Check if item with same SKU or barcode already exists
     if (createItemDto.sku) {
       const existingSku = await this.prisma.inventoryItem.findFirst({
@@ -203,6 +206,10 @@ export class InventoryService {
 
     if (!existingItem) {
       throw new NotFoundException('Inventory item not found');
+    }
+
+    if ((updateItemDto.type ?? existingItem.type) === 'MEDICINE' && ['name','brandName','dosageForm','strength','combinationProduct','dispenseLoose','itemCode'].some(key => (updateItemDto as any)[key] !== undefined)) {
+      Object.assign(updateItemDto, medicinePresentationData({ ...existingItem, ...updateItemDto }));
     }
 
     const supplied = updateItemDto as any;
@@ -1019,6 +1026,7 @@ export class InventoryService {
 
     return {
       ...item,
+      displayName: formatMedicineName(item.name, item),
       tags,
       metadata,
     };

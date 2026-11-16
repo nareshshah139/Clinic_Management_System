@@ -23,6 +23,17 @@ import {
 export class BillingService {
   constructor(private prisma: PrismaService, private invoiceNumbers: InvoiceNumbersService) {}
 
+  /**
+   * @cc [owner:nareshshah139,label:security] invoice-visit-scope
+   * A supplied visit MUST belong to the invoice patient in the authenticated branch;
+   * a missing or mismatched visit MUST fail before any invoice is written.
+   */
+  /**
+   * @cc [owner:nareshshah139,label:product] explicit-appointment-bill
+   * A supplied appointment MUST match the patient and branch and, when supplied,
+   * the visit. The recorded bill type MUST be a supported explicit choice; a
+   * missing type MUST remain unrecorded rather than inferred from visit history.
+   */
   async createInvoice(createInvoiceDto: CreateInvoiceDto, branchId: string) {
     try {
       console.log('🔧 BillingService.createInvoice called with:', {
@@ -32,7 +43,11 @@ export class BillingService {
         discount: createInvoiceDto.discount
       });
 
-      const { patientId, visitId, items, discount, discountReason, notes, dueDate, metadata, mode, gstin, hsn } = createInvoiceDto as any;
+      const { patientId, visitId, appointmentId, billType, items, discount, discountReason, notes, dueDate, metadata, mode, gstin, hsn } = createInvoiceDto as any;
+
+      if (billType && !['FIRST_CONSULTATION', 'REVIEW', 'PROCEDURE'].includes(billType)) {
+        throw new BadRequestException('Choose a valid bill type.');
+      }
 
       if (!items || items.length === 0) {
         console.error('❌ No items provided for invoice');
@@ -53,11 +68,20 @@ export class BillingService {
     // Verify visit exists and belongs to branch (if provided)
     if (visitId) {
       const visit = await this.prisma.visit.findFirst({
-        where: { id: visitId, branchId },
+        where: { id: visitId, patientId, patient: { branchId } },
       });
 
       if (!visit) {
         throw new NotFoundException('Visit not found');
+      }
+    }
+
+    if (appointmentId) {
+      const appointment = await this.prisma.appointment.findFirst({ where: { id: appointmentId, patientId, branchId } });
+      if (!appointment) throw new NotFoundException('Appointment not found for this patient in this branch');
+      if (visitId) {
+        const linkedVisit = await this.prisma.visit.findFirst({ where: { id: visitId, appointmentId, patientId, patient: { branchId } } });
+        if (!linkedVisit) throw new BadRequestException('The visit does not belong to this appointment.');
       }
     }
 
@@ -141,6 +165,8 @@ export class BillingService {
     };
     
     if (visitId) data.visitId = visitId;
+    if (appointmentId) data.appointmentId = appointmentId;
+    if (billType) data.billType = billType;
     if (mode) data.mode = mode;
     if (gstin) data.gstin = gstin;
     if (hsn) data.hsn = hsn;
@@ -693,6 +719,10 @@ export class BillingService {
   }
 
   // Private helper methods
+  /**
+   * @cc [owner:nareshshah139] explicit-zero-tax
+   * An explicitly supplied zero GST rate remains zero; only an absent rate uses the default.
+   */
   private calculateInvoiceTotals(items: any[], discount: number = 0) {
     const subtotal = items.reduce((sum, item) => {
       const itemTotal = (item.qty ?? item.quantity) * item.unitPrice;
@@ -707,7 +737,7 @@ export class BillingService {
       const itemTotal = (item.qty ?? item.quantity) * item.unitPrice;
       const itemDiscount = (item.discount || 0) * itemTotal / 100;
       const discountedItemTotal = itemTotal - itemDiscount;
-      const gstRate = item.gstRate || 18;
+      const gstRate = item.gstRate ?? 18;
       return sum + (discountedItemTotal * gstRate / 100);
     }, 0);
 

@@ -35,6 +35,8 @@ databaseTests('Automatic purchase intake with real PostgreSQL', () => {
       env: { ...process.env, DATABASE_URL: url.toString() }, stdio: 'pipe',
     });
     prisma = new PrismaClient({ datasourceUrl: url.toString() });
+    // db push does not install extensions used by the production identity search.
+    await prisma.$executeRawUnsafe(readFileSync(path.resolve('prisma/migrations/20260916100000_product_search_extension/migration.sql'), 'utf8'));
     // Exercise the additive deployment migration, rather than relying only on db push.
     await prisma.$executeRawUnsafe('DROP TABLE "pharmacy_purchase_invoice_documents"');
     const migration = readFileSync(path.resolve('prisma/migrations/20260912_add_purchase_invoice_documents/migration.sql'), 'utf8');
@@ -99,7 +101,7 @@ databaseTests('Automatic purchase intake with real PostgreSQL', () => {
     expect(reversed.items[0].ocrSourceRef).toBe(`${sourceDocument.id}:19`);
     expect(reversed.items[19].ocrSourceRef).toBe(`${sourceDocument.id}:0`);
     expect((await service.getSourceMap(sourceDocument.id,branchId)).sourceMap).toEqual(map);
-    expect(saved.items.every(item => item.manufacturer === '')).toBe(true);
+    expect(saved.items.every((item: { manufacturer: string }) => item.manufacturer === '')).toBe(true);
     expect(await prisma.stockTransaction.count({ where: { branchId } })).toBe(0);
 
     // Simulate existing drafts from the previous required-manufacturer policy.
@@ -120,7 +122,7 @@ databaseTests('Automatic purchase intake with real PostgreSQL', () => {
     expect(await prisma.stockTransaction.count({ where: { reference: committed.stockCommitReference } })).toBe(20);
     const stock = await prisma.inventoryItem.findMany({ where: { batchNumber: { in: draft.items.map((item: any) => item.batchNumber) } } });
     expect(stock).toHaveLength(20);
-    expect(stock.every(item => item.currentStock === 12)).toBe(true);
+    expect(stock.every((item: { manufacturer: string }) => item.currentStock === 12)).toBe(true);
     const original = await service.getOriginalDocument(sourceDocument.id, branchId);
     expect(original.purchaseInvoiceId).toBe(saved.id);
     expect(Buffer.from(original.data)).toEqual(upload.buffer);
@@ -130,7 +132,7 @@ databaseTests('Automatic purchase intake with real PostgreSQL', () => {
 
   it('automatically commits a manufacturer-free product and rejects ambiguous or conflicting product identities', async () => {
     const name = `Manufacturer optional ${randomUUID()}`;
-    const product = await service.confirmMasterRecord({ action: 'CREATE_NEW' as any,
+    const product = await service.confirmMasterRecord({ action: 'CREATE_NEW' as any, creationConfirmed: true,
       catalog: { productKind: 'COSMETIC' },
       item: { ...draft.items[0], productName: name, manufacturer: undefined },
     }, branchId);

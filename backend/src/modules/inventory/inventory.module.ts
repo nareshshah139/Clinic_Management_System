@@ -1,3 +1,6 @@
+import { InventoryIdentityMergeService } from './inventory-identity-merge.service';
+import { InventoryStocktakeController } from './inventory-stocktake.controller';
+import { InventoryStocktakeService } from './inventory-stocktake.service';
 import { InventoryPurchaseActionsService } from './inventory-purchase-actions.service';
 import { InventoryPurchaseActionsController } from './inventory-purchase-actions.controller';
 import { InventoryReplenishmentService } from './inventory-replenishment.service';
@@ -16,8 +19,8 @@ import { PrismaModule } from '../../shared/database/prisma.module';
 
 @Module({
   imports: [PrismaModule, PharmacyModule],
-  controllers: [InventoryPurchaseActionsController, InventoryController, InventoryWorkflowController],
-  providers: [InventoryPurchaseActionsService, InventoryReplenishmentService, InventoryService, InventoryImportService, InventoryWorkflowService, InventoryWorkspaceService, InventoryWorkflowScheduler, InventoryIntakeService, InventoryLabelService],
+  controllers: [InventoryStocktakeController, InventoryPurchaseActionsController, InventoryController, InventoryWorkflowController],
+  providers: [InventoryIdentityMergeService, InventoryStocktakeService, InventoryPurchaseActionsService, InventoryReplenishmentService, InventoryService, InventoryImportService, InventoryWorkflowService, InventoryWorkspaceService, InventoryWorkflowScheduler, InventoryIntakeService, InventoryLabelService],
   exports: [InventoryService],
 })
 export class InventoryModule {}

@@ -1,10 +1,11 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException, UnauthorizedException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException, UnauthorizedException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../shared/database/prisma.service';
 import { CreateUserDto, UpdateUserDto, ChangePasswordDto, ResetPasswordDto, SetPasswordDto, UpdateProfileDto, AssignRoleDto, UpdatePermissionsDto, UserStatusDto, CreateBranchDto, UpdateBranchDto, CreatePermissionDto, UpdatePermissionDto, CreateRoleDto, UpdateRoleDto } from './dto/user.dto';
 import { QueryUsersDto, QueryBranchesDto, QueryPermissionsDto, QueryRolesDto, UserStatisticsDto, UserActivityDto, UserDashboardDto } from './dto/query-user.dto';
-import { UserRole, UserStatus } from '@prisma/client';
+import { Prisma, UserRole, UserStatus } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
+import { readDoctorSignature, signatureDataUrl } from './doctor-signature';
 
 @Injectable()
 export class UsersService {
@@ -12,6 +13,83 @@ export class UsersService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
   ) {}
+
+  /**
+   * @cc [owner:nareshshah139,label:security;product] own-text-size-atomic-merge
+   * Only the active session user may save an allowed text size in her branch. The write MUST
+   * preserve unrelated metadata, retry concurrent metadata changes and reject malformed metadata.
+   */
+  async updateTextSize(id: string, textSize: string, actor: { id: string; branchId: string }) {
+    if (id !== actor.id) throw new ForbiddenException('Change only your own text size.');
+    if (!['NORMAL', 'LARGE', 'EXTRA_LARGE'].includes(textSize)) throw new BadRequestException('Choose Normal, Large or Extra large.');
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const user = await this.prisma.user.findFirst({ where: { id, branchId: actor.branchId, isActive: true }, select: { metadata: true } });
+      if (!user) throw new NotFoundException('Active user not found.');
+      let metadata: Record<string, unknown>;
+      try {
+        metadata = user.metadata ? JSON.parse(user.metadata) : {};
+        if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) throw new Error();
+      } catch { throw new ConflictException('User preferences need review before text size can be saved.'); }
+      const result = await this.prisma.user.updateMany({
+        where: { id, branchId: actor.branchId, isActive: true, metadata: user.metadata },
+        data: { metadata: JSON.stringify({ ...metadata, textSize }) },
+      });
+      if (result.count === 1) return { textSize };
+    }
+    throw new ConflictException('Preferences changed. Retry saving your text size.');
+  }
+
+  async getDoctorSignature(doctorId: string, branchId: string) {
+    return { signature: await readDoctorSignature(this.prisma, branchId, doctorId) };
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:security] signature-owner-only
+   * Signature mutations MUST require both the authenticated DOCTOR role and an
+   * active doctor record matching the session user and branch; otherwise forbid.
+   */
+  private async requireSignatureOwner(user: { id: string; branchId: string; role: string }) {
+    if (user.role !== 'DOCTOR' || !await this.prisma.user.findFirst({
+      where: { id: user.id, branchId: user.branchId, role: 'DOCTOR', isActive: true },
+      select: { id: true },
+    })) throw new ForbiddenException('Only the logged-in doctor can change her signature.');
+  }
+
+  async uploadOwnSignature(user: { id: string; branchId: string; role: string }, file?: Express.Multer.File) {
+    await this.requireSignatureOwner(user);
+    const url = await signatureDataUrl(file);
+    const signature = await this.prisma.$transaction(async tx => {
+      await tx.clinicAsset.updateMany({
+        where: { branchId: user.branchId, ownerId: user.id, type: 'SIGNATURE', isActive: true },
+        data: { isActive: false },
+      });
+      return tx.clinicAsset.create({
+        data: { branchId: user.branchId, ownerId: user.id, type: 'SIGNATURE', name: 'Doctor signature', url },
+        select: { id: true, url: true },
+      });
+    });
+    return { signature };
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:product] signature-removal-persists
+   * Removing a signature MUST leave the authenticated doctor's signature absent
+   * on subsequent reads, including when only the bundled default existed.
+   */
+  async removeOwnSignature(user: { id: string; branchId: string; role: string }) {
+    await this.requireSignatureOwner(user);
+    await this.prisma.$transaction(async tx => {
+      await tx.clinicAsset.updateMany({
+        where: { branchId: user.branchId, ownerId: user.id, type: 'SIGNATURE', isActive: true },
+        data: { isActive: false },
+      });
+      // Persist the choice even when there was no uploaded asset to deactivate.
+      await tx.clinicAsset.create({
+        data: { branchId: user.branchId, ownerId: user.id, type: 'SIGNATURE', name: 'Signature removed', url: '', isActive: false },
+      });
+    });
+    return { signature: null };
+  }
 
   // User Management Methods
   async createUser(createUserDto: CreateUserDto, branchId: string) {
@@ -60,7 +138,7 @@ export class UsersService {
   }
 
   async findAllUsers(query: QueryUsersDto, branchId: string) {
-    const { page, limit, search, role, status, department, designation, dateFrom, dateTo, isActive } = query;
+    const { page = 1, limit = 10, search, role, status, department, designation, dateFrom, dateTo, isActive } = query;
     const skip = (page - 1) * limit;
 
     const where: any = {
@@ -172,7 +250,7 @@ export class UsersService {
     }
     
     if (updateUserDto.metadata) {
-      updateData.metadata = JSON.stringify(updateUserDto.metadata);
+      return this.updateWithMetadata(id, branchId, updateData, updateUserDto.metadata);
     }
 
     const user = await this.prisma.user.update({
@@ -307,7 +385,7 @@ export class UsersService {
     const updateData: any = { ...updateProfileDto };
     
     if (updateProfileDto.metadata) {
-      updateData.metadata = JSON.stringify(updateProfileDto.metadata);
+      return this.updateWithMetadata(id, branchId, updateData, updateProfileDto.metadata);
     }
 
     const updatedUser = await this.prisma.user.update({
@@ -408,7 +486,7 @@ export class UsersService {
   }
 
   // Branch Management Methods
-  async createBranch(createBranchDto: CreateBranchDto, _branchId: string) {
+  async createBranch(createBranchDto: CreateBranchDto) {
     // Check if branch name already exists
     const existingBranch = await this.prisma.branch.findFirst({
       where: { name: createBranchDto.name },
@@ -426,7 +504,7 @@ export class UsersService {
   }
 
   async findAllBranches(query: QueryBranchesDto) {
-    const { page, limit, search, city, state } = query;
+    const { page = 1, limit = 10, search, city, state } = query;
     const skip = (page - 1) * limit;
 
     const where: any = {};
@@ -532,7 +610,7 @@ export class UsersService {
   }
 
   // Permission Management Methods
-  async createPermission(createPermissionDto: CreatePermissionDto, _branchId: string) {
+  async createPermission(createPermissionDto: CreatePermissionDto) {
     // Check if permission already exists
     const existingPermission = await this.prisma.permission.findFirst({
       where: { name: createPermissionDto.name },
@@ -551,11 +629,16 @@ export class UsersService {
     return permission;
   }
 
-  async findAllPermissions(query: QueryPermissionsDto, _branchId: string) {
-    const { page, limit, search, type } = query;
+  /**
+   * @cc [owner:nareshshah139] permission-query-schema
+   * Permission searches MUST apply resource, action and active filters to their stored fields;
+   * omitted pagination MUST default to page one with ten results.
+   */
+  async findAllPermissions(query: QueryPermissionsDto) {
+    const { page = 1, limit = 10, search, resource, action, isActive } = query;
     const skip = (page - 1) * limit;
 
-    const where: any = {};
+    const where: Prisma.PermissionWhereInput = {};
 
     if (search) {
       where.OR = [
@@ -564,7 +647,9 @@ export class UsersService {
       ];
     }
 
-    if (type) where.type = type;
+    if (resource) where.resource = resource;
+    if (action) where.action = action;
+    if (isActive !== undefined) where.isActive = isActive;
 
     const [permissions, total] = await Promise.all([
       this.prisma.permission.findMany({
@@ -633,6 +718,10 @@ export class UsersService {
   }
 
   // Role Management Methods
+  /**
+   * @cc [owner:nareshshah139] role-permissions-storage
+   * Role permission arrays MUST be persisted as JSON text consumable by the permission guard.
+   */
   async createRole(createRoleDto: CreateRoleDto) {
     const existingRole = await this.prisma.role.findFirst({
       where: { name: createRoleDto.name },
@@ -643,14 +732,14 @@ export class UsersService {
     }
 
     const role = await this.prisma.role.create({
-      data: createRoleDto,
+      data: { ...createRoleDto, permissions: createRoleDto.permissions === undefined ? null : JSON.stringify(createRoleDto.permissions) },
     });
 
     return role;
   }
 
   async findAllRoles(query: QueryRolesDto) {
-    const { page, limit, search } = query;
+    const { page = 1, limit = 10, search } = query;
     const skip = (page - 1) * limit;
 
     const where: any = {};
@@ -695,6 +784,11 @@ export class UsersService {
     return role;
   }
 
+  /**
+   * @cc [owner:nareshshah139] role-permission-update
+   * Permission updates MUST serialize arrays, preserve omitted permissions and allow an empty
+   * array to clear permissions without granting fallback access.
+   */
   async updateRole(id: string, updateRoleDto: UpdateRoleDto) {
     const existingRole = await this.prisma.role.findUnique({
       where: { id },
@@ -720,7 +814,7 @@ export class UsersService {
 
     const role = await this.prisma.role.update({
       where: { id },
-      data: updateRoleDto,
+      data: { ...updateRoleDto, permissions: updateRoleDto.permissions === undefined ? undefined : JSON.stringify(updateRoleDto.permissions) },
     });
 
     return role;
@@ -743,7 +837,15 @@ export class UsersService {
   }
 
   // Statistics and Analytics Methods
-  async getUserStatistics(branchId: string): Promise<UserStatisticsDto> {
+  /**
+   * @cc [owner:nareshshah139] user-statistics-scope
+   * Statistics MUST use the authenticated branch and requested date bounds; a query branchId
+   * MUST NOT override the authenticated branch.
+   */
+  async getUserStatistics(query: UserStatisticsDto, branchId: string) {
+    const where: Prisma.UserWhereInput = { branchId, ...((query.startDate || query.endDate) ? {
+      createdAt: { ...(query.startDate ? { gte: new Date(query.startDate) } : {}), ...(query.endDate ? { lte: new Date(query.endDate) } : {}) },
+    } : {}) };
     const [
       totalUsers,
       activeUsers,
@@ -752,21 +854,21 @@ export class UsersService {
       departmentBreakdown,
       recentUsers,
     ] = await Promise.all([
-      this.prisma.user.count({ where: { branchId } }),
-      this.prisma.user.count({ where: { branchId, status: UserStatus.ACTIVE } }),
-      this.prisma.user.count({ where: { branchId, status: UserStatus.INACTIVE } }),
+      this.prisma.user.count({ where }),
+      this.prisma.user.count({ where: { ...where, status: UserStatus.ACTIVE } }),
+      this.prisma.user.count({ where: { ...where, status: UserStatus.INACTIVE } }),
       this.prisma.user.groupBy({
         by: ['role'],
-        where: { branchId },
+        where,
         _count: { role: true },
       }),
       this.prisma.user.groupBy({
         by: ['department'],
-        where: { branchId, department: { not: null } },
+        where: { ...where, department: { not: null } },
         _count: { department: true },
       }),
       this.prisma.user.findMany({
-        where: { branchId },
+        where,
         take: 5,
         orderBy: { createdAt: 'desc' },
         select: {
@@ -790,7 +892,15 @@ export class UsersService {
     };
   }
 
-  async getUserDashboard(branchId: string): Promise<UserDashboardDto> {
+  /**
+   * @cc [owner:nareshshah139] user-dashboard-scope
+   * Dashboard aggregates MUST use the authenticated branch and requested date bounds;
+   * caller-supplied branch IDs cannot broaden that scope.
+   */
+  async getUserDashboard(query: UserDashboardDto, branchId: string) {
+    const where: Prisma.UserWhereInput = { branchId, ...((query.startDate || query.endDate) ? {
+      createdAt: { ...(query.startDate ? { gte: new Date(query.startDate) } : {}), ...(query.endDate ? { lte: new Date(query.endDate) } : {}) },
+    } : {}) };
     const [
       totalUsers,
       activeUsers,
@@ -799,11 +909,11 @@ export class UsersService {
       roleBreakdown,
       topDepartments,
     ] = await Promise.all([
-      this.prisma.user.count({ where: { branchId } }),
-      this.prisma.user.count({ where: { branchId, status: UserStatus.ACTIVE } }),
-      this.prisma.user.count({ where: { branchId, status: UserStatus.INACTIVE } }),
+      this.prisma.user.count({ where }),
+      this.prisma.user.count({ where: { ...where, status: UserStatus.ACTIVE } }),
+      this.prisma.user.count({ where: { ...where, status: UserStatus.INACTIVE } }),
       this.prisma.user.findMany({
-        where: { branchId },
+        where,
         take: 5,
         orderBy: { createdAt: 'desc' },
         select: {
@@ -817,12 +927,12 @@ export class UsersService {
       }),
       this.prisma.user.groupBy({
         by: ['role'],
-        where: { branchId },
+        where,
         _count: { role: true },
       }),
       this.prisma.user.groupBy({
         by: ['department'],
-        where: { branchId, department: { not: null } },
+        where: { ...where, department: { not: null } },
         _count: { department: true },
         orderBy: { _count: { department: 'desc' } },
         take: 5,
@@ -841,7 +951,45 @@ export class UsersService {
     };
   }
 
-  // Helper to format user object consistently
+  /**
+   * @cc [owner:nareshshah139,label:security] preserve-whatsapp-token
+   * Metadata updates that omit whatsappAccessToken MUST retain its current value, even across
+   * concurrent metadata writes; malformed stored metadata or repeated conflicts MUST fail.
+   */
+  private async updateWithMetadata(id: string, branchId: string, data: any, metadata: Record<string, any>) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const current = await this.prisma.user.findFirst({ where: { id, branchId } });
+      if (!current) throw new NotFoundException('User not found');
+      let stored: Record<string, any>;
+      try {
+        stored = current.metadata ? JSON.parse(current.metadata) : {};
+        if (!stored || typeof stored !== 'object' || Array.isArray(stored)) throw new Error();
+      } catch {
+        throw new BadRequestException('User metadata is invalid');
+      }
+      const next = { ...metadata };
+      if (!Object.prototype.hasOwnProperty.call(next, 'whatsappAccessToken') &&
+          Object.prototype.hasOwnProperty.call(stored, 'whatsappAccessToken')) {
+        next.whatsappAccessToken = stored.whatsappAccessToken;
+      }
+      const result = await this.prisma.user.updateMany({
+        where: { id, branchId, metadata: current.metadata },
+        data: { ...data, metadata: JSON.stringify(next) },
+      });
+      if (result.count === 1) {
+        const updated = await this.prisma.user.findFirst({ where: { id, branchId }, include: { branch: true } });
+        if (!updated) throw new NotFoundException('User not found');
+        return this.formatUser(updated);
+      }
+    }
+    throw new ConflictException('User metadata changed; please retry');
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:security] user-response-secrets
+   * Formatted user responses MUST omit password hashes, reset credentials, Google refresh tokens,
+   * and the WhatsApp access token, including when metadata is malformed.
+   */
   private formatUser(user: any) {
     let permissionsParsed: string[] | null = null;
     let metadataParsed: any = null;
@@ -851,9 +999,16 @@ export class UsersService {
     try {
       metadataParsed = user.metadata ? JSON.parse(user.metadata) : null;
     } catch {}
+    if (metadataParsed && typeof metadataParsed === 'object' && !Array.isArray(metadataParsed)) {
+      delete metadataParsed.whatsappAccessToken;
+    } else {
+      metadataParsed = null;
+    }
+
+    const { password, resetToken, resetTokenExpiry, googleRefreshToken, ...safeUser } = user;
 
     return {
-      ...user,
+      ...safeUser,
       permissions: permissionsParsed,
       metadata: metadataParsed,
     };

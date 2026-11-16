@@ -1,9 +1,14 @@
 'use client';
 
+import { Spinner } from '@/components/ui/spinner';
+
+import { PageHeader } from '@/components/ui/page-header';
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { LoadingSkeleton } from '@/components/ui/skeleton';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Tabs, TabsContent, TabsList, TabsTrigger, TabsFontSizeControls } from '@/components/ui/tabs';
 import {
   TrendingUp,
@@ -136,29 +141,13 @@ export function StockPredictionDashboard() {
     }
   };
 
-  const getConfidenceBadge = (confidence: string) => {
-    const variants: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-      HIGH: 'default',
-      MEDIUM: 'secondary',
-      LOW: 'destructive',
-      COLD_START: 'outline',
-    };
-    return (
-      <Badge variant={variants[confidence] || 'default'} className="ml-2">
-        {confidence}
-      </Badge>
-    );
-  };
+  const getConfidenceBadge = (confidence: string) => (
+    <StatusBadge domain="confidence" status={confidence} className="ml-2" />
+  );
 
-  const getPriorityBadge = (priority: string) => {
-    const colors: Record<string, string> = {
-      CRITICAL: 'bg-red-500 text-white',
-      HIGH: 'bg-orange-500 text-white',
-      MEDIUM: 'bg-yellow-500 text-black',
-      LOW: 'bg-green-500 text-white',
-    };
-    return <Badge className={colors[priority]}>{priority}</Badge>;
-  };
+  const getPriorityBadge = (priority: string) => (
+    <StatusBadge domain="priority" status={priority} />
+  );
 
   const exportToCSV = () => {
     if (!bulkOrder) return;
@@ -187,7 +176,7 @@ export function StockPredictionDashboard() {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold">Smart Stock Predictions</h1>
+          <PageHeader title={<>Smart Stock Predictions</>} />
           <p className="text-muted-foreground mt-1">
             AI-powered inventory forecasting for the next {monthsAhead} month{monthsAhead > 1 ? 's' : ''}
           </p>
@@ -196,19 +185,20 @@ export function StockPredictionDashboard() {
           <select
             value={monthsAhead}
             onChange={(e) => setMonthsAhead(Number(e.target.value))}
-            className="border rounded px-3 py-2"
+            className="border rounded-md px-3 py-2"
           >
             <option value={1}>1 Month</option>
             <option value={2}>2 Months</option>
             <option value={3}>3 Months</option>
           </select>
           <Button onClick={fetchPredictions} disabled={loading}>
-            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            {loading ? <Spinner className="h-4 w-4 mr-2" /> : <RefreshCw className="h-4 w-4 mr-2" />}
             Refresh
           </Button>
         </div>
       </div>
 
+      {loading && !predictions && <LoadingSkeleton label="Loading stock predictions…" variant="cards" />}
       {/* Summary Cards */}
       {predictions && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -229,7 +219,7 @@ export function StockPredictionDashboard() {
               <CardTitle className="text-sm font-medium">Critical Items</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-red-600">{predictions.summary?.criticalItems || 0}</div>
+              <div className="text-2xl font-bold text-destructive-text">{predictions.summary?.criticalItems || 0}</div>
               <p className="text-xs text-muted-foreground mt-1">Need immediate attention</p>
             </CardContent>
           </Card>
@@ -276,11 +266,12 @@ export function StockPredictionDashboard() {
               <CardDescription>AI-generated predictions based on historical sales data</CardDescription>
             </CardHeader>
             <CardContent>
+              {!loading && predictions?.predictions.length === 0 && <EmptyState title="No stock predictions available" description="Refresh after recording stock and sales activity." />}
               <div className="space-y-2 max-h-96 overflow-y-auto">
                 {predictions?.predictions.slice(0, 50).map((pred) => (
                   <div
                     key={pred.drugId}
-                    className="flex items-center justify-between p-3 border rounded hover:bg-gray-50 cursor-pointer"
+                    className="flex items-center justify-between p-3 border rounded-md hover:bg-background cursor-pointer"
                     onClick={() => setSelectedDrug(pred)}
                   >
                     <div className="flex-1">
@@ -291,10 +282,10 @@ export function StockPredictionDashboard() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      {pred.trend > 0.1 && <TrendingUp className="h-4 w-4 text-green-600" />}
-                      {pred.trend < -0.1 && <TrendingDown className="h-4 w-4 text-red-600" />}
+                      {pred.trend > 0.1 && <TrendingUp className="h-4 w-4 text-success-text" />}
+                      {pred.trend < -0.1 && <TrendingDown className="h-4 w-4 text-destructive-text" />}
                       {pred.daysUntilStockout && pred.daysUntilStockout < 15 && (
-                        <AlertTriangle className="h-4 w-4 text-orange-500" />
+                        <AlertTriangle className="h-4 w-4 text-warning-text" />
                       )}
                       {getConfidenceBadge(pred.confidence)}
                     </div>
@@ -334,7 +325,7 @@ export function StockPredictionDashboard() {
                 </div>
 
                 {selectedDrug.reasoning && (
-                  <div className="p-3 bg-blue-50 rounded">
+                  <div className="p-3 bg-info-soft rounded-md">
                     <p className="text-sm font-medium">Reasoning:</p>
                     <p className="text-sm text-muted-foreground">{selectedDrug.reasoning}</p>
                   </div>
@@ -377,10 +368,10 @@ export function StockPredictionDashboard() {
                       (pred.reorderLevel && pred.currentStock <= pred.reorderLevel),
                   )
                   .map((pred) => (
-                    <div key={pred.drugId} className="flex items-center justify-between p-3 border rounded bg-red-50">
+                    <div key={pred.drugId} className="flex items-center justify-between p-3 border rounded-md bg-destructive-soft">
                       <div className="flex-1">
                         <div className="font-medium flex items-center gap-2">
-                          <AlertTriangle className="h-4 w-4 text-red-600" />
+                          <AlertTriangle className="h-4 w-4 text-destructive-text" />
                           {pred.drugName}
                         </div>
                         <div className="text-sm text-muted-foreground">
@@ -402,7 +393,7 @@ export function StockPredictionDashboard() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5 text-green-600" />
+                  <TrendingUp className="h-5 w-5 text-success-text" />
                   Increasing Usage
                 </CardTitle>
               </CardHeader>
@@ -412,9 +403,9 @@ export function StockPredictionDashboard() {
                     .filter((pred) => pred.trend > 0.1)
                     .slice(0, 10)
                     .map((pred) => (
-                      <div key={pred.drugId} className="flex justify-between p-2 border rounded">
+                      <div key={pred.drugId} className="flex justify-between p-2 border rounded-md">
                         <span className="text-sm">{pred.drugName}</span>
-                        <span className="text-sm font-medium text-green-600">+{(pred.trend * 100).toFixed(1)}%</span>
+                        <span className="text-sm font-medium text-success-text">+{(pred.trend * 100).toFixed(1)}%</span>
                       </div>
                     ))}
                 </div>
@@ -424,7 +415,7 @@ export function StockPredictionDashboard() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <TrendingDown className="h-5 w-5 text-red-600" />
+                  <TrendingDown className="h-5 w-5 text-destructive-text" />
                   Decreasing Usage
                 </CardTitle>
               </CardHeader>
@@ -434,9 +425,9 @@ export function StockPredictionDashboard() {
                     .filter((pred) => pred.trend < -0.1)
                     .slice(0, 10)
                     .map((pred) => (
-                      <div key={pred.drugId} className="flex justify-between p-2 border rounded">
+                      <div key={pred.drugId} className="flex justify-between p-2 border rounded-md">
                         <span className="text-sm">{pred.drugName}</span>
-                        <span className="text-sm font-medium text-red-600">{(pred.trend * 100).toFixed(1)}%</span>
+                        <span className="text-sm font-medium text-destructive-text">{(pred.trend * 100).toFixed(1)}%</span>
                       </div>
                     ))}
                 </div>
@@ -465,9 +456,11 @@ export function StockPredictionDashboard() {
               </div>
             </CardHeader>
             <CardContent>
+              {loading && !bulkOrder && <LoadingSkeleton label="Generating bulk order…" />}
+              {!loading && !bulkOrder && <EmptyState title="No bulk order generated" description="Generate an order to review suggested quantities and estimated costs." />}
               {bulkOrder && (
                 <>
-                  <div className="mb-4 p-4 bg-blue-50 rounded">
+                  <div className="mb-4 p-4 bg-info-soft rounded-md">
                     <p className="text-lg font-semibold">
                       Total Estimated Cost: ₹{bulkOrder.totalEstimatedCost.toFixed(2)}
                     </p>
@@ -476,7 +469,7 @@ export function StockPredictionDashboard() {
 
                   <div className="space-y-2 max-h-96 overflow-y-auto">
                     {bulkOrder.items.map((item) => (
-                      <div key={item.drugId} className="flex items-center justify-between p-3 border rounded">
+                      <div key={item.drugId} className="flex items-center justify-between p-3 border rounded-md">
                         <div className="flex-1">
                           <div className="font-medium">{item.drugName}</div>
                           <div className="text-sm text-muted-foreground">

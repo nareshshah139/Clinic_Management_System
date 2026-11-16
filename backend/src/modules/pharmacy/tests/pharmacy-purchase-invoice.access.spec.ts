@@ -27,8 +27,10 @@ describe('Purchase invoice access through HTTP', () => {
     updateDraft: jest.fn().mockResolvedValue({ id: 'draft-1' }),
     suggestMasterMatches: jest.fn().mockResolvedValue({ matches: [] }),
     confirmMasterRecord: jest.fn().mockResolvedValue({}),
+    searchMasterProducts: jest.fn().mockResolvedValue([]),
     getDistributorAnalytics: jest.fn().mockResolvedValue({}),
     markReviewed: jest.fn().mockResolvedValue({ status: 'REVIEWED' }),
+    reopenDraft: jest.fn().mockResolvedValue({ status: 'DRAFT' }),
     commitStock: jest.fn().mockResolvedValue({ status: 'STOCK_COMMITTED' }),
     listUnlinkedDocuments: jest.fn().mockResolvedValue([]),
     getOriginalDocument: jest.fn().mockResolvedValue({ data: Buffer.from('%PDF-original'), sizeBytes: 13, mimeType: 'application/pdf', fileName: 'invoice.pdf' }),
@@ -73,6 +75,18 @@ describe('Purchase invoice access through HTTP', () => {
   const upload = () => request(app.getHttpServer())
     .post('/pharmacy/purchase-invoices/ocr/extract')
     .attach('file', Buffer.from('invoice-test-pixels'), { filename: 'invoice.jpg', contentType: 'image/jpeg' });
+
+  it('requires both editing and review authority to reopen a purchase', async () => {
+    const body = { reason: 'Correct receipt link', expectedUpdatedAt: '2026-10-24T00:00:00.000Z' };
+    userPermissions = ['pharmacy:purchase-invoice:review'];
+    await request(app.getHttpServer()).post('/pharmacy/purchase-invoices/draft-1/reopen').send(body).expect(403);
+    userPermissions = ['pharmacy:purchase-invoice:create'];
+    await request(app.getHttpServer()).post('/pharmacy/purchase-invoices/draft-1/reopen').send(body).expect(403);
+    expect(service.reopenDraft).not.toHaveBeenCalled();
+    userPermissions = ['pharmacy:purchase-invoice:create', 'pharmacy:purchase-invoice:review'];
+    await request(app.getHttpServer()).post('/pharmacy/purchase-invoices/draft-1/reopen').send(body).expect(201);
+    expect(service.reopenDraft).toHaveBeenCalledWith('draft-1', body, 'branch-1', 'staff-1');
+  });
 
   it('allows staff to learn their capabilities before any purchase permissions are granted', async () => {
     const response = await request(app.getHttpServer()).get('/pharmacy/purchase-invoices/capabilities').expect(200);
@@ -128,6 +142,7 @@ describe('Purchase invoice access through HTTP', () => {
     ['patch', '/drafts/draft-1', 'create', 'inventory:po:create', 'updateDraft', 200],
     ['post', '/master-matches', 'create', 'inventory:po:create', 'suggestMasterMatches', 201],
     ['post', '/master-confirmations', 'create', 'inventory:po:create', 'confirmMasterRecord', 201],
+    ['get', '/master-products?q=Abzorb', 'create', 'inventory:po:create', 'searchMasterProducts', 200],
     ['patch', '/draft-1/review', 'review', 'inventory:po:update', 'markReviewed', 200],
     ['post', '/draft-1/commit-stock', 'commit-stock', 'inventory:transaction:create', 'commitStock', 201],
   ] as const;

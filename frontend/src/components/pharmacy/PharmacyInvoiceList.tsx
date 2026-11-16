@@ -1,11 +1,14 @@
 'use client';
 
+import { StatusBadge } from '@/components/ui/status-badge';
+import { PageHeader } from '@/components/ui/page-header';
+import { EmptyState } from '@/components/ui/empty-state';
+import { LoadingSkeleton } from '@/components/ui/skeleton';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Search,
@@ -21,6 +24,7 @@ import {
   CheckCircle,
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
+import { downloadInvoicePdf } from '@/lib/download-invoice-pdf';
 import type {
   PharmacyInvoiceListResponse,
   PharmacyInvoiceSummary,
@@ -38,6 +42,7 @@ import {
   type PharmacyPaymentMethod as PharmacyPaymentMethodType,
 } from '@/lib/api-enums';
 import { getGlobalPrintStyleTag } from '@/lib/printStyles';
+import { formatPrintedDrugName } from '@/lib/printed-drug-name';
 import { useConfirm } from "@/components/ui/confirmation-provider";
 import { toast } from "@/hooks/use-toast";
 
@@ -45,25 +50,6 @@ type StatusFilter = PharmacyInvoiceStatusType | 'all';
 type PaymentStatusFilter = PharmacyPaymentStatusType | 'all';
 type PaymentMethodFilter = PharmacyPaymentMethodType | 'all';
 type DateRange = 'all' | 'today' | 'week' | 'month' | 'quarter';
-
-const STATUS_COLORS: Record<PharmacyInvoiceStatusType, string> = {
-  [PharmacyInvoiceStatus.DRAFT]: 'bg-gray-100 text-gray-800',
-  [PharmacyInvoiceStatus.PENDING]: 'bg-yellow-100 text-yellow-800',
-  [PharmacyInvoiceStatus.CONFIRMED]: 'bg-blue-100 text-blue-800',
-  [PharmacyInvoiceStatus.DISPENSED]: 'bg-green-100 text-green-800',
-  [PharmacyInvoiceStatus.COMPLETED]: 'bg-green-100 text-green-800',
-  [PharmacyInvoiceStatus.CANCELLED]: 'bg-red-100 text-red-800',
-};
-
-const PAYMENT_STATUS_COLORS: Record<PharmacyPaymentStatusType, string> = {
-  [PharmacyPaymentStatus.PENDING]: 'bg-yellow-100 text-yellow-800',
-  [PharmacyPaymentStatus.COMPLETED]: 'bg-green-100 text-green-800',
-  [PharmacyPaymentStatus.FAILED]: 'bg-red-100 text-red-800',
-  [PharmacyPaymentStatus.REFUNDED]: 'bg-purple-100 text-purple-800',
-  [PharmacyPaymentStatus.PARTIALLY_PAID]: 'bg-orange-100 text-orange-800',
-};
-
-
 
 export function PharmacyInvoiceList() {
   const confirmAction = useConfirm();
@@ -170,7 +156,7 @@ export function PharmacyInvoiceList() {
       
       return `
         <tr>
-          <td style="padding:6px;border:1px solid #ddd;">${itemName}</td>
+          <td style="padding:6px;border:1px solid #ddd;">${formatPrintedDrugName(itemName)}</td>
           <td style="padding:6px;border:1px solid #ddd;text-align:center;">${item.quantity}</td>
           <td style="padding:6px;border:1px solid #ddd;text-align:right;">₹${item.unitPrice?.toFixed(2) || '0.00'}</td>
           <td style="padding:6px;border:1px solid #ddd;text-align:right;">${item.discountPercent || 0}%</td>
@@ -387,27 +373,19 @@ export function PharmacyInvoiceList() {
     }
   };
 
+  /**
+   * @cc [owner:nareshshah139,label:product] invoice-list-pdf-download
+   * Downloading an invoice MUST use its fetched printable content to save a PDF without
+   * requiring a pop-up. Failed retrieval or rendering MUST report failure.
+   */
   const handleDownloadInvoice = async (invoiceId: string) => {
     try {
       setLoading(true);
       const invoice = await apiClient.get(`/pharmacy/invoices/${invoiceId}`);
       
-      // For now, open print dialog which allows save as PDF
-      const win = window.open('', '_blank');
-      if (!win) {
-        toast({ title: "Check the details", description: 'Please allow pop-ups to download the invoice', variant: "warning" });
-        return;
-      }
       const html = renderPrintHtml(invoice);
-      win.document.open();
-      win.document.write(html);
-      win.document.close();
-      
-      // Auto-trigger print dialog
-      setTimeout(() => {
-        win.focus();
-        win.print();
-      }, 500);
+      const source = new DOMParser().parseFromString(html, 'text/html');
+      await downloadInvoicePdf(source, (invoice as any)?.invoiceNumber || invoiceId);
     } catch (error) {
       console.error('Failed to download invoice:', error);
       toast({ title: "Action failed", description: 'Failed to download invoice. Please try again.', variant: "destructive" });
@@ -474,12 +452,7 @@ export function PharmacyInvoiceList() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold">Pharmacy Invoices</h2>
-          <p className="text-gray-600">Manage and track pharmacy billing</p>
-        </div>
-      </div>
+      <PageHeader title="Pharmacy Invoices" description="Manage and track pharmacy billing" />
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -487,10 +460,10 @@ export function PharmacyInvoiceList() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Total Invoices</p>
+                <p className="text-sm text-muted-foreground">Total Invoices</p>
                 <p className="text-2xl font-bold">{invoices.length}</p>
               </div>
-              <FileText className="h-8 w-8 text-blue-600" />
+              <FileText className="h-8 w-8 text-info-text" />
             </div>
           </CardContent>
         </Card>
@@ -499,10 +472,10 @@ export function PharmacyInvoiceList() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Total Amount</p>
+                <p className="text-sm text-muted-foreground">Total Amount</p>
                 <p className="text-2xl font-bold">₹{stats.totalAmount.toFixed(2)}</p>
               </div>
-              <DollarSign className="h-8 w-8 text-green-600" />
+              <DollarSign className="h-8 w-8 text-success-text" />
             </div>
           </CardContent>
         </Card>
@@ -511,10 +484,10 @@ export function PharmacyInvoiceList() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Completed</p>
+                <p className="text-sm text-muted-foreground">Completed</p>
                 <p className="text-2xl font-bold">{stats.completedInvoices}</p>
               </div>
-              <Calendar className="h-8 w-8 text-purple-600" />
+              <Calendar className="h-8 w-8 text-highlight-text" />
             </div>
           </CardContent>
         </Card>
@@ -523,10 +496,10 @@ export function PharmacyInvoiceList() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Pending Amount</p>
+                <p className="text-sm text-muted-foreground">Pending Amount</p>
                 <p className="text-2xl font-bold">₹{stats.pendingAmount.toFixed(2)}</p>
               </div>
-              <CreditCard className="h-8 w-8 text-orange-600" />
+              <CreditCard className="h-8 w-8 text-warning-text" />
             </div>
           </CardContent>
         </Card>
@@ -539,7 +512,7 @@ export function PharmacyInvoiceList() {
             <div>
               <Label>Search</Label>
               <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Invoice number, patient..."
                   value={searchQuery}
@@ -663,34 +636,22 @@ export function PharmacyInvoiceList() {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <div className="flex items-center justify-center py-8">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
-                <p className="text-gray-500">Loading invoices...</p>
-              </div>
-            </div>
+            <LoadingSkeleton label="Loading invoices…" variant="cards" />
           ) : invoices.length === 0 ? (
-            <div className="text-center py-8">
-              <FileText className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-              <p className="text-gray-500">No invoices found</p>
-            </div>
+            <EmptyState title="No invoices found" description="Try a different search or adjust the filters." icon={FileText} />
           ) : (
             <div className="space-y-4">
               {invoices.map((invoice) => (
-                <div key={invoice.id} className="border rounded-lg p-4 hover:bg-gray-50">
+                <div key={invoice.id} className="border rounded-lg p-4 hover:bg-background">
                   <div className="flex justify-between items-start">
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
                         <h3 className="font-semibold text-lg">{invoice.invoiceNumber}</h3>
-                        <Badge className={STATUS_COLORS[invoice.status]}>
-                          {invoice.status}
-                        </Badge>
-                        <Badge className={PAYMENT_STATUS_COLORS[invoice.paymentStatus]}>
-                          {invoice.paymentStatus}
-                        </Badge>
+                        <StatusBadge domain="invoice" status={invoice.status} />
+                        <StatusBadge domain="invoice" status={invoice.paymentStatus} />
                       </div>
                       
-                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm text-gray-600">
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm text-muted-foreground">
                         <div>
                           <p><strong>Patient:</strong> {invoice.patient.name}</p>
                           <p><strong>Phone:</strong> {invoice.billingPhone}</p>
@@ -712,16 +673,16 @@ export function PharmacyInvoiceList() {
                       </div>
                       
                       {/* Items Preview */}
-                      <div className="mt-3 p-3 bg-gray-50 rounded-md">
+                      <div className="mt-3 p-3 bg-background rounded-md">
                         <p className="text-sm font-medium mb-2">Items:</p>
                         <div className="space-y-1">
                           {invoice.items.slice(0, 2).map((item) => (
-                            <p key={item.id} className="text-sm text-gray-600">
+                            <p key={item.id} className="text-sm text-muted-foreground">
                               • {((item as any)?.drug?.name) || ((item as any)?.package?.name) || 'Item'} - Qty: {item.quantity} - ₹{item.totalAmount.toFixed(2)}
                             </p>
                           ))}
                           {invoice.items.length > 2 && (
-                            <p className="text-sm text-gray-500">
+                            <p className="text-sm text-muted-foreground">
                               +{invoice.items.length - 2} more items...
                             </p>
                           )}
@@ -751,7 +712,7 @@ export function PharmacyInvoiceList() {
                           variant="ghost"
                           size="sm"
                           onClick={() => handleMarkAsPaid(invoice)}
-                          className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                          className="text-success-text hover:text-success-text hover:bg-success-soft"
                           title="Mark as Paid"
                         >
                           <CheckCircle className="h-4 w-4" />
@@ -763,7 +724,7 @@ export function PharmacyInvoiceList() {
                             variant="ghost"
                             size="sm"
                             onClick={() => handleConfirmInvoice(invoice.id)}
-                            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                            className="text-info-text hover:text-info-text hover:bg-info-soft"
                             title="Confirm Invoice"
                           >
                             <CheckCircle className="h-4 w-4" />
@@ -782,7 +743,7 @@ export function PharmacyInvoiceList() {
                         variant="ghost"
                         size="sm"
                         onClick={() => handleDeleteInvoice(invoice.id)}
-                        className="text-red-500 hover:text-red-700"
+                        className="text-destructive-text hover:text-destructive-text"
                         title="Delete Invoice"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -804,7 +765,7 @@ export function PharmacyInvoiceList() {
                     Previous
                   </Button>
                   
-                  <span className="text-sm text-gray-600">
+                  <span className="text-sm text-muted-foreground">
                     Page {pagination.page} of {pagination.pages}
                   </span>
                   
@@ -824,4 +785,4 @@ export function PharmacyInvoiceList() {
       </Card>
     </div>
   );
-} 
+}

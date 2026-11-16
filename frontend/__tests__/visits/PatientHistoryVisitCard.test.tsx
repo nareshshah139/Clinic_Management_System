@@ -4,6 +4,16 @@ import { jest } from '@jest/globals';
 import PatientHistoryVisitCard from '@/components/visits/PatientHistoryVisitCard';
 
 describe('PatientHistoryVisitCard', () => {
+  it.each([{ complaints: [] }, { complaints: [{ complaint: 'General consultation' }] }])('keeps visits with complaints $complaints available in history', async ({ complaints }) => {
+    const onResume = jest.fn();
+    render(<PatientHistoryVisitCard visit={{ id: 'saved-visit', complaints, history: { pastHistory: 'Recorded history' } }} onResume={onResume} />);
+    expect(screen.getAllByText(complaints.length ? 'General consultation' : 'Not recorded').length).toBeGreaterThan(0);
+    await userEvent.click(screen.getByRole('button', { name: /show details/i }));
+    expect(screen.getByText('Recorded history')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /resume session/i }));
+    expect(onResume).toHaveBeenCalledTimes(1);
+  });
+
   it('shows a collapsed summary by default and expands into full details', async () => {
     const user = userEvent.setup();
     const onResume = jest.fn();
@@ -41,6 +51,7 @@ describe('PatientHistoryVisitCard', () => {
 
     await user.click(screen.getByRole('button', { name: /show details/i }));
 
+    await user.click(screen.getByRole('button', { name: 'Full details' }));
     expect(screen.getByText('Vitals')).toBeInTheDocument();
     expect(screen.getByText('Prescription Items')).toBeInTheDocument();
 
@@ -50,7 +61,7 @@ describe('PatientHistoryVisitCard', () => {
   });
 });
 
-it('renders every clinical field when expanded and uses the appointment day', () => {
+it('renders clinical fields on explicit full details and uses the appointment day', async () => {
   render(<PatientHistoryVisitCard defaultCollapsed={false} visit={{
     id: 'v', createdAt: '2026-09-01T13:00:00Z', appointment: { date: '2026-09-02T00:00:00Z' },
     complaints: [{ complaint: 'First complaint', duration: 'Two weeks' }, { complaint: 'Second complaint' }],
@@ -62,6 +73,7 @@ it('renders every clinical field when expanded and uses the appointment day', ()
     prescriptionItems: [{ drugName: 'Drug', dosePattern: '1-0-1', applicationSite: 'Application detail' }],
     prescriptionMeta: { followUpInstructions: 'Prescription guidance' },
   }} />);
+  await userEvent.click(screen.getByRole('button', { name: 'Full details' }));
   for (const text of ['Second complaint', 'Two weeks', 'Second diagnosis', 'Trigger detail', 'Prior treatment', 'Exam detail', 'Final note', 'Follow-up instruction', 'Procedure detail', 'Topical detail', '1-0-1', 'Application detail', 'Prescription guidance', 'Temperature (°C)', 'SpO₂ (%)']) {
     expect(screen.getAllByText(new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))).length).toBeGreaterThan(0);
   }
@@ -83,6 +95,7 @@ it('shows nested clinical fields as labeled rows and links every photo to its fu
     photoPreviewUrls: ['/visits/v/photos/one', '/visits/v/photos/two'],
   }} />);
   await userEvent.click(screen.getByRole('button', { name: /show details/i }));
+  await userEvent.click(screen.getByRole('button', { name: 'Full details' }));
   expect(screen.getByText('Diabetes').parentElement).toHaveTextContent('No');
   expect(screen.getByText('Hypertension').parentElement).toHaveTextContent('Yes');
   expect(screen.getByText('Itch Score').parentElement).toHaveTextContent('0');

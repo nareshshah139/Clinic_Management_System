@@ -11,7 +11,10 @@ import {
   UseGuards,
   Request,
   BadRequestException,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { PrescriptionsService } from './prescriptions.service';
 import { 
   CreatePrescriptionDto, 
@@ -62,7 +65,7 @@ export class PrescriptionsController {
     @Request() req: AuthenticatedRequest,
   ) {
     this.requireIdempotency(req as any);
-    return this.prescriptionsService.createPrescription(createPrescriptionDto, req.user.branchId);
+    return this.prescriptionsService.createPrescription(createPrescriptionDto, req.user.branchId, req.user.id);
   }
 
   @Post('pad')
@@ -72,7 +75,7 @@ export class PrescriptionsController {
     @Request() req: AuthenticatedRequest,
   ) {
     this.requireIdempotency(req as any);
-    return this.prescriptionsService.createPrescriptionPad(createPrescriptionDto, req.user.branchId);
+    return this.prescriptionsService.createPrescriptionPad(createPrescriptionDto, req.user.branchId, req.user.id);
   }
 
   @Get()
@@ -357,7 +360,7 @@ export class PrescriptionsController {
   generatePdf(
     @Param('id') id: string,
     @Request() req: AuthenticatedRequest,
-    @Body() body: { profileId?: string; includeAssets?: boolean; grayscale?: boolean },
+    @Body() body: { profileId?: string; includeAssets?: boolean; grayscale?: boolean; showSignature?: boolean },
   ) {
     return this.prescriptionsService.generatePrescriptionPdf(id, req.user.branchId, body);
   }
@@ -366,9 +369,20 @@ export class PrescriptionsController {
   sharePrescription(
     @Param('id') id: string,
     @Request() req: AuthenticatedRequest,
-    @Body() body: { channel: 'EMAIL'|'WHATSAPP'; to: string; message?: string; includePdf?: boolean },
+    @Body() body: { channel: 'EMAIL'|'WHATSAPP'; to: string; message?: string; includePdf?: boolean; showSignature?: boolean },
   ) {
     return this.prescriptionsService.sharePrescription(id, req.user.branchId, req.user.id, body);
+  }
+
+  @Post(':id/share-preview')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 15 * 1024 * 1024, files: 1 } }))
+  sharePrescriptionPreview(
+    @Param('id') id: string,
+    @Request() req: AuthenticatedRequest,
+    @Body() body: { channel: 'EMAIL'|'WHATSAPP'; to: string; message?: string },
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    return this.prescriptionsService.sharePrescriptionPreview(id, req.user.branchId, body, file);
   }
 
   // Print/Share tracking event
@@ -505,7 +519,7 @@ export class PrescriptionsController {
     @Request() req: AuthenticatedRequest,
   ) {
     this.requireIdempotency(req as any);
-    return this.prescriptionsService.updatePrescription(id, updatePrescriptionDto, req.user.branchId);
+    return this.prescriptionsService.updatePrescription(id, updatePrescriptionDto, req.user.branchId, req.user.id);
   }
 
   @Delete(':id')

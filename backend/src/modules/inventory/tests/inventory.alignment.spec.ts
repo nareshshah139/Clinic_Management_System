@@ -47,6 +47,8 @@ describe('InventoryService - Alignment Tests', () => {
   describe('Create inventory item with all required fields', () => {
     it('should create item with only required fields', async () => {
       const createItemDto = {
+        dosageForm: 'tablet',
+        strength: '500 mg',
         name: 'Test Medicine',
         type: InventoryItemType.MEDICINE,
         costPrice: 10.5,
@@ -87,6 +89,8 @@ describe('InventoryService - Alignment Tests', () => {
   describe('Create inventory item with optional fields', () => {
     it('should create item with all optional fields', async () => {
       const createItemDto = {
+        dosageForm: 'tablet',
+        strength: '500 mg',
         name: 'Amoxicillin 500mg',
         description: 'Antibiotic medication',
         genericName: 'Amoxicillin',
@@ -172,6 +176,8 @@ describe('InventoryService - Alignment Tests', () => {
   describe('Validate SKU uniqueness per branch', () => {
     it('should throw ConflictException if SKU exists in same branch', async () => {
       const createItemDto = {
+        dosageForm: 'tablet',
+        strength: '500 mg',
         name: 'Test Item',
         sku: 'DUPLICATE-SKU',
         type: InventoryItemType.MEDICINE,
@@ -196,6 +202,8 @@ describe('InventoryService - Alignment Tests', () => {
 
     it('should allow same SKU in different branches', async () => {
       const createItemDto = {
+        dosageForm: 'tablet',
+        strength: '500 mg',
         name: 'Test Item',
         sku: 'SAME-SKU',
         type: InventoryItemType.MEDICINE,
@@ -252,6 +260,8 @@ describe('InventoryService - Alignment Tests', () => {
 
     it('should throw ConflictException if barcode exists in same branch', async () => {
       const createItemDto = {
+        dosageForm: 'tablet',
+        strength: '500 mg',
         name: 'Test Item with Barcode',
         barcode: '1234567890123',
         type: InventoryItemType.MEDICINE,
@@ -287,6 +297,8 @@ describe('InventoryService - Alignment Tests', () => {
 
       for (const type of validTypes) {
         const dto = {
+          dosageForm: 'tablet',
+          strength: '500 mg',
           name: `Test ${type}`,
           type,
           costPrice: 10.0,
@@ -330,6 +342,8 @@ describe('InventoryService - Alignment Tests', () => {
 
       for (const unit of validUnits) {
         const dto = {
+          dosageForm: 'tablet',
+          strength: '500 mg',
           name: `Test Item ${unit}`,
           type: InventoryItemType.MEDICINE,
           costPrice: 10.0,
@@ -366,6 +380,8 @@ describe('InventoryService - Alignment Tests', () => {
 
       for (const status of validStatuses) {
         const dto = {
+          dosageForm: 'tablet',
+          strength: '500 mg',
           name: `Test Item ${status}`,
           type: InventoryItemType.MEDICINE,
           costPrice: 10.0,
@@ -395,6 +411,8 @@ describe('InventoryService - Alignment Tests', () => {
   describe('Validate number ranges', () => {
     it('should accept valid positive prices', async () => {
       const dto = {
+        dosageForm: 'tablet',
+        strength: '500 mg',
         name: 'Test Medicine',
         type: InventoryItemType.MEDICINE,
         costPrice: 99.99,
@@ -425,6 +443,8 @@ describe('InventoryService - Alignment Tests', () => {
 
     it('should accept valid stock level quantities', async () => {
       const dto = {
+        dosageForm: 'tablet',
+        strength: '500 mg',
         name: 'Test Medicine',
         type: InventoryItemType.MEDICINE,
         costPrice: 10.0,
@@ -473,6 +493,8 @@ describe('InventoryService - Alignment Tests', () => {
 
       for (const { gstRate, description } of testCases) {
         const dto = {
+          dosageForm: 'tablet',
+          strength: '500 mg',
           name: `Test Medicine ${description}`,
           type: InventoryItemType.MEDICINE,
           costPrice: 10.0,
@@ -503,6 +525,8 @@ describe('InventoryService - Alignment Tests', () => {
   describe('Test expiryDate conversion', () => {
     it('should convert ISO date string to Date object', async () => {
       const dto = {
+        dosageForm: 'tablet',
+        strength: '500 mg',
         name: 'Test Medicine',
         type: InventoryItemType.MEDICINE,
         costPrice: 10.0,
@@ -540,6 +564,8 @@ describe('InventoryService - Alignment Tests', () => {
 
     it('should handle null/undefined expiryDate', async () => {
       const dto = {
+        dosageForm: 'tablet',
+        strength: '500 mg',
         name: 'Test Medicine',
         type: InventoryItemType.MEDICINE,
         costPrice: 10.0,
@@ -577,6 +603,8 @@ describe('InventoryService - Alignment Tests', () => {
   describe('Test tags array serialization', () => {
     it('should serialize tags array to JSON string', async () => {
       const dto = {
+        dosageForm: 'tablet',
+        strength: '500 mg',
         name: 'Test Medicine',
         type: InventoryItemType.MEDICINE,
         costPrice: 10.0,
@@ -617,6 +645,8 @@ describe('InventoryService - Alignment Tests', () => {
 
     it('should handle empty tags array', async () => {
       const dto = {
+        dosageForm: 'tablet',
+        strength: '500 mg',
         name: 'Test Medicine',
         type: InventoryItemType.MEDICINE,
         costPrice: 10.0,
@@ -645,6 +675,8 @@ describe('InventoryService - Alignment Tests', () => {
 
     it('should handle null/undefined tags', async () => {
       const dto = {
+        dosageForm: 'tablet',
+        strength: '500 mg',
         name: 'Test Medicine',
         type: InventoryItemType.MEDICINE,
         costPrice: 10.0,

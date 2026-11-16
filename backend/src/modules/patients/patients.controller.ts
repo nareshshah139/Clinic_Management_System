@@ -37,11 +37,11 @@ export class PatientsController {
   findAll(
     @Query('page') page = 1,
     @Query('limit') limit = 10,
-    @Query('search') search?: string,
-    @Query('gender') gender?: string,
-    @Query('consultationType') consultationType?: string,
-    @Query('dateRange') dateRange?: string,
-    @Query('export') exportAll?: string,
+    @Query('search') search: string | undefined,
+    @Query('gender') gender: string | undefined,
+    @Query('consultationType') consultationType: string | undefined,
+    @Query('dateRange') dateRange: string | undefined,
+    @Query('export') exportAll: string | undefined,
     @Request() req: AuthenticatedRequest,
   ) {
     const isExport = exportAll === 'true';

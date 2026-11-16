@@ -1,7 +1,11 @@
 'use client';
-import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { Spinner } from '@/components/ui/spinner';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { encounterTime } from '@/lib/patient-history';
+import { PRESCRIPTION_LETTERHEAD_URL, prescriptionLetterheadUrl, prescriptionPageMargin } from '@/lib/prescription-letterhead';
 import { compactClinicalPatch } from '@/lib/clinical-patch';
+import { insertClinicalRow, examinationPreferenceKey } from '@/lib/clinical-display';
+import { medicineNameIssues } from '@cms/shared-types/medicine-name';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,18 +16,21 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { ToastAction } from '@/components/ui/toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { AlertCircle, CalendarDays, ChevronDown, ChevronUp, FlaskConical, Languages, Loader2, Mic, MicOff, Pill, Plus, RotateCcw, Sparkles, Trash2, Wand2, X } from 'lucide-react';
+import { AlertCircle, CalendarDays, ChevronDown, ChevronUp, FlaskConical, Languages, Mic, MicOff, Pill, Plus, RotateCcw, Sparkles, Trash2, Wand2, X } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuLabel } from '@/components/ui/dropdown-menu';
+import { TELE_VIDEO_DISCLAIMER, TELE_VIDEO_CONSENT_REQUIRED, type ConsultationType } from '@/lib/tele-consultation';
 import { apiClient } from '@/lib/api';
 import { handleUnauthorizedRedirect } from '@/lib/authRedirect';
 import { getErrorMessage } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { ensureGlobalPrintStyles } from '@/lib/printStyles';
+import { formatPrintedDrugName } from '@/lib/printed-drug-name';
 import { inferTimingFromDosePattern, getAllFrequencyOptions, addCustomFrequency, formatFrequency, getTimingOptionsForFrequency, TIMING_OPTIONS, getAllTimingOptions, addCustomTiming, getAllDosePatternOptions, addCustomDosePattern, getAllDurationUnitOptions, addCustomDurationUnit } from '@/lib/frequency';
-import { buildLearnedPrescriptionPlan, type LearnedPlanSuggestion } from '@/lib/prescription-learning';
+import { buildLearnedPrescriptionPlan, diagnosisLearningKey, type LearnedPlanSuggestion } from '@/lib/prescription-learning';
 import { editRegimenRow, beginRegimenSelection, applyRegimenSuggestion, acceptRegimenField, regimenLabels, type RegimenField, type RegimenRow } from '@/lib/medicine-regimen-defaults';
 import { appendSpeechToText, pickSpeechToTextInsert } from '@/lib/speech-to-text';
 import { useSpeechToTextRecorder } from '@/hooks/useSpeechToTextRecorder';
+import { usePrescriptionSignature } from '@/hooks/usePrescriptionSignature';
 // ID format validation is relaxed; backend accepts string IDs (cuid/uuid/custom)
 
 // Minimal local types aligned with backend DTO enums
@@ -46,6 +53,10 @@ function restoreLegacyDosage<T>(dosage: T): T | '' {
 // Use centralized options from lib/frequency
 
 interface PrescriptionItemForm extends RegimenRow {
+  rowKey?: string;
+  dosageForm?: string;
+  strength?: string;
+  combinationProduct?: boolean;
   drugName: string;
   genericName?: string;
   brandName?: string;
@@ -76,6 +87,8 @@ interface PrescriptionItemForm extends RegimenRow {
 }
 
 interface Props {
+  consultationType?: ConsultationType;
+  teleVideoConsent?: boolean;
   patientId: string;
   visitId: string | null;
   doctorId: string;
@@ -123,17 +136,21 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
   children,
   badge,
   highlight = false,
+  expanded,
+  onExpandedChange,
 }: {
   title: string;
   section: string;
   children: React.ReactNode;
   badge?: string;
   highlight?: boolean;
+  expanded?: boolean;
+  onExpandedChange?: (expanded: boolean) => void;
 }) {
   const headingId = `section-${section}-heading`;
   const contentId = `section-${section}-content`;
   return (
-    <Card className={`overflow-visible ${highlight ? 'bg-green-50 border-green-300' : ''}`}>
+    <Card className={`overflow-visible ${highlight ? 'bg-success-soft border-success-border' : ''}`}>
       <CardHeader className="pb-2">
         <div
           className="flex items-center justify-between w-full"
@@ -141,29 +158,104 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
           aria-labelledby={headingId}
         >
           <div className="flex items-center gap-2">
-            <CardTitle id={headingId} className="text-base">{title}</CardTitle>
+            <CardTitle id={headingId} className="text-base">{onExpandedChange ? <button type="button" className="flex items-center gap-2 text-left" aria-expanded={expanded} aria-controls={contentId} onClick={() => onExpandedChange(!expanded)}>{title}<ChevronDown aria-hidden="true" className={`h-4 w-4 ${expanded ? 'rotate-180' : ''}`} /></button> : title}</CardTitle>
             {badge && <Badge variant="outline" className="text-xs">{badge}</Badge>}
-            {highlight && <div className="text-[10px] text-green-700">Auto-included in preview</div>}
+            {highlight && <div className="text-xs text-success-text">Auto-included in preview</div>}
           </div>
         </div>
       </CardHeader>
-      <CardContent id={contentId} className="pt-0 overflow-visible">
+      <CardContent id={contentId} hidden={expanded === false} className="pt-0 overflow-visible">
         {children}
       </CardContent>
     </Card>
   );
 });
 
-function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR', onCreated, onClinicalDataChange, onBeforeExport, onPreview, reviewDate, printBgUrl, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, contentOffsetXPx, contentOffsetYPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason, includeSections: includeSectionsProp, onChangeIncludeSections, ensureVisitId, onChangeChiefComplaints, onChangeContentOffset, designAids, paperPreset, grayscale, bleedSafe, frames, onChangeFrames }: Props) {
+/**
+ * @cc [owner:nareshshah139,label:product] examination-disclosure-preserves-data
+ * Detailed examination MUST start collapsed without a saved doctor preference.
+ * Toggling visibility MUST retain all clinical values; entered examination text MUST print
+ * after complaints and before diagnosis. The doctor's last disclosure choice survives reload.
+ */
+/**
+ * @cc [owner:nareshshah139,label:product] compact-print-whitespace
+ * Space optimization MUST reduce section and medicine-row padding without reducing font sizes.
+ * Disabling optimization MUST restore the normal spacing.
+ */
+/**
+ * @cc [owner:nareshshah139,label:product] prescription-row-readable-scale
+ * Timing and duration-unit controls MUST NOT split values character by character at supported text sizes.
+ * Medicine input MUST honor enlarged name-size preferences; wide rows MUST scroll inside the medicine table.
+ */
+/**
+ * @cc [owner:nareshshah139,label:product] tele-video-preview-and-exports
+ * Tele-video print content MUST include the consultation label beside the date
+ * and the disclaimer above the signature, even when the signature is hidden.
+ * Switching to In-person MUST remove both from regenerated preview and exports.
+ */
+/**
+ * @cc [owner:nareshshah139,label:product] compact-clinical-print-fields
+ * Space-optimized print content MUST place Chief Complaints, Review Date and
+ * Follow-up labels beside their values, with wrapped text aligned under the
+ * value. Disabling it MUST restore the stacked headings and original labels;
+ * fields without values MUST remain omitted in both layouts.
+ */
+/**
+ * @cc [owner:nareshshah139,label:product] signature-preview-output
+ * When Show signature is checked and the signature block is included, print,
+ * download and shared PDFs MUST place the proportional image above the doctor's
+ * name. Unchecking MUST remove it; exports MUST wait for updated pagination.
+ */
+/**
+ * @cc [owner:nareshshah139,label:product] built-in-letterhead-page-flow
+ * The supplied Dr. Praneeta Jain letterhead MUST repeat on every preview and export
+ * page. Its continuation pages MUST use the same pagination margins without an
+ * automatic downward shift; explicit user content offsets remain available.
+ */
+/**
+ * @cc [owner:nareshshah139,label:product] optional-numeric-dosage-editing
+ * Each medicine row MUST allow its optional numeric dosage to be edited or cleared.
+ * Clearing MUST omit dosage from saved/exported payloads; stored positive values MUST be retained.
+ */
+function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, visitId, doctorId, userRole = 'DOCTOR', onCreated, onClinicalDataChange, onBeforeExport, onPreview, reviewDate, printBgUrl, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, contentOffsetXPx, contentOffsetYPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason, includeSections: includeSectionsProp, onChangeIncludeSections, ensureVisitId, onChangeChiefComplaints, onChangeContentOffset, designAids, paperPreset, grayscale, bleedSafe, frames, onChangeFrames }: Props) {
+  const clinicalScopeKey = JSON.stringify([patientId, visitId, doctorId]);
+  const clinicalScopeRef = useRef({ key: clinicalScopeKey });
+  if (clinicalScopeRef.current.key !== clinicalScopeKey) clinicalScopeRef.current = { key: clinicalScopeKey };
   const { toast } = useToast();
   useEffect(() => { ensureGlobalPrintStyles(); }, []);
   const [language, setLanguage] = useState<Language>('EN');
   const [diagnosis, setDiagnosis] = useState('');
-  const deferredDiagnosis = useDeferredValue(diagnosis);
   // Removed doctor's personal notes field from UI; retain no top-level notes state
   const [followUpInstructions, setFollowUpInstructions] = useState('');
 
-  const [items, setItems] = useState<PrescriptionItemForm[]>([]);
+  const [items, setRawItems] = useState<PrescriptionItemForm[]>([]);
+  const rowSequence = useRef(0);
+  const setItems = useCallback((next: React.SetStateAction<PrescriptionItemForm[]>) => {
+    setRawItems(previous => {
+      const rows = typeof next === 'function' ? next(previous) : next;
+      const seen = new Set<string>();
+      let changed = false;
+      const identified = rows.map(row => {
+        const rowKey = row.rowKey && !seen.has(row.rowKey) ? row.rowKey : `rx-row-${++rowSequence.current}`;
+        seen.add(rowKey);
+        if (row.rowKey === rowKey) return row;
+        changed = true;
+        return { ...row, rowKey };
+      });
+      return changed ? identified : rows;
+    });
+  }, []);
+  const [examinationDisclosure, setExaminationDisclosure] = useState({ scope: '', expanded: false });
+  const examinationExpanded = examinationDisclosure.scope === clinicalScopeKey && examinationDisclosure.expanded;
+  useEffect(() => {
+    let expanded = false;
+    try { expanded = localStorage.getItem(examinationPreferenceKey(doctorId || '')) === 'true'; } catch {}
+    setExaminationDisclosure({ scope: clinicalScopeKey, expanded });
+  }, [clinicalScopeKey, doctorId]);
+  const changeExaminationExpanded = (expanded: boolean) => {
+    setExaminationDisclosure({ scope: clinicalScopeKey, expanded });
+    try { localStorage.setItem(examinationPreferenceKey(doctorId || ''), String(expanded)); } catch {}
+  };
   const [loadingPrevMeds, setLoadingPrevMeds] = useState(false);
   const [customSections, setCustomSections] = useState<Array<{ id: string; title: string; content: string }>>([]);
   const [procedureMetrics, setProcedureMetrics] = useState<{ device?: string; wavelengthNm?: number | ''; fluenceJcm2?: number | ''; spotSizeMm?: number | ''; pulseMs?: number | ''; shots?: number | ''; cooling?: string; area?: string; peelAgent?: string; peelConcentration?: string; peelContactTimeMin?: number | ''; frosting?: string; needleDepthMm?: string; passes?: number | ''; anesthetic?: string }>({});
@@ -171,12 +263,14 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   // Allow creating a drug in DB for doctors, admins, pharmacists
   const canAddDrugToDB = useMemo(() => ['ADMIN', 'PHARMACIST', 'DOCTOR'].includes(String(userRole || '').toUpperCase()), [userRole]);
   const [addDrugOpen, setAddDrugOpen] = useState(false);
-  const [newDrugForm, setNewDrugForm] = useState<{ name: string; manufacturerName: string; price: string; packSizeLabel: string }>({ name: '', manufacturerName: '', price: '', packSizeLabel: '' });
+  const emptyDrugForm = { name: '', manufacturerName: '', price: '', packSizeLabel: '', composition1: '', category: '', dosageForm: '', strength: '', combinationProduct: false, requiresPrescription: '' };
+  const [newDrugForm, setNewDrugForm] = useState(emptyDrugForm);
+  const [newDrugSaving, setNewDrugSaving] = useState(false);
   const openAddDrugDialog = () => {
-    // No global drug query anymore, start with empty form
-    setNewDrugForm({ name: '', manufacturerName: '', price: '', packSizeLabel: '' });
+    setNewDrugForm(emptyDrugForm);
     setAddDrugOpen(true);
   };
+  useEffect(() => { setAddDrugOpen(false); setNewDrugSaving(false); }, [clinicalScopeKey]);
   const [activeRowIdx, setActiveRowIdx] = useState<number | null>(null);
   const pendingFocusRef = useRef<number | null>(null);
   // Custom option state for all extendable dropdowns
@@ -246,10 +340,34 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     timing: { title: 'Add Custom Timing', placeholder: 'e.g., Bedtime, Before Sleep, After Snack', hint: 'Stored as entered.' },
     durationUnit: { title: 'Add Custom Duration Unit', placeholder: 'e.g., Doses, Cycles, Applications', hint: 'Stored in uppercase with underscores.' },
   };
+  /**
+   * @cc [owner:nareshshah139,label:product] prescription-drug-creation
+   * Creation MUST collect verified composition, category and canonical naming fields plus an explicit
+   * prescription requirement. A created drug MUST retain its ID and structured fields in the same visit only.
+   */
   const handleCreateDrug = async () => {
+    if (newDrugSaving) return;
+    const scope = clinicalScopeRef.current;
     try {
+      const fields = { brandName: newDrugForm.name.trim(), dosageForm: newDrugForm.dosageForm, strength: newDrugForm.strength.trim(), combinationProduct: newDrugForm.combinationProduct };
+      const missing = medicineNameIssues(fields);
+      const placeholder = /^(?:review\b.*|unknown|unspecified|uncategorized|not specified|not available|n\/?a|none|[-?]+)$/i;
+      for (const [key, label] of [['manufacturerName', 'Manufacturer'], ['composition1', 'Generic / salt composition'], ['category', 'Therapeutic category']] as const) {
+        if (!newDrugForm[key].trim() || placeholder.test(newDrugForm[key].trim())) missing.push(`${label} is required`);
+      }
+      if (fields.strength && placeholder.test(fields.strength)) missing.push('Enter the verified strength');
+      if (!newDrugForm.requiresPrescription) missing.push('Choose the prescription requirement');
+      if (missing.length) {
+        toast({ variant: 'destructive', title: 'Missing details', description: missing.join('. ') });
+        return;
+      }
       const payload: any = {
-        name: (newDrugForm.name || '').trim(),
+        ...fields,
+        name: formatPrintedDrugName(fields.brandName, fields),
+        composition1: newDrugForm.composition1.trim(),
+        category: newDrugForm.category.trim(),
+        requiresPrescription: newDrugForm.requiresPrescription === 'true',
+        type: 'allopathy',
         manufacturerName: (newDrugForm.manufacturerName || '').trim(),
         price: Number(newDrugForm.price) || 0,
         packSizeLabel: (newDrugForm.packSizeLabel || '').trim() || 'unit',
@@ -264,9 +382,11 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         toast({ variant: 'destructive', title: 'Missing details', description: 'Name and Manufacturer are required.' });
         return;
       }
+      setNewDrugSaving(true);
       // Client-side duplicate pre-check by name+manufacturer (best-effort)
       try {
         const dupList: any = await apiClient.get('/drugs', { search: payload.name, limit: 20 });
+        if (clinicalScopeRef.current !== scope) return;
         const items = Array.isArray(dupList) ? dupList : (Array.isArray((dupList as any)?.items) ? (dupList as any).items : (Array.isArray((dupList as any)?.data) ? (dupList as any).data : []));
         const hasDup = (items as any[]).some((d: any) => String(d?.name || '').toLowerCase() === payload.name.toLowerCase() && String(d?.manufacturerName || '').toLowerCase() === payload.manufacturerName.toLowerCase());
         if (hasDup) {
@@ -274,33 +394,49 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           return;
         }
       } catch {}
+      if (clinicalScopeRef.current !== scope) return;
       const created: any = await apiClient.post('/drugs', payload);
+      if (clinicalScopeRef.current !== scope) return;
       setAddDrugOpen(false);
       // Immediately add to current prescription items (add a new row)
       const newRow: PrescriptionItemForm = {
+        drugId: created?.id,
+        brandName: created?.brandName || payload.brandName,
+        dosageForm: created?.dosageForm || payload.dosageForm,
+        strength: created?.strength || payload.strength,
+        combinationProduct: created?.combinationProduct ?? payload.combinationProduct,
         drugName: created?.name || '',
-        genericName: '',
+        genericName: created?.composition1 || payload.composition1,
         dosage: '',
-        dosageUnit: 'TABLET',
+        dosageUnit: inferDosageUnitFromDosageForm(created?.dosageForm || payload.dosageForm),
         frequency: '',
         duration: '',
         durationUnit: 'DAYS',
         instructions: '',
-        route: 'Oral',
+        route: '',
         timing: '',
         quantity: '',
-        isGeneric: true,
+        isGeneric: false,
       };
       setItems(prev => [...prev, newRow]);
       toast({ variant: 'success', title: 'Drug added', description: 'Drug saved to database and added to prescription.' });
     } catch (e: any) {
-      toast({ variant: 'destructive', title: 'Failed to add drug', description: getErrorMessage(e) });
-    }
+      if (clinicalScopeRef.current === scope) toast({ variant: 'destructive', title: 'Failed to add drug', description: getErrorMessage(e) });
+    } finally { if (clinicalScopeRef.current === scope) setNewDrugSaving(false); }
   };
 
   // Additional clinical fields per requirements
   const [chiefComplaints, setChiefComplaints] = useState<string>('');
+  const [chiefComplaintsTouched, setChiefComplaintsTouched] = useState(false);
   const [pastHistory, setPastHistory] = useState<string>('');
+  // Undefined means not loaded/edited yet; an empty string is an explicit clear.
+  const [personalHistoryState, setPersonalHistoryState] = useState<{ patientId: string; visitId: string | null | undefined; value: string | undefined }>({ patientId, visitId, value: undefined });
+  const matchesPersonalHistoryContext = (state: typeof personalHistoryState) => state.patientId === patientId && (!state.visitId || state.visitId === visitId);
+  const personalHistory = matchesPersonalHistoryContext(personalHistoryState) ? personalHistoryState.value : undefined;
+  const setPersonalHistory = (next: React.SetStateAction<string | undefined>) => setPersonalHistoryState(previous => ({
+    patientId, visitId,
+    value: typeof next === 'function' ? next(matchesPersonalHistoryContext(previous) ? previous.value : undefined) : next,
+  }));
   const [medicationHistory, setMedicationHistory] = useState<string>('');
   const [menstrualHistory, setMenstrualHistory] = useState<string>('');
   const [familyHistoryTouched, setFamilyHistoryTouched] = useState<string[]>([]);
@@ -324,8 +460,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   
   // Bubble chief complaint changes up so parent (visit form) stays in sync
   useEffect(() => {
-    if (chiefComplaints.trim()) onChangeChiefComplaintsRef.current?.(chiefComplaints);
-  }, [chiefComplaints]);
+    if (chiefComplaints.trim() || chiefComplaintsTouched) onChangeChiefComplaintsRef.current?.(chiefComplaints);
+  }, [chiefComplaints, chiefComplaintsTouched]);
 
   const showTemplateCreateError = useCallback((error: any, retry?: () => void) => {
     const status = error?.status;
@@ -410,7 +546,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       type="button"
       variant="ghost"
       size="sm"
-      className={`ml-2 ${activeVoiceField === fieldName ? 'bg-red-100 text-red-600' : ''}`}
+      className={`ml-2 ${activeVoiceField === fieldName ? 'bg-destructive-soft text-destructive-text' : ''}`}
       onClick={() => void startVoiceInput(fieldName)}
       disabled={isTranscribing || (isListening && activeVoiceField !== fieldName)}
       aria-label={
@@ -429,7 +565,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       }
     >
       {activeVoiceField === fieldName ? (
-        isListening ? <MicOff className="h-4 w-4" /> : <Loader2 className="h-4 w-4 animate-spin" />
+        isListening ? <MicOff className="h-4 w-4" /> : <Spinner className="h-4 w-4 " />
       ) : (
         <Mic className="h-4 w-4" />
       )}
@@ -454,16 +590,111 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   ];
   const [customInvestigationOptions, setCustomInvestigationOptions] = useState<string[]>([]);
   const [newCustomInvestigation, setNewCustomInvestigation] = useState<string>('');
-  const investigationOptions = useMemo(() => [...defaultInvestigationOptions, ...customInvestigationOptions], [customInvestigationOptions]);
+  const [investigationCatalog, setInvestigationCatalog] = useState<Array<{ id: string; name: string; version: number }>>([]);
+  const [investigationCatalogError, setInvestigationCatalogError] = useState('');
+  const [investigationCatalogLoading, setInvestigationCatalogLoading] = useState(true);
+  const [investigationCatalogReady, setInvestigationCatalogReady] = useState(false);
+  const [investigationMutationPending, setInvestigationMutationPending] = useState(false);
+  const [editingInvestigation, setEditingInvestigation] = useState<{ id: string; name: string; version: number } | null>(null);
+  const [showInvestigationManager, setShowInvestigationManager] = useState(false);
+  const [canManageInvestigations, setCanManageInvestigations] = useState(false);
+  const investigationCatalogRequestRef = useRef(0);
+  useEffect(() => {
+    let current = true;
+    void apiClient.get<{ role?: string }>('/auth/me').then(user => {
+      if (current) setCanManageInvestigations(['DOCTOR', 'OWNER', 'ADMIN'].includes(user?.role || ''));
+    }).catch(() => { if (current) setCanManageInvestigations(false); });
+    return () => { current = false; };
+  }, []);
   const [investigations, setInvestigations] = useState<string[]>([]);
+  const investigationOptions = useMemo(() => Array.from(new Set([...defaultInvestigationOptions, ...investigationCatalog.map(option => option.name), ...investigations])), [investigationCatalog, investigations]);
+  const refreshInvestigationCatalog = useCallback(async () => {
+    const scope = clinicalScopeRef.current;
+    const request = ++investigationCatalogRequestRef.current;
+    const current = () => clinicalScopeRef.current === scope && investigationCatalogRequestRef.current === request;
+    setInvestigationCatalogLoading(true);
+    try {
+      const options = await apiClient.getInvestigationOptions();
+      if (!current()) return false;
+      if (!Array.isArray(options) || options.some(option => !option || typeof option.id !== 'string' || typeof option.name !== 'string' || !Number.isSafeInteger(option.version))) {
+        throw new Error('Invalid investigation list');
+      }
+      setInvestigationCatalog(options);
+      setInvestigationCatalogError('');
+      setInvestigationCatalogReady(true);
+      return true;
+    } catch {
+      if (!current()) return false;
+      setInvestigationCatalogReady(false);
+      setInvestigationCatalogError('Could not load the reusable investigation list. Retry before changing it.');
+      return false;
+    }
+    finally { if (current()) setInvestigationCatalogLoading(false); }
+  }, []);
+  useEffect(() => {
+    setNewCustomInvestigation('');
+    setEditingInvestigation(null);
+    setShowInvestigationManager(false);
+    setInvestigationMutationPending(false);
+    setInvestigationCatalogReady(false);
+    setInvestigationCatalogError('');
+    void refreshInvestigationCatalog();
+  }, [clinicalScopeKey, refreshInvestigationCatalog]);
+  /**
+   * @cc [owner:nareshshah139,label:product] reusable-investigations-preserve-snapshots
+   * Catalog changes MUST persist through the server before appearing successful.
+   * Rename and removal MUST send the read version and leave selected visit strings unchanged.
+   * Failed changes MUST remain visible and refresh the catalog before another edit.
+   */
+  /**
+   * @cc [owner:nareshshah139,label:product] investigation-mutation-visit-scope
+   * An async catalog mutation MUST NOT change visit selection or mutation UI after navigating
+   * to another patient or visit, even if the user later returns to the original visit.
+   */
+  const mutateInvestigation = async (action: 'add' | 'rename' | 'remove', option?: { id: string; name: string; version: number }) => {
+    if (!canManageInvestigations || !investigationCatalogReady || investigationCatalogLoading || investigationMutationPending) return;
+    const name = (action === 'add' ? newCustomInvestigation : option?.name || '').trim();
+    if (action !== 'remove' && !name) return;
+    const scope = clinicalScopeRef.current;
+    setInvestigationMutationPending(true);
+    try {
+      if (action === 'add') {
+        const created = await apiClient.createInvestigationOption(name);
+        if (clinicalScopeRef.current !== scope) return;
+        setInvestigationCatalog(previous => [...previous.filter(item => item.id !== created.id), created]);
+        setInvestigations(previous => Array.from(new Set([...previous, created.name])));
+        setNewCustomInvestigation('');
+      } else if (option && action === 'rename') {
+        const updated = await apiClient.updateInvestigationOption(option.id, name, option.version);
+        if (clinicalScopeRef.current !== scope) return;
+        setInvestigationCatalog(previous => previous.map(item => item.id === updated.id ? updated : item));
+        setEditingInvestigation(null);
+      } else if (option) {
+        await apiClient.deleteInvestigationOption(option.id, option.version);
+        if (clinicalScopeRef.current !== scope) return;
+        setInvestigationCatalog(previous => previous.filter(item => item.id !== option.id));
+        setEditingInvestigation(null);
+      }
+      setInvestigationCatalogError('');
+    } catch (error) {
+      if (clinicalScopeRef.current !== scope) return;
+      const refreshed = await refreshInvestigationCatalog();
+      if (clinicalScopeRef.current !== scope) return;
+      setEditingInvestigation(null);
+      setInvestigationCatalogError(`${getErrorMessage(error) || 'The investigation could not be saved.'} ${refreshed ? 'The list has been refreshed. Retry your change.' : 'Could not refresh the list. Retry loading it before making another change.'}`);
+    } finally { if (clinicalScopeRef.current === scope) setInvestigationMutationPending(false); }
+  };
   const [patientHistoryForLearning, setPatientHistoryForLearning] = useState<any[]>([]);
   const [doctorPrescriptionsForLearning, setDoctorPrescriptionsForLearning] = useState<any[]>([]);
   const [learningSourcesStatus, setLearningSourcesStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [learningSourcesError, setLearningSourcesError] = useState('');
+  const [learningRevision, setLearningRevision] = useState(0);
+  const learningContext = JSON.stringify([patientId, doctorId, visitId]);
+  const [loadedLearningContext, setLoadedLearningContext] = useState('');
   const [lastAutofillPlanSignature, setLastAutofillPlanSignature] = useState<string | null>(null);
   const [lastAutofillStateSignature, setLastAutofillStateSignature] = useState<string | null>(null);
   const [lastAutofillMode, setLastAutofillMode] = useState<'replace' | 'merge' | null>(null);
-  const [suppressedAutofillSignature, setSuppressedAutofillSignature] = useState<string | null>(null);
+  const [pausedAutofillDiagnosis, setPausedAutofillDiagnosis] = useState<string | null>(null);
   const [autofillUndoSnapshot, setAutofillUndoSnapshot] = useState<{
     items: PrescriptionItemForm[];
     investigations: string[];
@@ -487,8 +718,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const [activeSearchRow, setActiveSearchRow] = useState<number | null>(null);
   const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number; width: number } | null>(null);
   const inputRefs = useRef<Record<number, HTMLInputElement | null>>({});
-  const [drugStockById, setDrugStockById] = useState<Record<string, number>>({});
-  const [drugStockLoading, setDrugStockLoading] = useState<Record<string, boolean>>({});
+  const [drugStockByKey, setDrugStockByKey] = useState<Record<string, number | null>>({});
+  const drugStockRequests = useRef(new Map<string, Promise<number | null>>());
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [templates, setTemplates] = useState<any[]>([]);
   const lastTemplateApplyRef = useRef<number>(0);
@@ -571,6 +802,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const [complaintOptions, setComplaintOptions] = useState<string[]>([]);
   const [loadingVisit, setLoadingVisit] = useState(false);
   const [visitData, setVisitData] = useState<any>(null);
+  const isTeleVideo = (consultationType ?? visitData?.consultationType) === 'TELE_VIDEO';
   const createdPrescriptionIdRef = useRef<string | null>(null);
   const [savedPrescriptionId, setSavedPrescriptionId] = useState<string | null>(null);
   const [savingFromPreview, setSavingFromPreview] = useState(false);
@@ -602,6 +834,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const prevPreviewOpenRef = useRef(previewOpen);
   // Refs to track previous values for change detection to prevent unnecessary refreshes
   const prevDepsRef = useRef<{
+    isTeleVideo: boolean;
     items: string;
     diagnosis: string;
     followUpInstructions: string;
@@ -618,14 +851,22 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     overrideTopMarginPx: number | null;
     overrideBottomMarginPx: number | null;
     spaceOptimized: boolean;
+    personalHistory: string | undefined;
+    exObjective: string; pastHistory: string; medicationHistory: string; menstrualHistory: string; procedures: string; procedurePlanned: string; reviewDate: string | undefined;
   } | null>(null);
   const previewRefreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   // Change detection refs to prevent flickering - track if initial render is done and last content hash
   const initialRenderDoneRef = useRef(false);
   const lastContentHashRef = useRef<string | null>(null);
   const [showRefillStamp, setShowRefillStamp] = useState<boolean>(false);
-  // Letterhead selection: 'default' uses printBgUrl prop or /letterhead.png, 'none' removes it
+  const { showSignature, setShowSignature, signatureUrl, signatureWidth, signatureHeight, signatureLoading, signatureError, reloadSignature } = usePrescriptionSignature(visitData?.doctor?.id || doctorId, previewOpen || autoPreview);
+  const [renderedSignatureUrl, setRenderedSignatureUrl] = useState<string | null>(null);
+  const [renderedTeleVideo, setRenderedTeleVideo] = useState<boolean | null>(null);
+  const pagedJsProcessRef = useRef<(() => Promise<void>) | null>(null);
+  const [sharingEmail, setSharingEmail] = useState(false);
+  // Default uses the supplied LINAE letterhead; explicit custom backgrounds remain available.
   const [letterheadOption, setLetterheadOption] = useState<'default' | 'none'>('default');
+  const resolvedPrintBgUrl = prescriptionLetterheadUrl(printBgUrl);
   const useLetterheadForDownload = useMemo(() => letterheadOption !== 'none', [letterheadOption]);
   // Live margin overrides (px). Null -> use printer profile or provided defaults
   const [overrideTopMarginPx, setOverrideTopMarginPx] = useState<number | null>(null);
@@ -791,6 +1032,13 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const [exPriorTx, setExPriorTx] = useState<string>('');
   const [exDermDx, setExDermDx] = useState<Set<string>>(new Set());
   const [exObjective, setExObjective] = useState<string>('');
+  const learningDiagnosis = useMemo(() => [diagnosis, ...exDermDx].filter(Boolean).join('; '), [diagnosis, exDermDx]);
+  const learningDiagnosisKey = diagnosisLearningKey(learningDiagnosis);
+  const [settledLearningDiagnosis, setSettledLearningDiagnosis] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => setSettledLearningDiagnosis(learningDiagnosis), 400);
+    return () => clearTimeout(timer);
+  }, [learningDiagnosis]);
 
   // Seed On Examination from visit if present
   useEffect(() => {
@@ -860,6 +1108,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   });
 
   const includeSections = includeSectionsProp ?? localIncludeSections;
+  const printedSignatureUrl = includeSections.doctorSignature && showSignature ? signatureUrl : null;
+  const exportPreviewPending = Boolean(showSignature && (signatureLoading || signatureError)) || renderedSignatureUrl !== printedSignatureUrl || renderedTeleVideo !== isTeleVideo;
   
   // Stabilize setIncludeSections using useRef to prevent infinite loops
   const onChangeIncludeSectionsRef = useRef(onChangeIncludeSections);
@@ -911,6 +1161,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     pushIf('diagnosis', diagnosis);
     pushIf('chiefComplaints', chiefComplaints);
     pushIf('pastHistory', pastHistory);
+    pushIf('personalHistory', personalHistory);
+    pushIf('examination', exObjective);
     pushIf('medicationHistory', medicationHistory);
     pushIf('menstrualHistory', menstrualHistory);
     pushIf('familyHistoryOthers', familyHistoryOthers);
@@ -986,14 +1238,14 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         description: 'Showing original text. Check server OPENAI_API_KEY and network.',
       });
     }
-  }, [language, diagnosis, chiefComplaints, pastHistory, medicationHistory, menstrualHistory, familyHistoryOthers, procedures, procedurePlanned, investigations, customSections, items, counselingText]);
+  }, [language, diagnosis, chiefComplaints, pastHistory, personalHistory, medicationHistory, menstrualHistory, familyHistoryOthers, procedures, procedurePlanned, investigations, customSections, items, counselingText]);
 
   // Derived flags to show inline UI feedback for auto-included sections
   const hasDiagnosis = useMemo(() => Boolean(diagnosis?.trim()?.length), [diagnosis]);
   const hasChiefComplaints = useMemo(() => Boolean(chiefComplaints?.trim()?.length), [chiefComplaints]);
   const hasHistories = useMemo(() => Boolean(
-    pastHistory?.trim()?.length || medicationHistory?.trim()?.length || menstrualHistory?.trim()?.length || exTriggers?.trim()?.length || exPriorTx?.trim()?.length
-  ), [pastHistory, medicationHistory, menstrualHistory, exTriggers, exPriorTx]);
+    pastHistory?.trim()?.length || personalHistory?.trim()?.length || medicationHistory?.trim()?.length || menstrualHistory?.trim()?.length || exTriggers?.trim()?.length || exPriorTx?.trim()?.length
+  ), [pastHistory, personalHistory, medicationHistory, menstrualHistory, exTriggers, exPriorTx]);
   
   const hasFamilyHistory = useMemo(() => Boolean(
     familyHistoryDM || familyHistoryHTN || familyHistoryThyroid || familyHistoryOthers?.trim()?.length
@@ -1002,7 +1254,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const hasInvestigations = useMemo(() => Array.isArray(investigations) && investigations.length > 0, [investigations]);
   const hasProcedures = useMemo(() => Boolean(procedures?.trim()?.length), [procedures]);
   const hasProcedurePlanned = useMemo(() => Boolean(procedurePlanned?.trim()?.length), [procedurePlanned]);
-  const validItems = useMemo(() => items.filter((it) => (it.drugName || '').trim().length > 0), [items]);
+  const validItems = useMemo(() => items.filter((it) => (it.drugName || '').trim().length > 0).map(({ rowKey: _rowKey, ...item }) => item), [items]);
   const canCreate = useMemo(
     () => Boolean(
       patientId &&
@@ -1160,12 +1412,18 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
     const loadVisit = async () => {
       if (!visitId || standalone) return;
       try {
         setLoadingVisit(true);
         const initialClinicalData = JSON.stringify(latestClinicalDataRef.current);
         const res: any = await apiClient.get(`/visits/${visitId}`);
+        if (cancelled) return;
+        const savedHistory = typeof res?.history === 'string' ? (() => { try { return JSON.parse(res.history); } catch { return null; } })() : res?.history;
+        if (typeof savedHistory?.personalHistory === 'string') {
+          setPersonalHistory(current => current ?? savedHistory.personalHistory);
+        }
         setVisitData(res || null);
         if (res?.prescription?.id) setSavedPrescriptionId(res.prescription.id);
         if (restoredClinicalDraftRef.current || initialClinicalData !== JSON.stringify(latestClinicalDataRef.current)) return;
@@ -1190,7 +1448,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         try {
           // Complaints
           const complaintsArr = Array.isArray(res?.complaints) ? res.complaints : (res?.complaints ? JSON.parse(res.complaints) : []);
-          if (!chiefComplaints && Array.isArray(complaintsArr) && complaintsArr.length > 0) {
+          if (!chiefComplaintsTouched && !chiefComplaints && Array.isArray(complaintsArr) && complaintsArr.length > 0) {
             setChiefComplaints(complaintsArr.map((c: any) => c?.complaint || '').filter(Boolean).join(', '));
           }
         } catch {}
@@ -1282,8 +1540,23 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       }
     };
     void loadVisit();
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visitId, refreshKey, standalone]);
+  }, [patientId, visitId, refreshKey, standalone]);
+
+  // Before a visit exists, seed from the patient's saved history. Drafts and edits win.
+  useEffect(() => {
+    if (!patientId || visitId) return;
+    let cancelled = false;
+    void apiClient.get<{ personalHistory: string | null }>(`/visits/patient/${patientId}/personal-history`)
+      .then(result => {
+        if (!cancelled && typeof result?.personalHistory === 'string') {
+          setPersonalHistory(current => current ?? result.personalHistory!);
+        }
+      })
+      .catch(() => { /* Saving a new visit also carries forward server-side. */ });
+    return () => { cancelled = true; };
+  }, [patientId, visitId]);
 
   // Load patient details if visitId is not present or visit payload lacks patient
   useEffect(() => {
@@ -1411,59 +1684,59 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     const parts = text.split(regex);
     return parts.map((part, index) => 
       regex.test(part) ? 
-        <span key={index} className="bg-yellow-200 font-semibold">{part}</span> : 
+        <span key={index} className="bg-warning-soft font-semibold">{part}</span> :
         part
     );
   };
 
-  // Prefetch remaining stock for a drug by id (uses /drugs/:id, accessible to doctors)
-  const prefetchDrugStockById = async (drugId?: string) => {
-    if (!drugId) return;
-    if (drugStockById[drugId] !== undefined || drugStockLoading[drugId]) return;
-    setDrugStockLoading((prev) => ({ ...prev, [drugId]: true }));
-    try {
-      const detail: any = await apiClient.get(`/drugs/${drugId}`);
-      const inv = Array.isArray(detail?.inventoryItems) ? detail.inventoryItems : [];
-      const stock = inv.length > 0 ? inv.reduce((sum: number, it: any) => sum + (Number(it?.currentStock || 0) || 0), 0) : 20;
-      setDrugStockById((prev) => ({ ...prev, [drugId]: stock }));
-    } catch {
-      // If inventory not configured or error, default to 20
-      setDrugStockById((prev) => ({ ...prev, [drugId]: 20 }));
-    } finally {
-      setDrugStockLoading((prev) => ({ ...prev, [drugId]: false }));
-    }
-  };
+  // Share the fetched value (including an in-flight request), not a stale React
+  // state snapshot. Unknown stock stays null and can be retried on the next hover.
+  const loadDrugStock = useCallback((key: string, load: () => Promise<number | null>) => {
+    const existing = drugStockRequests.current.get(key);
+    if (existing) return existing;
+    const request = Promise.resolve().then(load).catch(() => null).then((stock) => {
+      // An explicit selection can replace an older name lookup while it loads.
+      if (drugStockRequests.current.get(key) !== request) return stock;
+      if (stock === null) drugStockRequests.current.delete(key);
+      setDrugStockByKey((prev) => ({ ...prev, [key]: stock }));
+      return stock;
+    });
+    drugStockRequests.current.set(key, request);
+    return request;
+  }, []);
 
-  // Prefetch remaining stock for a drug by name (used in treatment table rows)
+  const prefetchDrugStockById = useCallback((drugId?: string, inventoryItemId?: string): Promise<number | null> => {
+    if (inventoryItemId) return loadDrugStock(`inventory:${inventoryItemId}`, async () => {
+      const result = await apiClient.get<any>(`/pharmacy/prescription-queue/inventory-stock/${encodeURIComponent(inventoryItemId)}`);
+      return result.stockStatus === 'UNMATCHED' || !Number.isFinite(result.totalNonExpiredStock) ? null : result.totalNonExpiredStock;
+    });
+    if (!drugId) return Promise.resolve(null);
+    return loadDrugStock(`id:${drugId}`, async () => {
+      const detail: any = await apiClient.get(`/drugs/${drugId}`);
+      const inventory = detail?.inventoryItems;
+      if (!Array.isArray(inventory) || inventory.length === 0) return null;
+      const units = new Set(inventory.map((i: any) => JSON.stringify([i.unit, i.packSize, i.packUnit])));
+      if (units.size !== 1) return null;
+      const day = new Date(new Date().toISOString().slice(0, 10));
+      return inventory.reduce((sum: number, item: any) => sum + (item.status !== 'ACTIVE' || (item.expiryDate && new Date(item.expiryDate) < day) ? 0 : Math.max(0, item.currentStock - (item.heldStock || 0))), 0);
+    });
+  }, [loadDrugStock]);
+
   const prefetchDrugStockByName = async (name?: string) => {
     const query = (name || '').trim();
     if (!query) return;
-    const key = query.toLowerCase();
-    if (drugStockById[key] !== undefined || drugStockLoading[key]) return;
-    setDrugStockLoading((prev) => ({ ...prev, [key]: true }));
-    try {
-      const res: any = await apiClient.get('/drugs', { search: query, limit: 1, isActive: true });
-      const list = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
-      const first = list?.[0];
-      if (!first?.id) {
-        // No match found; assume default stock
-        setDrugStockById((prev) => ({ ...prev, [key]: 20 }));
-      } else {
-        await prefetchDrugStockById(first.id);
-        const val = (typeof drugStockById[first.id] === 'number') ? drugStockById[first.id] : 20;
-        setDrugStockById((prev) => ({ ...prev, [key]: val }));
-      }
-    } catch {
-      setDrugStockById((prev) => ({ ...prev, [key]: 20 }));
-    } finally {
-      setDrugStockLoading((prev) => ({ ...prev, [key]: false }));
-    }
+    const normalizedName = query.toLowerCase();
+    return loadDrugStock(`name:${normalizedName}`, async () => {
+      const list = await apiClient.get<any[]>('/prescriptions/drugs/autocomplete', { q: query, limit: 30 });
+      const matches = (Array.isArray(list) ? list : []).filter((drug: any) => String(drug?.name || '').trim().toLowerCase() === normalizedName);
+      return matches.length === 1 ? matches[0].totalStock ?? null : null;
+    });
   };
 
   // Get relevance badge for search results
   const getRelevanceBadge = (drug: any, query: string, index: number) => {
-    if (index === 0) return <Badge variant="default" className="text-xs ml-2 bg-green-100 text-green-800">Best Match</Badge>;
-    if (index < 3) return <Badge variant="secondary" className="text-xs ml-2 bg-blue-100 text-blue-800">High Match</Badge>;
+    if (index === 0) return <Badge variant="default" className="text-xs ml-2 bg-success-soft text-success-text">Best Match</Badge>;
+    if (index < 3) return <Badge variant="secondary" className="text-xs ml-2 bg-info-soft text-info-text">High Match</Badge>;
     return null;
   };
 
@@ -1625,7 +1898,9 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     return {
       drugName: name,
       drugId: raw?.drugId || undefined,
+      inventoryItemId: raw?.inventoryItemId || undefined,
       genericName: raw?.genericName ? String(raw.genericName) : undefined,
+      dosageForm: raw?.dosageForm, strength: raw?.strength, combinationProduct: raw?.combinationProduct,
       brandName: raw?.brandName ? String(raw.brandName) : undefined,
       dosePattern: dosePattern || '',
       frequency,
@@ -1763,7 +2038,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     setLastAutofillPlanSignature(null);
     setLastAutofillStateSignature(null);
     setLastAutofillMode(null);
-    setSuppressedAutofillSignature(null);
+    setPausedAutofillDiagnosis(null);
     setAutofillUndoSnapshot(null);
   }, [patientId, doctorId, visitId]);
 
@@ -1781,6 +2056,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
 
       setLearningSourcesStatus('loading');
       setLearningSourcesError('');
+      setPatientHistoryForLearning([]);
+      setDoctorPrescriptionsForLearning([]);
 
       const [patientResult, doctorResult] = await Promise.allSettled([
         patientId ? apiClient.getPatientVisitHistory<any>(patientId, { limit: 12 }) : Promise.resolve([]),
@@ -1796,6 +2073,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         ? normalizePrescriptionResponse(doctorResult.value)
         : [];
 
+      setLoadedLearningContext(learningContext);
       setPatientHistoryForLearning(nextPatientHistory);
       setDoctorPrescriptionsForLearning(nextDoctorPrescriptions);
 
@@ -1819,16 +2097,20 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     return () => {
       cancelled = true;
     };
-  }, [patientId, doctorId]);
+  }, [patientId, doctorId, visitId, learningContext, learningRevision, refreshKey]);
 
-  const learnedPlan = useMemo<LearnedPlanSuggestion | null>(() => buildLearnedPrescriptionPlan({
-    diagnosis: deferredDiagnosis,
-    patientVisits: patientHistoryForLearning,
-    doctorPrescriptions: doctorPrescriptionsForLearning,
-    templates,
-    currentVisitId: visitId,
-    doctorId,
-  }), [deferredDiagnosis, patientHistoryForLearning, doctorPrescriptionsForLearning, templates, visitId, doctorId]);
+  const learnedPlan = useMemo<LearnedPlanSuggestion | null>(() => {
+    if (loadedLearningContext !== learningContext || learningSourcesStatus === 'loading'
+      || settledLearningDiagnosis !== learningDiagnosis) return null;
+    return buildLearnedPrescriptionPlan({
+      diagnosis: settledLearningDiagnosis,
+      patientVisits: patientHistoryForLearning,
+      doctorPrescriptions: doctorPrescriptionsForLearning,
+      templates,
+      currentVisitId: visitId,
+      doctorId,
+    });
+  }, [loadedLearningContext, learningContext, learningSourcesStatus, settledLearningDiagnosis, learningDiagnosis, patientHistoryForLearning, doctorPrescriptionsForLearning, templates, visitId, doctorId]);
 
   const treatmentHasMeaningfulData = useMemo(
     () => Boolean(validItems.length || investigations.length || followUpInstructions.trim() || reviewDate),
@@ -1845,7 +2127,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     reviewDate: reviewDate || '',
   }), [serializeTreatmentState, items, investigations, followUpInstructions, reviewDate]);
   const treatmentMachineOwned = Boolean(lastAutofillStateSignature && currentTreatmentSignature === lastAutofillStateSignature);
-  const learnedPlanSuppressed = Boolean(learnedPlan && suppressedAutofillSignature === learnedPlan.signature);
+  const learnedPlanSuppressed = Boolean(learningDiagnosisKey && pausedAutofillDiagnosis === learningDiagnosisKey);
   const learnedPlanCurrent = Boolean(learnedPlan && lastAutofillPlanSignature === learnedPlan.signature && treatmentMachineOwned);
   const learnedPlanMerged = Boolean(learnedPlanCurrent && lastAutofillMode === 'merge');
   const learnedPlanApplied = Boolean(learnedPlanCurrent && lastAutofillMode !== 'merge');
@@ -1880,7 +2162,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     setCustomInvestigationOptions(nextCustomInvestigations);
     setFollowUpInstructions(nextFollowUp);
     if (onChangeReviewDate) onChangeReviewDate(nextReviewDate);
-    setSuppressedAutofillSignature(null);
+    setPausedAutofillDiagnosis(null);
     setLastAutofillMode('replace');
     setLastAutofillPlanSignature(plan.signature);
     setLastAutofillStateSignature(serializeTreatmentState({
@@ -2002,7 +2284,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     setCustomInvestigationOptions(nextCustomInvestigations);
     setFollowUpInstructions(nextFollowUp);
     if (onChangeReviewDate) onChangeReviewDate(nextReviewDate);
-    setSuppressedAutofillSignature(null);
+    setPausedAutofillDiagnosis(null);
     setLastAutofillMode('merge');
     setLastAutofillPlanSignature(plan.signature);
     setLastAutofillStateSignature(serializeTreatmentState({
@@ -2042,15 +2324,15 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     setCustomInvestigationOptions([...autofillUndoSnapshot.customInvestigationOptions]);
     setFollowUpInstructions(autofillUndoSnapshot.followUpInstructions);
     onChangeReviewDate?.(autofillUndoSnapshot.reviewDate);
-    setSuppressedAutofillSignature(lastAutofillPlanSignature);
+    setPausedAutofillDiagnosis(learningDiagnosisKey);
     setLastAutofillMode(null);
     setLastAutofillPlanSignature(null);
     setLastAutofillStateSignature(null);
     setAutofillUndoSnapshot(null);
-  }, [autofillUndoSnapshot, onChangeReviewDate, lastAutofillPlanSignature]);
+  }, [autofillUndoSnapshot, onChangeReviewDate, learningDiagnosisKey]);
 
   useEffect(() => {
-    if (!learnedPlan || learnedPlanSuppressed || learnedPlanCurrent) return;
+    if (!learnedPlan || !learnedPlan.autoApplyEligible || learnedPlanSuppressed || learnedPlanCurrent) return;
     if (!treatmentIsEmpty && !treatmentMachineOwned) return;
     applyLearnedPlan(learnedPlan);
   }, [learnedPlan, learnedPlanSuppressed, learnedPlanCurrent, treatmentIsEmpty, treatmentMachineOwned, applyLearnedPlan]);
@@ -2107,6 +2389,11 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const regimenContext = JSON.stringify([patientId, doctorId, visitId]);
   const regimenContextRef = useRef(regimenContext);
   regimenContextRef.current = regimenContext;
+  /**
+   * @cc [owner:nareshshah139,label:product] prescription-selection-retains-inventory
+   * Choosing clinic stock MUST retain its inventory item ID through prescription save and reload.
+   * Typing another medicine name MUST invalidate the prior item and drug IDs.
+   */
   const applyDrugSelectionToRow = (rowIdx: number, drug: any, options?: {
     clearSearch?: boolean;
     showToast?: boolean;
@@ -2115,7 +2402,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     const drugName = String(drug?.name || '');
     setItems(prev => {
       const next = prev.map((item, index) => index === rowIdx ? {
-        ...beginRegimenSelection(item, selection), drugId: drug.id, drugName, genericName: drug.genericName,
+        ...beginRegimenSelection(item, selection), drugId: drug.id, inventoryItemId: drug.inventoryItemId, drugName, genericName: drug.genericName,
+        dosageForm: drug.dosageForm, strength: drug.strength, combinationProduct: drug.combinationProduct,
         dosageUnit: item.dosage ? item.dosageUnit : inferDosageUnitFromDosageForm(drug.dosageForm),
       } : item);
       if (!hasTrailingBlank(next)) next.push(createBlankItem());
@@ -2126,7 +2414,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       try {
         let drugId = drug.id;
         if (!drugId) {
-          const res: any = await apiClient.get('/drugs', { search: drugName, limit: 30, isActive: true });
+          const res: any = await apiClient.get('/prescriptions/drugs/autocomplete', { q: drugName, limit: 30 });
           const matches = (Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [])
             .filter((candidate: any) => candidate.name?.trim().toLowerCase() === drugName.trim().toLowerCase());
           if (matches.length === 1) drugId = matches[0].id;
@@ -2151,6 +2439,11 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           ? { ...item, regimenState: { ...item.regimenState, loading: false, failed: true } } : item));
       }
     })();
+    if (drug?.id && drugName) {
+      const key = `name:${drugName.trim().toLowerCase()}`;
+      drugStockRequests.current.delete(key);
+      void loadDrugStock(key, () => prefetchDrugStockById(drug.id, drug.inventoryItemId));
+    }
     if (options?.clearSearch) {
       setRowDrugResults(prev => ({ ...prev, [rowIdx]: [] }));
       setRowDrugQueries(prev => ({ ...prev, [rowIdx]: '' }));
@@ -2174,6 +2467,19 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       </button>
     ) : null;
 
+  const clearRowPopoverState = () => {
+    setActiveSearchRow(null);
+    setRowDrugQueries({});
+    setRowDrugResults({});
+    setRowLoadingDrugs({});
+    setInstrFocusIdx(null);
+    setActiveRowIdx(null);
+  };
+  const insertRowAfter = (index: number) => {
+    clearRowPopoverState();
+    setItems(previous => insertClinicalRow(previous, index, createBlankItem()));
+    pendingFocusRef.current = index + 1;
+  };
   const addRowAndFocus = () => {
     setItems(prev => {
       const next = [...prev, createBlankItem()];
@@ -2234,6 +2540,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   };
 
   const removeItem = (index: number) => {
+    clearRowPopoverState();
     setItems(prev => prev.filter((_, i) => i !== index));
   };
 
@@ -2305,7 +2612,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       max-height: ${pagedPrintPageHeight} !important;
       overflow: hidden !important;
       box-sizing: border-box !important;
-      background-image: ${letterheadOption === 'none' ? 'none' : `url('${printBgUrl ?? '/letterhead.png'}')`};
+      background-image: ${letterheadOption === 'none' ? 'none' : `url('${resolvedPrintBgUrl}')`};
       background-repeat: no-repeat;
       background-position: top left;
       background-size: ${pagedPrintPageWidth} ${pagedPrintPageHeight};
@@ -2336,8 +2643,12 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const prescriptionItemsPayload = useMemo(() => validItems.map(it => ({
           drugName: it.drugName,
           drugId: it.drugId || undefined,
+          inventoryItemId: it.inventoryItemId || undefined,
           genericName: it.genericName || undefined,
           brandName: it.brandName || undefined,
+          dosageForm: it.dosageForm || undefined,
+          strength: it.strength || undefined,
+          combinationProduct: it.combinationProduct,
           dosage: it.dosage === '' || it.dosage == null ? undefined : Number(it.dosage),
           dosageUnit: it.dosageUnit,
           frequency: it.frequency,
@@ -2364,7 +2675,9 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           pulseRegimen: it.pulseRegimen || undefined,
         })), [validItems]);
 
-  const clinicalData = useMemo(() => compactClinicalPatch({
+  const clinicalData = useMemo(() => {
+    const patch = { ...compactClinicalPatch({
+          ...(consultationType ? { consultationType, teleVideoConsent } : {}),
           scribeJson: { customSections: customSections.filter(section => section.title.trim() || section.content.trim()), procedureMetrics },
           vitals: (vitalsBpSys !== '' || vitalsBpDia !== '' || vitalsPulse !== '' || vitalsWeightKg !== '' || vitalsHeightCm !== '') ? {
             ...(vitalsBpSys !== '' ? { systolicBP: Number(vitalsBpSys) } : {}),
@@ -2373,7 +2686,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
             ...(vitalsWeightKg !== '' ? { weight: Number(vitalsWeightKg) } : {}),
             ...(vitalsHeightCm !== '' ? { height: Number(vitalsHeightCm) } : {}),
           } : undefined,
-          complaints: chiefComplaints ? [{ complaint: chiefComplaints }] : undefined,
+          complaints: chiefComplaints.trim() ? [{ complaint: chiefComplaints }] : undefined,
           history: {
             pastHistory: pastHistory || undefined,
             medicationHistory: medicationHistory || undefined,
@@ -2413,12 +2726,23 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
               skinConcerns: Array.from(skinConcerns),
             }
           },
-        }), [exDermDx, familyHistoryTouched, validItems, customSections, procedureMetrics, vitalsBpSys, vitalsBpDia, vitalsPulse, vitalsWeightKg, vitalsHeightCm, chiefComplaints, pastHistory, medicationHistory, menstrualHistory, exTriggers, exPriorTx, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, diagnosis, investigations, procedurePlanned, followUpInstructions, reviewDate, procedures, skinConcerns, exObjective, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore]);
+        }),
+          // Preserve an explicit clear; untouched empty controls must not erase saved data during loading.
+          ...(chiefComplaintsTouched && !chiefComplaints.trim() ? { complaints: [] } : {}),
+        };
+    // Apply after compaction so clearing this field survives the clinical merge.
+    if (personalHistory !== undefined) patch.history = { ...patch.history, personalHistory };
+    return patch;
+  }, [consultationType, teleVideoConsent, chiefComplaintsTouched, exDermDx, familyHistoryTouched, validItems, customSections, procedureMetrics, vitalsBpSys, vitalsBpDia, vitalsPulse, vitalsWeightKg, vitalsHeightCm, chiefComplaints, pastHistory, personalHistory, medicationHistory, menstrualHistory, exTriggers, exPriorTx, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, diagnosis, investigations, procedurePlanned, followUpInstructions, reviewDate, procedures, skinConcerns, exObjective, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore]);
   latestClinicalDataRef.current = clinicalData;
   useEffect(() => { onClinicalDataChange?.(clinicalData); }, [clinicalData, onClinicalDataChange]);
 
   const create = useCallback(async (fromPreview = false, exportVisitId?: string) => {
     if (prescriptionSaveInFlight.current) return;
+    if (consultationType === 'TELE_VIDEO' && !teleVideoConsent) {
+      toast({ variant: 'destructive', title: 'Patient consent required', description: TELE_VIDEO_CONSENT_REQUIRED });
+      return;
+    }
     if (!canCreate) {
       const missing: string[] = [];
       if (!patientId) missing.push('patient');
@@ -2479,6 +2803,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           chiefComplaints: chiefComplaints || undefined,
           histories: {
             pastHistory: pastHistory || undefined,
+            personalHistory,
             medicationHistory: medicationHistory || undefined,
             menstrualHistory: menstrualHistory || undefined,
             triggers: exTriggers || undefined,
@@ -2538,7 +2863,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       prescriptionSaveInFlight.current = false;
       setSavingFromPreview(false);
     }
-  }, [savedPrescriptionId, prescriptionItemsPayload, clinicalData, ensureVisitId, standalone, standaloneReason, validItems, visitData, canCreate, patientId, visitId, doctorId, items, diagnosis, language, reviewDate, followUpInstructions, procedureMetrics, chiefComplaints, pastHistory, medicationHistory, menstrualHistory, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, investigations, procedures, procedurePlanned, onCreated]);
+  }, [consultationType, teleVideoConsent, savedPrescriptionId, prescriptionItemsPayload, clinicalData, ensureVisitId, standalone, standaloneReason, validItems, visitData, canCreate, patientId, visitId, doctorId, items, diagnosis, language, reviewDate, followUpInstructions, procedureMetrics, chiefComplaints, pastHistory, personalHistory, medicationHistory, menstrualHistory, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, investigations, procedures, procedurePlanned, onCreated]);
 
   const exportSaveInFlight = useRef(false);
   const [savingForExport, setSavingForExport] = useState(false);
@@ -2580,6 +2905,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     try {
       const tItems = Array.isArray(tpl.items) ? tpl.items : JSON.parse(tpl.items || '[]');
       const mapped: PrescriptionItemForm[] = tItems.map((x: any) => ({
+        drugId: x.drugId || undefined,
+        inventoryItemId: x.inventoryItemId || undefined,
         drugName: x.drugName,
         genericName: x.genericName,
         brandName: x.brandName,
@@ -2618,8 +2945,11 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       // Always clear+set every field so switching templates never leaves stale values behind
       setDiagnosis(md?.diagnosis || '');
       setChiefComplaints(md?.chiefComplaints || '');
+      setChiefComplaintsTouched(true);
 
       setPastHistory(md?.histories?.pastHistory || '');
+      // Generic templates must not erase this patient's saved personal history.
+      if (typeof md?.histories?.personalHistory === 'string') setPersonalHistory(md.histories.personalHistory);
       setMedicationHistory(md?.histories?.medicationHistory || '');
       setMenstrualHistory(md?.histories?.menstrualHistory || '');
 
@@ -2902,6 +3232,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         items: validItems.map(it => ({
           drugName: it.drugName,
           drugId: it.drugId || undefined,
+          inventoryItemId: it.inventoryItemId || undefined,
           genericName: it.genericName,
           brandName: it.brandName,
           dosage: it.dosage === '' || it.dosage === undefined || it.dosage === null ? undefined : Number(it.dosage),
@@ -2965,6 +3296,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
             items: validItems.map(it => ({
               drugName: it.drugName,
           drugId: it.drugId || undefined,
+          inventoryItemId: it.inventoryItemId || undefined,
               genericName: it.genericName,
               brandName: it.brandName,
               dosage: it.dosage === '' || it.dosage == null ? undefined : Number(it.dosage),
@@ -3038,27 +3370,18 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   // Computed effective margins (depend on printer profile and overrides)
   const effectiveTopMarginPx = useMemo(() => {
     const prof = activeProfileId ? (printerProfiles.find((p: any) => p.id === activeProfileId) || {}) : {};
-    return (overrideTopMarginPx ?? (prof.topMarginPx ?? printTopMarginPx ?? 170)) as number;
-  }, [activeProfileId, printerProfiles, overrideTopMarginPx, printTopMarginPx]);
+    return prescriptionPageMargin(overrideTopMarginPx ?? prof.topMarginPx ?? printTopMarginPx, 'top', printBgUrl, useLetterheadForDownload);
+  }, [activeProfileId, printerProfiles, overrideTopMarginPx, printTopMarginPx, printBgUrl, useLetterheadForDownload]);
   const effectiveBottomMarginPx = useMemo(() => {
     const prof = activeProfileId ? (printerProfiles.find((p: any) => p.id === activeProfileId) || {}) : {};
-    return (overrideBottomMarginPx ?? (prof.bottomMarginPx ?? printBottomMarginPx ?? 45)) as number;
-  }, [activeProfileId, printerProfiles, overrideBottomMarginPx, printBottomMarginPx]);
+    return prescriptionPageMargin(overrideBottomMarginPx ?? prof.bottomMarginPx ?? printBottomMarginPx, 'bottom', printBgUrl, useLetterheadForDownload);
+  }, [activeProfileId, printerProfiles, overrideBottomMarginPx, printBottomMarginPx, printBgUrl, useLetterheadForDownload]);
   const effectiveTopMarginMm = useMemo(() => Math.max(0, Math.round((effectiveTopMarginPx / 3.78) * 10) / 10), [effectiveTopMarginPx]);
   const effectiveBottomMarginMm = useMemo(() => Math.max(0, Math.round((effectiveBottomMarginPx / 3.78) * 10) / 10), [effectiveBottomMarginPx]);
 
-  // Memoize slider values to prevent frequent re-renders of sidebar
-  const activeProfile = useMemo(() => {
-    return activeProfileId ? printerProfiles.find((p:any)=>p.id===activeProfileId) : null;
-  }, [activeProfileId, printerProfiles]);
-
-  const topMarginSliderValue = useMemo(() => {
-    return overrideTopMarginPx ?? (activeProfile?.topMarginPx ?? printTopMarginPx ?? 170);
-  }, [overrideTopMarginPx, activeProfile, printTopMarginPx]);
-
-  const bottomMarginSliderValue = useMemo(() => {
-    return overrideBottomMarginPx ?? (activeProfile?.bottomMarginPx ?? printBottomMarginPx ?? 45);
-  }, [overrideBottomMarginPx, activeProfile, printBottomMarginPx]);
+  // Show the same protected margins that pagination uses.
+  const topMarginSliderValue = effectiveTopMarginPx;
+  const bottomMarginSliderValue = effectiveBottomMarginPx;
 
   useEffect(() => {
     (async () => {
@@ -3129,6 +3452,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   }, [removePreviewPrintHost]);
 
   const printPreviewInPlace = useCallback(async () => {
+    if (exportPreviewPending || pagedJsProcessing) return;
     const container = pagedJsContainerRef.current || document.getElementById('pagedjs-container');
     if (!container || !container.querySelector('.pagedjs_page')) {
       toast({ variant: 'destructive', title: 'Print failed', description: 'No paginated preview is ready yet.' });
@@ -3144,6 +3468,14 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       return;
     }
     previewPrintHostRef.current = printHost;
+    try {
+      const { waitForSignatureImages } = await import('@/lib/pdf-export');
+      await waitForSignatureImages(printHost);
+    } catch {
+      cleanupPreviewPrintMode();
+      toast({ variant: 'destructive', title: 'Print failed', description: 'The signature image could not be loaded. Please retry.' });
+      return;
+    }
     document.body.classList.add('prescription-preview-printing');
 
     const handleAfterPrint = () => {
@@ -3169,7 +3501,27 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         }
       });
     });
-  }, [cleanupPreviewPrintMode, createPreviewPrintHost, saveBeforeExport, toast]);
+  }, [cleanupPreviewPrintMode, createPreviewPrintHost, saveBeforeExport, toast, exportPreviewPending, pagedJsProcessing]);
+
+  const renderPreviewPdf = async () => {
+    if (exportPreviewPending || pagedJsProcessing) throw new Error('Wait for the prescription preview to finish updating.');
+    const container = document.getElementById('pagedjs-container');
+    if (!container?.querySelector('.pagedjs_page')) throw new Error('No paginated preview is ready yet.');
+    const stylesheets = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]')).map(element => element.outerHTML);
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = `
+      <link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+      ${stylesheets.join('\n')}
+      <style>
+        @page { size: ${paperPreset === 'LETTER' ? '8.5in 11in' : 'A4'}; margin: 0; }
+        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+        html, body { margin: 0; padding: 0; }
+        ${pagedPrintExportCss}
+      </style>
+      ${container.innerHTML}`;
+    const { renderPrescriptionPages } = await import('@/lib/pdf-export');
+    return renderPrescriptionPages(wrapper, paperPreset);
+  };
 
   useEffect(() => {
     return () => {
@@ -3211,10 +3563,13 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
 
     // Create a snapshot of current dependencies for comparison
     const currentDeps = {
+      isTeleVideo,
       items: itemsStringified,
       diagnosis,
       followUpInstructions,
       chiefComplaints,
+      personalHistory,
+      exObjective, pastHistory, medicationHistory, menstrualHistory, procedures, procedurePlanned, reviewDate,
       investigations: investigationsStringified,
       customSections: customSectionsStringified,
       contentOffsetXPx,
@@ -3267,7 +3622,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       window.removeEventListener('beforeprint', handleBeforePrint);
       window.removeEventListener('afterprint', handleAfterPrint);
     };
-  }, [previewOpen, autoPreview, language, rxPrintFormat, itemsStringified, diagnosis, followUpInstructions, chiefComplaints, investigationsStringified, customSectionsStringified, contentOffsetXPx, contentOffsetYPx, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, activeProfileId, overrideTopMarginPx, overrideBottomMarginPx, spaceOptimized, avoidBreakInsideTables, translateForPreview]);
+  }, [isTeleVideo, previewOpen, autoPreview, language, rxPrintFormat, itemsStringified, diagnosis, followUpInstructions, chiefComplaints, personalHistory, exObjective, pastHistory, medicationHistory, menstrualHistory, procedures, procedurePlanned, reviewDate, investigationsStringified, customSectionsStringified, contentOffsetXPx, contentOffsetYPx, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, activeProfileId, overrideTopMarginPx, overrideBottomMarginPx, spaceOptimized, avoidBreakInsideTables, translateForPreview]);
 
   // Globally suppress Paged.js internal DOM errors while preview is active or in autoPreview mode
   useEffect(() => {
@@ -3319,9 +3674,12 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     // Create a content hash of values that actually affect the rendered output
     // This prevents re-processing when React re-renders but content hasn't changed
     const contentHash = JSON.stringify({
+      isTeleVideo,
       items: itemsStringified,
       diagnosis,
       chiefComplaints,
+      personalHistory,
+      exObjective, pastHistory, medicationHistory, menstrualHistory, procedures, procedurePlanned, reviewDate,
       investigations: investigationsStringified,
       customSections: customSectionsStringified,
       followUpInstructions,
@@ -3333,6 +3691,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       offsetX: contentOffsetXPx,
       offsetY: contentOffsetYPx,
       showRefillStamp,
+      printedSignatureUrl,
       grayscale,
       letterheadOption,
       rxPrintFormat,
@@ -3515,6 +3874,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           .medication-item { break-inside: avoid; page-break-inside: avoid; }
           .pb-before-page { break-before: page; page-break-before: always; }
           .rx-row { break-inside: avoid; page-break-inside: avoid; }
+          .doctor-signature-block { break-inside: avoid; page-break-inside: avoid; }
         `;
         
         // Process with Paged.js - pass CSS via Blob URLs so the content markup stays clean.
@@ -3555,6 +3915,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         // Mark initial render as done and update content hash to prevent flickering
         initialRenderDoneRef.current = true;
         lastContentHashRef.current = contentHash;
+        setRenderedSignatureUrl(printedSignatureUrl);
+        setRenderedTeleVideo(isTeleVideo);
         console.log('📏 Container dimensions:', {
           width: container.offsetWidth,
           height: container.offsetHeight,
@@ -3665,7 +4027,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
             const offsetX = activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.contentOffsetXPx ?? contentOffsetXPx ?? 0) : (contentOffsetXPx ?? 0);
             const baseOffsetY = activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.contentOffsetYPx ?? contentOffsetYPx ?? 0) : (contentOffsetYPx ?? 0);
             let continuationOffsetY = 0;
-            if (idx > 0 && firstPageTextOffsetPx > 0) {
+            if (idx > 0 && firstPageTextOffsetPx > 0 && !(useLetterheadForDownload && resolvedPrintBgUrl === PRESCRIPTION_LETTERHEAD_URL)) {
               const pageBox = page.querySelector('.pagedjs_pagebox') as HTMLElement | null;
               const firstText = findFirstTextElement(contentArea as HTMLElement);
               if (pageBox && firstText) {
@@ -3834,10 +4196,11 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           // Clear flag and immediately re-run with the latest state
           pagedJsPendingRef.current = false;
           // Run in microtask to let state settle
-          setTimeout(() => processWithPagedJs(), 0);
+          setTimeout(() => void pagedJsProcessRef.current?.(), 0);
         }
       }
     };
+    pagedJsProcessRef.current = processWithPagedJs;
     
     // Wait for container to mount if needed, then process
     let cancelled = false;
@@ -3859,10 +4222,10 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       // Only clear the reference, not the container content
       // The container will be cleared by processWithPagedJs when it runs next
     };
-  }, [previewOpen, autoPreview, itemsStringified, diagnosis, chiefComplaints, investigationsStringified, customSectionsStringified, followUpInstructions,
+  }, [isTeleVideo, previewOpen, autoPreview, itemsStringified, diagnosis, chiefComplaints, personalHistory, exObjective, pastHistory, medicationHistory, menstrualHistory, procedures, procedurePlanned, reviewDate, spaceOptimized, investigationsStringified, customSectionsStringified, followUpInstructions,
       paperPreset, effectiveTopMarginMm, effectiveBottomMarginMm, overrideTopMarginPx, overrideBottomMarginPx,
       activeProfileId, printerProfiles, printLeftMarginPx, printRightMarginPx, contentOffsetXPx, contentOffsetYPx, 
-      designAids, frames, bleedSafe, showRefillStamp, letterheadOption, grayscale, translationsMap]); // Added translationsMap to re-process when translations complete
+      designAids, frames, bleedSafe, showRefillStamp, printedSignatureUrl, letterheadOption, resolvedPrintBgUrl, grayscale, translationsMap]); // Added translationsMap to re-process when translations complete
 
   // Handle page navigation
   useEffect(() => {
@@ -3892,8 +4255,10 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         items,
         followUpInstructions,
         chiefComplaints,
+        chiefComplaintsTouched,
         diagnosis,
         pastHistory,
+        personalHistory,
         medicationHistory,
         menstrualHistory,
         exObjective,
@@ -3938,7 +4303,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       };
       localStorage.setItem(draftKey, JSON.stringify(data));
     } catch {}
-  }, [draftKey, procedureMetrics, exDermDx, familyHistoryTouched, language, items, followUpInstructions, chiefComplaints, diagnosis, pastHistory, medicationHistory, menstrualHistory, exObjective, procedures, procedurePlanned, investigations, customInvestigationOptions, vitalsHeightCm, vitalsWeightKg, vitalsBmi, vitalsBpSys, vitalsBpDia, vitalsPulse, skinConcerns, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore, exTriggers, exPriorTx, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, customSections, overrideTopMarginPx, overrideBottomMarginPx, activeProfileId, showRefillStamp, letterheadOption, breakBeforeMedications, breakBeforeInvestigations, breakBeforeFollowUp, breakBeforeSignature, avoidBreakInsideTables]);
+  }, [draftKey, procedureMetrics, exDermDx, familyHistoryTouched, language, items, followUpInstructions, chiefComplaints, chiefComplaintsTouched, diagnosis, pastHistory, personalHistory, medicationHistory, menstrualHistory, exObjective, procedures, procedurePlanned, investigations, customInvestigationOptions, vitalsHeightCm, vitalsWeightKg, vitalsBmi, vitalsBpSys, vitalsBpDia, vitalsPulse, skinConcerns, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore, exTriggers, exPriorTx, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, customSections, overrideTopMarginPx, overrideBottomMarginPx, activeProfileId, showRefillStamp, letterheadOption, breakBeforeMedications, breakBeforeInvestigations, breakBeforeFollowUp, breakBeforeSignature, avoidBreakInsideTables]);
   useEffect(() => {
     const t = setTimeout(() => { saveDraftNow(); }, 600);
     return () => clearTimeout(t);
@@ -3960,8 +4325,10 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         }
         if (typeof data?.followUpInstructions === 'string') setFollowUpInstructions(data.followUpInstructions);
         if (typeof data?.chiefComplaints === 'string') setChiefComplaints(data.chiefComplaints);
+        if (data?.chiefComplaintsTouched === true) setChiefComplaintsTouched(true);
         if (typeof data?.diagnosis === 'string') setDiagnosis(data.diagnosis);
         if (typeof data?.pastHistory === 'string') setPastHistory(data.pastHistory);
+        if (typeof data?.personalHistory === 'string') setPersonalHistory(data.personalHistory);
         if (typeof data?.medicationHistory === 'string') setMedicationHistory(data.medicationHistory);
         if (typeof data?.menstrualHistory === 'string') setMenstrualHistory(data.menstrualHistory);
         if (typeof data?.exObjective === 'string') setExObjective(data.exObjective);
@@ -4058,31 +4425,31 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const shouldShowLearnedPlanPanel = true;
   const learnedPlanConfidenceLabel = useMemo(() => {
     if (!learnedPlan) return '';
-    if (learnedPlan.confidence >= 0.84) return 'High confidence';
-    if (learnedPlan.confidence >= 0.68) return 'Practice-backed';
-    return 'Emerging pattern';
+    if (learnedPlan.autoApplyEligible) return 'Exact diagnosis match';
+    return 'Similar diagnosis · review needed';
   }, [learnedPlan]);
   const learnedPlanTitle = useMemo(() => {
-    if (!diagnosis.trim()) return 'Name the diagnosis. The plan can assemble itself.';
+    if (!learningDiagnosis.trim()) return 'Name the diagnosis. The plan can assemble itself.';
     if (learningSourcesStatus === 'loading' && !learnedPlan) return 'Reading recent plans, patterns, and saved order sets…';
     if (learnedPlanSuppressed) return 'Autofill paused for this diagnosis.';
     if (learnedPlanMerged) return 'Missing treatment details were quick-filled.';
     if (learnedPlanApplied) return 'Treatment assembled from live practice patterns.';
     if (learnedPlanCustomized) return 'Customized after autofill.';
     if (learnedPlanBlocked) return 'Learned plan ready. Your manual edits were preserved.';
+    if (learnedPlan && !learnedPlan.autoApplyEligible) return 'Similar plan found. Review before applying.';
     if (learnedPlan) return 'A learned plan is ready to prefill.';
     if (learningSourcesError) return 'Pattern learning is partially offline right now.';
     return 'No strong pattern yet for this diagnosis.';
-  }, [diagnosis, learningSourcesStatus, learnedPlan, learnedPlanSuppressed, learnedPlanMerged, learnedPlanApplied, learnedPlanCustomized, learnedPlanBlocked, learningSourcesError]);
+  }, [learningDiagnosis, learningSourcesStatus, learnedPlan, learnedPlanSuppressed, learnedPlanMerged, learnedPlanApplied, learnedPlanCustomized, learnedPlanBlocked, learningSourcesError]);
   const learnedPlanDescription = useMemo(() => {
-    if (!diagnosis.trim()) {
+    if (!learningDiagnosis.trim()) {
       return 'Once diagnosis is entered, this panel learns from the patient’s similar visits, recent prescriptions from the database, and saved server order sets.';
     }
     if (learningSourcesStatus === 'loading' && !learnedPlan) {
       return 'Scanning live prescription history. The full row editor remains editable underneath.';
     }
     if (learnedPlanSuppressed) {
-      return 'You rolled back the machine draft. It will stay out of the way until you reapply it or change the diagnosis.';
+      return 'You rolled back the machine draft. It will stay out of the way for this diagnosis, including after refreshing patterns. Choose Resume autofill to use the suggestion again.';
     }
     if (learnedPlanMerged) {
       return 'Only blank medication details, missing medications, and empty follow-up fields were filled from the learned plan.';
@@ -4097,13 +4464,13 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       return 'A stronger pattern exists for this diagnosis, but the builder already contains doctor-entered treatment so nothing was overwritten.';
     }
     if (learnedPlan) {
-      return learnedPlan.sourceLabel;
+      return learnedPlan.autoApplyEligible ? learnedPlan.sourceLabel : 'The diagnosis details differ. Review the source diagnosis and complete regimen before applying this suggestion.';
     }
     if (learningSourcesError) {
       return learningSourcesError;
     }
     return 'Keep building manually once. As more prescriptions land in the database, this section becomes a faster diagnosis-to-treatment shortcut.';
-  }, [diagnosis, learningSourcesStatus, learnedPlan, learnedPlanSuppressed, learnedPlanMerged, learnedPlanApplied, learnedPlanCustomized, learnedPlanBlocked, learningSourcesError]);
+  }, [learningDiagnosis, learningSourcesStatus, learnedPlan, learnedPlanSuppressed, learnedPlanMerged, learnedPlanApplied, learnedPlanCustomized, learnedPlanBlocked, learningSourcesError]);
   const learnedPlanVisibleComboNames = learnedPlan?.comboDrugNames.slice(0, 4) || [];
   const learnedPlanHiddenComboCount = Math.max(0, (learnedPlan?.comboDrugNames.length || 0) - learnedPlanVisibleComboNames.length);
   const followUpPresetTexts = useMemo(() => [
@@ -4175,14 +4542,14 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   }, [onChangeReviewDate, formatSuggestedReviewDate, followUpInstructions]);
 
   return (
-    <div className="space-y-6 overflow-visible">
+    <div className="min-w-0 max-w-full space-y-6 overflow-visible">
       <div className="space-y-6">
         <div className="space-y-4">
           {/* Templates quick bar */}
             {hydrated && showTemplatesBar && templatesReady && allTemplates.length > 0 ? (
               <div className="flex flex-wrap gap-2 items-end">
-                <div className="min-w-[240px]">
-                  <label className="text-xs text-gray-600">Templates</label>
+                <div className="w-60 min-w-0 max-w-full">
+                  <label className="text-xs text-muted-foreground">Templates</label>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild disabled={!templatesReady || loadingTemplates}>
                       <Button variant="outline" className="w-full justify-between font-normal">
@@ -4203,7 +4570,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                           <span className="truncate flex-1">{t.name}</span>
                           <button
                             type="button"
-                            className="shrink-0 rounded p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                            className="shrink-0 rounded-md p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
                             onClick={(e) => handleDeleteTemplate(t.id, e)}
                             disabled={deletingTemplateId === t.id}
                             title="Delete template"
@@ -4237,7 +4604,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 </div>
               </div>
             ) : (
-              <div className="flex items-center gap-2 text-sm text-gray-500">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 {loadingTemplates ? 'Loading templates…' : 'Templates will appear once loaded.'}
               </div>
             )}
@@ -4249,29 +4616,29 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
             <CollapsibleSection title="Clinical Details & Vitals" section="clinical">
               <div className="space-y-3">
                 {/* Vitals */}
-                <div className="grid grid-cols-3 md:grid-cols-8 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-2">
                   <div>
-                    <label className="text-xs text-gray-600">Height (cm)</label>
+                    <label className="text-xs text-muted-foreground">Height (cm)</label>
                     <Input key="vitals-height" type="number" value={vitalsHeightCm ?? ''} onChange={(e) => setVitalsHeightCm(e.target.value === '' ? '' : Number(e.target.value))} />
                   </div>
                   <div>
-                    <label className="text-xs text-gray-600">Weight (kg)</label>
+                    <label className="text-xs text-muted-foreground">Weight (kg)</label>
                     <Input key="vitals-weight" type="number" value={vitalsWeightKg ?? ''} onChange={(e) => setVitalsWeightKg(e.target.value === '' ? '' : Number(e.target.value))} />
                   </div>
                   <div>
-                    <label className="text-xs text-gray-600">BMI</label>
+                    <label className="text-xs text-muted-foreground">BMI</label>
                     <Input key="vitals-bmi" value={vitalsBmi ?? ''} readOnly />
                   </div>
                   <div>
-                    <label className="text-xs text-gray-600">BP (Sys)</label>
+                    <label className="text-xs text-muted-foreground">BP (Sys)</label>
                     <Input key="vitals-bp-sys" type="number" value={vitalsBpSys ?? ''} onChange={(e) => setVitalsBpSys(e.target.value === '' ? '' : Number(e.target.value))} />
                   </div>
                   <div>
-                    <label className="text-xs text-gray-600">BP (Dia)</label>
+                    <label className="text-xs text-muted-foreground">BP (Dia)</label>
                     <Input key="vitals-bp-dia" type="number" value={vitalsBpDia ?? ''} onChange={(e) => setVitalsBpDia(e.target.value === '' ? '' : Number(e.target.value))} />
                   </div>
                   <div>
-                    <label className="text-xs text-gray-600">Pulse (bpm)</label>
+                    <label className="text-xs text-muted-foreground">Pulse (bpm)</label>
                     <Input key="vitals-pulse" type="number" value={vitalsPulse ?? ''} onChange={(e) => setVitalsPulse(e.target.value === '' ? '' : Number(e.target.value))} />
                   </div>
                   <div></div>
@@ -4284,34 +4651,63 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
 
             {/* Add Drug to DB Dialog */}
             <Dialog open={addDrugOpen} onOpenChange={setAddDrugOpen}>
-              <DialogContent>
+              <DialogContent className="max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Add Drug to Database</DialogTitle>
                   <DialogDescription>Quickly add a new drug record and insert into this prescription.</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-3">
                   <div>
-                    <label className="text-xs text-gray-600">Name</label>
-                    <Input value={newDrugForm.name} onChange={(e) => setNewDrugForm((p) => ({ ...p, name: e.target.value }))} placeholder="e.g., Paracetamol 500mg Tablet" />
+                    <label htmlFor="new-drug-brand" className="text-xs text-muted-foreground">Brand name</label>
+                    <Input id="new-drug-brand" value={newDrugForm.name} onChange={(e) => setNewDrugForm((p) => ({ ...p, name: e.target.value }))} placeholder="e.g., Dolo" />
                   </div>
                   <div>
-                    <label className="text-xs text-gray-600">Manufacturer</label>
-                    <Input value={newDrugForm.manufacturerName} onChange={(e) => setNewDrugForm((p) => ({ ...p, manufacturerName: e.target.value }))} placeholder="e.g., Sun Pharmaceuticals" />
+                    <label htmlFor="new-drug-manufacturer" className="text-xs text-muted-foreground">Manufacturer</label>
+                    <Input id="new-drug-manufacturer" value={newDrugForm.manufacturerName} onChange={(e) => setNewDrugForm((p) => ({ ...p, manufacturerName: e.target.value }))} placeholder="e.g., Sun Pharmaceuticals" />
+                  </div>
+                  <div>
+                    <label htmlFor="new-drug-composition" className="text-xs text-muted-foreground">Generic / salt composition</label>
+                    <Input id="new-drug-composition" value={newDrugForm.composition1} onChange={event => setNewDrugForm(previous => ({ ...previous, composition1: event.target.value }))} placeholder="Enter the verified composition" />
+                  </div>
+                  <div>
+                    <label htmlFor="new-drug-category" className="text-xs text-muted-foreground">Therapeutic category</label>
+                    <Input id="new-drug-category" value={newDrugForm.category} onChange={event => setNewDrugForm(previous => ({ ...previous, category: event.target.value }))} placeholder="e.g., Analgesic" />
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="text-xs text-gray-600">Price (₹)</label>
+                      <label htmlFor="new-drug-form" className="text-xs text-muted-foreground">Medicine form</label>
+                      <select id="new-drug-form" className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={newDrugForm.dosageForm} onChange={event => setNewDrugForm(previous => ({ ...previous, dosageForm: event.target.value }))}>
+                        <option value="">Choose form</option>
+                        {['tablet', 'capsule', 'syrup', 'suspension', 'cream', 'ointment', 'gel', 'lotion', 'solution', 'scalp solution', 'shampoo', 'serum', 'sunscreen', 'face wash', 'gel wash', 'drops', 'injection', 'powder', 'soap'].map(form => <option key={form} value={form}>{form}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label htmlFor="new-drug-strength" className="text-xs text-muted-foreground">Strength</label>
+                      <Input id="new-drug-strength" value={newDrugForm.strength} onChange={event => setNewDrugForm(previous => ({ ...previous, strength: event.target.value }))} placeholder="e.g., 650 mg or 100mg/5ml" />
+                    </div>
+                  </div>
+                  <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={newDrugForm.combinationProduct} onChange={event => setNewDrugForm(previous => ({ ...previous, combinationProduct: event.target.checked }))} />Combination product</label>
+                  <p className="text-xs text-muted-foreground">Strength is optional for topical and combination products. Enter verified composition and category; leave unknown strength blank.</p>
+                  <div>
+                    <label htmlFor="new-drug-prescription" className="text-xs text-muted-foreground">Prescription requirement</label>
+                    <select id="new-drug-prescription" className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={newDrugForm.requiresPrescription} onChange={event => setNewDrugForm(previous => ({ ...previous, requiresPrescription: event.target.value }))}>
+                      <option value="">Choose requirement</option><option value="true">Prescription required</option><option value="false">Prescription not required</option>
+                    </select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-xs text-muted-foreground">Price (₹)</label>
                       <Input type="number" value={newDrugForm.price} onChange={(e) => setNewDrugForm((p) => ({ ...p, price: e.target.value }))} placeholder="e.g., 25" />
                     </div>
                     <div>
-                      <label className="text-xs text-gray-600">Pack Size Label</label>
+                      <label className="text-xs text-muted-foreground">Pack Size Label</label>
                       <Input value={newDrugForm.packSizeLabel} onChange={(e) => setNewDrugForm((p) => ({ ...p, packSizeLabel: e.target.value }))} placeholder="e.g., strip of 10 tablets" />
                     </div>
                   </div>
                 </div>
                 <DialogFooter>
                   <Button variant="outline" onClick={() => setAddDrugOpen(false)}>Cancel</Button>
-                  <Button onClick={handleCreateDrug}>Save & Add</Button>
+                  <Button onClick={handleCreateDrug} disabled={newDrugSaving}>{newDrugSaving ? 'Saving…' : 'Save & Add'}</Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
@@ -4327,7 +4723,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     </DialogHeader>
                     <div className="space-y-3">
                       <div>
-                        <label className="text-xs text-gray-600">Value</label>
+                        <label className="text-xs text-muted-foreground">Value</label>
                         <Input
                           value={customDialogInput}
                           onChange={(e) => setCustomDialogInput(e.target.value)}
@@ -4335,7 +4731,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                           onKeyDown={(e) => { if (e.key === 'Enter') handleAddCustomOption(); }}
                           autoFocus
                         />
-                        <p className="text-[10px] text-muted-foreground mt-1">{customDialogMeta[customDialogType].hint}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{customDialogMeta[customDialogType].hint}</p>
                       </div>
                     </div>
                     <DialogFooter>
@@ -4355,13 +4751,13 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
               badge={hasChiefComplaints ? 'Has Data' : ''}
             >
               <div className="opacity-100">
-                <label className="text-xs text-gray-600 flex items-center gap-1">Chief Complaints{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
+                <label htmlFor="chief-complaints" className="text-xs text-muted-foreground flex items-center gap-1">Chief Complaints{language !== 'EN' && (<Languages className="h-3 w-3 text-info-text" aria-label="Translated on print" />)}</label>
                 <div className="relative complaint-autocomplete flex items-start">
-                  <Textarea key="chief-complaints" rows={2} value={chiefComplaints} onChange={(e) => setChiefComplaints(e.target.value)} />
+                  <Textarea id="chief-complaints" key="chief-complaints" rows={2} value={chiefComplaints} onChange={(e) => { setChiefComplaintsTouched(true); setChiefComplaints(e.target.value); }} />
                   <VoiceButton fieldName="chiefComplaints" />
                 </div>
                 <div className="mt-2">
-                  <div className="text-[11px] text-gray-600 mb-1">Skin Concerns</div>
+                  <div className="text-xs text-muted-foreground mb-1">Skin Concerns</div>
                   <div className="flex flex-wrap gap-2">
                     {SKIN_CONCERNS.map((c) => (
                       <Button
@@ -4377,9 +4773,9 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   </div>
                 </div>
                 {complaintOptions.length > 0 && (
-                  <div className="absolute z-10 mt-1 w-full bg-white border rounded shadow-sm max-h-40 overflow-auto" onMouseDown={(e) => e.preventDefault()}>
+                  <div className="absolute z-10 mt-1 w-full bg-card border rounded-md shadow-sm max-h-40 overflow-auto" onMouseDown={(e) => e.preventDefault()}>
                     {complaintOptions.map((opt) => (
-                      <div key={opt} className="px-3 py-1 text-sm hover:bg-gray-50 cursor-pointer" onClick={() => { setChiefComplaints(opt); setComplaintOptions([]); pushRecent('chiefComplaints', opt); }}>
+                      <div key={opt} className="px-3 py-1 text-sm hover:bg-background cursor-pointer" onClick={() => { setChiefComplaints(opt); setComplaintOptions([]); pushRecent('chiefComplaints', opt); }}>
                         {opt}
                       </div>
                     ))}
@@ -4396,13 +4792,13 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
               badge={hasDiagnosis ? 'Has Data' : ''}
             >
               <div className="opacity-100">
-                <label className="text-xs text-gray-600 flex items-center gap-1">Diagnosis{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
+                <label className="text-xs text-muted-foreground flex items-center gap-1">Diagnosis{language !== 'EN' && (<Languages className="h-3 w-3 text-info-text" aria-label="Translated on print" />)}</label>
                 <div className="relative diag-autocomplete">
                   <Input key="diagnosis" placeholder="e.g., Acne vulgaris" value={diagnosis} onChange={(e) => setDiagnosis(e.target.value)} />
                   {diagOptions.length > 0 && (
-                    <div className="absolute z-10 mt-1 w-full bg-white border rounded shadow-sm max-h-48 overflow-auto" onMouseDown={(e) => e.preventDefault()}>
+                    <div className="absolute z-10 mt-1 w-full bg-card border rounded-md shadow-sm max-h-48 overflow-auto" onMouseDown={(e) => e.preventDefault()}>
                       {diagOptions.map((opt) => (
-                        <div key={opt} className="px-3 py-1 text-sm hover:bg-gray-50 cursor-pointer" onClick={() => { setDiagnosis(opt); setDiagOptions([]); pushRecent('diagnosis', opt); }}>
+                        <div key={opt} className="px-3 py-1 text-sm hover:bg-background cursor-pointer" onClick={() => { setDiagnosis(opt); setDiagOptions([]); pushRecent('diagnosis', opt); }}>
                           {opt}
                         </div>
                       ))}
@@ -4422,19 +4818,19 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
               <div className="opacity-100">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                   <div>
-                    <label className="text-xs text-gray-600 flex items-center gap-1">Past History{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
+                    <label className="text-xs text-muted-foreground flex items-center gap-1">Past History{language !== 'EN' && (<Languages className="h-3 w-3 text-info-text" aria-label="Translated on print" />)}</label>
                     <Textarea key="past-history" rows={2} value={pastHistory} onChange={(e) => setPastHistory(e.target.value)} onBlur={(e) => pushRecent('pastHistory', e.target.value)} />
                   </div>
                   <div>
-                    <label className="text-xs text-gray-600 flex items-center gap-1">Medication History{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
+                    <label className="text-xs text-muted-foreground flex items-center gap-1">Medication History{language !== 'EN' && (<Languages className="h-3 w-3 text-info-text" aria-label="Translated on print" />)}</label>
                     <Textarea key="medication-history" rows={2} value={medicationHistory} onChange={(e) => setMedicationHistory(e.target.value)} onBlur={(e) => pushRecent('medicationHistory', e.target.value)} />
                   </div>
                   <div>
-                    <label className="text-xs text-gray-600 flex items-center gap-1">Menstrual History{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
+                    <label className="text-xs text-muted-foreground flex items-center gap-1">Menstrual History{language !== 'EN' && (<Languages className="h-3 w-3 text-info-text" aria-label="Translated on print" />)}</label>
                     <Textarea key="menstrual-history" rows={2} value={menstrualHistory} onChange={(e) => setMenstrualHistory(e.target.value)} onBlur={(e) => pushRecent('menstrualHistory', e.target.value)} />
                   </div>
                   <div>
-                    <label className="text-xs text-gray-600 flex items-center gap-1">Family History{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
+                    <label className="text-xs text-muted-foreground flex items-center gap-1">Family History{language !== 'EN' && (<Languages className="h-3 w-3 text-info-text" aria-label="Translated on print" />)}</label>
                     <div className="flex flex-wrap gap-2 text-xs mt-1">
                       <label className="flex items-center gap-1"><input type="checkbox" checked={familyHistoryDM} onChange={(e) => { setFamilyHistoryDM(e.target.checked); setFamilyHistoryTouched(prev => Array.from(new Set([...prev, 'dm']))); }} /> DM</label>
                       <label className="flex items-center gap-1"><input type="checkbox" checked={familyHistoryHTN} onChange={(e) => { setFamilyHistoryHTN(e.target.checked); setFamilyHistoryTouched(prev => Array.from(new Set([...prev, 'htn']))); }} /> HTN</label>
@@ -4443,25 +4839,23 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     <Input key="family-history-others" className="mt-1" placeholder="Others" value={familyHistoryOthers} onChange={(e) => setFamilyHistoryOthers(e.target.value)} onBlur={(e) => pushRecent('familyHistoryOthers', e.target.value)} />
                   </div>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
-                  <div>
-                    <label className="text-xs text-gray-600 flex items-center gap-1">Triggers{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
-                    <Input placeholder="Heat, stress, cosmetics..." value={exTriggers} onChange={(e) => setExTriggers(e.target.value)} />
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-600 flex items-center gap-1">Prior Treatments{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
-                    <Input placeholder="Topicals/systemics tried" value={exPriorTx} onChange={(e) => setExPriorTx(e.target.value)} />
-                  </div>
+                <div className="mt-3">
+                  <label htmlFor="personal-history" className="text-xs text-muted-foreground flex items-center gap-1">Personal history{language !== 'EN' && (<Languages className="h-3 w-3 text-info-text" aria-label="Translated on print" />)}</label>
+                  <Textarea id="personal-history" rows={2} placeholder="Diet, sleep, habits, occupation, cosmetics/products used" value={personalHistory ?? ''} onChange={(e) => setPersonalHistory(e.target.value)} />
                 </div>
               </div>
             </CollapsibleSection>
 
             {/* On Examination - Dermatology */}
-            <CollapsibleSection title="On Examination" section="on-examination">
+            <div className="space-y-1">
+              <label htmlFor="examination-summary" className="text-sm font-medium">Examination</label>
+              <Textarea id="examination-summary" placeholder="Examination findings" value={exObjective} onChange={event => setExObjective(event.target.value)} rows={2} />
+            </div>
+            <CollapsibleSection title="On Examination" section="on-examination" expanded={examinationExpanded} onExpandedChange={changeExaminationExpanded}>
               <div className="space-y-3">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                   <div>
-                    <label className="text-xs text-gray-600">Fitzpatrick Skin Type</label>
+                    <label className="text-xs text-muted-foreground">Fitzpatrick Skin Type</label>
                     <div className="flex flex-wrap gap-2 mt-1">
                       {FITZPATRICK.map(ft => (
                         <Button key={ft} type="button" variant={exSkinType === ft ? 'default' : 'outline'} size="sm" onClick={() => setExSkinType(exSkinType === ft ? '' : ft)}>{ft}</Button>
@@ -4469,17 +4863,17 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     </div>
                   </div>
                   <div>
-                    <label className="text-xs text-gray-600">Acne Severity</label>
+                    <label className="text-xs text-muted-foreground">Acne Severity</label>
                     <Input placeholder="mild/moderate/severe" value={exAcneSeverity} onChange={(e) => setExAcneSeverity(e.target.value)} />
                   </div>
                   <div>
-                    <label className="text-xs text-gray-600">Itch Score (0-10)</label>
+                    <label className="text-xs text-muted-foreground">Itch Score (0-10)</label>
                     <Input placeholder="0-10" value={exItchScore} onChange={(e) => setExItchScore(e.target.value)} />
                   </div>
                 </div>
 
                 <div>
-                  <label className="text-xs text-gray-600">Morphology</label>
+                  <label className="text-xs text-muted-foreground">Morphology</label>
                   <div className="flex flex-wrap gap-2 mt-1">
                     {MORPHOLOGY.map(m => (
                       <div key={m} className="relative">
@@ -4488,7 +4882,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                           <button
                             type="button"
                             aria-label="Remove custom morphology"
-                            className="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-white border shadow flex items-center justify-center hover:bg-gray-50"
+                            className="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-card border shadow-sm flex items-center justify-center hover:bg-background"
                             onClick={(e) => {
                               e.stopPropagation();
                               const lowered = m.toLowerCase();
@@ -4549,7 +4943,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 </div>
 
                 <div>
-                  <label className="text-xs text-gray-600">Distribution / Body Areas</label>
+                  <label className="text-xs text-muted-foreground">Distribution / Body Areas</label>
                   <div className="flex flex-wrap gap-2 mt-1">
                     {DISTRIBUTION.map(d => (
                       <div key={d} className="relative">
@@ -4558,7 +4952,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                           <button
                             type="button"
                             aria-label="Remove custom distribution"
-                            className="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-white border shadow flex items-center justify-center hover:bg-gray-50"
+                            className="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-card border shadow-sm flex items-center justify-center hover:bg-background"
                             onClick={(e) => {
                               e.stopPropagation();
                               const lowered = d.toLowerCase();
@@ -4620,7 +5014,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 
 
                 <div>
-                  <label className="text-xs text-gray-600">Dermatology Diagnoses</label>
+                  <label className="text-xs text-muted-foreground">Dermatology Diagnoses</label>
                   <div className="flex flex-wrap gap-2 mt-1">
                     {DERM_DIAGNOSES.map(dx => (
                       <Button key={dx} type="button" variant={exDermDx.has(dx) ? 'default' : 'outline'} size="sm" onClick={() => setExDermDx(prev => { const next = new Set(prev); next.has(dx) ? next.delete(dx) : next.add(dx); return next; })}>{dx}</Button>
@@ -4629,7 +5023,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 </div>
 
                 <div>
-                  <label className="text-xs text-gray-600">Detailed Examination</label>
+                  <label className="text-xs text-muted-foreground">Detailed Examination</label>
                   <div className="flex items-center">
                     <Textarea placeholder="Detailed physical examination findings..." value={exObjective} onChange={(e) => setExObjective(e.target.value)} rows={3} />
                     <VoiceButton fieldName="objective" />
@@ -4642,18 +5036,18 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
             <CollapsibleSection title="Treatment" section="treatment">
               <div className="space-y-3 overflow-visible">
                 {shouldShowLearnedPlanPanel && (
-                  <div className="relative overflow-hidden rounded-[30px] border border-slate-900/10 bg-[linear-gradient(135deg,rgba(15,23,42,0.96),rgba(13,148,136,0.92),rgba(249,115,22,0.78))] p-[1px] shadow-[0_24px_80px_rgba(15,23,42,0.16)]">
-                    <div className="relative overflow-hidden rounded-[29px] bg-slate-950/90 px-5 py-5 text-white">
-                      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(45,212,191,0.24),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(251,146,60,0.22),transparent_30%)]" />
+                  <div className="relative overflow-hidden rounded-lg border border-border/10 bg-primary-soft p-[1px] shadow-sm">
+                    <div className="relative overflow-hidden rounded-lg bg-card/90 px-5 py-5 text-foreground">
+                      <div className="pointer-events-none absolute inset-0 bg-transparent" />
                       <div className="relative flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                         <div className="space-y-3">
-                          <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-teal-100">
+                          <div className="inline-flex items-center gap-2 rounded-full border border-current/15 bg-card/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-info-text">
                             <Sparkles className="h-3.5 w-3.5" />
                             Diagnosis Autopilot
                           </div>
                           <div>
                             <div className="text-xl font-semibold tracking-tight">{learnedPlanTitle}</div>
-                            <div className={`mt-1 max-w-3xl text-sm leading-6 ${learningSourcesStatus === 'loading' && !learnedPlan ? 'text-white/80 animate-pulse' : 'text-white/74'}`}>
+                            <div className={`mt-1 max-w-3xl text-sm leading-6 ${learningSourcesStatus === 'loading' && !learnedPlan ? 'text-foreground/80 animate-pulse' : 'text-foreground/74'}`}>
                               {learnedPlanDescription}
                             </div>
                           </div>
@@ -4661,14 +5055,14 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                           {learnedPlan && (
                             <>
                               <div className="flex flex-wrap gap-2 text-xs">
-                                <span className="inline-flex items-center rounded-full border border-white/15 bg-white/10 px-3 py-1 font-medium text-white/90">
+                                <span className="inline-flex items-center rounded-full border border-current/15 bg-card/10 px-3 py-1 font-medium text-foreground/90">
                                   {learnedPlan.sourceLabel}
                                 </span>
-                                <span className="inline-flex items-center rounded-full border border-emerald-200/20 bg-emerald-300/10 px-3 py-1 font-medium text-emerald-100">
+                                <span className="inline-flex items-center rounded-full border border-success-border/20 bg-success/10 px-3 py-1 font-medium text-success-text">
                                   {learnedPlanConfidenceLabel}
                                 </span>
                                 {learnedPlan.diagnosisText && (
-                                  <span className="inline-flex items-center rounded-full border border-white/10 bg-slate-900/40 px-3 py-1 font-medium text-white/75">
+                                  <span className="inline-flex items-center rounded-full border border-current/10 bg-card/40 px-3 py-1 font-medium text-foreground/75">
                                     Matched on {learnedPlan.diagnosisText}
                                   </span>
                                 )}
@@ -4679,14 +5073,14 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                                   {learnedPlanVisibleComboNames.map((drugName) => (
                                     <div
                                       key={drugName}
-                                      className="inline-flex items-center gap-2 rounded-2xl border border-white/12 bg-white/10 px-3 py-2 text-sm font-medium text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
+                                      className="inline-flex items-center gap-2 rounded-2xl border border-current/12 bg-card/10 px-3 py-2 text-sm font-medium text-foreground shadow-sm"
                                     >
-                                      <Pill className="h-3.5 w-3.5 text-teal-200" />
+                                      <Pill className="h-3.5 w-3.5 text-info-text" />
                                       <span>{drugName}</span>
                                     </div>
                                   ))}
                                   {learnedPlanHiddenComboCount > 0 && (
-                                    <div className="inline-flex items-center rounded-2xl border border-white/12 bg-white/5 px-3 py-2 text-sm font-medium text-white/70">
+                                    <div className="inline-flex items-center rounded-2xl border border-current/12 bg-card/5 px-3 py-2 text-sm font-medium text-foreground/70">
                                       +{learnedPlanHiddenComboCount} more
                                     </div>
                                   )}
@@ -4694,58 +5088,89 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                               )}
 
                               {learnedPlan.supportingLabel && (
-                                <div className="text-xs text-white/70">{learnedPlan.supportingLabel}</div>
+                                <div className="text-xs text-foreground/70">{learnedPlan.supportingLabel}</div>
                               )}
+                              <details className="rounded-xl border border-current/15 bg-card/5 p-3 text-sm">
+                                <summary className="cursor-pointer font-medium">Review suggested plan</summary>
+                                <ul className="mt-3 space-y-3">
+                                  {learnedPlan.items.map((item, index) => (
+                                    <li key={index}>
+                                      <div className="font-medium">{String(item.drugName || item.name || item.medicine || '')}</div>
+                                      <dl className="mt-1 grid gap-1 text-xs text-foreground/80">
+                                        {Object.entries({
+                                          Dose: [item.dosage, item.dosageUnit].filter(value => value != null && value !== '').join(' '),
+                                          Frequency: item.dosePattern || item.frequency,
+                                          Duration: [item.duration, item.durationUnit].filter(value => value != null && value !== '').join(' '),
+                                          Route: item.route, Timing: item.timing, Instructions: item.instructions,
+                                          'Application site': item.applicationSite, 'Application amount': item.applicationAmount,
+                                          Taper: item.taperSchedule, 'Food instructions': item.foodInstructions,
+                                          'Pulse regimen': item.pulseRegimen, Notes: item.notes,
+                                        }).filter(([, value]) => value != null && String(value).trim()).map(([label, value]) => (
+                                          <div key={label}><dt className="inline font-medium">{label}: </dt><dd className="inline">{String(value)}</dd></div>
+                                        ))}
+                                      </dl>
+                                    </li>
+                                  ))}
+                                </ul>
+                                {learnedPlan.investigations.length > 0 && <p className="mt-3 text-xs">Investigations: {learnedPlan.investigations.join(', ')}</p>}
+                                {learnedPlan.followUpInstructions && <p className="mt-2 text-xs">Follow-up: {learnedPlan.followUpInstructions}</p>}
+                              </details>
                             </>
                           )}
                         </div>
 
                         <div className="relative xl:min-w-[280px]">
                           <div className="grid grid-cols-2 gap-2">
-                            <div className="rounded-2xl border border-white/10 bg-white/8 p-3">
-                              <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-white/50">
+                            <div className="rounded-2xl border border-current/10 bg-card/8 p-3">
+                              <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-foreground/50">
                                 <Pill className="h-3.5 w-3.5" />
                                 Combo
                               </div>
                               <div className="mt-2 text-lg font-semibold">{learnedPlan ? learnedPlan.comboDrugNames.length : '—'}</div>
-                              <div className="text-xs text-white/60">meds prefilled</div>
+                              <div className="text-xs text-foreground/60">meds prefilled</div>
                             </div>
-                            <div className="rounded-2xl border border-white/10 bg-white/8 p-3">
-                              <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-white/50">
+                            <div className="rounded-2xl border border-current/10 bg-card/8 p-3">
+                              <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-foreground/50">
                                 <CalendarDays className="h-3.5 w-3.5" />
                                 Review
                               </div>
                               <div className="mt-2 text-lg font-semibold">{learnedPlan?.reviewDays ? `${learnedPlan.reviewDays}d` : '—'}</div>
-                              <div className="text-xs text-white/60">suggested window</div>
+                              <div className="text-xs text-foreground/60">suggested window</div>
                             </div>
-                            <div className="rounded-2xl border border-white/10 bg-white/8 p-3">
-                              <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-white/50">
+                            <div className="rounded-2xl border border-current/10 bg-card/8 p-3">
+                              <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-foreground/50">
                                 <FlaskConical className="h-3.5 w-3.5" />
                                 Labs
                               </div>
                               <div className="mt-2 text-lg font-semibold">{learnedPlan ? learnedPlan.investigations.length : '—'}</div>
-                              <div className="text-xs text-white/60">auto-suggested</div>
+                              <div className="text-xs text-foreground/60">auto-suggested</div>
                             </div>
-                            <div className="rounded-2xl border border-white/10 bg-white/8 p-3">
-                              <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-white/50">
+                            <div className="rounded-2xl border border-current/10 bg-card/8 p-3">
+                              <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-foreground/50">
                                 <Wand2 className="h-3.5 w-3.5" />
                                 Evidence
                               </div>
                               <div className="mt-2 text-lg font-semibold">{learnedPlan ? learnedPlan.evidenceCount : '—'}</div>
-                              <div className="text-xs text-white/60">matching plans</div>
+                              <div className="text-xs text-foreground/60">matching plans</div>
                             </div>
                           </div>
 
                           <div className="mt-3 flex flex-wrap gap-2">
+                            <Button type="button" size="sm" variant="outline"
+                              className="border-current/20 bg-card/5 text-foreground hover:bg-card/10 hover:text-foreground"
+                              disabled={learningSourcesStatus === 'loading'}
+                              onClick={() => { setLearningRevision(value => value + 1); void loadTemplates(); }}>
+                              Refresh patterns
+                            </Button>
                             {learnedPlan && (
                               <Button
                                 type="button"
                                 size="sm"
-                                className="bg-white text-slate-950 hover:bg-white/90"
+                                className="bg-card text-foreground hover:bg-card/90"
                                 onClick={() => { void applyLearnedPlan(learnedPlan, { force: true }); }}
                               >
                                 <Wand2 className="mr-2 h-4 w-4" />
-                                Reapply learned plan
+                                {learnedPlanSuppressed ? 'Resume autofill' : learnedPlanCurrent ? 'Reapply learned plan' : 'Apply learned plan'}
                               </Button>
                             )}
                             {learnedPlan && treatmentHasMeaningfulData && !learnedPlanCurrent && (
@@ -4753,7 +5178,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                                 type="button"
                                 size="sm"
                                 variant="outline"
-                                className="border-white/20 bg-white/5 text-white hover:bg-white/10 hover:text-white"
+                                className="border-current/20 bg-card/5 text-foreground hover:bg-card/10 hover:text-foreground"
                                 onClick={() => { void mergeLearnedPlanMissingFields(learnedPlan); }}
                               >
                                 <Sparkles className="mr-2 h-4 w-4" />
@@ -4765,7 +5190,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                                 type="button"
                                 size="sm"
                                 variant="outline"
-                                className="border-white/20 bg-white/5 text-white hover:bg-white/10 hover:text-white"
+                                className="border-current/20 bg-card/5 text-foreground hover:bg-card/10 hover:text-foreground"
                                 onClick={undoLearnedAutofill}
                               >
                                 <RotateCcw className="mr-2 h-4 w-4" />
@@ -4774,8 +5199,9 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                             )}
                           </div>
 
+                          <p className="mt-3 text-xs text-foreground/70">Suggestions reuse saved plans. Review suitability, allergies, doses, and follow-up for this patient before saving.</p>
                           {learningSourcesError && (
-                            <div className="mt-3 flex items-start gap-2 rounded-2xl border border-amber-300/20 bg-amber-400/10 px-3 py-2 text-xs text-amber-100">
+                            <div className="mt-3 flex items-start gap-2 rounded-2xl border border-warning-border/20 bg-warning/10 px-3 py-2 text-xs text-warning-text">
                               <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                               <span>{learningSourcesError}</span>
                             </div>
@@ -4786,7 +5212,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   </div>
                 )}
                 <div className="flex justify-between items-center">
-                  <div className="text-sm text-gray-600">Total items: {items.length}</div>
+                  <div className="text-sm text-muted-foreground">Total items: {items.length}</div>
                   <div className="flex gap-2">
                     {canAddDrugToDB && (
                       <Button size="sm" variant="ghost" onClick={openAddDrugDialog}>+ Add to Drug Database</Button>
@@ -4800,7 +5226,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 <div className="flex flex-col gap-2 text-xs">
                   {(recentDrugsForPatient.length > 0 || recentDrugsGlobal.length > 0) && (
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-gray-600">Recent meds:</span>
+                      <span className="text-muted-foreground">Recent meds:</span>
                       {(recentDrugsForPatient.length ? recentDrugsForPatient : recentDrugsGlobal).map((d) => (
                         <Button key={d} size="sm" variant="outline" onClick={() => {
                           const target = activeRowIdx ?? (items.length > 0 ? items.length - 1 : 0);
@@ -4812,7 +5238,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     </div>
                   )}
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-gray-600">Presets:</span>
+                    <span className="text-muted-foreground">Presets:</span>
                     {frequencyPresets.map((p) => (
                       <Button
                         key={p.label}
@@ -4849,10 +5275,10 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     ))}
                   </div>
                 </div>
-                <div className="overflow-visible border rounded">
+                <div className="overflow-visible border rounded-md">
                   <div className="overflow-x-auto">
                     <table className="w-full min-w-[1080px] text-sm">
-                    <thead className="bg-gray-50 text-gray-700">
+                    <thead className="bg-background text-foreground">
                       <tr>
                         <th className="px-3 py-2 text-left font-medium">Medicine</th>
                         <th className="px-3 py-2 text-left font-medium">Frequency (0-1-0)</th>
@@ -4865,14 +5291,15 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     <tbody>
                       {items.length === 0 && (
                         <tr>
-                          <td colSpan={6} className="px-3 py-3 text-center text-gray-500">No items added yet</td>
+                          <td colSpan={6} className="px-3 py-3 text-center text-muted-foreground">No items added yet</td>
                         </tr>
                       )}
                       {items.map((it, idx) => (
-                        <tr key={idx} className="border-t">
-                          <td className="px-3 py-2 align-top" onMouseEnter={() => prefetchDrugStockByName(it.drugName)} title={(() => { const key = (it.drugName || '').trim().toLowerCase(); const stock = drugStockById[key]; if (stock === undefined) return 'Remaining stock: —'; return `Remaining stock: ${stock}`; })()}>
-                            <div className="flex items-center gap-2">
+                        <tr key={it.rowKey} className="border-t">
+                          <td className="px-3 py-2 align-top" onMouseEnter={() => it.inventoryItemId ? prefetchDrugStockById(it.drugId, it.inventoryItemId) : prefetchDrugStockByName(it.drugName)} title={(() => { const key = it.inventoryItemId ? `inventory:${it.inventoryItemId}` : `name:${(it.drugName || '').trim().toLowerCase()}`; const stock = drugStockByKey[key]; return `Remaining stock: ${stock ?? '—'}`; })()}>
+                            <div className="space-y-2">
                               <Input 
+                                data-medicine-name
                                 ref={(el) => { inputRefs.current[idx] = el; }}
                                 value={it.drugName} 
                                 onChange={(e) => {
@@ -4911,18 +5338,28 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                                   }
                                 }}
                                 placeholder="Search medicine name..." 
-                                className="min-w-[180px]"
+                                className="w-full min-w-[180px]"
                               />
-                              <span className="text-xs text-gray-500 whitespace-nowrap">
+                              <span className="text-xs text-muted-foreground whitespace-nowrap">
                                 Stock:{' '}
-                                {(() => { const key = (it.drugName || '').trim().toLowerCase(); const stock = drugStockById[key]; return stock !== undefined ? <span className={stock <= 5 ? 'text-red-600' : 'text-gray-700'}>{stock}</span> : <span className="text-gray-400">—</span>; })()}
+                                {(() => { const key = it.inventoryItemId ? `inventory:${it.inventoryItemId}` : `name:${(it.drugName || '').trim().toLowerCase()}`; const stock = drugStockByKey[key]; return stock != null ? <span className={stock <= 5 ? 'text-destructive-text' : 'text-foreground'}>{stock}</span> : <span className="text-muted-foreground">—</span>; })()}
                               </span>
                             </div>
-                            {it.regimenState?.loading && <p className="mt-1 text-xs text-slate-500" role="status">Loading usual values…</p>}
-                            {it.regimenState?.failed && <p className="mt-1 text-xs text-amber-700" role="status">Suggestions unavailable. Enter values or select the medicine again to retry.</p>}
+                            {it.regimenState?.loading && <p className="mt-1 text-xs text-muted-foreground" role="status">Loading usual values…</p>}
+                            {it.regimenState?.failed && <p className="mt-1 text-xs text-warning-text" role="status">Suggestions unavailable. Enter values or select the medicine again to retry.</p>}
                           </td>
                           <td className="px-3 py-2 align-top">
-                            <div className="min-w-[100px]">
+                            <div className="min-w-[100px] space-y-2">
+                              <Input
+                                type="number"
+                                aria-label={`Numeric dosage for ${it.drugName || 'medicine'}`}
+                                placeholder="Dosage (optional)"
+                                min="0"
+                                step="any"
+                                value={it.dosage ?? ''}
+                                onFocus={() => setActiveRowIdx(idx)}
+                                onChange={(event) => updateItem(idx, { dosage: event.target.value === '' ? '' : Number(event.target.value) })}
+                              />
                               <Select value={it.dosePattern || it.frequency || ''} onOpenChange={() => setActiveRowIdx(idx)} onValueChange={(v: string) => {
                                 if (v === '__CUSTOM__') { openCustomDialog('dosePattern', idx); return; }
                                 const inferred = inferFrequencyFromDosePattern(v);
@@ -4941,48 +5378,51 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                                   {Array.from(new Set([...dosePatternOptions, it.dosePattern || it.frequency].filter(Boolean))).map(p => (
                                     <SelectItem key={p} value={p}>{p.toUpperCase()}</SelectItem>
                                   ))}
-                                  <SelectItem value="__CUSTOM__" className="text-blue-600 border-t mt-1 pt-1">+ Custom...</SelectItem>
+                                  <SelectItem value="__CUSTOM__" className="text-info-text border-t mt-1 pt-1">+ Custom...</SelectItem>
                                 </SelectContent>
                               </Select>
                             </div>
                             {regimenHint(it, idx, 'frequency')}
                           </td>
-                          <td className="px-3 py-2 align-top">
+                          <td className="min-w-[216px] px-3 py-2 align-top">
                             <Select value={it.timing || ''} onOpenChange={() => setActiveRowIdx(idx)} onValueChange={(v: string) => {
                               if (v === '__CUSTOM__') { openCustomDialog('timing', idx); return; }
                               updateItem(idx, { timing: v });
                             }}>
-                              <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                              <SelectTrigger className="w-full min-w-[192px]" title={it.timing || undefined} style={{ overflowWrap: 'normal', wordBreak: 'normal' }}><SelectValue placeholder="Select" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} /></SelectTrigger>
                               <SelectContent>
                                 {Array.from(new Set([...getTimingOptionsForFrequency(it.frequency), it.timing].filter((t): t is string => Boolean(t)))).map(t => (
                                   <SelectItem key={t} value={t}>{t}</SelectItem>
                                 ))}
-                                <SelectItem value="__CUSTOM__" className="text-blue-600 border-t mt-1 pt-1">+ Custom...</SelectItem>
+                                <SelectItem value="__CUSTOM__" className="text-info-text border-t mt-1 pt-1">+ Custom...</SelectItem>
                               </SelectContent>
                             </Select>
                             {regimenHint(it, idx, 'timing')}
                           </td>
                           <td className="px-3 py-2 align-top">
-                            <div className="grid grid-cols-[5rem_6rem] gap-2">
+                            <div className="grid grid-cols-[3.5rem_8rem] gap-1">
                               <Input type="number" aria-label={`Duration for ${it.drugName || 'new medicine'}`} value={it.duration} onFocus={() => setActiveRowIdx(idx)} onChange={(e) => updateItem(idx, { duration: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="#" />
                               <Select value={it.durationUnit} onOpenChange={() => setActiveRowIdx(idx)} onValueChange={(v: DurationUnit) => {
                                 if (v === '__CUSTOM__') { openCustomDialog('durationUnit', idx); return; }
                                 updateItem(idx, { durationUnit: v });
                               }}>
-                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectTrigger className="min-w-[128px]" title={it.durationUnit} style={{ overflowWrap: 'normal', wordBreak: 'normal' }}><SelectValue style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} /></SelectTrigger>
                                 <SelectContent>
                                   {Array.from(new Set([...durationUnitOptions, it.durationUnit].filter(Boolean))).map(u => (
                                     <SelectItem key={u} value={u}>{u}</SelectItem>
                                   ))}
-                                  <SelectItem value="__CUSTOM__" className="text-blue-600 border-t mt-1 pt-1">+ Custom...</SelectItem>
+                                  <SelectItem value="__CUSTOM__" className="text-info-text border-t mt-1 pt-1">+ Custom...</SelectItem>
                                 </SelectContent>
                               </Select>
                             </div>
                             {regimenHint(it, idx, 'duration')}
                           </td>
-                          <td className="min-w-[190px] px-3 py-2 align-top relative">
+                          <td className="min-w-[256px] w-full px-3 py-2 align-top relative">
                             <div className="space-y-1">
-                              <Input
+                              <Textarea
+                                rows={2}
+                                aria-label={`Instructions for ${it.drugName || 'new medicine'}`}
+                                className="min-h-16 whitespace-pre-wrap break-words"
                                 value={it.instructions || ''}
                                 onFocus={() => { setInstrFocusIdx(idx); setActiveRowIdx(idx); }}
                                 onBlur={(e) => {
@@ -4996,11 +5436,11 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                               />
                               {regimenHint(it, idx, 'instructions')}
                               {instrFocusIdx === idx && !!getInstructionSuggestions(it.drugName, it.instructions || '').length && (
-                                <div className="absolute z-50 mt-1 w-[260px] bg-white border rounded shadow max-h-48 overflow-auto">
+                                <div className="absolute z-50 mt-1 w-[260px] bg-card border rounded-md shadow-sm max-h-48 overflow-auto">
                                   {getInstructionSuggestions(it.drugName, it.instructions || '').map((s) => (
                                     <div
                                       key={s}
-                                      className="px-3 py-1 text-sm hover:bg-gray-50 cursor-pointer"
+                                      className="px-3 py-1 text-sm hover:bg-background cursor-pointer"
                                       onMouseDown={() => {
                                         updateItem(idx, { instructions: s });
                                         const byDrugKey = 'instr:' + (it.drugName || '').trim().toLowerCase();
@@ -5017,7 +5457,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                             </div>
                           </td>
                           <td className="px-3 py-2 align-top text-right">
-                            <Button size="sm" variant="outline" onClick={() => removeItem(idx)}>Remove</Button>
+                            <div className="flex flex-col gap-1"><Button type="button" size="sm" variant="outline" onClick={() => insertRowAfter(idx)} aria-label={`Add row after ${it.drugName || `row ${idx + 1}`}`}>Add Row</Button><Button type="button" size="sm" variant="outline" onClick={() => removeItem(idx)}>Remove</Button></div>
                           </td>
                         </tr>
                       ))}
@@ -5038,11 +5478,11 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
             >
               <div className="space-y-3 opacity-100">
                 <div>
-                  <label className="text-xs text-gray-600 flex items-center gap-1">Procedures{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
+                  <label className="text-xs text-muted-foreground flex items-center gap-1">Procedures{language !== 'EN' && (<Languages className="h-3 w-3 text-info-text" aria-label="Translated on print" />)}</label>
                   <Textarea rows={2} value={procedures} onChange={(e) => setProcedures(e.target.value)} onBlur={(e) => pushRecent('procedures', e.target.value)} />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-600 flex items-center gap-1">Procedure Planned{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
+                  <label className="text-xs text-muted-foreground flex items-center gap-1">Procedure Planned{language !== 'EN' && (<Languages className="h-3 w-3 text-info-text" aria-label="Translated on print" />)}</label>
                   <Textarea rows={2} value={procedurePlanned} onChange={(e) => setProcedurePlanned(e.target.value)} onBlur={(e) => pushRecent('procedurePlanned', e.target.value)} />
                 </div>
               </div>
@@ -5064,44 +5504,49 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     </label>
                   ))}
                 </div>
-                <div className="flex gap-2 items-end pt-2 border-t">
+                {canManageInvestigations && <div className="flex gap-2 items-end pt-2 border-t">
                   <div className="flex-1">
-                    <label className="text-xs text-gray-600 mb-1 block">Add Custom Investigation</label>
+                    <label className="text-xs text-muted-foreground mb-1 block">Add Custom Investigation</label>
                     <Input
                       placeholder="e.g., MRI Brain, CT Scan"
                       value={newCustomInvestigation}
                       onChange={(e) => setNewCustomInvestigation(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && newCustomInvestigation.trim()) {
-                          e.preventDefault();
-                          const trimmed = newCustomInvestigation.trim();
-                          if (!investigationOptions.includes(trimmed)) {
-                            setCustomInvestigationOptions((prev) => [...prev, trimmed]);
-                            setInvestigations((prev) => [...prev, trimmed]);
-                            setNewCustomInvestigation('');
-                          }
-                        }
-                      }}
+                      onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); if (!investigationCatalogLoading && !investigationMutationPending) void mutateInvestigation('add'); } }}
+                      disabled={!investigationCatalogReady || investigationCatalogLoading || investigationMutationPending}
                     />
                   </div>
                   <Button
                     type="button"
                     size="sm"
                     variant="outline"
-                    onClick={() => {
-                          const trimmed = newCustomInvestigation.trim();
-                          if (trimmed && !investigationOptions.includes(trimmed)) {
-                            setCustomInvestigationOptions((prev) => [...prev, trimmed]);
-                            setInvestigations((prev) => [...prev, trimmed]);
-                            setNewCustomInvestigation('');
-                          }
-                    }}
-                    disabled={!newCustomInvestigation.trim() || investigationOptions.includes(newCustomInvestigation.trim())}
+                    onClick={() => void mutateInvestigation('add')}
+                    disabled={!newCustomInvestigation.trim() || !investigationCatalogReady || investigationCatalogLoading || investigationMutationPending}
                   >
                     <Plus className="h-4 w-4 mr-1" />
                     Add
                   </Button>
+                </div>}
+                <div className="flex flex-wrap items-center gap-3 text-sm">
+                  {investigationCatalogLoading && <span role="status">Loading saved investigations…</span>}
+                  {canManageInvestigations && <Button type="button" size="sm" variant="ghost" onClick={() => setShowInvestigationManager(value => !value)} aria-expanded={showInvestigationManager}>Manage saved investigations</Button>}
+                  {investigationMutationPending && <span role="status">Saving investigation…</span>}
                 </div>
+                {investigationCatalogError && <div role="alert" className="text-sm text-destructive-text">{investigationCatalogError}<Button type="button" size="sm" variant="outline" onClick={() => void refreshInvestigationCatalog()} disabled={investigationCatalogLoading || investigationMutationPending}>Retry</Button></div>}
+                {canManageInvestigations && showInvestigationManager && <div className="space-y-2 border-t pt-3">
+                  <p className="text-sm text-muted-foreground">Changes apply to the reusable list. Saved visit investigations stay unchanged.</p>
+                  {!investigationCatalog.length && !investigationCatalogLoading && <p className="text-sm">No custom investigations saved yet.</p>}
+                  {investigationCatalog.map(option => <div key={option.id} className="flex flex-wrap items-center gap-2">
+                    {editingInvestigation?.id === option.id ? <>
+                      <Input aria-label={`Rename ${option.name}`} value={editingInvestigation.name} onChange={event => setEditingInvestigation({ ...editingInvestigation, name: event.target.value })} className="max-w-sm" />
+                      <Button type="button" size="sm" disabled={!investigationCatalogReady || investigationCatalogLoading || investigationMutationPending || !editingInvestigation.name.trim()} onClick={() => void mutateInvestigation('rename', editingInvestigation)}>Save name</Button>
+                      <Button type="button" size="sm" variant="ghost" onClick={() => setEditingInvestigation(null)}>Cancel</Button>
+                    </> : <>
+                      <span className="min-w-0 flex-1 break-words">{option.name}</span>
+                      <Button type="button" size="sm" variant="outline" disabled={!investigationCatalogReady || investigationCatalogLoading || investigationMutationPending} onClick={() => setEditingInvestigation(option)} aria-label={`Edit ${option.name}`}>Edit</Button>
+                      <Button type="button" size="sm" variant="ghost" disabled={!investigationCatalogReady || investigationCatalogLoading || investigationMutationPending} onClick={() => void mutateInvestigation('remove', option)} aria-label={`Remove ${option.name} from reusable list`}>Remove</Button>
+                    </>}
+                  </div>)}
+                </div>}
               </div>
             </CollapsibleSection>
 
@@ -5113,11 +5558,11 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                       <CardContent className="p-3 space-y-2">
                         <div className="grid grid-cols-1 md:grid-cols-6 gap-2 items-end">
                           <div className="md:col-span-2">
-                            <label className="text-xs text-gray-600">Section Title</label>
+                            <label className="text-xs text-muted-foreground">Section Title</label>
                             <Input value={s.title} onChange={(e) => updateCustomSection(s.id, { title: e.target.value })} />
                           </div>
                           <div className="md:col-span-3">
-                            <label className="text-xs text-gray-600">Content</label>
+                            <label className="text-xs text-muted-foreground">Content</label>
                             <Input value={s.content} onChange={(e) => updateCustomSection(s.id, { content: e.target.value })} />
                           </div>
                           <div className="md:col-span-1 flex justify-end">
@@ -5139,7 +5584,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
               <div className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                   <div>
-                    <label className="text-sm text-gray-700">Language</label>
+                    <label className="text-sm text-foreground">Language</label>
                     <Select value={language} onValueChange={(v: Language) => setLanguage(v)}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
@@ -5152,7 +5597,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 </div>
 
                 {language !== 'EN' && (
-                  <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900">
+                  <div className="rounded-md border border-info-border bg-info-soft p-3 text-xs text-info-text">
                     <div className="font-medium mb-1">Translation enabled</div>
                     <div>
                       On print preview, free‑form fields will be translated to {language === 'HI' ? 'Hindi' : 'Telugu'}.
@@ -5165,7 +5610,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <label className="text-sm text-gray-700 flex items-center gap-1">Follow-up Instructions{language !== 'EN' && (<Languages className="h-3.5 w-3.5 text-blue-600" aria-label="Translated on print" />)}</label>
+                    <label className="text-sm text-foreground flex items-center gap-1">Follow-up Instructions{language !== 'EN' && (<Languages className="h-3.5 w-3.5 text-info-text" aria-label="Translated on print" />)}</label>
                     <Input key="followup-instructions" placeholder="e.g., Review in 4 weeks" value={followUpInstructions} onChange={(e) => setFollowUpInstructions(e.target.value)} onBlur={(e) => pushRecent('followUp', e.target.value)} />
                     {followUpSuggestions.length > 0 && (
                       <div className="mt-2 flex flex-wrap gap-2">
@@ -5191,7 +5636,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
             {/* Review Date (bottom of builder) */}
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 opacity-100">
               <div className="md:col-span-1">
-                <label className="text-sm text-gray-700">Review Date</label>
+                <label className="text-sm text-foreground">Review Date</label>
                 <Input type="date" value={reviewDate || ''} onChange={(e) => onChangeReviewDate?.(e.target.value)} />
                 {reviewDateShortcutDays.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-2">
@@ -5213,10 +5658,10 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
             </div>
 
                           <div className="flex items-center justify-between pt-2 opacity-100">
-              <div className="text-sm text-gray-600">Total items: {validItems.length} • Total qty: {totalQuantity}</div>
+              <div className="text-sm text-muted-foreground">Total items: {validItems.length} • Total qty: {totalQuantity}</div>
               <div className="flex gap-2">
                 <div className="hidden sm:flex items-center gap-2">
-                  <span className="text-sm text-gray-700">Print</span>
+                  <span className="text-sm text-foreground">Print</span>
                   <Select value={rxPrintFormat} onValueChange={(v: 'TEXT' | 'TABLE') => setRxPrintFormat(v)} disabled={spaceOptimized}>
                     <SelectTrigger className="w-36 h-9">
                       <SelectValue placeholder="Format" />
@@ -5272,7 +5717,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
             <DialogHeader className="sr-only">
               <DialogTitle>Prescription Preview</DialogTitle>
             </DialogHeader>
-            <div data-prescription-preview-main className="h-full min-h-0 flex flex-row">
+            <div data-prescription-preview-main className="h-full min-h-0 min-w-0 flex flex-col sm:flex-row">
               {/* Scoped print CSS to only print the preview container */}
               <style dangerouslySetInnerHTML={{
                 __html: `
@@ -5326,7 +5771,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 
                 #pagedjs-container .pagedjs_pagebox,
                 #prescription-print-host .prescription-print-pages .pagedjs_pagebox {
-                  background-image: ${letterheadOption === 'none' ? 'none' : `url('${printBgUrl ?? '/letterhead.png'}')`};
+                  background-image: ${letterheadOption === 'none' ? 'none' : `url('${resolvedPrintBgUrl}')`};
                   background-repeat: no-repeat;
                   background-position: top left;
                   background-size: ${paperPreset === 'LETTER' ? '216mm 279mm' : '210mm 297mm'};
@@ -5386,16 +5831,16 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 }
                 `
               }} />
-            <div id="print-preview-scroll" data-prescription-preview-scroll className="flex-1 min-h-0 overflow-auto overflow-x-auto" style={{ position: 'relative' }}>
-              <div data-prescription-preview-toolbar className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-3 px-3 py-2 bg-white/90 backdrop-blur border-b text-sm">
+            <div id="print-preview-scroll" data-prescription-preview-scroll className="flex-1 min-h-0 min-w-0 overflow-auto overflow-x-auto" style={{ position: 'relative' }}>
+              <div data-prescription-preview-toolbar className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-3 px-3 py-2 bg-card/90 backdrop-blur border-b text-sm">
                 <div className="space-y-0.5">
-                  <div className="flex flex-wrap gap-2 items-center text-gray-800">
+                  <div className="flex flex-wrap gap-2 items-center text-foreground">
                     <span className="font-semibold">{previewPatientName}</span>
-                    <span className="text-gray-500">•</span>
+                    <span className="text-muted-foreground">•</span>
                     <span>{previewDoctorName}</span>
                   </div>
-                  <div className="text-xs text-gray-600">
-                    Date: {new Date().toLocaleDateString()} {standaloneReason ? `• Reason: ${standaloneReason}` : ''}
+                  <div className="text-xs text-muted-foreground">
+                    Date: {new Date().toLocaleDateString()} {isTeleVideo ? '• Consultation: Tele-video' : ''} {standaloneReason ? `• Reason: ${standaloneReason}` : ''}
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -5407,11 +5852,11 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 </div>
               </div>
               {previewJustUpdated && (
-                <div data-prescription-preview-status className="absolute top-2 right-3 z-20 text-xs px-2 py-1 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">Updated</div>
+                <div data-prescription-preview-status className="absolute top-2 right-3 z-20 text-xs px-2 py-1 rounded-md bg-success-soft text-success-text border border-success-border">Updated</div>
               )}
               {/* Page indicator */}
               {totalPreviewPages > 1 && (
-                <div data-prescription-preview-status className="absolute top-2 left-1/2 transform -translate-x-1/2 z-20 text-xs px-3 py-1.5 rounded-full bg-gray-900 text-white shadow-lg">
+                <div data-prescription-preview-status className="absolute top-2 left-1/2 transform -translate-x-1/2 z-20 text-xs px-3 py-1.5 rounded-full bg-card text-foreground shadow-sm">
                   Page {currentPreviewPage} of {totalPreviewPages}
                 </div>
               )}
@@ -5432,9 +5877,9 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
               
               {/* Hidden source content for Paged.js processing (overlays applied to Paged.js output) */}
               <div
-                id="prescription-print-root"
+                id="prescription-print-root" data-print-preview data-space-optimized={spaceOptimized}
                 ref={printRef}
-                className="bg-white text-gray-900"
+                className="bg-card text-foreground"
                 style={{
                   display: 'none', // Hidden - used only as source for Paged.js
                   fontFamily: "Fira Sans, 'Segoe UI Symbol', 'Arial Unicode MS', system-ui, sans-serif",
@@ -5442,12 +5887,12 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 }}
               >
                 <div id="prescription-print-content">
-                  {!spaceOptimized && (
-                    <div className="text-sm text-gray-700 mb-2">{todayStr}</div>
+                  {(!spaceOptimized || isTeleVideo) && (
+                    <div className="text-sm text-foreground mb-2">{todayStr}{isTeleVideo && <span data-consultation-label> • Consultation: Tele-video</span>}</div>
                   )}
                   {/* Optional plain text preview block (shown only when TEXT format) */}
                   {rxPrintFormat === 'TEXT' && (
-                    <div className="rx-text p-4 text-sm whitespace-pre-wrap font-mono border rounded mb-3">
+                    <div className="rx-text p-4 text-sm whitespace-pre-wrap font-mono border rounded-md mb-3">
                       {(() => {
                         const headerLines = [
                           'PRESCRIPTION',
@@ -5461,7 +5906,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                         ].filter(Boolean);
                         const medsLines = (items || []).map((it: any, idx: number) => {
                           const parts: string[] = [];
-                          parts.push(`${idx + 1}. ${it.drugName}`);
+                          parts.push(`${idx + 1}. ${formatPrintedDrugName(it.drugName, it)}`);
                           if (it.dosage) parts.push(`Dosage: ${it.dosage}${it.dosageUnit ? ' ' + it.dosageUnit.toLowerCase() : ''}`);
                           parts.push(`Freq: ${(it.frequency || '').replaceAll('_',' ').toLowerCase()}`);
                           parts.push(`Duration: ${it.duration} ${String(it.durationUnit || '').toLowerCase()}`);
@@ -5523,23 +5968,23 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   {includeSections.patientInfo && (
                     spaceOptimized ? (
                       <div className="py-2 text-sm flex flex-wrap gap-x-4 gap-y-1 items-baseline">
-                        <span className="text-gray-800">{todayStr}</span>
+                        <span className="text-foreground">{todayStr}</span>
                         <span className="font-semibold">{patientName}</span>
-                        {patientAgeSex ? <span className="text-gray-700">{patientAgeSex}</span> : null}
-                        {patientCodeDisplay ? <span className="text-gray-700">{patientCodeDisplay}</span> : <span className="text-gray-500">—</span>}
+                        {patientAgeSex ? <span className="text-foreground">{patientAgeSex}</span> : null}
+                        {patientCodeDisplay ? <span className="text-foreground">{patientCodeDisplay}</span> : <span className="text-muted-foreground">—</span>}
                       </div>
                     ) : (
-                      <div className="flex justify-between text-sm py-3">
+                      <div className={`flex justify-between text-sm ${spaceOptimized ? 'py-1' : 'py-3'}`}>
                         <div>
-                          <div className="text-gray-600">Patient</div>
+                          <div className="text-muted-foreground">Patient</div>
                           <div className="font-medium">{patientName}</div>
                         </div>
                         <div>
-                          <div className="text-gray-600">Patient Code</div>
+                          <div className="text-muted-foreground">Patient Code</div>
                           <div className="font-medium">{patientCodeDisplay || '—'}</div>
                         </div>
                         <div>
-                          <div className="text-gray-600">Gender / Age</div>
+                          <div className="text-muted-foreground">Gender / Age</div>
                           <div className="font-medium">{patientAgeSex || '—'}</div>
                         </div>
                       </div>
@@ -5569,18 +6014,18 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                       entries.push({ label: 'PR', value: <>{(vitalsPulse !== '' && vitalsPulse != null) ? vitalsPulse : (visitVitals?.heartRate || visitVitals?.pulse || visitVitals?.pr)} bpm</> });
                     }
                     return (
-                      <div className="py-3">
+                      <div className={`${spaceOptimized ? 'py-1' : 'py-3'}`}>
                         <div className="font-semibold mb-1">Vitals</div>
                         {spaceOptimized ? (
                           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm">
                             {entries.map((e, idx) => (
-                              <span key={`vitals-${idx}`} className="text-gray-800"><span className="text-gray-600 mr-1">{e.label}:</span>{e.value}</span>
+                              <span key={`vitals-${idx}`} className="text-foreground"><span className="text-muted-foreground mr-1">{e.label}:</span>{e.value}</span>
                             ))}
                           </div>
                         ) : (
                           <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
                             {entries.map((e, idx) => (
-                              <div key={`vitals-${idx}`}><span className="text-gray-600 mr-1">{e.label}:</span><span className="font-medium">{e.value}</span></div>
+                              <div key={`vitals-${idx}`}><span className="text-muted-foreground mr-1">{e.label}:</span><span className="font-medium">{e.value}</span></div>
                             ))}
                           </div>
                         )}
@@ -5589,9 +6034,22 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   })()
                 )}
 
+                {/* Chief Complaints */}
+                {(chiefComplaints?.trim()?.length > 0) && (
+                  <div className={`${spaceOptimized ? 'py-1' : 'py-3'} ${spaceOptimized ? 'flex items-baseline gap-2 text-sm' : ''}`}>
+                    <div className={`font-semibold ${spaceOptimized ? 'shrink-0' : 'mb-1'}`}>Chief Complaints{spaceOptimized ? ':' : ''}</div>
+                    <div className={`text-sm whitespace-pre-wrap ${spaceOptimized ? 'min-w-0 flex-1 [overflow-wrap:anywhere]' : ''}`}>{tt('chiefComplaints', chiefComplaints)}</div>
+                  </div>
+                )}
+
+                {!!exObjective.trim() && <div data-examination className={`${spaceOptimized ? 'py-1' : 'py-3'} text-sm ${spaceOptimized ? 'flex items-baseline gap-2' : ''}`}>
+                  <div className={`font-semibold ${spaceOptimized ? 'shrink-0' : 'mb-1'}`}>Examination{spaceOptimized ? ':' : ''}</div>
+                  <div className="min-w-0 flex-1 whitespace-pre-wrap">{tt('examination', exObjective)}</div>
+                </div>}
+
                 {/* Diagnosis */}
                 {includeSections.diagnosis && (
-                  <div className="py-3 text-sm">
+                  <div className={`${spaceOptimized ? 'py-1' : 'py-3'} text-sm`}>
                     <div className={`flex flex-wrap gap-2 items-start ${spaceOptimized ? '' : 'mb-1'}`}>
                       <span className="font-semibold">Diagnosis:</span>
                       <span className="flex-1 min-w-[200px] whitespace-pre-wrap">{(diagnosis?.trim() || '').length > 0 ? tt('diagnosis', diagnosis) : '—'}</span>
@@ -5599,17 +6057,9 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   </div>
                 )}
 
-                {/* Chief Complaints */}
-                {(chiefComplaints?.trim()?.length > 0) && (
-                  <div className="py-3">
-                    <div className="font-semibold mb-1">Chief Complaints</div>
-                    <div className="text-sm whitespace-pre-wrap">{tt('chiefComplaints', chiefComplaints)}</div>
-                  </div>
-                )}
-
                 {/* Histories */}
                 {!!(pastHistory?.trim()?.length || medicationHistory?.trim()?.length || menstrualHistory?.trim()?.length || exTriggers?.trim()?.length || exPriorTx?.trim()?.length) && (
-                  <div className="py-3 text-sm">
+                  <div className={`${spaceOptimized ? 'py-1' : 'py-3'} text-sm`}>
                     <div className="flex flex-wrap gap-2 items-start">
                       <span className="font-semibold">History:</span>
                       <span className="flex-1 min-w-[200px] whitespace-pre-wrap">{historyLine || '—'}</span>
@@ -5617,9 +6067,19 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   </div>
                 )}
 
+                {/* Personal history */}
+                {!!personalHistory?.trim() && (
+                  <div className={`${spaceOptimized ? 'py-1' : 'py-3'} text-sm`} data-personal-history>
+                    <div className={spaceOptimized ? 'flex flex-wrap gap-2 items-start' : ''}>
+                      <div className={`font-semibold ${spaceOptimized ? '' : 'mb-1'}`}>Personal history{spaceOptimized ? ':' : ''}</div>
+                      <div className={spaceOptimized ? 'flex-1 min-w-[200px] whitespace-pre-wrap' : 'whitespace-pre-wrap'}>{tt('personalHistory', personalHistory)}</div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Family History */}
                 {(familyHistoryDM || familyHistoryHTN || familyHistoryThyroid || !!familyHistoryOthers?.trim()?.length) && (
-                  <div className="py-3 text-sm">
+                  <div className={`${spaceOptimized ? 'py-1' : 'py-3'} text-sm`}>
                     <div className="flex flex-wrap gap-2 items-start">
                       <span className="font-semibold">Family History:</span>
                       <span className="flex-1 min-w-[200px] whitespace-pre-wrap">{familyHistoryLine || '—'}</span>
@@ -5629,25 +6089,25 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
 
                 {/* Medications */}
                 {includeSections.medications && (
-                  <div className={`py-3 ${breakBeforeMedications ? 'pb-before-page' : ''}`}>
+                  <div className={`${spaceOptimized ? 'py-1' : 'py-3'} ${breakBeforeMedications ? 'pb-before-page' : ''}`}>
                     <div className="font-semibold mb-2">Rx</div>
                     {validItems.length > 0 ? (
                       rxPrintFormat === 'TABLE' ? (
                         <div className="text-sm" style={{ width: '100%' }}>
-                          <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid #d1d5db', background: '#f9fafb', fontWeight: 500, padding: '6px 0' }}>
-                            <div style={{ flex: '2 1 0%', padding: '0 12px' }}>Medicine</div>
-                            <div style={{ flex: '1 1 0%', padding: '0 12px' }}>Frequency</div>
-                            <div style={{ flex: '1 1 0%', padding: '0 12px' }}>When</div>
-                            <div style={{ flex: '1 1 0%', padding: '0 12px' }}>Duration</div>
-                            <div style={{ flex: '1.5 1 0%', padding: '0 12px' }}>Instructions</div>
+                          <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid #d1d5db', background: '#f9fafb', fontWeight: 500, padding: spaceOptimized ? '2px 0' : '6px 0' }}>
+                            <div style={{ flex: '2 1 0%', padding: spaceOptimized ? '0 6px' : '0 12px' }}>Medicine</div>
+                            <div style={{ flex: '1 1 0%', padding: spaceOptimized ? '0 6px' : '0 12px' }}>Frequency</div>
+                            <div style={{ flex: '1 1 0%', padding: spaceOptimized ? '0 6px' : '0 12px' }}>When</div>
+                            <div style={{ flex: '1 1 0%', padding: spaceOptimized ? '0 6px' : '0 12px' }}>Duration</div>
+                            <div style={{ flex: '1.5 1 0%', padding: spaceOptimized ? '0 6px' : '0 12px' }}>Instructions</div>
                           </div>
                           {validItems.map((it: any, idx: number) => (
-                            <div key={`rx-row-${idx}`} className="rx-row" style={{ display: 'flex', gap: 0, borderBottom: '1px solid #e5e7eb', padding: '6px 0' }}>
-                              <div style={{ flex: '2 1 0%', padding: '0 12px' }}>{it.drugName}</div>
-                              <div style={{ flex: '1 1 0%', padding: '0 12px' }}>{(it.dosePattern || '').trim() || it.frequency.replaceAll('_',' ').toLowerCase()}</div>
-                              <div style={{ flex: '1 1 0%', padding: '0 12px' }}>{it.timing || '—'}</div>
-                              <div style={{ flex: '1 1 0%', padding: '0 12px' }}>{`${it.duration ?? '—'} ${String(it.durationUnit || '').toLowerCase()}`}</div>
-                              <div style={{ flex: '1.5 1 0%', padding: '0 12px' }}>{it.instructions ? tt(`items.${idx}.instructions`, it.instructions) : '—'}</div>
+                            <div key={`rx-row-${idx}`} className="rx-row" style={{ display: 'flex', gap: 0, borderBottom: '1px solid #e5e7eb', padding: spaceOptimized ? '2px 0' : '6px 0' }}>
+                              <div style={{ flex: '2 1 0%', padding: spaceOptimized ? '0 6px' : '0 12px' }}>{formatPrintedDrugName(it.drugName, it)}</div>
+                              <div style={{ flex: '1 1 0%', padding: spaceOptimized ? '0 6px' : '0 12px' }}>{(it.dosePattern || '').trim() || it.frequency.replaceAll('_',' ').toLowerCase()}</div>
+                              <div style={{ flex: '1 1 0%', padding: spaceOptimized ? '0 6px' : '0 12px' }}>{it.timing || '—'}</div>
+                              <div style={{ flex: '1 1 0%', padding: spaceOptimized ? '0 6px' : '0 12px' }}>{`${it.duration ?? '—'} ${String(it.durationUnit || '').toLowerCase()}`}</div>
+                              <div style={{ flex: '1.5 1 0%', padding: spaceOptimized ? '0 6px' : '0 12px' }}>{it.instructions ? tt(`items.${idx}.instructions`, it.instructions) : '—'}</div>
                             </div>
                           ))}
                         </div>
@@ -5655,7 +6115,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                         <div className="text-sm" style={{ width: '100%' }}>
                           {validItems.map((it: any, idx: number) => (
                             <div key={`rx-${idx}`} className="rx-row" style={{ padding: '3px 0' }}>
-                              <span style={{ fontWeight: 500 }}>{idx + 1}. {it.drugName}</span>
+                              <span style={{ fontWeight: 500 }}>{idx + 1}. {formatPrintedDrugName(it.drugName, it)}</span>
                               {it.dosage ? ` ${it.dosage}${it.dosageUnit ? ' ' + it.dosageUnit.toLowerCase() : ''}` : ''} — {it.frequency.replaceAll('_',' ').toLowerCase()} × {it.duration}{' '}{it.durationUnit.toLowerCase()}
                               {it.instructions && <span> — {tt(`items.${idx}.instructions`, it.instructions)}</span>}
                             </div>
@@ -5663,7 +6123,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                         </div>
                       )
                     ) : (
-                      <div className="text-sm text-gray-600">—</div>
+                      <div className="text-sm text-muted-foreground">—</div>
                     )}
                   </div>
                 )}
@@ -5674,7 +6134,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
 
                 {/* Investigations */}
                 {(Array.isArray(investigations) && investigations.length > 0) && (
-                  <div className={`py-3 ${breakBeforeInvestigations ? 'pb-before-page' : ''}`}>
+                  <div className={`${spaceOptimized ? 'py-1' : 'py-3'} ${breakBeforeInvestigations ? 'pb-before-page' : ''}`}>
                     <div className="text-sm flex flex-wrap gap-2 items-start">
                       <span className="font-semibold">Investigations:</span>
                       <span className="flex-1 min-w-[200px] whitespace-pre-wrap">{investigations.map((inv, i) => tt(`investigations.${i}`, inv)).join(', ')}</span>
@@ -5684,7 +6144,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
 
                 {/* Counseling / Advice */}
                 {(counselingText?.trim()?.length) ? (
-                  <div className="py-3">
+                  <div className={`${spaceOptimized ? 'py-1' : 'py-3'}`}>
                     <div className="font-semibold mb-1">Counseling</div>
                     <div className="text-sm whitespace-pre-wrap">{tt('counseling', counselingText)}</div>
                   </div>
@@ -5692,7 +6152,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
 
                 {/* Procedures */}
                 {(procedures?.trim()?.length > 0) && (
-                  <div className="py-3 text-sm">
+                  <div className={`${spaceOptimized ? 'py-1' : 'py-3'} text-sm`}>
                     <div className="flex flex-wrap gap-2 items-start">
                       <span className="font-semibold">Procedures:</span>
                       <span className="flex-1 min-w-[200px] whitespace-pre-wrap">{tt('procedures', procedures)}</span>
@@ -5702,7 +6162,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
 
                 {/* Procedure Planned */}
         {(procedurePlanned?.trim()?.length > 0) && (
-                  <div className="py-3 text-sm">
+                  <div className={`${spaceOptimized ? 'py-1' : 'py-3'} text-sm`}>
                     <div className="flex flex-wrap gap-2 items-start">
                       <span className="font-semibold">Procedure Planned:</span>
                       <span className="flex-1 min-w-[200px] whitespace-pre-wrap">{tt('procedurePlanned', procedurePlanned)}</span>
@@ -5713,7 +6173,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 {/* Custom Sections */}
                 {customSections.length > 0 && customSections.map((s, i) => (
                   (s.title?.trim() || s.content?.trim()) ? (
-                    <div key={`cs-${s.id}`} className="py-3">
+                    <div key={`cs-${s.id}`} className={`${spaceOptimized ? 'py-1' : 'py-3'}`}>
                       <div className="font-semibold mb-1">{tt(`custom.${i}.title`, s.title)}</div>
                       <div className="text-sm whitespace-pre-wrap">{tt(`custom.${i}.content`, s.content)}</div>
                     </div>
@@ -5722,42 +6182,49 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
 
                 {/* Review Date */}
                 {reviewDateDisplay ? (
-                  <div className="py-3">
-                    <div className="font-semibold mb-1">Review Date</div>
-                    <div className="text-sm">{reviewDateDisplay}</div>
+                  <div className={`${spaceOptimized ? 'py-1' : 'py-3'} ${spaceOptimized ? 'flex items-baseline gap-2 text-sm' : ''}`}>
+                    <div className={`font-semibold ${spaceOptimized ? 'shrink-0' : 'mb-1'}`}>Review Date{spaceOptimized ? ':' : ''}</div>
+                    <div className={`text-sm ${spaceOptimized ? 'min-w-0 flex-1 [overflow-wrap:anywhere]' : ''}`}>{reviewDateDisplay}</div>
                   </div>
                 ) : null}
 
                 {/* Follow-up Instructions */}
                 {(followUpInstructions?.trim()?.length) ? (
-                  <div className={`py-3 ${breakBeforeFollowUp ? 'pb-before-page' : ''}`}>
-                    <div className="font-semibold mb-1">Follow-up Instructions</div>
-                    <div className="text-sm whitespace-pre-wrap">{tt('followUpInstructions', followUpInstructions)}</div>
+                  <div className={`${spaceOptimized ? 'py-1' : 'py-3'} ${spaceOptimized ? 'flex items-baseline gap-2 text-sm' : ''} ${breakBeforeFollowUp ? 'pb-before-page' : ''}`}>
+                    <div className={`font-semibold ${spaceOptimized ? 'shrink-0' : 'mb-1'}`}>{spaceOptimized ? 'Follow-up:' : 'Follow-up Instructions'}</div>
+                    <div className={`text-sm whitespace-pre-wrap ${spaceOptimized ? 'min-w-0 flex-1 [overflow-wrap:anywhere]' : ''}`}>{tt('followUpInstructions', followUpInstructions)}</div>
                   </div>
                 ) : null}
 
+                {/* Keep the required disclaimer with the signature, independently of signature visibility. */}
+                <div data-prescription-signoff className={breakBeforeSignature ? 'pb-before-page' : undefined} style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}>
+                {isTeleVideo && <p data-tele-video-disclaimer className={`border-t text-sm text-foreground ${spaceOptimized ? 'mt-2 pt-1' : 'mt-4 pt-3'}`}>{TELE_VIDEO_DISCLAIMER}</p>}
                 {/* Signature */}
                 {includeSections.doctorSignature && (
-                  <div className={`pt-6 mt-4 border-t ${breakBeforeSignature ? 'pb-before-page' : ''}`}>
+                  <div className={`doctor-signature-block border-t ${spaceOptimized ? 'pt-2 mt-2' : 'pt-6 mt-4'}`} style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}>
                     <div className="flex justify-end text-sm">
                       <div className="text-right">
-                        <div className="h-10" />
+                        {printedSignatureUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img data-doctor-signature src={printedSignatureUrl} alt="Doctor’s signature" width={signatureWidth} height={signatureHeight} style={{ display: 'block', width: signatureWidth, height: signatureHeight, marginLeft: 'auto', marginBottom: 4 }} />
+                        ) : <div className="h-10" />}
                         <div className="font-medium">Dr. {visitData?.doctor?.firstName} {visitData?.doctor?.lastName}</div>
-                        {!spaceOptimized && <div className="text-gray-600">Signature</div>}
+                        {!spaceOptimized && <div className="text-muted-foreground">Signature</div>}
                       </div>
                     </div>
                   </div>
                 )}
+                </div>
               </div>
             </div>
               </div>
             </div>
             {/* Right Sidebar Controls */}
-            <div data-prescription-preview-sidebar className="print:hidden w-full sm:w-96 shrink-0 border-l h-full overflow-auto">
+            <div data-prescription-preview-sidebar className="print:hidden w-full sm:w-96 shrink-0 border-t sm:border-t-0 sm:border-l h-1/2 sm:h-full min-h-0 overflow-auto">
               <div className="p-4 space-y-4">
-                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <div className="text-sm font-medium text-blue-900 mb-1">📋 Print Settings Tip</div>
-                  <div className="text-xs text-blue-700">
+                <div className="p-3 bg-info-soft border border-info-border rounded-lg">
+                  <div className="text-sm font-medium text-info-text mb-1">📋 Print Settings Tip</div>
+                  <div className="text-xs text-info-text">
                     To remove browser headers/footers: In your browser's print dialog, go to <strong>More settings</strong> → 
                     turn OFF <strong>"Headers and footers"</strong> for a clean prescription print.
                   </div>
@@ -5769,9 +6236,9 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   
                   {/* Unified Pagination Info */}
                   {pagedJsProcessing && (
-                    <div className="p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-800">
+                    <div className="p-2 bg-info-soft border border-info-border rounded-md text-xs text-info-text">
                       <div className="flex items-center gap-2">
-                        <span className="animate-spin">⏳</span>
+                        <Spinner label="Processing pagination…" />
                         <span>Processing pagination...</span>
                       </div>
                     </div>
@@ -5779,10 +6246,10 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
 
                   {/* Page Navigation Controls */}
                   {totalPreviewPages > 1 && (
-                    <div className="space-y-2 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                    <div className="space-y-2 p-3 bg-background border border-border rounded-lg">
                       <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-gray-700">Page Navigation</span>
-                        <span className="text-xs text-gray-600">{currentPreviewPage} / {totalPreviewPages}</span>
+                        <span className="text-sm font-medium text-foreground">Page Navigation</span>
+                        <span className="text-xs text-muted-foreground">{currentPreviewPage} / {totalPreviewPages}</span>
                       </div>
                       <div className="flex gap-2">
                         <Button 
@@ -5805,7 +6272,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                         </Button>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-600">Go to:</span>
+                        <span className="text-xs text-muted-foreground">Go to:</span>
                         <input 
                           type="number" 
                           min={1} 
@@ -5817,18 +6284,18 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                               setCurrentPreviewPage(page);
                             }
                           }}
-                          className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded"
+                          className="flex-1 px-2 py-1 text-sm border border-border rounded-md"
                         />
                       </div>
                     </div>
                   )}
                   
-                  <div className="flex items-center gap-2 text-sm text-gray-700">
+                  <div className="flex items-center gap-2 text-sm text-foreground">
                     <span>Zoom</span>
                     <input className="flex-1" type="range" min={0.6} max={1.4} step={0.05} value={previewZoom} onChange={(e) => setPreviewZoom(Number(e.target.value))} />
                     <span className="w-10 text-right">{Math.round(previewZoom * 100)}%</span>
                   </div>
-                  <div className="space-y-2 text-sm text-gray-700">
+                  <div className="space-y-2 text-sm text-foreground">
                     <div className="flex items-center justify-between">
                       <label className="block">Top margin</label>
                       <span className="tabular-nums">{effectiveTopMarginMm} mm</span>
@@ -5858,14 +6325,14 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     </div>
                   </div>
                   <div className="space-y-1">
-                    <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <label className="flex items-center gap-2 text-sm text-foreground">
                       <input type="checkbox" checked={spaceOptimized} onChange={(e) => setSpaceOptimized(e.target.checked)} />
                       Space-optimized layout
                     </label>
-                    <p className="text-xs text-gray-500">Inline headers for patient info, vitals, diagnosis, histories, and procedures. Forces Rx table format.</p>
+                    <p className="text-xs text-muted-foreground">Inline headers for patient info, vitals, diagnosis, histories, and procedures. Forces Rx table format.</p>
                   </div>
                   <div className="space-y-1">
-                    <span className="text-sm text-gray-700">Print Format</span>
+                    <span className="text-sm text-foreground">Print Format</span>
                     <Select value={rxPrintFormat} onValueChange={(v: 'TEXT' | 'TABLE') => setRxPrintFormat(v)} disabled={spaceOptimized}>
                       <SelectTrigger className="w-full">
                         <SelectValue placeholder="Select format" />
@@ -5877,21 +6344,21 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     </Select>
                   </div>
                   <div className="space-y-1">
-                    <span className="text-sm text-gray-700">Letterhead</span>
+                    <span className="text-sm text-foreground">Letterhead</span>
                     <Select value={letterheadOption} onValueChange={(v: 'default' | 'none') => setLetterheadOption(v)}>
                       <SelectTrigger className="w-full">
                         <SelectValue placeholder="Select letterhead" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="default">Letterhead ({printBgUrl ? 'Custom' : 'letterhead.png'})</SelectItem>
+                        <SelectItem value="default">Letterhead ({resolvedPrintBgUrl === PRESCRIPTION_LETTERHEAD_URL ? 'Dr. Praneeta Jain' : 'Custom'})</SelectItem>
                         <SelectItem value="none">None (Plain)</SelectItem>
                       </SelectContent>
                     </Select>
-                    <p className="text-xs text-gray-500">Applies to preview and PDF download.</p>
+                    <p className="text-xs text-muted-foreground">Applies to preview and PDF download.</p>
                   </div>
                   <div className="space-y-1">
-                    <span className="text-sm text-gray-700">Page Breaks</span>
-                    <div className="space-y-2 text-sm text-gray-700">
+                    <span className="text-sm text-foreground">Page Breaks</span>
+                    <div className="space-y-2 text-sm text-foreground">
                       <label className="flex items-center gap-2"><input type="checkbox" checked={breakBeforeMedications} onChange={(e) => setBreakBeforeMedications(e.target.checked)} /> Break before Rx</label>
                       <label className="flex items-center gap-2"><input type="checkbox" checked={breakBeforeInvestigations} onChange={(e) => setBreakBeforeInvestigations(e.target.checked)} /> Break before Investigations</label>
                       <label className="flex items-center gap-2"><input type="checkbox" checked={breakBeforeFollowUp} onChange={(e) => setBreakBeforeFollowUp(e.target.checked)} /> Break before Follow-up</label>
@@ -5900,7 +6367,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     </div>
                   </div>
                   <div className="space-y-1">
-                    <span className="text-sm text-gray-700">Printer profile</span>
+                    <span className="text-sm text-foreground">Printer profile</span>
                     <Select value={activeProfileId || ''} onValueChange={(v: string) => setActiveProfileId(v)}>
                       <SelectTrigger className="w-full">
                         <SelectValue placeholder="Select profile" />
@@ -5912,15 +6379,24 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                       </SelectContent>
                     </Select>
                   </div>
-                  <label className="text-sm text-gray-700 flex items-center gap-2">
+                  <label className="text-sm text-foreground flex items-center gap-2">
                     <input type="checkbox" checked={showRefillStamp} onChange={(e) => setShowRefillStamp(e.target.checked)} />
                     Refill stamp
                   </label>
+                  <label className="text-sm text-foreground flex items-center gap-2">
+                    <input type="checkbox" checked={showSignature} disabled={savingForExport || sharingEmail || (!showSignature && (signatureLoading || !signatureUrl))} onChange={event => setShowSignature(event.target.checked)} aria-describedby="signature-preview-help" />
+                    Show signature
+                  </label>
+                  <div id="signature-preview-help" className="text-xs text-muted-foreground">
+                    {signatureLoading ? 'Loading signature…' : signatureError ? (
+                      <><span role="alert">{signatureError}</span> <button type="button" className="underline" onClick={reloadSignature}>Retry</button></>
+                    ) : !signatureUrl ? 'No signature uploaded. The doctor can add one in My Settings → Doctor signature.' : 'Remembered for this doctor on this browser. Applies to print, PDF, WhatsApp and Email.'}
+                  </div>
                 </div>
                 <div className="pt-2 grid grid-cols-2 gap-2">
                   {(
                     <Button
-                      className="col-span-2 bg-green-600 hover:bg-green-700 text-white"
+                      className="col-span-2 bg-success hover:bg-success text-success-foreground"
                       disabled={!canCreate || savingFromPreview || savingForExport}
                       onClick={() => void create(true)}
                     >
@@ -5933,16 +6409,23 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <span className={!hasSavedPrescription ? 'cursor-not-allowed' : ''}>
-                          <Button variant="secondary" disabled={!hasSavedPrescription} className={!hasSavedPrescription ? 'pointer-events-none opacity-50' : ''} onClick={async () => {
+                          <Button variant="secondary" disabled={!hasSavedPrescription || savingForExport || savingFromPreview || sharingEmail || exportPreviewPending || pagedJsProcessing} className={!hasSavedPrescription ? 'pointer-events-none opacity-50' : ''} onClick={async () => {
+                            setSharingEmail(true);
                             try {
-                              const prescId = visitData?.prescriptionId || savedPrescriptionId || createdPrescriptionIdRef?.current || undefined;
-                              if (!prescId) return;
-                              await apiClient.sharePrescription(prescId, { channel: 'EMAIL', to: (visitData?.patient?.email || '') as string, message: 'Your prescription is ready.' });
-                              toast({ title: 'Email sent', description: 'Prescription email queued.' });
+                              const to = visitData?.patient?.email?.trim();
+                              if (!to) throw new Error('Patient has no email address on file.');
+                              const saved = await saveBeforeExport();
+                              if (!saved?.prescriptionId) return;
+                              const pdfBlob = await renderPreviewPdf();
+                              const file = new File([pdfBlob], `prescription-${saved.documentId}.pdf`, { type: 'application/pdf' });
+                              await apiClient.sharePrescriptionPreview(saved.prescriptionId, file, { channel: 'EMAIL', to, message: 'Your prescription is attached.' });
+                              toast({ title: 'Email sent', description: 'Prescription PDF sent by email.' });
                             } catch (e) {
-                              toast({ variant: 'destructive', title: 'Email failed', description: 'Could not send email.' });
+                              toast({ variant: 'destructive', title: 'Email failed', description: getErrorMessage(e) || 'Could not send email.' });
+                            } finally {
+                              setSharingEmail(false);
                             }
-                          }}>Email</Button>
+                          }}>{sharingEmail ? 'Sending…' : 'Email'}</Button>
                         </span>
                       </TooltipTrigger>
                       {!hasSavedPrescription && <TooltipContent><p>Save the prescription first</p></TooltipContent>}
@@ -5952,7 +6435,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <span >
-                          <Button variant="secondary" disabled={savingForExport || savingFromPreview} onClick={async () => {
+                          <Button variant="secondary" disabled={savingForExport || savingFromPreview || sharingEmail || exportPreviewPending || pagedJsProcessing} onClick={async () => {
                             try {
                               const saved = await saveBeforeExport();
                               if (!saved) return;
@@ -5962,33 +6445,9 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                                 toast({ variant: 'destructive', title: 'No phone number', description: 'Patient has no phone number on file.' });
                                 return;
                               }
-                              const container = document.getElementById('pagedjs-container');
-                              if (!container) {
-                                toast({ variant: 'destructive', title: 'WhatsApp failed', description: 'No preview content. Open the preview first.' });
-                                return;
-                              }
                               toast({ title: 'Generating PDF…', description: 'Preparing prescription for WhatsApp.' });
-
-                              const stylesheets: string[] = [];
-                              document.querySelectorAll('style').forEach(s => stylesheets.push(s.outerHTML));
-                              document.querySelectorAll('link[rel="stylesheet"]').forEach(l => stylesheets.push(l.outerHTML));
-
-                              const wrapper = document.createElement('div');
-                              wrapper.innerHTML = `
-                                <link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-                                ${stylesheets.join('\n')}
-                                <style>
-                                  @page { size: ${paperPreset === 'LETTER' ? '8.5in 11in' : 'A4'}; margin: 0; }
-                                  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-                                  html, body { margin: 0; padding: 0; }
-                                  ${pagedPrintExportCss}
-                                </style>
-                                ${container.innerHTML}
-                              `;
-
                               const fileName = `prescription-${saved.documentId}.pdf`;
-                              const { renderPrescriptionPages } = await import('@/lib/pdf-export');
-                              const pdfBlob = await renderPrescriptionPages(wrapper, paperPreset);
+                              const pdfBlob = await renderPreviewPdf();
 
                               try { if (prescId) await apiClient.recordPrescriptionPrintEvent(prescId, { eventType: 'WHATSAPP_SHARE' }); } catch {}
 
@@ -6026,42 +6485,18 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     </Tooltip>
                   </TooltipProvider>
                   <Button variant="ghost" className="col-span-2" onClick={() => document.body.classList.toggle('high-contrast')}>High contrast</Button>
-                  <Button className="col-span-1" disabled={savingForExport || savingFromPreview} onClick={printPreviewInPlace}>Print</Button>
+                  <Button className="col-span-1" disabled={savingForExport || savingFromPreview || sharingEmail || exportPreviewPending || pagedJsProcessing} onClick={printPreviewInPlace}>Print</Button>
                   <TooltipProvider delayDuration={200}>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <span className="col-span-1">
-                          <Button className="w-full" disabled={savingForExport || savingFromPreview} onClick={async () => {
+                          <Button className="w-full" disabled={savingForExport || savingFromPreview || sharingEmail || exportPreviewPending || pagedJsProcessing} onClick={async () => {
                             try {
                               const saved = await saveBeforeExport();
                               if (!saved) return;
                               const prescId = saved.prescriptionId;
-                              const container = document.getElementById('pagedjs-container');
-                              if (!container) {
-                                toast({ variant: 'destructive', title: 'PDF failed', description: 'No preview content. Open the preview first.' });
-                                return;
-                              }
                               toast({ title: 'Generating PDF…', description: 'Capturing prescription preview.' });
-
-                              const stylesheets: string[] = [];
-                              document.querySelectorAll('style').forEach(s => stylesheets.push(s.outerHTML));
-                              document.querySelectorAll('link[rel="stylesheet"]').forEach(l => stylesheets.push(l.outerHTML));
-
-                              const wrapper = document.createElement('div');
-                              wrapper.innerHTML = `
-                                <link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-                                ${stylesheets.join('\n')}
-                                <style>
-                                  @page { size: ${paperPreset === 'LETTER' ? '8.5in 11in' : 'A4'}; margin: 0; }
-                                  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-                                  html, body { margin: 0; padding: 0; }
-                                  ${pagedPrintExportCss}
-                                </style>
-                                ${container.innerHTML}
-                              `;
-
-                              const { renderPrescriptionPages } = await import('@/lib/pdf-export');
-                              const pdfBlob = await renderPrescriptionPages(wrapper, paperPreset);
+                              const pdfBlob = await renderPreviewPdf();
 
                               const blobUrl = URL.createObjectURL(pdfBlob);
                               const a = document.createElement('a');
@@ -6098,15 +6533,15 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
             </DialogHeader>
             <div className="max-h-[60vh] overflow-auto text-sm">
               {interactions.length === 0 ? (
-                <div className="text-gray-600">No interactions found.</div>
+                <div className="text-muted-foreground">No interactions found.</div>
               ) : (
                 <ul className="space-y-2">
                   {interactions.map((it, idx) => (
-                    <li key={`ix-${idx}`} className="border rounded p-2">
+                    <li key={`ix-${idx}`} className="border rounded-md p-2">
                       <div className="font-medium">{it.drug1} × {it.drug2}</div>
-                      <div className="text-xs text-gray-600">Severity: {it.severity}</div>
+                      <div className="text-xs text-muted-foreground">Severity: {it.severity}</div>
                       <div className="mt-1">{it.description}</div>
-                      {it.recommendation && <div className="mt-1 text-xs text-gray-700">Recommendation: {it.recommendation}</div>}
+                      {it.recommendation && <div className="mt-1 text-xs text-foreground">Recommendation: {it.recommendation}</div>}
                     </li>
                   ))}
                 </ul>
@@ -6141,7 +6576,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
             </DialogHeader>
             <div className="space-y-4">
               <div>
-                <label className="text-xs text-gray-600">Name</label>
+                <label className="text-xs text-muted-foreground">Name</label>
                 <Input 
                   value={newTplName} 
                   onChange={(e) => { setNewTplName(e.target.value); if (newTplNameError) setNewTplNameError(''); }} 
@@ -6150,26 +6585,26 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   aria-describedby={newTplNameError ? 'new-tpl-name-error' : undefined}
                 />
                 {newTplNameError ? (
-                  <p id="new-tpl-name-error" className="text-sm text-red-600">{newTplNameError}</p>
+                  <p id="new-tpl-name-error" className="text-sm text-destructive-text">{newTplNameError}</p>
                 ) : null}
               </div>
               <div>
-                <label className="text-xs text-gray-600">Chief Complaints</label>
+                <label className="text-xs text-muted-foreground">Chief Complaints</label>
                 <Textarea rows={2} value={newTplChiefComplaints} onChange={(e) => setNewTplChiefComplaints(e.target.value)} />
               </div>
               <div>
-                <label className="text-xs text-gray-600">Diagnosis</label>
+                <label className="text-xs text-muted-foreground">Diagnosis</label>
                 <Input value={newTplDiagnosis} onChange={(e) => setNewTplDiagnosis(e.target.value)} placeholder="e.g., Acne vulgaris" />
               </div>
               <div className="space-y-2">
                 <div className="text-sm font-medium">On Examination</div>
                 <div>
-                  <label className="text-xs text-gray-600">General Appearance</label>
+                  <label className="text-xs text-muted-foreground">General Appearance</label>
                   <Textarea rows={2} value={newTplExObjective} onChange={(e) => setNewTplExObjective(e.target.value)} />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                   <div>
-                    <label className="text-xs text-gray-600">Skin Type</label>
+                    <label className="text-xs text-muted-foreground">Skin Type</label>
                     <Select value={newTplSkinType} onValueChange={setNewTplSkinType}>
                       <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
                       <SelectContent>
@@ -6178,12 +6613,12 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     </Select>
                   </div>
                   <div className="md:col-span-1">
-                    <label className="text-xs text-gray-600">Itch Score (0-10)</label>
+                    <label className="text-xs text-muted-foreground">Itch Score (0-10)</label>
                     <Input value={newTplItchScore} onChange={(e) => setNewTplItchScore(e.target.value)} placeholder="e.g., 4" />
                   </div>
                 </div>
                 <div>
-                  <div className="text-[11px] text-gray-600 mb-1">Morphology</div>
+                  <div className="text-xs text-muted-foreground mb-1">Morphology</div>
                   <div className="flex flex-wrap gap-2">
                     {MORPHOLOGY.map(m => (
                       <Button key={m} type="button" variant={newTplMorphology.has(m) ? 'default' : 'outline'} size="sm" onClick={() => toggleSet(newTplMorphology, m, setNewTplMorphology)}>{m}</Button>
@@ -6191,7 +6626,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   </div>
                 </div>
                 <div>
-                  <div className="text-[11px] text-gray-600 mb-1">Distribution</div>
+                  <div className="text-xs text-muted-foreground mb-1">Distribution</div>
                   <div className="flex flex-wrap gap-2">
                     {DISTRIBUTION.map(d => (
                       <Button key={d} type="button" variant={newTplDistribution.has(d) ? 'default' : 'outline'} size="sm" onClick={() => toggleSet(newTplDistribution, d, setNewTplDistribution)}>{d}</Button>
@@ -6200,7 +6635,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 </div>
                 {/* Triggers and prior treatments removed from template form */}
                 <div>
-                  <div className="text-[11px] text-gray-600 mb-1">Skin Concerns</div>
+                  <div className="text-xs text-muted-foreground mb-1">Skin Concerns</div>
                   <div className="flex flex-wrap gap-2">
                     {SKIN_CONCERNS.map((c) => (
                       <Button key={c} type="button" variant={newTplSkinConcerns.has(c) ? 'default' : 'outline'} size="sm" onClick={() => toggleSet(newTplSkinConcerns, c, setNewTplSkinConcerns)}>{c}</Button>
@@ -6211,7 +6646,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
               </div>
               <div className="space-y-3">
                 <div>
-                  <label className="text-sm text-gray-700">Add Medicine</label>
+                  <label className="text-sm text-foreground">Add Medicine</label>
                   <Input 
                     key="newtpl-drug-search"
                     placeholder="Search drug name or brand (min 2 chars)" 
@@ -6219,27 +6654,27 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     onChange={(e) => setNewTplDrugQuery(e.target.value)}
                   />
                   {newTplDrugQuery.trim().length >= 2 && (
-                    <div className="mt-2 border rounded divide-y max-h-48 overflow-auto" onMouseDown={(e) => e.preventDefault()}>
+                    <div className="mt-2 border rounded-md divide-y max-h-48 overflow-auto" onMouseDown={(e) => e.preventDefault()}>
                       {newTplLoadingDrugs && (
-                        <div className="px-3 py-2 text-xs text-gray-500">Searching…</div>
+                        <div className="px-3 py-2 text-xs text-muted-foreground">Searching…</div>
                       )}
                       {!newTplLoadingDrugs && newTplDrugResults.length === 0 && (
-                        <div className="px-3 py-2 text-xs text-gray-500">No results</div>
+                        <div className="px-3 py-2 text-xs text-muted-foreground">No results</div>
                       )}
                       {!newTplLoadingDrugs && newTplDrugResults.length > 0 && (
                         <>
                           {newTplDrugResults.map((d: any, index: number) => (
                             <div 
                               key={`${d.id}-${d.name}`} 
-                              className={`px-3 py-2 text-sm flex items-center justify-between hover:bg-gray-50 ${
-                                index === 0 ? 'bg-green-50 border-l-4 border-l-green-500' : 
-                                index < 3 ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''
+                              className={`px-3 py-2 text-sm flex items-center justify-between hover:bg-background ${
+                                index === 0 ? 'bg-success-soft border-l-4 border-l-success-border' :
+                                index < 3 ? 'bg-info-soft border-l-4 border-l-info-border' : ''
                               }`}
-                              onMouseEnter={() => prefetchDrugStockById(d.id)}
+                              onMouseEnter={() => prefetchDrugStockById(d.id, d.inventoryItemId)}
                             >
                               <div className="flex-1">
                                 <div className="font-medium">{d.name}</div>
-                                <div className="text-xs text-gray-500">{d.manufacturer || d.manufacturerName || d.genericName || ''} {d.packSizeLabel ? ` • ${d.packSizeLabel}` : ''}</div>
+                                <div className="text-xs text-muted-foreground">{d.manufacturer || d.manufacturerName || d.genericName || ''} {d.packSizeLabel ? ` • ${d.packSizeLabel}` : ''}</div>
                               </div>
                               <Button size="sm" variant="outline" onClick={() => { addItemFromDrugToNewTpl(d); }}>Add</Button>
                             </div>
@@ -6250,12 +6685,12 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   )}
                 </div>
                 <div className="flex justify-between items-center">
-                  <div className="text-sm text-gray-600">Total items: {newTplItems.length}</div>
+                  <div className="text-sm text-muted-foreground">Total items: {newTplItems.length}</div>
                   <Button size="sm" variant="outline" onClick={addNewTplItem}>Add Row</Button>
                 </div>
-                <div className="overflow-auto border rounded">
+                <div className="overflow-auto border rounded-md">
                   <table className="min-w-full text-sm">
-                    <thead className="bg-gray-50 text-gray-700">
+                    <thead className="bg-background text-foreground">
                       <tr>
                         <th className="px-3 py-2 text-left font-medium">Medicine</th>
                         <th className="px-3 py-2 text-left font-medium">Frequency (0-1-0)</th>
@@ -6268,7 +6703,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     <tbody>
                       {newTplItems.length === 0 && (
                         <tr>
-                          <td colSpan={6} className="px-3 py-3 text-center text-gray-500">No items added yet</td>
+                          <td colSpan={6} className="px-3 py-3 text-center text-muted-foreground">No items added yet</td>
                         </tr>
                       )}
                       {newTplItems.map((it: any, idx: number) => (
@@ -6296,7 +6731,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                                   {dosePatternOptions.map(p => (
                                     <SelectItem key={p} value={p}>{p.toUpperCase()}</SelectItem>
                                   ))}
-                                  <SelectItem value="__CUSTOM__" className="text-blue-600 border-t mt-1 pt-1">+ Custom...</SelectItem>
+                                  <SelectItem value="__CUSTOM__" className="text-info-text border-t mt-1 pt-1">+ Custom...</SelectItem>
                                 </SelectContent>
                               </Select>
                               <Select value={it.frequency} onValueChange={(v: Frequency) => {
@@ -6311,7 +6746,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                                   {frequencyOptions.map(f => (
                                     <SelectItem key={f} value={f}>{formatFrequency(f)}</SelectItem>
                                   ))}
-                                  <SelectItem value="__CUSTOM__" className="text-blue-600 border-t mt-1 pt-1">+ Custom...</SelectItem>
+                                  <SelectItem value="__CUSTOM__" className="text-info-text border-t mt-1 pt-1">+ Custom...</SelectItem>
                                 </SelectContent>
                               </Select>
                             </div>
@@ -6326,7 +6761,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                                 {getTimingOptionsForFrequency(it.frequency).map(t => (
                                   <SelectItem key={t} value={t}>{t}</SelectItem>
                                 ))}
-                                <SelectItem value="__CUSTOM__" className="text-blue-600 border-t mt-1 pt-1">+ Custom...</SelectItem>
+                                <SelectItem value="__CUSTOM__" className="text-info-text border-t mt-1 pt-1">+ Custom...</SelectItem>
                               </SelectContent>
                             </Select>
                           </td>
@@ -6342,7 +6777,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                                   {durationUnitOptions.map(u => (
                                     <SelectItem key={u} value={u}>{u}</SelectItem>
                                   ))}
-                                  <SelectItem value="__CUSTOM__" className="text-blue-600 border-t mt-1 pt-1">+ Custom...</SelectItem>
+                                  <SelectItem value="__CUSTOM__" className="text-info-text border-t mt-1 pt-1">+ Custom...</SelectItem>
                                 </SelectContent>
                               </Select>
                             </div>
@@ -6550,7 +6985,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
               aria-describedby={templateNameError ? 'template-name-error' : undefined}
               />
             {templateNameError ? (
-              <p id="template-name-error" className="text-sm text-red-600">{templateNameError}</p>
+              <p id="template-name-error" className="text-sm text-destructive-text">{templateNameError}</p>
             ) : null}
             </div>
             <DialogFooter>
@@ -6593,7 +7028,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       {/* Fixed position drug search dropdown - rendered outside table structure */}
       {activeSearchRow !== null && dropdownPosition && (rowDrugQueries[activeSearchRow] || '').trim().length >= 2 && (
         <div 
-          className="fixed z-[10000] bg-white border-2 border-blue-500 rounded-lg shadow-2xl max-h-64 overflow-auto"
+          className="fixed z-[10000] bg-card border-2 border-info-border rounded-lg shadow-sm max-h-64 overflow-auto"
           style={{ 
             top: `${dropdownPosition.top}px`,
             left: `${dropdownPosition.left}px`,
@@ -6603,26 +7038,26 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           onMouseDown={(e) => e.preventDefault()}
         >
           {rowLoadingDrugs[activeSearchRow] && (
-            <div className="px-3 py-2 text-xs text-gray-500">Searching…</div>
+            <div className="px-3 py-2 text-xs text-muted-foreground">Searching…</div>
           )}
           {!rowLoadingDrugs[activeSearchRow] && (!rowDrugResults[activeSearchRow] || rowDrugResults[activeSearchRow].length === 0) && (
-            <div className="px-3 py-2 text-xs text-gray-500">No results found</div>
+            <div className="px-3 py-2 text-xs text-muted-foreground">No results found</div>
           )}
           {!rowLoadingDrugs[activeSearchRow] && rowDrugResults[activeSearchRow] && rowDrugResults[activeSearchRow].length > 0 && (
             <>
               {rowDrugResults[activeSearchRow].map((d: any, index: number) => (
                 <div 
                   key={`${d.id}-${d.name}`} 
-                  className={`px-3 py-2 text-sm flex items-center justify-between hover:bg-gray-50 cursor-pointer border-b last:border-b-0 ${
-                    index === 0 ? 'bg-green-50 border-l-4 border-l-green-500' : 
-                    index < 3 ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''
+                  className={`px-3 py-2 text-sm flex items-center justify-between hover:bg-background cursor-pointer border-b last:border-b-0 ${
+                    index === 0 ? 'bg-success-soft border-l-4 border-l-success-border' :
+                    index < 3 ? 'bg-info-soft border-l-4 border-l-info-border' : ''
                   }`}
-                  onMouseEnter={() => prefetchDrugStockById(d.id)}
+                  onMouseEnter={() => prefetchDrugStockById(d.id, d.inventoryItemId)}
                   onClick={() => { addItemFromDrugToRow(activeSearchRow, d); }}
                   title={((): string => {
-                    const stock = drugStockById[d.id];
+                    const stock = drugStockByKey[d.inventoryItemId ? `inventory:${d.inventoryItemId}` : `id:${d.id}`] ?? d.totalStock;
                     if (stock === undefined) return 'Checking stock…';
-                    return `Remaining stock: ${stock}`;
+                    return `Remaining stock: ${stock ?? '—'}`;
                   })()}
                 >
                   <div className="flex-1">
@@ -6632,19 +7067,18 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                       </div>
                       {getRelevanceBadge(d, rowDrugQueries[activeSearchRow], index)}
                     </div>
-                    <div className="text-xs text-gray-500">
+                    <div className="text-xs text-muted-foreground">
                       {highlightMatch(d.manufacturer || d.manufacturerName || d.genericName || '', rowDrugQueries[activeSearchRow])}
                       {d.packSizeLabel ? ` • ${d.packSizeLabel}` : ''}
                     </div>
                     <div className="text-xs mt-0.5">
-                      <span className="text-gray-500">Stock:</span>{' '}
-                      {drugStockById[d.id] !== undefined ? (
-                        <span className={drugStockById[d.id] <= 5 ? 'text-red-600' : 'text-gray-700'}>
-                          {drugStockById[d.id]}
-                        </span>
-                      ) : (
-                        <span className="text-gray-400">—</span>
-                      )}
+                      <span className="text-muted-foreground">Stock:</span>{' '}
+                      {(() => {
+                        const stock = drugStockByKey[d.inventoryItemId ? `inventory:${d.inventoryItemId}` : `id:${d.id}`] ?? d.totalStock;
+                        return stock != null
+                          ? <span className={stock <= 5 ? 'text-destructive-text' : 'text-foreground'}>{stock}</span>
+                          : <span className="text-muted-foreground">—</span>;
+                      })()}
                     </div>
                   </div>
                   <Button

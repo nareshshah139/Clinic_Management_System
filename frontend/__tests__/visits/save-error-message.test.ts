@@ -11,11 +11,18 @@ describe('Save API error messages', () => {
     try {
       const error = await new ApiClient().createPrescription({}).catch(error => error);
       expect(error.status).toBe(400);
-      expect(getErrorMessage(error)).toBe(messages.join('; '));
+      expect(getErrorMessage(error)).toBe(`${messages.join('; ')} (Reference: ${error.requestId})`);
       expect(() => getErrorMessage(error).toLowerCase()).not.toThrow();
     } finally {
       global.fetch = previousFetch;
     }
+  });
+
+  it('does not duplicate a reference or render an untrusted reference value', () => {
+    const requestId = '11111111-1111-4111-8111-111111111111';
+    const message = `Unable to save (Reference: ${requestId})`;
+    expect(getErrorMessage({ message, requestId })).toBe(message);
+    expect(getErrorMessage({ message: 'Unable to save', requestId: 'patient-name' })).toBe('Unable to save');
   });
 
   it.each([

@@ -50,6 +50,9 @@ describe('PharmacyPrescriptionQueueService', () => {
       drug: {
         findFirst: jest.fn(),
       },
+      inventoryItem: {
+        findMany: jest.fn().mockImplementation(({ where }) => Promise.resolve(where.id.in.map((id: string) => ({ id, unit: 'PIECES' })))),
+      },
     };
     drugService = {
       getAlternatives: jest.fn(),
@@ -59,6 +62,90 @@ describe('PharmacyPrescriptionQueueService', () => {
 
   afterEach(() => {
     jest.clearAllMocks();
+  });
+
+  it.each([
+    [{ dosage: 2, dosageUnit: 'TABLET', frequency: 'TWICE_DAILY', duration: 5 }, 20],
+    [{ dosage: 2, dosageUnit: 'CAPSULE', dosePattern: '2-0-2', frequency: 'TWICE_DAILY', duration: 5 }, 20],
+    [{ dosageUnit: 'TABLET', dosePattern: '1-0-1', duration: 5 }, 10],
+    [{ dosage: 2, dosageUnit: 'TABLET', dosePattern: '1-0-1', frequency: 'TWICE_DAILY', duration: 5 }, null],
+    [{ dosageUnit: 'TABLET', dosePattern: '1-0-1', frequency: 'THREE_TIMES_DAILY', duration: 5 }, null],
+    [{ dosage: 1, dosageUnit: 'TABLET', dosePattern: 'q8h', duration: 3 }, 9],
+    [{ dosage: 500, dosageUnit: 'MG', frequency: 'TWICE_DAILY', duration: 5 }, null],
+    [{ dosage: 1, dosageUnit: 'TABLET', dosePattern: 'as directed', frequency: 'TWICE_DAILY', duration: 5 }, null],
+    [{ dosage: '2 tablets', dosageUnit: 'TABLET', frequency: 'TWICE_DAILY', duration: 5 }, null],
+    [{ quantity: 7, dosage: 500, dosageUnit: 'MG', frequency: 'TWICE_DAILY', duration: 5 }, 7],
+  ])('transfers a safe prescribed quantity for %o', async (regimen, expected) => {
+    prisma.prescription.findFirst.mockResolvedValue(prescription({
+      items: JSON.stringify([{ drugName: 'Azithral 500', ...regimen }]),
+    }));
+
+    const result = await service.findOne('rx-1', branchId);
+
+    expect(result.medications[0].prescribedQuantity).toBe(expected);
+  });
+
+  it.each([
+    [[{ drugName: 'Azithral 500', quantity: 10 }], [{ quantity: 3, drug: { id: 'drug-1', name: 'Azithral 500' } }], [3, 7]],
+    [[{ drugName: 'Azithral 500', quantity: 10 }, { drugName: 'Azithral 500', quantity: 5 }], [{ quantity: 3, drug: { id: 'drug-1', name: 'Azithral 500' } }], [null, null]],
+    [[{ drugName: 'Azithral 500', quantity: 10 }, { drugName: 'Azithral', quantity: 5 }], [{ quantity: 3, drug: { id: 'drug-1', name: 'Azithral 500' } }], [null, null]],
+    [[{ drugName: 'Azithral 500', quantity: 10 }], [{ quantity: 3, drug: { id: 'drug-2', name: 'Azithral 250' } }], [null, null]],
+    [[{ drugName: 'Azithral 500' }], [], [0, null]],
+  ])('returns only attributable billed and remaining quantities', async (lines, billed, expected) => {
+    prisma.prescription.findFirst.mockResolvedValue(prescription({
+      items: JSON.stringify(lines),
+      pharmacyInvoices: billed.length ? [{ id: 'inv-1', status: 'CONFIRMED', items: billed.map((item) => ({ ...item, inventoryItemId: 'batch-1' })) }] : [],
+    }));
+    jest.spyOn(service as any, 'stockCheckMedication').mockResolvedValue({ drugName: 'Azithral 500', unit: 'PIECES' });
+
+    const result = await service.stockCheck('rx-1', branchId);
+
+    expect([result.items[0].dispensedQuantity, result.items[0].remainingQuantity]).toEqual(expected);
+  });
+
+  it.each([
+    [{ dosage: 2, dosageUnit: 'TABLET', frequency: 'TWICE_DAILY', duration: 5 }, 'PIECES', 20],
+    [{ dosage: 2, dosageUnit: 'TABLET', frequency: 'TWICE_DAILY', duration: 5 }, 'STRIPS', null],
+    [{ quantity: 5, dosage: 500, dosageUnit: 'MG' }, 'PIECES', 5],
+    [{ quantity: 5, dosage: 500, dosageUnit: 'MG' }, 'STRIPS', null],
+    [{ quantity: 2, quantityUnit: 'STRIPS' }, 'STRIPS', 2],
+    [{ quantity: 2 }, 'TUBES', null],
+    [{ quantity: 2 }, null, null],
+  ])('transfers %o only when stock unit %s is compatible', async (regimen, unit, expected) => {
+    prisma.prescription.findFirst.mockResolvedValue(prescription({
+      items: JSON.stringify([{ drugName: 'Azithral 500', ...regimen }]),
+    }));
+    jest.spyOn(service as any, 'stockCheckMedication').mockResolvedValue({ drugName: 'Azithral 500', unit });
+    const result = await service.stockCheck('rx-1', branchId);
+    expect(result.items[0].remainingQuantity).toBe(expected);
+    expect(result.items[0].quantityUnavailableReason === null).toBe(expected !== null);
+  });
+
+  it('does not subtract a historical strip from a current piece quantity or mark it dispensed', async () => {
+    prisma.prescription.findFirst.mockResolvedValue(prescription({
+      items: JSON.stringify([{ drugName: 'Azithral 500', dosage: 1, dosageUnit: 'TABLET', frequency: 'ONCE_DAILY', duration: 3 }]),
+      pharmacyInvoices: [{ id: 'inv-1', status: 'COMPLETED', items: [{ quantity: 3, inventoryItemId: 'old-batch', drug: { id: 'drug-1', name: 'Azithral 500' } }] }],
+    }));
+    prisma.inventoryItem.findMany.mockResolvedValue([{ id: 'old-batch', unit: 'STRIPS' }]);
+    jest.spyOn(service as any, 'stockCheckMedication').mockResolvedValue({ drugName: 'Azithral 500', unit: 'PIECES' });
+    const entry = await service.findOne('rx-1', branchId);
+    const stock = await service.stockCheck('rx-1', branchId);
+    expect(entry.status).toBe(PrescriptionQueueStatus.PARTIAL);
+    expect(stock.items[0].remainingQuantity).toBeNull();
+    expect(stock.items[0].quantityUnavailableReason).toContain('Previously billed stock units');
+  });
+
+  it('requires review when historical invoice stock units cannot be read', async () => {
+    prisma.prescription.findFirst.mockResolvedValue(prescription({
+      pharmacyInvoices: [{ id: 'inv-1', status: 'COMPLETED', items: [{ quantity: 3, inventoryItemId: 'batch-1', drug: { id: 'drug-1', name: 'Azithral 500' } }] }],
+    }));
+    prisma.inventoryItem.findMany.mockRejectedValue(new Error('lookup unavailable'));
+    jest.spyOn(service as any, 'stockCheckMedication').mockResolvedValue({ drugName: 'Azithral 500', unit: 'PIECES' });
+    const entry = await service.findOne('rx-1', branchId);
+    const stock = await service.stockCheck('rx-1', branchId);
+    expect(entry.status).toBe(PrescriptionQueueStatus.PARTIAL);
+    expect(stock.items[0].remainingQuantity).toBeNull();
+    expect(stock.items[0].quantityUnavailableReason).toContain('Previously billed stock units');
   });
 
   it('marks unlinked prescriptions older than 24 hours as expired', async () => {
@@ -123,6 +210,54 @@ describe('PharmacyPrescriptionQueueService', () => {
     });
   });
 
+  it.each(['DISPENSED', 'COMPLETED'])('keeps a %s invoice partial until all prescribed units are covered', async (status) => {
+    prisma.prescription.findFirst.mockResolvedValue(prescription({
+      pharmacyInvoices: [{ id: 'inv-1', status, items: [{ quantity: 1, drug: { id: 'drug-1', name: 'Azithral 500' } }] }],
+    }));
+    const result = await service.findOne('rx-1', branchId);
+    expect(result.status).toBe(PrescriptionQueueStatus.PARTIAL);
+  });
+
+  it('marks the prescription dispensed when all lines are reliably covered across invoices', async () => {
+    prisma.prescription.findFirst.mockResolvedValue(prescription({
+      pharmacyInvoices: [
+        { id: 'inv-1', status: 'DISPENSED', items: [{ quantity: 1, inventoryItemId: 'batch-1', drug: { id: 'drug-1', name: 'Azithral 500' } }] },
+        { id: 'inv-2', status: 'COMPLETED', items: [{ quantity: 2, inventoryItemId: 'batch-1', drug: { id: 'drug-1', name: 'Azithral 500' } }] },
+      ],
+    }));
+    const result = await service.findOne('rx-1', branchId);
+    expect(result.status).toBe(PrescriptionQueueStatus.DISPENSED);
+  });
+
+  it('does not treat duplicate prescription lines as covered by the same invoice item', async () => {
+    prisma.prescription.findFirst.mockResolvedValue(prescription({
+      items: JSON.stringify([{ drugName: 'Azithral 500', quantity: 3 }, { drugName: 'Azithral 500', quantity: 3 }]),
+      pharmacyInvoices: [{ id: 'inv-1', status: 'COMPLETED', items: [{ quantity: 3, drug: { id: 'drug-1', name: 'Azithral 500' } }] }],
+    }));
+    const result = await service.findOne('rx-1', branchId);
+    expect(result.status).toBe(PrescriptionQueueStatus.PARTIAL);
+  });
+
+  it('keeps partial coverage visible when an existing task was marked dispensed', async () => {
+    prisma.prescription.findFirst.mockResolvedValue(prescription({
+      pharmacyInvoices: [{ id: 'inv-1', status: 'DISPENSED', items: [{ quantity: 1, drug: { id: 'drug-1', name: 'Azithral 500' } }] }],
+    }));
+    const task = { id: 'task-1', status: 'DISPENSED', lines: [] };
+    prisma.pharmacyDispenseTask = { findFirst: jest.fn().mockResolvedValue(task), update: jest.fn().mockResolvedValue(task) };
+    const result = await service.findOne('rx-1', branchId);
+    expect(result.status).toBe(PrescriptionQueueStatus.PARTIAL);
+  });
+
+  it('shows complete coverage when a partially filled task has not yet reflected posted invoices', async () => {
+    prisma.prescription.findFirst.mockResolvedValue(prescription({
+      pharmacyInvoices: [{ id: 'inv-1', status: 'DISPENSED', items: [{ quantity: 3, inventoryItemId: 'batch-1', drug: { id: 'drug-1', name: 'Azithral 500' } }] }],
+    }));
+    const task = { id: 'task-1', status: 'PARTIALLY_FILLED', lines: [] };
+    prisma.pharmacyDispenseTask = { findFirst: jest.fn().mockResolvedValue(task), update: jest.fn().mockResolvedValue(task) };
+    const result = await service.findOne('rx-1', branchId);
+    expect(result.status).toBe(PrescriptionQueueStatus.DISPENSED);
+  });
+
   it('keeps cancelled linked invoices out of coverage without treating the prescription as pending', async () => {
     prisma.prescription.findMany.mockResolvedValue([
       prescription({
@@ -154,7 +289,7 @@ describe('PharmacyPrescriptionQueueService', () => {
     });
   });
 
-  it('marks a completed linked invoice as dispensed even when quantities are unknown', async () => {
+  it('keeps a completed linked invoice partial when prescribed quantities are unknown', async () => {
     prisma.prescription.findMany.mockResolvedValue([
       prescription({
         items: JSON.stringify([
@@ -183,7 +318,7 @@ describe('PharmacyPrescriptionQueueService', () => {
 
     const result = await service.findAll({ page: 1, limit: 20 }, branchId);
 
-    expect(result.data[0].status).toBe(PrescriptionQueueStatus.DISPENSED);
+    expect(result.data[0].status).toBe(PrescriptionQueueStatus.PARTIAL);
     expect(result.data[0].medications[0]).toMatchObject({
       prescribedQuantity: null,
       quantityInferred: false,
@@ -192,18 +327,13 @@ describe('PharmacyPrescriptionQueueService', () => {
     });
   });
 
-  it('returns FEFO stock checks with low stock, near expiry, and alternatives', async () => {
+  it('returns FEFO available stock checks with low stock and near expiry', async () => {
     const futureExpiry = new Date(Date.now() + 20 * 24 * 60 * 60 * 1000);
     const laterExpiry = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
     const expired = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
     prisma.prescription.findFirst.mockResolvedValue(prescription());
-    prisma.drug.findFirst.mockResolvedValueOnce({
-      id: 'drug-1',
-      name: 'Azithral 500',
-      manufacturerName: 'Alembic',
-      minStockLevel: 10,
-      inventoryItems: [
+    const batches = [
         {
           id: 'batch-late',
           currentStock: 4,
@@ -237,8 +367,9 @@ describe('PharmacyPrescriptionQueueService', () => {
           stockStatus: 'LOW_STOCK',
           storageLocation: 'A1',
         },
-      ],
-    });
+      ].map(b => ({ ...b, minStockLevel: 10, status: 'ACTIVE', unit: 'TABLETS', branchId, heldStock: 0, drugs: [{ id: 'drug-1', isActive: true, isDiscontinued: false, name: 'Azithral 500', manufacturerName: 'Alembic', minStockLevel: 10, branchId }] }));
+    prisma.prescriptionInventoryLink = { findUnique: jest.fn().mockResolvedValue(null) };
+    prisma.inventoryItem = { findMany: jest.fn().mockResolvedValue(batches) };
     drugService.getAlternatives.mockResolvedValue([
       {
         id: 'alt-1',
@@ -261,21 +392,12 @@ describe('PharmacyPrescriptionQueueService', () => {
       totalNonExpiredStock: 7,
       lowStock: true,
       nearExpiry: true,
-      alternatives: [
-        {
-          id: 'alt-1',
-          name: 'Azithro 500',
-          totalStock: 12,
-        },
-      ],
+      alternatives: [],
     });
     expect(
       result.items[0].batches.map((batch: any) => batch.batchNumber),
     ).toEqual(['EARLY', 'LATE']);
-    expect(drugService.getAlternatives).toHaveBeenCalledWith(
-      'drug-1',
-      branchId,
-    );
+    expect(drugService.getAlternatives).not.toHaveBeenCalled();
   });
 
   it('throws not found for prescriptions outside the branch', async () => {

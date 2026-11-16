@@ -1,5 +1,10 @@
 'use client';
 
+import { PageHeader } from '@/components/ui/page-header';
+import { EmptyState } from '@/components/ui/empty-state';
+import { LoadingSkeleton } from '@/components/ui/skeleton';
+import { medicineNameIssues, formatMedicineName } from '@cms/shared-types/medicine-name';
+
 import { useState, useEffect } from 'react';
 import {
   Card,
@@ -54,6 +59,7 @@ interface Drug {
   composition1?: string;
   composition2?: string;
   category?: string;
+  brandName?: string; itemCode?: string; combinationProduct?: boolean; dispenseLoose?: boolean;
   dosageForm?: string;
   strength?: string;
   isDiscontinued: boolean;
@@ -82,7 +88,7 @@ export function DrugManagement() {
 
   // Form state for add/edit
   const [formData, setFormData] = useState({
-    name: '',
+    name: '', brandName: '', itemCode: '', combinationProduct: false, dispenseLoose: false,
     price: '',
     manufacturerName: '',
     packSizeLabel: '',
@@ -207,13 +213,14 @@ export function DrugManagement() {
       ['composition1', 'Primary composition'],
       ['category', 'Category'],
       ['dosageForm', 'Dosage form'],
-      ['strength', 'Strength'],
+
     ];
 
     const missing = requiredFields
-      .filter(([field]) => (medicineForm || ['name', 'packSizeLabel', 'category'].includes(field)) && !formData[field]?.trim())
+      .filter(([field]) => (medicineForm || ['name', 'packSizeLabel', 'category'].includes(field)) && !String(formData[field] ?? '').trim())
       .map(([, label]) => label);
 
+    if (medicineForm) missing.push(...medicineNameIssues(formData));
     if (missing.length > 0) {
       toast({ title: "Check the details", description: `Please fill required product master fields: ${missing.join(', ')}`, variant: "warning" });
       return false;
@@ -236,7 +243,7 @@ export function DrugManagement() {
 
   const resetForm = () => {
     setFormData({
-      name: '',
+      name: '', brandName: '', itemCode: '', combinationProduct: false, dispenseLoose: false,
       price: '',
       manufacturerName: '',
       packSizeLabel: '',
@@ -254,7 +261,7 @@ export function DrugManagement() {
   const openEditDialog = (drug: Drug) => {
     setEditingDrug(drug);
     setFormData({
-      name: drug.name,
+      name: drug.name, brandName: drug.brandName || drug.name, itemCode: drug.itemCode || '', combinationProduct: drug.combinationProduct || false, dispenseLoose: drug.dispenseLoose || false,
       price: drug.price.toString(),
       manufacturerName: drug.manufacturerName,
       packSizeLabel: drug.packSizeLabel,
@@ -279,19 +286,15 @@ export function DrugManagement() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold">Drug Database</h2>
-          <p className="text-gray-600">Manage your pharmacy's drug inventory</p>
-        </div>
+      <PageHeader title="Drug Database" description="Manage your pharmacy's drug inventory" actions={
         <Button
           onClick={() => setShowAddDialog(true)}
-          className="bg-blue-600 hover:bg-blue-700"
+          className="bg-info hover:bg-info"
         >
           <Plus className="h-4 w-4 mr-2" />
           Add New Drug
         </Button>
-      </div>
+      } />
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -299,12 +302,12 @@ export function DrugManagement() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Total Drugs</p>
+                <p className="text-sm text-muted-foreground">Total Drugs</p>
                 <p className="text-2xl font-bold">
                   {pagination.total.toLocaleString()}
                 </p>
               </div>
-              <Pill className="h-8 w-8 text-blue-600" />
+              <Pill className="h-8 w-8 text-info-text" />
             </div>
           </CardContent>
         </Card>
@@ -313,10 +316,10 @@ export function DrugManagement() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Categories</p>
+                <p className="text-sm text-muted-foreground">Categories</p>
                 <p className="text-2xl font-bold">{categories.length}</p>
               </div>
-              <Package className="h-8 w-8 text-green-600" />
+              <Package className="h-8 w-8 text-success-text" />
             </div>
           </CardContent>
         </Card>
@@ -325,10 +328,10 @@ export function DrugManagement() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Manufacturers</p>
+                <p className="text-sm text-muted-foreground">Manufacturers</p>
                 <p className="text-2xl font-bold">{manufacturers.length}</p>
               </div>
-              <Building className="h-8 w-8 text-purple-600" />
+              <Building className="h-8 w-8 text-highlight-text" />
             </div>
           </CardContent>
         </Card>
@@ -337,12 +340,12 @@ export function DrugManagement() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Active Drugs</p>
+                <p className="text-sm text-muted-foreground">Active Drugs</p>
                 <p className="text-2xl font-bold">
                   {drugs.filter((d) => d.isActive).length}
                 </p>
               </div>
-              <Calendar className="h-8 w-8 text-orange-600" />
+              <Calendar className="h-8 w-8 text-warning-text" />
             </div>
           </CardContent>
         </Card>
@@ -355,7 +358,7 @@ export function DrugManagement() {
             <div>
               <Label>Search Drugs</Label>
               <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Search by name, composition..."
                   value={searchQuery}
@@ -429,23 +432,15 @@ export function DrugManagement() {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <div className="flex items-center justify-center py-8">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
-                <p className="text-gray-500">Loading drugs...</p>
-              </div>
-            </div>
+            <LoadingSkeleton label="Loading drugs…" variant="cards" />
           ) : drugs.length === 0 ? (
-            <div className="text-center py-8">
-              <Pill className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-              <p className="text-gray-500">No drugs found</p>
-            </div>
+            <EmptyState title="No drugs found" description="Adjust your search or add a drug to the database." icon={Pill} action={<Button onClick={() => setShowAddDialog(true)}><Plus className="size-4" />Add New Drug</Button>} />
           ) : (
             <div className="space-y-4">
               {drugs.map((drug) => (
                 <div
                   key={drug.id}
-                  className="border rounded-lg p-4 hover:bg-gray-50"
+                  className="border rounded-lg p-4 hover:bg-background"
                 >
                   <div className="flex justify-between items-start">
                     <div className="flex-1">
@@ -462,7 +457,7 @@ export function DrugManagement() {
                         )}
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-muted-foreground">
                         <div>
                           <p>
                             <strong>Manufacturer:</strong>{' '}
@@ -497,7 +492,7 @@ export function DrugManagement() {
                       </div>
 
                       {drug.composition2 && (
-                        <p className="text-sm text-blue-600 mt-2">
+                        <p className="text-sm text-info-text mt-2">
                           <strong>Additional:</strong> {drug.composition2}
                         </p>
                       )}
@@ -515,7 +510,7 @@ export function DrugManagement() {
                         variant="ghost"
                         size="sm"
                         onClick={() => handleDeleteDrug(drug.id)}
-                        className="text-red-500 hover:text-red-700"
+                        className="text-destructive-text hover:text-destructive-text"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -541,7 +536,7 @@ export function DrugManagement() {
                     Previous
                   </Button>
 
-                  <span className="text-sm text-gray-600">
+                  <span className="text-sm text-muted-foreground">
                     Page {pagination.page} of {pagination.pages}
                   </span>
 
@@ -613,6 +608,13 @@ export function DrugManagement() {
               />
             </div>
 
+            <div className="space-y-2">
+              <Label htmlFor="medicine-brand">Brand name</Label><Input id="medicine-brand" required value={formData.brandName} onChange={e => setFormData({ ...formData, brandName: e.target.value })} />
+              <Label htmlFor="medicine-code">Item code</Label><Input id="medicine-code" value={formData.itemCode} onChange={e => setFormData({ ...formData, itemCode: e.target.value })} />
+              <label className="flex gap-2"><input type="checkbox" checked={formData.combinationProduct} onChange={e => setFormData({ ...formData, combinationProduct: e.target.checked })} />Combination product</label>
+              <label className="flex gap-2"><input type="checkbox" checked={formData.dispenseLoose} onChange={e => setFormData({ ...formData, dispenseLoose: e.target.checked })} />Dispense loose</label>
+              <p data-medicine-name>Prescription name. {formatMedicineName(formData.name, formData)}</p>
+            </div>
             <div>
               <Label htmlFor="manufacturerName">Manufacturer{medicineForm ? ' *' : ' (optional)'}</Label>
               <Input
@@ -706,7 +708,7 @@ export function DrugManagement() {
             </div>
 
             <div>
-              <Label htmlFor="strength">Strength{medicineForm ? ' *' : ' (optional)'}</Label>
+              <Label htmlFor="strength">Strength</Label>
               <Input
                 id="strength"
                 value={formData.strength}
@@ -714,7 +716,7 @@ export function DrugManagement() {
                   setFormData((prev) => ({ ...prev, strength: e.target.value }))
                 }
                 placeholder="e.g., 500mg"
-                required={medicineForm}
+
               />
             </div>
 

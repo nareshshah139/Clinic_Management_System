@@ -80,8 +80,17 @@ describe('InventoryService', () => {
   });
 
   describe('createInventoryItem', () => {
+    it.each([
+      { name: 'Synthetic 500mg', strength: '500 mg' },
+      { name: 'Synthetic', dosageForm: 'tablet' },
+    ])('rejects missing verified medicine details before persistence: %j', async details => {
+      await expect(service.createInventoryItem({ ...details, type: InventoryItemType.MEDICINE, costPrice: 1, sellingPrice: 2, unit: UnitType.PIECES }, 'branch-123')).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.inventoryItem.create).not.toHaveBeenCalled();
+    });
     it('should create an inventory item successfully', async () => {
       const createItemDto = {
+        dosageForm: 'tablet',
+        strength: '500 mg',
         name: 'Paracetamol 500mg',
         description: 'Pain relief medicine',
         type: InventoryItemType.MEDICINE,
@@ -132,6 +141,8 @@ describe('InventoryService', () => {
 
     it('should throw ConflictException if SKU already exists', async () => {
       const createItemDto = {
+        dosageForm: 'tablet',
+        strength: '500 mg',
         name: 'Paracetamol 500mg',
         sku: 'PAR-500',
         type: InventoryItemType.MEDICINE,
@@ -148,6 +159,8 @@ describe('InventoryService', () => {
 
     it('should throw ConflictException if barcode already exists', async () => {
       const createItemDto = {
+        dosageForm: 'tablet',
+        strength: '500 mg',
         name: 'Paracetamol 500mg',
         barcode: '123456789',
         type: InventoryItemType.MEDICINE,

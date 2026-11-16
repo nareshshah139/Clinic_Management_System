@@ -40,6 +40,7 @@ describe('PharmacyPartnerSalesService', () => {
       },
       inventoryItem: {
         findMany: jest.fn(),
+        findFirst: jest.fn(),
         updateMany: jest.fn(),
         findUnique: jest.fn(),
         update: jest.fn(),
@@ -173,9 +174,9 @@ describe('PharmacyPartnerSalesService', () => {
       branchId,
       name: 'Azithral 500',
       batchNumber: 'AZT-001',
-      currentStock: 5,
+      currentStock: 5, heldStock: 0, status: 'ACTIVE', costPrice: 50, unit: 'TABLETS', packSize: 1, packUnit: 'TABLETS',
       expiryDate: new Date('2099-06-01T00:00:00.000Z'),
-      drugs: [{ id: 'drug-1', name: 'Azithral 500' }],
+      drugs: [{ id: 'drug-1', name: 'Azithral 500', branchId, isActive: true }],
     };
 
     tx.partnerDailySale.findFirst.mockResolvedValue(sale);
@@ -183,7 +184,7 @@ describe('PharmacyPartnerSalesService', () => {
     tx.inventoryItem.findMany
       .mockResolvedValueOnce([inventoryBatch])
       .mockResolvedValueOnce([]);
-    tx.inventoryItem.updateMany.mockResolvedValue({ count: 1 });
+    tx.inventoryItem.findFirst.mockResolvedValue(inventoryBatch);
     tx.inventoryItem.findUnique.mockResolvedValue({
       currentStock: 0,
       minStockLevel: 10,
@@ -212,14 +213,14 @@ describe('PharmacyPartnerSalesService', () => {
 
     const result = await service.commitStock('sale-1', adminUser);
 
-    expect(tx.inventoryItem.updateMany).toHaveBeenCalledWith(
+    expect(tx.inventoryItem.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
           id: 'inventory-1',
           branchId,
-          currentStock: { gte: 5 },
+          currentStock: 5, heldStock: 0,
         }),
-        data: { currentStock: { decrement: 5 } },
+        data: expect.objectContaining({ currentStock: 0, heldStock: 0 }),
       }),
     );
     expect(tx.stockTransaction.create).toHaveBeenCalledWith(
@@ -278,7 +279,7 @@ describe('PharmacyPartnerSalesService', () => {
     tx.inventoryItem.findMany
       .mockResolvedValueOnce([
         {
-          id: 'inventory-1',
+          id: 'inventory-1', branchId, status: 'ACTIVE', heldStock: 0, costPrice: 50,
           name: 'Azithral 500',
           batchNumber: 'AZT-001',
           currentStock: 2,
@@ -287,7 +288,8 @@ describe('PharmacyPartnerSalesService', () => {
         },
       ])
       .mockResolvedValueOnce([]);
-    tx.inventoryItem.updateMany.mockResolvedValue({ count: 0 });
+    tx.inventoryItem.findFirst.mockResolvedValue({ id: 'inventory-1', branchId, currentStock: 2, heldStock: 0, costPrice: 50 });
+    tx.inventoryItem.update.mockRejectedValue({ code: 'P2025' });
 
     await expect(service.commitStock('sale-1', adminUser)).rejects.toThrow(
       ConflictException,

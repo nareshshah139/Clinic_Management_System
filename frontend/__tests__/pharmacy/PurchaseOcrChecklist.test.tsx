@@ -22,7 +22,7 @@ describe('Purchase OCR review controls', () => {
     const onResolveMany=jest.fn();const onResolve=jest.fn();
     const flags=['missing_packUnitType','uncertain_packUnitType'];
     render(<PurchaseOcrChecklist flags={flags} lineIndex={0} values={{packUnitType:'Tube'}} disabled={false} onResolve={onResolve} onResolveMany={onResolveMany}/>);
-    expect(screen.getAllByRole('button')).toHaveLength(1);
+    expect(screen.getAllByRole('button', {name:/^Confirm /})).toHaveLength(1);
     fireEvent.click(screen.getByRole('button',{name:'Confirm line 1 stock unit checked'}));
     expect(onResolveMany).toHaveBeenCalledWith(flags);expect(onResolve).not.toHaveBeenCalled();
   });
@@ -36,7 +36,7 @@ describe('Purchase OCR review controls', () => {
     expect(onResolve).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Confirm line 2 stock unit checked' }));
     expect(onResolve).toHaveBeenCalledWith('missing_packUnitType');
-    expect(screen.getByRole('link', { name: 'Go to stock unit' })).toHaveAttribute('href', '#line-2-unit');
+    expect(screen.getByRole('link', { name: 'Edit line 2 stock unit' })).toHaveAttribute('href', '#line-2-unit');
   });
 
   it('hides retired missing-manufacturer checks while retaining a reported manufacturer disagreement', () => {
@@ -58,8 +58,8 @@ describe('Purchase OCR review controls', () => {
 
   it('directs missing-page issues to a new upload instead of a confirmation that discards the issue', () => {
     render(<PurchaseOcrChecklist flags={['missing_pages']} values={{}} disabled={false} onResolve={jest.fn()} />);
-    expect(screen.queryByRole('button')).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Go to complete invoice' })).toHaveAttribute('href', '#purchase-invoice-upload');
+    expect(screen.queryByRole('button', {name:/^Confirm /})).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Upload pages for complete invoice' })).toHaveAttribute('href', '#purchase-invoice-upload');
   });
 
   it('keeps confirmation disabled when the draft is locked or the user cannot edit', () => {

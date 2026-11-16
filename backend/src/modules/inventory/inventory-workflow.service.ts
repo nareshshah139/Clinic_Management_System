@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../../shared/database/prisma.service';
+import { hasScopedPermission } from '../../shared/guards/scoped-permission';
 import {
   DEFAULT_INVENTORY_SETTINGS,
   SaveWorkflowDocumentDto,
@@ -61,6 +62,11 @@ const amount = (v: unknown, name: string, fallback = 0) => {
 export class InventoryWorkflowService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * @cc [owner:nareshshah139,label:security] inventory-privileged-bypass
+   * Only OWNER, ADMIN, and DOCTOR receive the global bypass. A stored bare wildcard MUST NOT
+   * grant another role unrestricted inventory access.
+   */
   async permissions(actor: WorkflowActor): Promise<Set<string>> {
     if (!actor.id || !actor.branchId)
       throw new ForbiddenException('Authenticated branch and user required');
@@ -80,7 +86,7 @@ export class InventoryWorkflowService {
     const parse = (v: unknown): string[] => {
       try {
         const p = Array.isArray(v) ? v : JSON.parse(String(v || '[]'));
-        return Array.isArray(p) ? p.filter((x) => typeof x === 'string') : [];
+        return Array.isArray(p) ? p.filter((x) => typeof x === 'string' && x !== '*') : [];
       } catch {
         return [];
       }
@@ -99,12 +105,12 @@ export class InventoryWorkflowService {
   async authorize(actor: WorkflowActor, kind: string, write = false) {
     const p = await this.permissions(actor);
     const required = this.permissionFor(kind, write);
-    if (!p.has('*') && !p.has(required))
+    if (!p.has('*') && !hasScopedPermission(p, required))
       throw new ForbiddenException(`This action requires ${required}`);
   }
   async capabilities(actor: WorkflowActor) {
     const p = await this.permissions(actor),
-      has = (key: string) => p.has('*') || p.has(key);
+      has = (key: string) => p.has('*') || hasScopedPermission(p, key);
     return {
       approve: APPROVERS.has(actor.role),
       settings: APPROVERS.has(actor.role),
@@ -420,9 +426,9 @@ export class InventoryWorkflowService {
       !source ||
       typeof source !== 'object' ||
       !Array.isArray(source.lines) ||
-      source.lines.length > 1000
+      source.lines.length > (kind === 'COUNT' ? 10000 : 1000)
     )
-      throw new BadRequestException('Provide at most 1,000 document lines');
+      throw new BadRequestException(kind === 'COUNT' ? 'Provide at most 10,000 count lines' : 'Provide at most 1,000 document lines');
     const ids = source.lines
       .map((l: any) => clean(l.inventoryId))
       .filter(Boolean);
@@ -550,6 +556,17 @@ export class InventoryWorkflowService {
           fefoOverrideReason: clean(line.fefoOverrideReason),
         };
         if (kind === 'COUNT') {
+          if (line.expectedStock !== undefined && (line.expectedStock !== item?.currentStock || line.expectedUpdatedAt !== item?.updatedAt?.toISOString()))
+            throw new ConflictException(`Line ${index + 1}: stock or batch details changed since export. Export again and recount.`);
+          if (line.countedBatchNumber !== undefined || line.countedExpiryDate !== undefined) {
+            const expiry = String(line.countedExpiryDate || '');
+            if (expiry && (!/^\d{4}-\d{2}-\d{2}$/.test(expiry) || !Number.isFinite(Date.parse(expiry)) || new Date(expiry).toISOString().slice(0, 10) !== expiry))
+              throw new BadRequestException(`Line ${index + 1}: expiry must be YYYY-MM-DD or blank`);
+            if (String(line.countedBatchNumber || '').length > 100) throw new BadRequestException('Batch number is too long');
+            l.countedBatchNumber = String(line.countedBatchNumber || '').trim();
+            l.countedExpiryDate = expiry;
+            l.countRevision = oldById.get(id)?.countRevision ?? item?.updatedAt?.toISOString();
+          }
           l.physicalStock =
             line.physicalStock === '' ||
             line.physicalStock === undefined ||
@@ -643,7 +660,7 @@ export class InventoryWorkflowService {
   async documents(actor: WorkflowActor, query: Record<string, any> = {}) {
     const perms = await this.permissions(actor);
     const kinds = WORKFLOW_KINDS.filter(
-      (k) => perms.has('*') || perms.has(this.permissionFor(k, false)),
+      (k) => perms.has('*') || hasScopedPermission(perms, this.permissionFor(k, false)),
     );
     const where: any = { branchId: actor.branchId, kind: { in: kinds } };
     if (query.kind) {
@@ -710,7 +727,8 @@ export class InventoryWorkflowService {
   /**
    * @cc [owner:nareshshah139,label:product] workflow-stage-atomic-effects
    * A document transition, its signed stock/hold effects and its event MUST commit together.
-   * Concurrent or repeated transitions cannot repeat effects; final records remain immutable.
+   * Concurrent or repeated transitions cannot repeat effects. Posted line data remains immutable;
+   * recovery status changes MUST retain the original effects and append a versioned event.
    */
   /**
    * @cc [owner:nareshshah139,label:product;target] inventory-audit-approval-before-post
@@ -718,6 +736,18 @@ export class InventoryWorkflowService {
    * approval is recorded; a flag saying approvalRequired is not itself approval.
    * Acceptance: INV-31. Validation and open gaps:
    * docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
+   */
+  /**
+   * @cc [owner:nareshshah139,label:product] imported-count-batch-audit
+   * Posting an imported count MUST reject changed batch revisions and commit counted quantity,
+   * batch/expiry corrections and before/after audit together. Draft and approval stages MUST
+   * leave quantities and batch metadata unchanged; blank rows MUST not reset stock.
+   */
+  /**
+   * @cc [owner:nareshshah139] verified-count-ledger-checkpoint
+   * Every posted physical count, including zero variance, MUST record its resulting quantity,
+   * actor, document and covered movement identities atomically. Prior unknown history remains
+   * unchanged; later ledger agreement MUST be measured against this checkpoint.
    */
   async transition(
     actor: WorkflowActor,
@@ -735,6 +765,7 @@ export class InventoryWorkflowService {
         throw new ConflictException(
           'This document changed. Reload to confirm its current status.',
         );
+      if (dto.action === 'RECOUNT') return this.restartCount(tx, actor, doc);
       const p = doc.payload as any,
         lines: WorkflowLine[] = p.lines;
       if (
@@ -847,7 +878,7 @@ export class InventoryWorkflowService {
         data: {
           status: next,
           version: { increment: 1 },
-          ...(dto.action === 'APPROVE' ? { approvedBy: actor.id } : {}),
+          ...(dto.action === 'APPROVE' || (doc.kind === 'COUNT' && next === 'POSTED' && APPROVERS.has(actor.role)) ? { approvedBy: actor.id } : {}),
           ...(next === 'POSTED'
             ? { postedAt: new Date(), postedBy: actor.id }
             : {}),
@@ -891,13 +922,28 @@ export class InventoryWorkflowService {
           const item = await tx.inventoryItem.findFirst({
             where: { id: line.inventoryId, branchId: actor.branchId },
           });
+          const ledgerCheckpoint = {
+            documentId: doc.id,
+            quantity: item.currentStock,
+            actorId: actor.id,
+            recordedAt: new Date().toISOString(),
+            coveredMovementIds: (await tx.stockTransaction.findMany({
+              where: { branchId: actor.branchId, itemId: item.id }, select: { id: true },
+            })).map((movement: any) => movement.id),
+          };
           await tx.inventoryItem.update({
             where: { id: item.id },
             data: {
+              ...(line.countRevision ? {
+                batchNumber: line.countedBatchNumber || null,
+                expiryDate: line.countedExpiryDate ? new Date(line.countedExpiryDate) : null,
+                stockStatus: stockStatus({ ...item, expiryDate: line.countedExpiryDate ? new Date(line.countedExpiryDate) : null }),
+              } : {}),
               metadata: JSON.stringify({
                 ...jsonObject(item.metadata),
                 lastCountAt: new Date().toISOString(),
                 lastCountDocumentId: doc.id,
+                ledgerCheckpoint,
               }),
             },
           });
@@ -912,7 +958,10 @@ export class InventoryWorkflowService {
               status: 'ADJUSTED',
               notes: JSON.stringify({
                 workflowDocumentId: doc.id,
+                ledgerCheckpoint,
                 reason: p.reason,
+                beforeBatchNumber: line.batchNumber, afterBatchNumber: line.countedBatchNumber ?? line.batchNumber,
+                beforeExpiryDate: line.expiryDate, afterExpiryDate: line.countedExpiryDate ?? line.expiryDate,
               }),
             },
           });
@@ -924,6 +973,29 @@ export class InventoryWorkflowService {
       });
       return this.plain(updated);
     });
+  }
+  /**
+   * @cc [owner:nareshshah139,label:product] count-recovery-fresh-observation
+   * Restarting any supported COUNT state MUST create one linked draft per source version,
+   * capture current batch balances, discard all previous physical observations, and change no stock.
+   */
+  private async restartCount(tx: any, actor: WorkflowActor, doc: any) {
+    if (doc.kind !== 'COUNT' || !['DRAFT', 'AWAITING_APPROVAL', 'APPROVED', 'POSTED', 'REJECTED', 'CANCELLED', 'REVERSED'].includes(doc.status))
+      throw new BadRequestException('Only a physical count can be restarted');
+    const requestKey = `recount:${doc.id}:${doc.version}`;
+    const existing = await tx.inventoryWorkflowDocument.findUnique({ where: { branchId_requestKey: { branchId: actor.branchId, requestKey } } });
+    if (existing) return this.plain(existing);
+    const payload = await this.normalizePayload(tx, actor, 'COUNT', {
+      reason: doc.payload.reason,
+      lines: doc.payload.lines.map((line: WorkflowLine) => ({ inventoryId: line.inventoryId, quantity: 0 })),
+    });
+    const created = await tx.inventoryWorkflowDocument.create({ data: {
+      branchId: actor.branchId, kind: 'COUNT', status: 'DRAFT', sourceId: doc.id,
+      reference: `Recount: ${doc.reference}`.slice(0, 160), requestKey, createdBy: actor.id,
+      payload, totalAmount: 0,
+    } });
+    await this.event(tx, created, actor, 'RECOUNT', null, { sourceId: doc.id, sourceVersion: doc.version, observationsDiscarded: true });
+    return this.plain(created);
   }
   /**
    * @cc [owner:nareshshah139,label:product;target] sales-return-original-batch
@@ -1005,7 +1077,7 @@ export class InventoryWorkflowService {
         item &&
         doc.kind === 'COUNT' &&
         line.physicalStock !== undefined &&
-        line.systemStock !== item.currentStock
+        (line.systemStock !== item.currentStock || (line.countRevision && line.countRevision !== item.updatedAt.toISOString()))
       )
         throw new ConflictException(
           `${item.name}: stock changed since the count started. Recount using the current balance.`,
@@ -1268,6 +1340,8 @@ export class InventoryWorkflowService {
     const existing = await tx.inventoryWorkflowEffect.findMany({
       where: { documentId: doc.id },
     });
+    if (doc.status === 'CANCELLED' && doc.payload.sourceHoldId && existing.some((e: any) => e.heldDelta < 0))
+      await this.restoreHoldSource(tx, actor, doc);
     const sourceHold = doc.payload.sourceHoldId
       ? await this.holdBalances(tx, actor, doc.payload.sourceHoldId, doc.id)
       : null;
@@ -1501,6 +1575,25 @@ export class InventoryWorkflowService {
       );
     return balances;
   }
+  /**
+   * @cc [owner:nareshshah139,label:product] released-source-compensation
+   * Compensation of a consumer of a released hold MUST reopen that same source atomically
+   * with its inverse effects. It MUST NOT borrow another hold or erase the release history.
+   * Reversed or missing source documents MUST reject the entire compensation.
+   */
+  private async restoreHoldSource(tx: any, actor: WorkflowActor, consumer: any) {
+    const source = await tx.inventoryWorkflowDocument.findFirst({ where: {
+      id: consumer.payload.sourceHoldId, branchId: actor.branchId, kind: { in: ['HOLD', 'SALES_RETURN'] },
+    } });
+    if (!source || !['POSTED', 'RELEASED'].includes(source.status))
+      throw new BadRequestException('The original hold is unavailable for compensation');
+    if (source.status === 'POSTED') return;
+    const reopened = await tx.inventoryWorkflowDocument.update({
+      where: { id: source.id, branchId: actor.branchId, status: 'RELEASED', version: source.version },
+      data: { status: 'POSTED', version: { increment: 1 } },
+    });
+    await this.event(tx, reopened, actor, 'REOPEN_FOR_CORRECTION', 'RELEASED', { consumerId: consumer.id, reason: 'Restore original held units during linked compensation' });
+  }
   private async releaseHold(tx: any, actor: WorkflowActor, doc: any) {
     const balances = await this.holdBalances(
       tx,
@@ -1629,8 +1722,10 @@ export class InventoryWorkflowService {
       throw new BadRequestException(
         'Reverse the linked hold disposals or returns first',
       );
-    if (doc.payload.sourceHoldId)
+    if (doc.payload.sourceHoldId) {
+      await this.restoreHoldSource(tx, actor, doc);
       await this.holdBalances(tx, actor, doc.payload.sourceHoldId, doc.id);
+    }
     const saleEffects = await tx.inventoryWorkflowEffect.findMany({
       where: { documentId: doc.id, transactionId: { not: null } },
     });

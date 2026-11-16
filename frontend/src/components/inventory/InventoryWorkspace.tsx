@@ -1,4 +1,6 @@
 "use client";
+import { LoadingSkeleton } from '@/components/ui/skeleton';
+import { PageHeader } from '@/components/ui/page-header';
 import "./inventory-readability.css";
 import { useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -7,6 +9,7 @@ import { InventoryAction } from "./InventoryPresentation";
 import { Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { apiClient } from "@/lib/api";
+import { purchaseInvoiceStatusLabel } from "@/lib/purchase-invoice-review";
 import { PurchaseInvoiceWorkbench } from "@/components/pharmacy/PurchaseInvoiceWorkbench";
 import { PurchaseLedger } from "@/components/pharmacy/PurchaseLedger";
 import { ComplianceCenter } from "@/components/pharmacy/ComplianceCenter";
@@ -17,7 +20,11 @@ import { SupplierCreditPanel } from "./SupplierCreditPanel";
 import { ReplenishmentCenter } from "./ReplenishmentCenter";
 import { AlternateInvoiceIntake } from "./AlternateInvoiceIntake";
 import { WorkflowDocumentEditor } from "./WorkflowDocumentEditor";
+import { StocktakeTools } from "./StocktakeTools";
 import { WorkspaceStock } from "./WorkspaceStock";
+import { InventoryUpdates } from "./InventoryUpdates";
+import { InventoryMovements } from "./InventoryMovements";
+import { useDashboardUser } from "@/components/layout/dashboard-user-context";
 import {
   fmtMoney,
   fmtDate,
@@ -38,8 +45,8 @@ const areas = [
 const menus: Record<string, string[][]> = {
   today: [],
   purchases: [
-    ["intake", "Scan / enter invoice"],
-    ["register", "Purchase register"],
+    ["intake", "Scan or enter bill"],
+    ["register", "Saved bills"],
     ["csv", "Import CSV"],
     ["gmail", "Gmail intake"],
     ["suppliers", "Suppliers"],
@@ -52,6 +59,8 @@ const menus: Record<string, string[][]> = {
   ],
   stock: [
     ["list", "Stock list"],
+    ["movements", "Timeline & ledger"],
+    ["approvals", "Approve corrections"],
     ["COUNT", "Counts & audit"],
     ["SUPPLIER_RETURN", "Supplier returns"],
     ["LOSS", "Loss & breakage"],
@@ -95,6 +104,8 @@ const menus: Record<string, string[][]> = {
  * scrollable within the workspace, without changing typography on unrelated routes.
  */
 export function InventoryWorkspace() {
+  const { user } = useDashboardUser();
+  const canReadEdits = ["OWNER", "ADMIN", "DOCTOR", "PHARMACIST"].includes(user?.role || "");
   const params = useSearchParams(),
     router = useRouter(),
     path = usePathname(),
@@ -192,20 +203,17 @@ export function InventoryWorkspace() {
       .then(setCaps)
       .catch((e: any) => setError(e.message));
   }, []);
+  const availableTasks = (menus[area] || []).filter(([id]) => id !== "approvals" || canReadEdits);
+  const primaryTasks = availableTasks.slice(0, 3);
+  const moreTasks = availableTasks.slice(3);
+  const switchTask = (id: string) => navigate({ view: id, document: "", new: "", invoice: "", item: "", receipt: "", intake: "", return: "", status: "", page: "1" });
   const switchArea = (a: string) => {
     router.push(`${path}?area=${a}`, { scroll: false });
     setInitial(null);
   };
   return (
     <main className="inventory-surface min-w-0 space-y-5 pb-12">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Inventory</h1>
-          <p className="mt-1 text-muted-foreground">
-            Receive, review and manage pharmacy stock.
-          </p>
-        </div>
-        <InventoryAction
+      <PageHeader title={<>Inventory</>} actions={<><InventoryAction
           label="Refresh inventory"
           onClick={() => {
             router.refresh();
@@ -215,8 +223,7 @@ export function InventoryWorkspace() {
           }}
         >
           <RefreshCw className="h-4 w-4" />
-        </InventoryAction>
-      </header>
+        </InventoryAction></>} />
       <nav
         aria-label="Inventory areas"
         className="flex gap-1 overflow-x-auto border-b pb-2 print:hidden"
@@ -255,7 +262,7 @@ export function InventoryWorkspace() {
               })
             }
           >
-            {menus[area].map(([id, label]) => (
+            {menus[area].filter(([id]) => id !== "approvals" || canReadEdits).map(([id, label]) => (
               <option key={id} value={id}>
                 {label}
               </option>
@@ -268,30 +275,15 @@ export function InventoryWorkspace() {
           aria-label={`${area} tasks`}
           className="hidden flex-wrap gap-2 md:flex print:hidden"
         >
-          {menus[area].map(([id, label]) => (
-            <Button
-              key={id}
-              size="sm"
-              variant={view === id ? "secondary" : "ghost"}
-              aria-current={view === id ? "page" : undefined}
-              onClick={() =>
-                navigate({
-                  view: id,
-                  document: "",
-                  new: "",
-                  invoice: "",
-                  item: "",
-                  receipt: "",
-                  intake: "",
-                  return: "",
-                  status: "",
-                  page: "1",
-                })
-              }
-            >
-              {label}
-            </Button>
+          {primaryTasks.map(([id, label]) => (
+            <Button key={id} size="sm" variant={view === id ? "secondary" : "ghost"}
+              aria-current={view === id ? "page" : undefined} onClick={() => switchTask(id)}>{label}</Button>
           ))}
+          {moreTasks.length > 0 && <select aria-label="More inventory tasks" className="max-w-64 rounded-md border bg-background px-3 py-2 text-sm"
+            value={moreTasks.some(([id]) => id === view) ? view : ""} onChange={event => switchTask(event.target.value)}>
+            <option value="" disabled>More tasks…</option>
+            {moreTasks.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+          </select>}
         </nav>
       )}
       {error && (
@@ -302,7 +294,7 @@ export function InventoryWorkspace() {
           {error}
         </p>
       )}
-      {!caps && !error && <p role="status">Loading inventory permissions…</p>}
+      {!caps && !error && <LoadingSkeleton variant="cards" label="Loading inventory permissions…" />}
       {caps && (
         <>
           {area === "today" && (
@@ -319,6 +311,12 @@ export function InventoryWorkspace() {
               onDocument={open}
               onInvoice={invoice}
             />
+          )}
+          {area === "stock" && view === "approvals" && (
+            canReadEdits ? <InventoryUpdates /> : <p role="alert">You do not have access to price/stock approvals.</p>
+          )}
+          {area === "stock" && view === "movements" && (
+            <InventoryMovements query={query} navigate={navigate} onBatch={(item) => navigate({ return: params.toString(), area: "stock", view: "list", item })} />
           )}
           {area === "stock" && view === "opening" && (
             <>
@@ -530,6 +528,12 @@ function WorkspaceToday({ navigate, open }: any) {
       )
       .reduce((n: number, q: any) => n + q._count, 0) || 0;
   const rows = [
+    ...(data?.pendingEdits != null ? [{
+      label: `Price/stock edits awaiting approval (${data.pendingEdits})`,
+      count: data.pendingEdits,
+      detail: "Review the reason and proposed changes before updating clinic stock.",
+      target: { area: "stock", view: "approvals" },
+    }] : []),
     ...(data?.supplierOverdue
       ? [
           {
@@ -543,7 +547,7 @@ function WorkspaceToday({ navigate, open }: any) {
     {
       label: "Low stock",
       count: data?.lowStock,
-      detail: "Available quantity is at or below this batch’s saved minimum.",
+      detail: "",
       target: { area: "stock", view: "list", stock: "LOW" },
     },
     {
@@ -591,10 +595,14 @@ function WorkspaceToday({ navigate, open }: any) {
   ];
   return (
     <section className="space-y-5">
+      <div className="flex flex-wrap gap-3" aria-label="Everyday inventory tasks">
+        <Button onClick={() => navigate({ area: "purchases", view: "intake" })}><Plus className="h-4 w-4" /> Scan or enter bill</Button>
+        <Button variant="outline" onClick={() => navigate({ area: "stock", view: "list" })}>Find or correct stock <ArrowRight className="h-4 w-4" /></Button>
+      </div>
       <header>
         <h2 className="text-2xl font-semibold">What needs attention</h2>
         <p className="text-muted-foreground">
-          Every action opens the matching records.{" "}
+
           {data && `As of ${fmtDate(data.asOf)} · current branch`}
         </p>
       </header>
@@ -618,7 +626,7 @@ function WorkspaceToday({ navigate, open }: any) {
         error ? (
           <p>Branch queues are unavailable. Retry to see current work.</p>
         ) : (
-          <p role="status">Loading branch queues…</p>
+          <LoadingSkeleton variant="cards" label="Loading branch queues…" />
         )
       ) : (
         <>
@@ -626,7 +634,8 @@ function WorkspaceToday({ navigate, open }: any) {
             {rows.map((r) => (
               <li key={r.label}>
                 <button
-                  className="flex w-full items-center gap-4 py-5 text-left hover:bg-muted/50"
+                  className="flex w-full items-center gap-4 py-4 text-left hover:bg-muted/50"
+                  title={r.detail}
                   onClick={() => navigate(r.target)}
                 >
                   <span className="min-w-10 text-2xl font-semibold">
@@ -634,9 +643,6 @@ function WorkspaceToday({ navigate, open }: any) {
                   </span>
                   <span className="flex-1">
                     <strong>{r.label}</strong>
-                    <span className="mt-1 block text-sm text-muted-foreground">
-                      {r.detail}
-                    </span>
                   </span>
                   <ArrowRight className="h-5 w-5" />
                 </button>
@@ -804,7 +810,7 @@ function PurchaseRegister({ query, navigate, onOpen }: any) {
               "STOCK_COMMITTED",
               "CANCELLED",
             ].map((s) => (
-              <option key={s}>{s}</option>
+              <option key={s} value={s}>{s === "UNPOSTED" ? "Stock not added" : s === "OCR_REVIEW_REQUIRED" ? "OCR checks needed" : s === "RECONCILIATION_FAILED" ? "Corrections or manual review needed" : purchaseInvoiceStatusLabel({ status: s })}</option>
             ))}
           </select>
         </label>
@@ -875,11 +881,9 @@ function PurchaseRegister({ query, navigate, onOpen }: any) {
                 </td>
                 <td className="p-3">{fmtDate(d.invoiceDate)}</td>
                 <td className="p-3">
-                  {d.status === "STOCK_COMMITTED"
-                    ? "Stock added"
-                    : d.status.replaceAll("_", " ").toLowerCase()}
+                  {purchaseInvoiceStatusLabel(d)}
                 </td>
-                <td className="p-3">{fmtMoney(d.netPayable)}</td>
+                <td className="p-3 text-right tabular-nums">{fmtMoney(d.netPayable)}</td>
                 <td className="p-3">
                   {d.documents?.map((f: any) => (
                     <a
@@ -1033,6 +1037,7 @@ function WorkflowRegister({
           </div>
         )}
       </header>
+      {kind === "COUNT" && capabilities?.kinds?.COUNT?.write && <StocktakeTools onOpen={onOpen} />}
       <label className="block max-w-xs text-sm">
         Status
         <select

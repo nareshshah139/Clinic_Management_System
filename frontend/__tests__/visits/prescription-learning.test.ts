@@ -91,7 +91,7 @@ describe('buildLearnedPrescriptionPlan', () => {
         },
         {
           createdAt: '2026-04-01T00:00:00.000Z',
-          diagnosis: 'Rosacea flare',
+          diagnosis: 'Rosacea',
           items: [
             { drugName: 'Doxycycline 40 mg' },
             { drugName: 'Azelaic Acid Gel' },
@@ -176,7 +176,7 @@ describe('buildLearnedMedicationSuggestion', () => {
           id: 'visit-history-1',
           createdAt: '2026-04-20T00:00:00.000Z',
           doctor: { id: 'doc-7' },
-          diagnosis: [{ diagnosis: 'Rosacea flare' }],
+          diagnosis: [{ diagnosis: 'Rosacea' }],
           prescriptionItems: [
             {
               drugName: 'Doxycycline 40 mg',

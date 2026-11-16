@@ -260,7 +260,7 @@ export class VisitsController {
     @Body() createVisitDto: CreateVisitDto,
     @Request() req: AuthenticatedRequest,
   ) {
-    return this.visitsService.create(createVisitDto, req.user.branchId);
+    return this.visitsService.create(createVisitDto, req.user.branchId, req.user.id);
   }
 
   @Get()
@@ -422,6 +422,14 @@ export class VisitsController {
     );
   }
 
+  @Get('patient/:patientId/personal-history')
+  getPatientPersonalHistory(
+    @Param('patientId') patientId: string,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    return this.visitsService.getPatientPersonalHistory(patientId, req.user.branchId);
+  }
+
   @Get('patient/:patientId/history')
   getPatientVisitHistory(
     @Param('patientId') patientId: string,
@@ -458,7 +466,7 @@ export class VisitsController {
     @Body() updateVisitDto: UpdateVisitDto,
     @Request() req: AuthenticatedRequest,
   ) {
-    return this.visitsService.update(id, updateVisitDto, req.user.branchId);
+    return this.visitsService.update(id, updateVisitDto, req.user.branchId, req.user.id);
   }
 
   @Post(':id/complete')
@@ -614,21 +622,11 @@ export class VisitsController {
     return new StreamableFile(data);
   }
 
-  @Delete(':id/photos/:attachmentId')
-  @Roles(UserRole.DOCTOR, UserRole.ADMIN, UserRole.OWNER)
-  async deleteVisitPhoto(
-    @Param('id') id: string,
-    @Param('attachmentId') attachmentId: string,
-    @Request() req: AuthenticatedRequest,
-  ) {
-    await this.visitsService.deleteVisitAttachment(
-      id,
-      attachmentId,
-      req.user.branchId,
-    );
-    return this.visitsService.listAttachments(id, req.user.branchId);
-  }
-
+  /**
+   * @cc [owner:nareshshah139,label:product] legacy-photo-route
+   * DELETE of the legacy photo route MUST remove the supplied legacy URL, not interpret
+   * "legacy" as an attachment ID. Missing URLs MUST be rejected.
+   */
   @Delete(':id/photos/legacy')
   @Roles(UserRole.DOCTOR, UserRole.ADMIN, UserRole.OWNER)
   async deleteLegacyPhoto(
@@ -641,6 +639,21 @@ export class VisitsController {
       throw new BadRequestException('Missing url');
     }
     await this.visitsService.deleteLegacyAttachment(id, url, req.user.branchId);
+    return this.visitsService.listAttachments(id, req.user.branchId);
+  }
+
+  @Delete(':id/photos/:attachmentId')
+  @Roles(UserRole.DOCTOR, UserRole.ADMIN, UserRole.OWNER)
+  async deleteVisitPhoto(
+    @Param('id') id: string,
+    @Param('attachmentId') attachmentId: string,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    await this.visitsService.deleteVisitAttachment(
+      id,
+      attachmentId,
+      req.user.branchId,
+    );
     return this.visitsService.listAttachments(id, req.user.branchId);
   }
 
@@ -955,10 +968,10 @@ export class VisitsController {
                 speaker:
                   typeof s?.speaker === 'string' &&
                   s.speaker.toUpperCase().includes('DOC')
-                    ? 'DOCTOR'
+                    ? 'DOCTOR' as const
                     : s?.speaker === 'PATIENT'
-                      ? 'PATIENT'
-                      : 'PATIENT',
+                      ? 'PATIENT' as const
+                      : 'PATIENT' as const,
                 text: typeof s?.text === 'string' ? s.text : '',
                 confidence:
                   typeof s?.confidence === 'number' ? s.confidence : undefined,

@@ -152,7 +152,7 @@ describe('MedicalVisitForm', () => {
       expect(mockCreateVisit).toHaveBeenCalledWith({
         patientId: 'patient-123',
         doctorId: 'doctor-123',
-        complaints: [{ complaint: 'General consultation' }],
+        complaints: [],
         examination: undefined,
         diagnosis: undefined,
         treatmentPlan: undefined,
@@ -235,7 +235,7 @@ describe('MedicalVisitForm', () => {
       expect(mockCreateVisit).toHaveBeenCalledWith({
         patientId: 'patient-123',
         doctorId: 'doctor-123',
-        complaints: [{ complaint: 'Headache for 2 days' }],
+        complaints: [],
         examination: { generalAppearance: 'Patient appears well' },
         diagnosis: [{ diagnosis: 'Tension headache', icd10Code: 'R69', type: 'Primary' }],
         treatmentPlan: { notes: 'Paracetamol 500mg TID' },

@@ -1,3 +1,4 @@
+import { formatMedicineName } from '@cms/shared-types/medicine-name';
 import { Prisma, PrismaClient } from '@prisma/client';
 import { BadRequestException } from '@nestjs/common';
 import {
@@ -27,6 +28,10 @@ export const drugSearchSelect = {
   category: true,
   dosageForm: true,
   strength: true,
+  brandName: true,
+  itemCode: true,
+  combinationProduct: true,
+  dispenseLoose: true,
   barcode: true,
   sku: true,
 } satisfies Prisma.DrugSelect;
@@ -67,7 +72,7 @@ export async function autocompleteDrugCatalog(
     .slice(0, limit)
     .map(({ drug, match }) => {
       const { aliases, ...result } = drug;
-      return { ...result, searchMatch: match };
+      return { ...result, displayName: formatMedicineName(result.name, result), searchMatch: match };
     });
 }
 

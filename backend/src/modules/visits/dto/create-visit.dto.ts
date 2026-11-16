@@ -1,5 +1,6 @@
 import {
   IsString,
+  IsBoolean,
   registerDecorator,
   ValidationOptions,
   IsOptional,
@@ -15,6 +16,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { Language } from '@prisma/client';
+import { ConsultationType } from '../consultation';
 
 function IsClinicalHistory(options?: ValidationOptions) {
   return (object: object, propertyName: string) => registerDecorator({
@@ -202,6 +204,14 @@ export class TreatmentPlanDto {
 }
 
 export class CreateVisitDto {
+  @IsOptional()
+  @IsEnum(ConsultationType)
+  consultationType?: ConsultationType;
+
+  @IsOptional()
+  @IsBoolean()
+  teleVideoConsent?: boolean;
+
   @IsString()
   patientId: string;
 
@@ -261,6 +271,14 @@ export class CreateVisitDto {
 }
 
 export class UpdateVisitDto {
+  @IsOptional()
+  @IsEnum(ConsultationType)
+  consultationType?: ConsultationType;
+
+  @IsOptional()
+  @IsBoolean()
+  teleVideoConsent?: boolean;
+
   @IsOptional()
   @ValidateNested()
   @Type(() => VitalsDto)

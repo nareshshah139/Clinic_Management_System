@@ -1,5 +1,7 @@
 'use client';
 
+import { Spinner } from '@/components/ui/spinner';
+import { formatMedicineName, medicineNameIssues } from '@cms/shared-types/medicine-name';
 import { InventoryRegimenFields } from './InventoryRegimenFields';
 import "./inventory-readability.css";
 import { useState } from 'react';
@@ -11,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { apiClient } from '@/lib/api';
-import { Loader2 } from 'lucide-react';
+
 
 interface AddInventoryItemDialogProps {
   open: boolean;
@@ -31,7 +33,7 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
     name: '',
     description: '',
     genericName: '',
-    brandName: '',
+    brandName: '', dosageForm: '', strength: '', itemCode: '', combinationProduct: false, dispenseLoose: false,
     type: 'MEDICINE',
     category: '',
     subCategory: '',
@@ -78,9 +80,15 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
     setError(null);
 
     try {
+      if (formData.type === 'MEDICINE') {
+        const issues = medicineNameIssues(formData);
+        if (issues.length) throw new Error(issues.join('. '));
+      }
       // Prepare data, converting strings to numbers where needed
       const payload: Record<string, unknown> = {
         name: formData.name,
+        dosageForm: formData.dosageForm, strength: formData.strength, itemCode: formData.itemCode,
+        combinationProduct: formData.combinationProduct, dispenseLoose: formData.dispenseLoose,
         type: formData.type,
         costPrice: parseFloat(formData.costPrice),
         sellingPrice: parseFloat(formData.sellingPrice),
@@ -137,7 +145,7 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
     name: '',
         description: '',
         genericName: '',
-        brandName: '',
+        brandName: '', dosageForm: '', strength: '', itemCode: '', combinationProduct: false, dispenseLoose: false,
         type: 'MEDICINE',
         category: '',
         subCategory: '',
@@ -191,7 +199,7 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
             onChange={patch => setFormData(prev => ({ ...prev, ...patch } as typeof prev))} />}
           {/* Basic Information */}
           <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-gray-900">Basic Information</h3>
+            <h3 className="text-sm font-semibold text-foreground">Basic Information</h3>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -221,6 +229,18 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
               </div>
             </div>
 
+            {formData.type === 'MEDICINE' && <section className="space-y-3" aria-label="Medicine name">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label>Form<select required className="block w-full rounded-md border p-2" value={formData.dosageForm} onChange={e => setFormData({ ...formData, dosageForm: e.target.value })}>
+                  <option value="">Choose form</option>{['tablet','capsule','syrup','cream','ointment','solution','lotion','gel','shampoo','face wash','serum','sunscreen','drops','injection'].map(form => <option key={form}>{form}</option>)}
+                </select></label>
+                <label>Strength<Input value={formData.strength} onChange={e => setFormData({ ...formData, strength: e.target.value })} placeholder="150 mg or 2.5mg/5ml" /></label>
+                <label>Item code<Input value={formData.itemCode} onChange={e => setFormData({ ...formData, itemCode: e.target.value })} /></label>
+              </div>
+              <label className="flex gap-2"><input type="checkbox" checked={formData.combinationProduct} onChange={e => setFormData({ ...formData, combinationProduct: e.target.checked })} />Combination product. Omit strength from prescription.</label>
+              <label className="flex gap-2"><input type="checkbox" checked={formData.dispenseLoose} onChange={e => setFormData({ ...formData, dispenseLoose: e.target.checked })} />Dispense loose tablets or capsules.</label>
+              <p data-medicine-name>Prescription name. {formatMedicineName(formData.name, formData)}</p>
+            </section>}
             <div className="space-y-2">
               <Label htmlFor="description">Description</Label>
               <Textarea
@@ -301,7 +321,7 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
 
           {/* Identification */}
           <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-gray-900">Identification</h3>
+            <h3 className="text-sm font-semibold text-foreground">Identification</h3>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -328,7 +348,7 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
 
           {/* Pricing */}
           <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-gray-900">Pricing</h3>
+            <h3 className="text-sm font-semibold text-foreground">Pricing</h3>
             
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="space-y-2">
@@ -376,7 +396,7 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
 
           {/* Unit & Packaging */}
           <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-gray-900">Unit & Packaging</h3>
+            <h3 className="text-sm font-semibold text-foreground">Unit & Packaging</h3>
             
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="space-y-2">
@@ -426,7 +446,7 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
 
           {/* Stock Levels */}
           <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-gray-900">Stock Levels</h3>
+            <h3 className="text-sm font-semibold text-foreground">Stock Levels</h3>
             
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
               <div className="space-y-2">
@@ -481,7 +501,7 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
 
           {/* Additional Details */}
           <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-gray-900">Additional Details</h3>
+            <h3 className="text-sm font-semibold text-foreground">Additional Details</h3>
             
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="space-y-2">
@@ -581,8 +601,8 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
           </div>
 
           {error && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-md">
-              <p className="text-sm text-red-600">{error}</p>
+            <div className="p-3 bg-destructive-soft border border-destructive-border rounded-md">
+              <p className="text-sm text-destructive-text">{error}</p>
             </div>
           )}
 
@@ -596,7 +616,7 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
               Cancel
             </Button>
             <Button type="submit" disabled={loading}>
-              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {loading && <Spinner className="mr-2 h-4 w-4 " />}
               Add Item
             </Button>
           </DialogFooter>

@@ -32,7 +32,7 @@ export class UpdateAppointmentDto {
 
 export class BulkUpdateAppointmentsDto {
   @IsArray()
-  @IsUUID({}, { each: true })
+  @IsUUID('all', { each: true })
   appointmentIds: string[];
 
   @IsOptional()

@@ -8,7 +8,12 @@ jest.mock("@/lib/api", () => ({
   apiClient: { importInventoryStarterExcel: jest.fn() },
 }));
 
-beforeEach(() => jest.clearAllMocks());
+const originalFetch = global.fetch;
+beforeEach(() => {
+  jest.clearAllMocks();
+  global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ rows: [] }) });
+});
+afterEach(() => { global.fetch = originalFetch; });
 
 it("shows every failed row and a failure toast in the inventory page compact uploader", async () => {
   const errors = Array.from({ length: 7 }, (_, i) => ({
@@ -28,7 +33,12 @@ it("shows every failed row and a failure toast in the inventory page compact upl
   fireEvent.change(container.querySelector("input[type=file]")!, {
     target: { files: [new File(["test"], "stock.xlsx")] },
   });
-  fireEvent.click(screen.getByRole("button", { name: /^Import$/ }));
+  fireEvent.click(screen.getByRole("button", { name: 'Preview import' }));
+  const confirm = await screen.findByRole('button', { name: 'Confirm opening import' });
+  expect(apiClient.importInventoryStarterExcel).not.toHaveBeenCalled();
+  expect(global.fetch).toHaveBeenCalledWith('/api/inventory/items/import-preview', expect.objectContaining({ method: 'POST', credentials: 'include' }));
+  await waitFor(() => expect(confirm).toBeEnabled());
+  fireEvent.click(confirm);
   expect(await screen.findByText("Row 8: Invalid row 8")).toBeInTheDocument();
   expect(toast).toHaveBeenCalledWith(
     expect.objectContaining({
@@ -50,5 +60,5 @@ it("rejects oversized files before submitting an import", async () => {
       expect.objectContaining({ title: "File too large" }),
     ),
   );
-  expect(screen.getByRole("button", { name: /^Import$/ })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Preview import" })).toBeDisabled();
 });

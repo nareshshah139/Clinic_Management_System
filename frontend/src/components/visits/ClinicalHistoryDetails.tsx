@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { clinicalDisplayValue } from '@/lib/clinical-display';
 
 const labels: Record<string, string> = {
   dm: 'Diabetes', htn: 'Hypertension', thyroid: 'Thyroid disease', others: 'Other history',
@@ -30,7 +31,7 @@ export function hasClinicalValue(value: unknown): boolean {
 
 /** Render every nonempty clinical leaf, including unfamiliar legacy/custom fields. */
 export function ClinicalHistoryDetails({ value }: { value: unknown }): ReactNode {
-  const normalized = normalizeClinicalValue(value);
+  const normalized = clinicalDisplayValue(normalizeClinicalValue(value));
   if (!hasClinicalValue(normalized)) return null;
   if (Array.isArray(normalized)) {
     const items = normalized.filter(hasClinicalValue);

@@ -1,4 +1,5 @@
 import { mergeClinicalData, mergeClinicalEntries } from './clinical-data';
+import { consultationPatch } from './consultation';
 import { Injectable, BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../../shared/database/prisma.service';
 import { CreateVisitDto, UpdateVisitDto, CompleteVisitDto } from './dto/create-visit.dto';
@@ -12,7 +13,30 @@ import * as fs from 'fs';
 export class VisitsService {
   constructor(private prisma: PrismaService) {}
 
-  async create(createVisitDto: CreateVisitDto, branchId: string) {
+  private async latestPersonalHistory(patientId: string, branchId: string): Promise<string | undefined> {
+    const visit = await this.prisma.visit.findFirst({
+      where: { patientId, patient: { branchId }, history: { contains: '"personalHistory":' } },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      select: { history: true },
+    });
+    const history = this.safeParse<any>(visit?.history, null);
+    // An explicit empty string is a saved clear and must stop carry-forward.
+    return typeof history?.personalHistory === 'string' ? history.personalHistory : undefined;
+  }
+
+  async getPatientPersonalHistory(patientId: string, branchId: string) {
+    const patient = await this.prisma.patient.findFirst({ where: { id: patientId, branchId } });
+    if (!patient) throw new NotFoundException('Patient not found in this branch');
+    return { personalHistory: (await this.latestPersonalHistory(patientId, branchId)) ?? null };
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:product] visit-consent-on-create
+   * Tele-video visits MUST pass consent validation before any visit or appointment
+   * write; the receipt MUST be derived from the authenticated actor, not the DTO.
+   */
+  async create(createVisitDto: CreateVisitDto, branchId: string, actorId?: string) {
+    const consultation = consultationPatch(createVisitDto, undefined, actorId);
     const {
       patientId,
       doctorId,
@@ -29,9 +53,9 @@ export class VisitsService {
       notes,
     } = createVisitDto;
 
-    // Validate complaints are provided first so we return 400 before 404s
-    if (!complaints || complaints.length === 0) {
-      throw new BadRequestException('At least one complaint is required');
+    // An empty array means the doctor has not recorded a complaint yet.
+    if (!Array.isArray(complaints)) {
+      throw new BadRequestException('Complaints must be an array');
     }
 
     // Validate patient exists and belongs to branch
@@ -78,11 +102,6 @@ export class VisitsService {
       }
     }
 
-    // Validate complaints are provided
-    if (!complaints || complaints.length === 0) {
-      throw new BadRequestException('At least one complaint is required');
-    }
-
     // Merge top-level notes into plan JSON to preserve the field semantically
     const mergedPlanObject = (() => {
       const basePlan = treatmentPlan ? { ...treatmentPlan } : undefined;
@@ -92,17 +111,25 @@ export class VisitsService {
       return basePlan;
     })();
 
+    // Keep a visit snapshot while carrying the patient's last saved personal history forward.
+    let visitHistory = history;
+    if (!history || typeof history !== 'object' || history.personalHistory === undefined) {
+      const personalHistory = await this.latestPersonalHistory(patientId, branchId);
+      if (personalHistory !== undefined) visitHistory = mergeClinicalData(history, { personalHistory });
+    }
+
     // Create visit and update appointment status atomically
     const visit = await this.prisma.$transaction(async tx => {
       const createdVisit = await tx.visit.create({
         data: {
+          ...consultation,
           patientId,
           doctorId,
           appointmentId,
           followUp: treatmentPlan?.followUpDate ? new Date(treatmentPlan.followUpDate) : null,
           vitals: vitals ? JSON.stringify(vitals) : null,
           complaints: JSON.stringify(complaints),
-          history: history ? JSON.stringify(history) : null,
+          history: visitHistory ? JSON.stringify(visitHistory) : null,
           exam: examination ? JSON.stringify(examination) : null,
           diagnosis: diagnosis ? JSON.stringify(diagnosis) : null,
           plan: mergedPlanObject ? JSON.stringify(mergedPlanObject) : null,
@@ -191,6 +218,7 @@ export class VisitsService {
     if (patientId) where.patientId = patientId;
     if (doctorId) where.doctorId = doctorId;
     if (appointmentId) where.appointmentId = appointmentId;
+    if (query.consultationType) where.consultationType = query.consultationType;
 
     // Date filters
     if (date) {
@@ -417,11 +445,22 @@ export class VisitsService {
     return parsedVisit;
   }
 
-  async update(id: string, updateVisitDto: UpdateVisitDto, branchId: string) {
+  /**
+   * @cc [owner:nareshshah139,label:product] visit-consent-on-update
+   * Every visit update MUST validate the resulting consultation against its saved
+   * consent receipt before writing, including clinical updates from prescriptions.
+   */
+  /**
+   * @cc [owner:nareshshah139,label:reliability] visit-consent-compare-and-set
+   * Updating a visit MUST compare the consultation type and consent receipt used for
+   * validation. A concurrent change MUST reject the entire update with a conflict,
+   * so stale clinical edits cannot restore tele-video or replace its first receipt.
+   */
+  async update(id: string, updateVisitDto: UpdateVisitDto, branchId: string, actorId?: string) {
     const visit = await this.findOne(id, branchId);
 
     // Prepare update data
-    const updateData: any = {};
+    const updateData: any = consultationPatch(updateVisitDto, visit, actorId);
 
     if (updateVisitDto.vitals !== undefined) {
       updateData.vitals = updateVisitDto.vitals ? JSON.stringify(mergeClinicalData(visit.vitals, updateVisitDto.vitals)) : null;
@@ -471,7 +510,12 @@ export class VisitsService {
     }
 
     const updatedVisit = await this.prisma.visit.update({
-      where: { id },
+      where: {
+        id,
+        consultationType: visit.consultationType,
+        teleVideoConsentById: visit.teleVideoConsentById ?? null,
+        teleVideoConsentAt: visit.teleVideoConsentAt ?? null,
+      },
       data: updateData,
       include: {
         patient: {
@@ -484,6 +528,11 @@ export class VisitsService {
           select: { id: true, date: true, slot: true },
         },
       },
+    }).catch(error => {
+      if (error?.code === 'P2025') {
+        throw new ConflictException('Visit consultation changed. Reload the visit before saving.');
+      }
+      throw error;
     });
 
     return {
@@ -776,6 +825,7 @@ export class VisitsService {
             if (!hist) return {};
             const out: any = {};
             if (hist.pastHistory) out.pastHistory = hist.pastHistory;
+            if (typeof hist.personalHistory === 'string') out.personalHistory = hist.personalHistory;
             if (hist.medicationHistory) out.medicationHistory = hist.medicationHistory;
             if (hist.menstrualHistory) out.menstrualHistory = hist.menstrualHistory;
             if (hist.familyHistory) out.familyHistory = hist.familyHistory;

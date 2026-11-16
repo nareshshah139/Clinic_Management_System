@@ -11,8 +11,10 @@ import {
   Min,
   Max,
   IsBoolean,
+  IsIn,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { PaymentMode } from '@prisma/client';
 
 export enum InvoiceStatus {
   DRAFT = 'DRAFT',
@@ -76,6 +78,10 @@ export class InvoiceItemDto {
 }
 
 export class CreateInvoiceDto {
+  @IsOptional()
+  @IsIn(['FIRST_CONSULTATION', 'REVIEW', 'PROCEDURE'])
+  billType?: 'FIRST_CONSULTATION' | 'REVIEW' | 'PROCEDURE';
+
   @IsString()
   patientId: string;
 
@@ -123,6 +129,18 @@ export class CreateInvoiceDto {
 }
 
 export class UpdateInvoiceDto {
+  @IsOptional()
+  @IsEnum(PaymentMode)
+  mode?: PaymentMode;
+
+  @IsOptional()
+  @IsString()
+  gstin?: string;
+
+  @IsOptional()
+  @IsString()
+  hsn?: string;
+
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
@@ -210,7 +228,7 @@ export class RefundDto {
 
 export class BulkPaymentDto {
   @IsArray()
-  @IsUUID({ each: true })
+  @IsUUID('all', { each: true })
   invoiceIds: string[];
 
   @IsNumber()

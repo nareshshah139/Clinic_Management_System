@@ -1,4 +1,5 @@
 "use client";
+import { Spinner } from '@/components/ui/spinner';
 import { useDashboardUser } from "@/components/layout/dashboard-user-context";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -7,7 +8,6 @@ import {
   Trash2,
   FileDown,
   Printer,
-  Loader2,
 } from "lucide-react";
 import { apiClient } from "@/lib/api";
 import { InventoryAction } from "./InventoryPresentation";
@@ -381,6 +381,11 @@ export function WorkflowDocumentEditor({
     ]);
     setSearch("");
   };
+  /**
+   * @cc [owner:nareshshah139] fresh-count-navigation
+   * Starting a fresh count MUST use the saved document revision and open the returned attempt
+   * without first saving or copying the old physical measurements.
+   */
   const perform = async (action?: string) => {
     if (lock.current) return;
     lock.current = true;
@@ -389,7 +394,7 @@ export function WorkflowDocumentEditor({
     setNotice("");
     let saved = doc;
     try {
-      if (editable && action !== "CANCEL" && action !== "REVERSE") {
+      if (editable && action !== "CANCEL" && action !== "REVERSE" && action !== "RECOUNT") {
         saved = doc
           ? await apiClient.patch<any>(
               `/inventory/workspace/documents/${doc.id}`,
@@ -408,7 +413,7 @@ export function WorkflowDocumentEditor({
             ...(kind === "TARGET_REVIEW" ? { lineIds: selected } : {}),
           },
         );
-        if (["CREATE_PO", "CONVERT_SALE"].includes(action)) {
+        if (["CREATE_PO", "CONVERT_SALE", "RECOUNT"].includes(action)) {
           onOpen(saved.kind, saved.id);
           return;
         }
@@ -520,7 +525,7 @@ export function WorkflowDocumentEditor({
               disabled={busy || (kind === "TARGET_REVIEW" && !selected.length)}
               onClick={() => perform(action)}
             >
-              {busy && <Loader2 className="h-4 w-4 animate-spin" />}
+              {busy && <Spinner className="h-4 w-4 " />}
               {primaryText}
             </Button>
           )}
@@ -556,7 +561,7 @@ export function WorkflowDocumentEditor({
         {notice && (
           <p
             role="status"
-            className="rounded-md border border-green-600 bg-green-50 p-3 text-green-900"
+            className="rounded-md border border-success-border bg-success-soft p-3 text-success-text"
           >
             {notice}
           </p>
@@ -972,6 +977,7 @@ export function WorkflowDocumentEditor({
                 )}
                 <td className="min-w-52 p-3">
                   <strong>{l.name}</strong>
+                  {kind === "COUNT" && l.countRevision && <p className="mt-1 text-sm">Counted batch: {l.countedBatchNumber || '—'} · Expiry: {l.countedExpiryDate || '—'}</p>}
                   {kind === "COUNTER_SALE" && (
                     <label className="mt-2 block text-xs">
                       Batch-selection reason (if bypassing earlier expiry)
@@ -1062,7 +1068,7 @@ export function WorkflowDocumentEditor({
                       "schemeAmount",
                       "gstRate",
                     ].map((f) => (
-                      <td key={f} className="p-2">
+                      <td key={f} className="p-2 text-right tabular-nums">
                         <input
                           className={`${inputClass} w-24`}
                           type="number"
@@ -1084,7 +1090,7 @@ export function WorkflowDocumentEditor({
                         />
                       </td>
                     ))}
-                    <td className="whitespace-nowrap p-3">
+                    <td className="whitespace-nowrap p-3 text-right tabular-nums">
                       {fmtMoney(
                         !editable && l.total != null
                           ? l.total
@@ -1121,7 +1127,7 @@ export function WorkflowDocumentEditor({
                   </td>
                 )}
                 {kind === "INWARD_CHALLAN" && form.sourceId && (
-                  <td className="p-3">
+                  <td className="p-3 text-right tabular-nums">
                     <select
                       className={`${inputClass} w-44`}
                       disabled={!editable}
@@ -1208,6 +1214,11 @@ export function WorkflowDocumentEditor({
           >
             <Printer className="h-4 w-4" />
           </InventoryAction>
+          {kind === "COUNT" && canWrite && (
+            <Button variant="outline" onClick={() => perform("RECOUNT")} disabled={busy}>
+              Start fresh count
+            </Button>
+          )}
           {["HOLD", "SALES_RETURN"].includes(kind) &&
             doc.status === "POSTED" &&
             doc.effects?.some((e: any) => e.heldDelta > 0) &&

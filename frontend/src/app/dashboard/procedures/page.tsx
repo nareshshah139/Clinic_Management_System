@@ -1,5 +1,8 @@
 'use client';
 
+import { LoadingSkeleton } from '@/components/ui/skeleton';
+import { PageHeader } from '@/components/ui/page-header';
+
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -257,6 +260,11 @@ export default function SmartProceduresPage() {
     }));
   };
 
+  /**
+   * @cc [owner:nareshshah139,label:product] procedure-visit-payload
+   * Saving a procedure MUST send the required complaints array and retain the selected therapist
+   * inside the stored procedure details. Missing required selections MUST prevent the save.
+   */
   const saveProcedure = async () => {
     if (!procedureData.patientId || !procedureData.doctorId || !procedureData.selectedMachine) {
       toast({ title: "Check the details", description: 'Please fill in all required fields', variant: "warning" });
@@ -268,11 +276,12 @@ export default function SmartProceduresPage() {
       const payload = {
         patientId: procedureData.patientId,
         doctorId: procedureData.doctorId,
-        therapistId: procedureData.therapistId,
+        complaints: [],
         treatmentPlan: {
           dermatology: {
             procedures: [{
               type: MACHINES[procedureData.selectedMachine as keyof typeof MACHINES]?.name,
+              therapistId: procedureData.therapistId || undefined,
               sessionNo: procedureData.sessionNo,
               bodyPart: procedureData.bodyPart,
               indications: procedureData.indications,
@@ -365,7 +374,7 @@ export default function SmartProceduresPage() {
       const doctor = doctors.find((d) => d.id === visit.doctorId);
       
       return (
-        <Card key={visit.id} className="cursor-pointer hover:shadow-md transition-shadow">
+        <Card key={visit.id} className="cursor-pointer hover:shadow-sm transition-shadow">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <div>
@@ -387,7 +396,7 @@ export default function SmartProceduresPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              <div className="flex items-center gap-2 text-sm text-gray-600">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <User className="h-4 w-4" />
                 <span>{formatDoctorName(doctor)}</span>
               </div>
@@ -396,24 +405,24 @@ export default function SmartProceduresPage() {
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   {procedure.fluence && (
                     <div>
-                      <span className="text-gray-500">Fluence:</span> {procedure.fluence} J/cm²
+                      <span className="text-muted-foreground">Fluence:</span> {procedure.fluence} J/cm²
                     </div>
                   )}
                   {procedure.spotSize && (
                     <div>
-                      <span className="text-gray-500">Spot Size:</span> {procedure.spotSize} mm
+                      <span className="text-muted-foreground">Spot Size:</span> {procedure.spotSize} mm
                     </div>
                   )}
                   {procedure.passes && (
                     <div>
-                      <span className="text-gray-500">Passes:</span> {procedure.passes}
+                      <span className="text-muted-foreground">Passes:</span> {procedure.passes}
                     </div>
                   )}
                 </div>
               )}
               
               {plan?.dermatology?.notes && (
-                <p className="text-sm text-gray-600 line-clamp-2">{plan.dermatology.notes}</p>
+                <p className="text-sm text-muted-foreground line-clamp-2">{plan.dermatology.notes}</p>
               )}
             </div>
             
@@ -459,12 +468,12 @@ export default function SmartProceduresPage() {
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse border border-gray-300">
+            <table className="w-full border-collapse border border-border">
               <thead>
-                <tr className="bg-gray-50">
-                  <th className="border border-gray-300 p-2 text-left font-medium">Parameter</th>
+                <tr className="bg-background">
+                  <th className="border border-border p-2 text-left font-medium">Parameter</th>
                   {Array.from({ length: machine.maxPasses }, (_, i) => (
-                    <th key={i} className="border border-gray-300 p-2 text-center font-medium">
+                    <th key={i} className="border border-border p-2 text-center font-medium">
                       Pass {i + 1}
                     </th>
                   ))}
@@ -472,12 +481,12 @@ export default function SmartProceduresPage() {
               </thead>
               <tbody>
                 {machine.parameters.map((param, paramIndex) => (
-                  <tr key={paramIndex} className={paramIndex % 2 === 0 ? 'bg-white' : 'bg-gray-25'}>
-                    <td className="border border-gray-300 p-2 font-medium text-gray-700">
+                  <tr key={paramIndex} className={paramIndex % 2 === 0 ? 'bg-card' : 'bg-muted/40'}>
+                    <td className="border border-border p-2 font-medium text-foreground">
                       {param}
                     </td>
                     {Array.from({ length: machine.maxPasses }, (_, passIndex) => (
-                      <td key={passIndex} className="border border-gray-300 p-1">
+                      <td key={passIndex} className="border border-border p-1">
                         <Input
                           placeholder={`${param.toLowerCase()}`}
                           value={procedureData.machineParameters[param]?.[passIndex + 1] || ''}
@@ -501,17 +510,7 @@ export default function SmartProceduresPage() {
       {/* Header */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <Zap className="h-6 w-6 text-blue-600" />
-                Smart Procedures Management
-              </CardTitle>
-              <CardDescription>
-                Advanced procedure planning and tracking with machine-specific parameters
-              </CardDescription>
-            </div>
-            <QuickGuide
+          <PageHeader title="Smart Procedures Management" description="Advanced procedure planning and tracking with machine-specific parameters" actions={<><QuickGuide
               title="Procedures Management Guide"
               triggerVariant="ghost"
               sections={[
@@ -543,8 +542,7 @@ export default function SmartProceduresPage() {
                   ]
                 }
               ]}
-            />
-          </div>
+            /></>} />
         </CardHeader>
       </Card>
 
@@ -566,7 +564,7 @@ export default function SmartProceduresPage() {
             </CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="text-sm font-medium text-gray-700">Patient *</label>
+                <label className="text-sm font-medium text-foreground">Patient *</label>
                 <Select value={procedureData.patientId} onValueChange={(value: string) => updateProcedureData('patientId', value)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select patient" />
@@ -582,7 +580,7 @@ export default function SmartProceduresPage() {
               </div>
 
               <div>
-                <label className="text-sm font-medium text-gray-700">Doctor *</label>
+                <label className="text-sm font-medium text-foreground">Doctor *</label>
                 <Select value={procedureData.doctorId} onValueChange={(value: string) => updateProcedureData('doctorId', value)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select doctor" />
@@ -598,7 +596,7 @@ export default function SmartProceduresPage() {
               </div>
 
               <div>
-                <label className="text-sm font-medium text-gray-700">Nurse/Therapist</label>
+                <label className="text-sm font-medium text-foreground">Nurse/Therapist</label>
                 <Select value={procedureData.therapistId} onValueChange={(value: string) => updateProcedureData('therapistId', value)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select nurse" />
@@ -626,33 +624,33 @@ export default function SmartProceduresPage() {
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div>
-                  <label className="text-sm font-medium text-gray-700">Session No.</label>
+                  <label className="text-sm font-medium text-foreground">Session No.</label>
                   <Input placeholder="Session number" value={procedureData.sessionNo} onChange={(e) => updateProcedureData('sessionNo', parseInt(e.target.value) || 1)} />
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium text-gray-700">Shot Count (Begin)</label>
+                  <label className="text-sm font-medium text-foreground">Shot Count (Begin)</label>
                   <Input placeholder="e.g. 50" value={procedureData.shotCountBegin} onChange={(e) => updateProcedureData('shotCountBegin', parseInt(e.target.value) || 0)} />
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium text-gray-700">Shot Count (End)</label>
+                  <label className="text-sm font-medium text-foreground">Shot Count (End)</label>
                   <Input placeholder="e.g. 50" value={procedureData.shotCountEnd} onChange={(e) => updateProcedureData('shotCountEnd', parseInt(e.target.value) || 0)} />
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium text-gray-700">Total Shots</label>
+                  <label className="text-sm font-medium text-foreground">Total Shots</label>
                   <Input
                     value={procedureData.shotCountEnd - procedureData.shotCountBegin}
                     disabled
-                    className="bg-gray-50"
+                    className="bg-background"
                   />
                 </div>
               </div>
 
               {/* Body Parts */}
               <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block">Body Parts</label>
+                <label className="text-sm font-medium text-foreground mb-2 block">Body Parts</label>
                 <div className="flex flex-wrap gap-2">
                   {BODY_PARTS.map((part) => (
                     <Button
@@ -670,7 +668,7 @@ export default function SmartProceduresPage() {
 
               {/* Indications */}
               <div>
-                <label className="text-sm font-medium text-gray-700">Indications</label>
+                <label className="text-sm font-medium text-foreground">Indications</label>
                 <Textarea
                   placeholder="Enter procedure indications..."
                   value={procedureData.indications}
@@ -688,7 +686,7 @@ export default function SmartProceduresPage() {
             </CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div>
-                <label className="text-sm font-medium text-gray-700">Fitzpatrick Type</label>
+                <label className="text-sm font-medium text-foreground">Fitzpatrick Type</label>
                 <Select value={procedureData.fitzpatrickType} onValueChange={(value: string) => updateProcedureData('fitzpatrickType', value)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select type" />
@@ -704,7 +702,7 @@ export default function SmartProceduresPage() {
               </div>
 
               <div>
-                <label className="text-sm font-medium text-gray-700">Robert Type</label>
+                <label className="text-sm font-medium text-foreground">Robert Type</label>
                 <Select value={procedureData.robertType} onValueChange={(value: string) => updateProcedureData('robertType', value)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select type" />
@@ -720,7 +718,7 @@ export default function SmartProceduresPage() {
               </div>
 
               <div>
-                <label className="text-sm font-medium text-gray-700">Scar Type</label>
+                <label className="text-sm font-medium text-foreground">Scar Type</label>
                 <Select value={procedureData.scarType} onValueChange={(value: string) => updateProcedureData('scarType', value)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select type" />
@@ -736,7 +734,7 @@ export default function SmartProceduresPage() {
               </div>
 
               <div>
-                <label className="text-sm font-medium text-gray-700">Herpes Status</label>
+                <label className="text-sm font-medium text-foreground">Herpes Status</label>
                 <Select value={procedureData.herpesStatus} onValueChange={(value: string) => updateProcedureData('herpesStatus', value)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select status" />
@@ -815,7 +813,7 @@ export default function SmartProceduresPage() {
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-lg font-semibold">Procedure History</h3>
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-muted-foreground">
                 Procedures captured from visits ({visits.length} found)
               </p>
             </div>
@@ -824,15 +822,12 @@ export default function SmartProceduresPage() {
               onClick={() => loadVisitsWithProcedures(procedureData.patientId)}
               disabled={loadingVisits}
             >
-              {loadingVisits ? 'Loading...' : 'Refresh'}
+              {loadingVisits ? 'Loading…' : 'Refresh'}
             </Button>
           </div>
 
           {loadingVisits ? (
-            <div className="text-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
-              <p className="text-gray-500">Loading procedure history...</p>
-            </div>
+            <LoadingSkeleton variant="cards" label="Loading procedure history…" />
           ) : visits.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {visits.map(renderVisitProcedureCard)}
@@ -840,8 +835,8 @@ export default function SmartProceduresPage() {
           ) : (
             <Card>
               <CardContent>
-                <div className="text-center py-8 text-gray-500">
-                  <Activity className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+                <div className="text-center py-8 text-muted-foreground">
+                  <Activity className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
                   <p>No procedure history found for this patient</p>
                   <p className="text-sm">Procedures from visits will appear here</p>
                 </div>
@@ -857,8 +852,8 @@ export default function SmartProceduresPage() {
               <CardDescription>Insights and statistics about procedures</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-center py-8 text-gray-500">
-                <Activity className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+              <div className="text-center py-8 text-muted-foreground">
+                <Activity className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
                 <p>Analytics dashboard coming soon</p>
                 <p className="text-sm">Track procedure outcomes and performance metrics</p>
               </div>

@@ -37,6 +37,7 @@ import {
   QueryPharmacyPurchaseAnalyticsDto,
   QueryPharmacyPurchaseInvoiceDto,
   ReviewPharmacyPurchaseInvoiceDto,
+  ReopenPharmacyPurchaseInvoiceDto,
   SavePharmacyPurchaseSupplierDto,
   PurchaseProductCatalogDto,
   SuggestPharmacyPurchaseMasterMatchesDto,
@@ -277,6 +278,7 @@ export class PharmacyPurchaseInvoiceController {
     return this.purchaseInvoiceService.suggestMasterMatches(
       dto.items,
       req.user.branchId,
+      dto,
     );
   }
 
@@ -294,7 +296,15 @@ export class PharmacyPurchaseInvoiceController {
     return this.purchaseInvoiceService.confirmMasterRecord(
       dto,
       req.user.branchId,
+      req.user.id || req.user.sub,
     );
+  }
+
+  @Get('master-products')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
+  @Permissions(['pharmacy:purchase-invoice:create', 'inventory:po:create'])
+  searchMasterProducts(@Query('q') q: string, @Request() req: any) {
+    return this.purchaseInvoiceService.searchMasterProducts(q || '', req.user.branchId);
   }
 
   @Get()
@@ -345,6 +355,14 @@ export class PharmacyPurchaseInvoiceController {
     @Request() req: any,
   ) {
     return this.purchaseInvoiceService.markReviewed(id, dto, req.user.branchId, req.user.id);
+  }
+
+  @Post(':id/reopen')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
+  @Permissions(['pharmacy:purchase-invoice:create', 'inventory:po:create'], ['pharmacy:purchase-invoice:review', 'inventory:po:update'])
+  @ApiOperation({ summary: 'Reopen an unchanged unposted reviewed invoice for correction' })
+  reopen(@Param('id') id: string, @Body() dto: ReopenPharmacyPurchaseInvoiceDto, @Request() req: any) {
+    return this.purchaseInvoiceService.reopenDraft(id, dto, req.user.branchId, req.user.id);
   }
 
   @Post(':id/commit-stock')

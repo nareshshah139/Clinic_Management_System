@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import PrescriptionBuilder from '@/components/visits/PrescriptionBuilder';
+import { apiClient } from '@/lib/api';
 jest.mock('@/lib/api', () => ({ apiClient: {
   get: jest.fn().mockResolvedValue({}), getPatient: jest.fn().mockResolvedValue({}),
   getClinicAssets: jest.fn().mockResolvedValue([]), getPrinterProfiles: jest.fn().mockResolvedValue([]),
@@ -11,13 +12,42 @@ jest.mock('@/lib/api', () => ({ apiClient: {
 } }));
 jest.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: jest.fn() }) }));
 beforeEach(() => localStorage.clear());
+it('starts a new visit empty even when patient history contains General consultation', async () => {
+  const history = [{ id: 'old-visit', complaints: [{ complaint: 'General consultation' }] }];
+  jest.mocked(apiClient.getPatientVisitHistory).mockResolvedValueOnce({ visits: history });
+  render(<PrescriptionBuilder patientId="synthetic" visitId={null} doctorId="doctor" />);
+  await waitFor(() => expect(apiClient.getPatientVisitHistory).toHaveBeenCalledWith('synthetic', { limit: 12 }));
+  expect(screen.getByRole('textbox', { name: 'Chief Complaints' })).toHaveValue('');
+});
+
+it('restores an explicitly cleared complaint from a draft without restoring the saved complaint', async () => {
+  localStorage.setItem('rxDraft:synthetic:saved', JSON.stringify({ chiefComplaints: '', chiefComplaintsTouched: true, pastHistory: 'Retained draft history' }));
+  jest.mocked(apiClient.get).mockImplementation(async (url) => url === '/visits/saved' ? { complaints: [{ complaint: 'Original complaint' }] } : {});
+  const onClinicalDataChange = jest.fn();
+  render(<PrescriptionBuilder patientId="synthetic" visitId="saved" doctorId="doctor" onClinicalDataChange={onClinicalDataChange} />);
+  await waitFor(() => expect(onClinicalDataChange).toHaveBeenLastCalledWith(expect.objectContaining({ complaints: [], history: { pastHistory: 'Retained draft history' } })));
+  expect(screen.getByRole('textbox', { name: 'Chief Complaints' })).toHaveValue('');
+});
+
+it.each(['', '  \n  '])('persists clearing a saved complaint to %j without changing unrelated history', async (emptyValue) => {
+  jest.mocked(apiClient.get).mockImplementation(async (url) => url === '/visits/saved' ? { complaints: [{ complaint: 'Recorded complaint' }], history: { pastHistory: 'Keep this history' } } : {});
+  const onClinicalDataChange = jest.fn();
+  const onChangeChiefComplaints = jest.fn();
+  render(<PrescriptionBuilder patientId="synthetic" visitId="saved" doctorId="doctor" onClinicalDataChange={onClinicalDataChange} onChangeChiefComplaints={onChangeChiefComplaints} />);
+  const field = await screen.findByDisplayValue('Recorded complaint');
+  fireEvent.change(field, { target: { value: emptyValue } });
+  await waitFor(() => expect(onClinicalDataChange).toHaveBeenLastCalledWith(expect.objectContaining({ complaints: [], history: { pastHistory: 'Keep this history' } })));
+  expect(onChangeChiefComplaints).toHaveBeenLastCalledWith(emptyValue);
+});
+
 it('sends examination diagnosis shortcuts and explicitly unchecked family history to the visit saver', async () => {
   const onClinicalDataChange = jest.fn();
   render(<PrescriptionBuilder patientId="synthetic" visitId={null} doctorId="doctor" onClinicalDataChange={onClinicalDataChange} />);
   await waitFor(() => expect(onClinicalDataChange).toHaveBeenCalled());
-  fireEvent.click(screen.getByRole('button', { name: 'Acne vulgaris', exact: true }));
-  fireEvent.click(screen.getByRole('checkbox', { name: 'DM', exact: true }));
-  fireEvent.click(screen.getByRole('checkbox', { name: 'DM', exact: true }));
+  fireEvent.click(screen.getByRole('button', { name: 'On Examination' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Acne vulgaris' }));
+  fireEvent.click(screen.getByRole('checkbox', { name: 'DM' }));
+  fireEvent.click(screen.getByRole('checkbox', { name: 'DM' }));
   await waitFor(() => expect(onClinicalDataChange).toHaveBeenLastCalledWith(expect.objectContaining({
     diagnosis: [{ diagnosis: 'Acne vulgaris' }],
     history: expect.objectContaining({ familyHistory: expect.objectContaining({ dm: false }) }),

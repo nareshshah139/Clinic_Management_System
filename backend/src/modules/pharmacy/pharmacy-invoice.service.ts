@@ -1,3 +1,4 @@
+import { resolvePrescriptionInventory } from './pharmacy-stock-identity';
 import {
   Injectable,
   NotFoundException,
@@ -212,8 +213,12 @@ export class PharmacyInvoiceService {
       );
 
       // Calculate totals
+      const builtItems = this.buildInvoiceItems(
+        createInvoiceDto.items,
+        packages,
+      );
       const { subtotal, totalDiscount, totalTax, grandTotal } =
-        this.calculateInvoiceTotals(createInvoiceDto, packages);
+        this.calculateInvoiceTotals(builtItems);
 
       // Retry-on-unique invoice number generation to avoid race collisions
       const MAX_ATTEMPTS = 5;
@@ -282,35 +287,22 @@ export class PharmacyInvoiceService {
 
             // Create invoice items
             const invoiceItems = await Promise.all(
-              createInvoiceDto.items.map(async (item) => {
-                const resolvedUnitPrice = this.resolveUnitPrice(
-                  item as unknown as PharmacyInvoiceItemDto,
-                  packages,
-                );
-                const discountAmount =
-                  (item.quantity *
-                    resolvedUnitPrice *
-                    (item.discountPercent || 0)) /
-                  100;
-                const discountedAmount =
-                  item.quantity * resolvedUnitPrice - discountAmount;
-                const taxAmount =
-                  (discountedAmount * (item.taxPercent || 0)) / 100;
-                const totalAmount = discountedAmount + taxAmount;
-
+              createInvoiceDto.items.map(async (item, index) => {
+                const built = builtItems[index];
                 return tx.pharmacyInvoiceItem.create({
                   data: {
                     invoiceId: invoice.id,
                     drugId: item.drugId,
+                    inventoryItemId: item.inventoryItemId,
                     packageId: item.packageId,
                     itemType: item.itemType || 'DRUG',
                     quantity: item.quantity,
-                    unitPrice: resolvedUnitPrice,
+                    unitPrice: built.unitPrice,
                     discountPercent: item.discountPercent || 0,
-                    discountAmount,
+                    discountAmount: built.discountAmount,
                     taxPercent: item.taxPercent || 0,
-                    taxAmount,
-                    totalAmount,
+                    taxAmount: built.taxAmount,
+                    totalAmount: built.totalAmount,
                     dosage: item.dosage,
                     frequency: item.frequency,
                     duration: item.duration,
@@ -776,7 +768,7 @@ export class PharmacyInvoiceService {
           dueDate: invoice.dueDate,
           subtotal: this.money(invoice.subtotal),
           discountAmount: this.money(invoice.discountAmount),
-          taxableAmount: this.money(invoice.subtotal - invoice.discountAmount),
+          taxableAmount: this.money(invoice.totalAmount - invoice.taxAmount),
           taxAmount: this.money(invoice.taxAmount),
           totalAmount,
           paidAmount,
@@ -1030,25 +1022,12 @@ export class PharmacyInvoiceService {
             updateInvoiceDto.items as any,
             packages,
           );
-          const recomputeTotals = builtItems.reduce(
-            (acc, bi) => {
-              const itemSubtotal = bi.quantity * bi.unitPrice;
-              acc.subtotal += itemSubtotal;
-              acc.totalDiscount += bi.discountAmount;
-              acc.totalTax += bi.taxAmount;
-              return acc;
-            },
-            { subtotal: 0, totalDiscount: 0, totalTax: 0 },
-          );
-          const grandTotal =
-            recomputeTotals.subtotal -
-            recomputeTotals.totalDiscount +
-            recomputeTotals.totalTax;
+          const recomputeTotals = this.calculateInvoiceTotals(builtItems);
 
           updateData.subtotal = recomputeTotals.subtotal;
           updateData.discountAmount = recomputeTotals.totalDiscount;
           updateData.taxAmount = recomputeTotals.totalTax;
-          updateData.totalAmount = grandTotal;
+          updateData.totalAmount = recomputeTotals.grandTotal;
 
           // Delete existing items
           await prisma.pharmacyInvoiceItem.deleteMany({
@@ -1063,6 +1042,7 @@ export class PharmacyInvoiceService {
               data: {
                 invoiceId: id,
                 drugId: bi.drugId,
+                inventoryItemId: bi.inventoryItemId,
                 packageId: bi.packageId,
                 itemType: bi.itemType,
                 quantity: bi.quantity,
@@ -1243,6 +1223,7 @@ export class PharmacyInvoiceService {
               data: {
                 itemId: op.inventoryItemId,
                 type: 'SALE',
+                reason: 'Pharmacy bill saved and confirmed',
                 quantity: op.quantity,
                 quantityDelta: -op.quantity,
                 unitPrice: op.unitPrice,
@@ -1353,6 +1334,11 @@ export class PharmacyInvoiceService {
     });
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product] saved-line-taxable-amount
+   * A printed line's taxable amount MUST be the rounded difference of its rounded stored
+   * total and tax, including for invoices created before tax-inclusive pricing.
+   */
   private toPrintLineItem(
     item: any,
     lineNumber: number,
@@ -1362,10 +1348,10 @@ export class PharmacyInvoiceService {
     const unitPrice = this.money(item.unitPrice);
     const grossAmount = this.money(quantity * unitPrice);
     const discountAmount = this.money(item.discountAmount);
-    const taxableAmount = this.money(grossAmount - discountAmount);
     const taxPercent = this.money(item.taxPercent);
     const taxAmount = this.money(item.taxAmount);
     const totalAmount = this.money(item.totalAmount);
+    const taxableAmount = this.money(totalAmount - taxAmount);
     const itemName =
       item.itemType === 'PACKAGE'
         ? item.package?.name
@@ -1392,6 +1378,7 @@ export class PharmacyInvoiceService {
       lineNumber,
       itemType: item.itemType,
       drugId: item.drugId,
+      inventoryItemId: item.inventoryItemId,
       packageId: item.packageId,
       name: itemName || 'Unnamed item',
       manufacturerName: item.drug?.manufacturerName,
@@ -1444,7 +1431,7 @@ export class PharmacyInvoiceService {
       );
       existing.totalTax = this.money(existing.totalTax + line.taxAmount);
       existing.cgst = this.money(existing.totalTax / 2);
-      existing.sgst = this.money(existing.totalTax / 2);
+      existing.sgst = this.money(existing.totalTax - existing.cgst);
       existing.igst = 0;
       existing.grossAmount = this.money(
         existing.taxableAmount + existing.totalTax,
@@ -1666,6 +1653,12 @@ export class PharmacyInvoiceService {
     }
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product] bill-stock-identity-and-units
+   * Saved inventory identity MUST constrain bill deductions to its branch product, unit and pack.
+   * Held or expired stock is unavailable; ambiguous links or mixed units MUST reject confirmation.
+   * Repeated lines MUST share an allocation budget so a batch cannot be spent twice.
+   */
   private async planConfirmedStockDeductions(
     tx: any,
     invoiceItems: any[],
@@ -1676,6 +1669,7 @@ export class PharmacyInvoiceService {
       {
         drugId: string;
         drugName: string;
+        inventoryItemId?: string;
         quantity: number;
         fallbackUnitPrice: number;
         taxableAmount: number;
@@ -1709,6 +1703,7 @@ export class PharmacyInvoiceService {
           item.drug.name,
           Number(item.totalAmount ?? item.quantity * item.unitPrice) - Number(item.taxAmount || 0),
           Number(item.taxAmount || 0),
+          item.inventoryItemId,
         );
         continue;
       }
@@ -1748,8 +1743,14 @@ export class PharmacyInvoiceService {
     const now = new Date();
     const stockOps: StockDeductionOp[] = [];
 
+    const allocated = new Map<string, number>();
     for (const requirement of requirements.values()) {
-      const batches = await tx.inventoryItem.findMany({
+      const linked = requirement.inventoryItemId ? await resolvePrescriptionInventory(tx, {
+        drugName: requirement.drugName, drugId: requirement.drugId, inventoryItemId: requirement.inventoryItemId,
+      }, branchId) : null;
+      if (requirement.inventoryItemId && (!linked || linked.drug?.id !== requirement.drugId))
+        throw new BadRequestException('Invoice inventory identity changed. Reload the prescription before billing.');
+      const batches = linked ? linked.batches : await tx.inventoryItem.findMany({
         where: {
           branchId,
           status: 'ACTIVE',
@@ -1764,6 +1765,8 @@ export class PharmacyInvoiceService {
           name: true,
           currentStock: true,
           heldStock: true,
+          unit: true, packSize: true, packUnit: true,
+          drugs: { select: { id: true } },
           costPrice: true,
           sellingPrice: true,
           minStockLevel: true,
@@ -1774,11 +1777,13 @@ export class PharmacyInvoiceService {
         },
       });
 
+      if (batches.some((b: any) => b.drugs && b.drugs.length !== 1) || new Set(batches.map((b: any) => JSON.stringify([b.unit, b.packSize, b.packUnit]))).size > 1)
+        throw new BadRequestException('Ambiguous stock units or product links. Select the inventory item before billing.');
       const eligibleBatches = batches
+        .map((b: any) => ({ ...b, currentStock: b.currentStock - (allocated.get(b.id) || 0) }))
         .filter(
           (batch: any) =>
             batch.currentStock - (batch.heldStock || 0) > 0 &&
-            batch.stockStatus !== 'EXPIRED' &&
             !this.isExpired(batch.expiryDate, now),
         )
         .sort((a: any, b: any) => {
@@ -1816,6 +1821,7 @@ export class PharmacyInvoiceService {
         const allocatedBefore=requirement.quantity-remaining;
         const taxableForBatch=money((allocatedBefore+quantity)*requirement.taxableAmount/requirement.quantity)-money(allocatedBefore*requirement.taxableAmount/requirement.quantity);
         const taxForBatch=money((allocatedBefore+quantity)*requirement.taxAmount/requirement.quantity)-money(allocatedBefore*requirement.taxAmount/requirement.quantity);
+        allocated.set(batch.id, (allocated.get(batch.id) || 0) + quantity);
         stockOps.push({
           inventoryItemId: batch.id,
           drugName: requirement.drugName,
@@ -1823,7 +1829,7 @@ export class PharmacyInvoiceService {
           unitPrice,
           batchNumber: batch.batchNumber,
           expiryDate: batch.expiryDate,
-          notes: JSON.stringify({text:`Pharmacy invoice confirmed: ${requirement.sourceNames.join(', ')}`,costPerStockUnit:money(batch.costPrice),accountingCategory:'SALE',saleTerms:{unitPrice:requirement.taxableAmount/requirement.quantity,discountPercent:0,gstRate:requirement.taxableAmount>0?requirement.taxAmount/requirement.taxableAmount*100:0,schemePerUnit:0,taxablePerUnit:taxableForBatch/quantity,taxPerUnit:taxForBatch/quantity}}),
+          notes: JSON.stringify({beforeStock:batch.currentStock,afterStock:batch.currentStock-quantity,quantityUnit:batch.unit,text:`Pharmacy invoice confirmed: ${requirement.sourceNames.join(', ')}`,costPerStockUnit:money(batch.costPrice),accountingCategory:'SALE',saleTerms:{unitPrice:requirement.taxableAmount/requirement.quantity,discountPercent:0,gstRate:requirement.taxableAmount>0?requirement.taxAmount/requirement.taxableAmount*100:0,schemePerUnit:0,taxablePerUnit:taxableForBatch/quantity,taxPerUnit:taxForBatch/quantity}}),
         });
         remaining -= quantity;
       }
@@ -1838,6 +1844,7 @@ export class PharmacyInvoiceService {
       {
         drugId: string;
         drugName: string;
+        inventoryItemId?: string;
         quantity: number;
         fallbackUnitPrice: number;
         taxableAmount: number;
@@ -1852,12 +1859,14 @@ export class PharmacyInvoiceService {
     sourceName: string,
     taxableAmount = quantity*fallbackUnitPrice,
     taxAmount = 0,
+    inventoryItemId?: string,
   ): void {
     if (!Number.isInteger(quantity) || quantity < 1) {
       throw new BadRequestException(`Invalid quantity for ${drugName}`);
     }
 
-    const existing = requirements.get(drugId);
+    const requirementKey = `${drugId}:${inventoryItemId || ''}`;
+    const existing = requirements.get(requirementKey);
     const safeFallbackUnitPrice = Number.isFinite(Number(fallbackUnitPrice))
       ? Number(fallbackUnitPrice)
       : 0;
@@ -1871,8 +1880,8 @@ export class PharmacyInvoiceService {
       return;
     }
 
-    requirements.set(drugId, {
-      drugId,
+    requirements.set(requirementKey, {
+      drugId, inventoryItemId,
       drugName,
       quantity,
       fallbackUnitPrice: safeFallbackUnitPrice,
@@ -1958,7 +1967,7 @@ export class PharmacyInvoiceService {
     now = new Date(),
   ): boolean {
     if (!expiryDate) return false;
-    return new Date(expiryDate).getTime() < now.getTime();
+    return new Date(expiryDate).getTime() < new Date(now.toISOString().slice(0, 10) + 'T00:00:00.000Z').getTime();
   }
 
   // Helper method to update inventory stock
@@ -2111,35 +2120,27 @@ export class PharmacyInvoiceService {
     }
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product] inclusive-invoice-grand-total
+   * New invoice totals MUST sum the rounded line gross, discounts and included tax;
+   * the grand total is gross less discount and MUST NOT add tax again.
+   */
   private calculateInvoiceTotals(
-    invoiceDto: CreatePharmacyInvoiceDto,
-    packages: any[] = [],
+    items: ReturnType<PharmacyInvoiceService['buildInvoiceItems']>,
   ) {
     let subtotal = 0;
     let totalDiscount = 0;
     let totalTax = 0;
 
-    for (const item of invoiceDto.items) {
-      // For packages, use the package price if not overridden
-      let unitPrice = item.unitPrice;
-      if (item.itemType === 'PACKAGE' && item.packageId) {
-        const package_ = packages.find((p) => p.id === item.packageId);
-        if (package_ && !item.unitPrice) {
-          unitPrice = package_.packagePrice;
-        }
-      }
-
-      const itemSubtotal = item.quantity * unitPrice;
-      const itemDiscount = (itemSubtotal * (item.discountPercent || 0)) / 100;
-      const discountedAmount = itemSubtotal - itemDiscount;
-      const itemTax = (discountedAmount * (item.taxPercent || 0)) / 100;
-
-      subtotal += itemSubtotal;
-      totalDiscount += itemDiscount;
-      totalTax += itemTax;
+    for (const item of items) {
+      subtotal = this.invoiceMoney(
+        subtotal + this.invoiceMoney(item.quantity * item.unitPrice),
+      );
+      totalDiscount = this.invoiceMoney(totalDiscount + item.discountAmount);
+      totalTax = this.invoiceMoney(totalTax + item.taxAmount);
     }
 
-    const grandTotal = subtotal - totalDiscount + totalTax;
+    const grandTotal = this.invoiceMoney(subtotal - totalDiscount);
 
     return { subtotal, totalDiscount, totalTax, grandTotal };
   }
@@ -2154,11 +2155,16 @@ export class PharmacyInvoiceService {
   }
 
   // ===== Extracted helpers (pure or side-effect free) =====
+  /**
+   * @cc [owner:nareshshah139,label:product] inclusive-invoice-prices
+   * Drug and package prices include tax; discount applies to gross and tax is extracted from the discounted total, rounded per line.
+   */
   private buildInvoiceItems(
     items: PharmacyInvoiceItemDto[],
     packages: any[],
   ): Array<{
     drugId?: string;
+    inventoryItemId?: string;
     packageId?: string;
     itemType: 'DRUG' | 'PACKAGE';
     quantity: number;
@@ -2173,13 +2179,17 @@ export class PharmacyInvoiceService {
       const unitPrice = this.resolveUnitPrice(item, packages);
       const discountPercent = item.discountPercent || 0;
       const taxPercent = item.taxPercent || 0;
-      const itemSubtotal = item.quantity * unitPrice;
-      const discountAmount = (itemSubtotal * discountPercent) / 100;
-      const discountedAmount = itemSubtotal - discountAmount;
-      const taxAmount = (discountedAmount * taxPercent) / 100;
-      const totalAmount = discountedAmount + taxAmount;
+      const itemSubtotal = this.invoiceMoney(item.quantity * unitPrice);
+      const discountAmount = this.invoiceMoney(
+        (itemSubtotal * discountPercent) / 100,
+      );
+      const totalAmount = this.invoiceMoney(itemSubtotal - discountAmount);
+      const taxAmount = this.invoiceMoney(
+        (totalAmount * taxPercent) / (100 + taxPercent),
+      );
       return {
         drugId: item.drugId,
+        inventoryItemId: item.inventoryItemId,
         packageId: item.packageId,
         itemType: (item.itemType as any) || 'DRUG',
         quantity: item.quantity,
@@ -2191,6 +2201,13 @@ export class PharmacyInvoiceService {
         totalAmount,
       };
     });
+  }
+  /**
+   * @cc [owner:nareshshah139,label:product] invoice-rounding-parity
+   * New invoice amounts round to two decimal places using the billing screen's epsilon-adjusted rounding.
+   */
+  private invoiceMoney(value: number): number {
+    return Math.round((value + Number.EPSILON) * 100) / 100;
   }
   private resolveUnitPrice(
     item: PharmacyInvoiceItemDto,

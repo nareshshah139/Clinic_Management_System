@@ -7,6 +7,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { ClinicalHistoryDetails, hasClinicalValue } from './ClinicalHistoryDetails';
 import { encounterDay } from '@/lib/patient-history';
 import { cn } from '@/lib/utils';
+import { clinicalDisplayValue } from '@/lib/clinical-display';
+import { formatPrintedDrugName } from '@/lib/printed-drug-name';
 import {
   Calendar,
   Camera,
@@ -133,7 +135,8 @@ const deriveVisitData = (visit: PatientHistoryVisit) => {
   const day = encounterDay(raw);
   const visitTypeLabel = extractTextFromUnknown(scribe.visitType, []) || visit.visitType || undefined;
   const photoPreviews = Array.isArray(raw.photoPreviewUrls) ? raw.photoPreviewUrls.map(normalizeAssetUrl) : [];
-  const rxItems = Array.isArray(raw.prescriptionItems) ? raw.prescriptionItems : [];
+  const plan = normalizeStructuredValue(visit.plan) as Record<string, any> | undefined;
+  const rxItems = [raw.prescriptionItems, normalizeStructuredValue(raw.prescription?.items), plan?.dermatology?.medicationPlan].find(value => Array.isArray(value) && value.length > 0) || [];
   const status = String(visit.status || '').toLowerCase().replaceAll('_', '-');
   return {
     dateLabel: day ? new Date(`${day}T12:00:00Z`).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' }) : 'Unknown date',
@@ -163,6 +166,11 @@ const DetailSection = ({
   </section>
 );
 
+/**
+ * @cc [owner:nareshshah139,label:product] compact-visit-history
+ * The opened history panel MUST initially show complaints, history and unique medicine names only.
+ * Full details MUST remain one click away without duplicated medicines or internal editor fields.
+ */
 export default function PatientHistoryVisitCard({
   visit,
   visitLabel,
@@ -175,6 +183,7 @@ export default function PatientHistoryVisitCard({
 }: PatientHistoryVisitCardProps) {
   const detailsId = useId();
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
+  const [fullDetails, setFullDetails] = useState(false);
   const data = useMemo(() => deriveVisitData(visit), [visit]);
 
   const raw = visit as Record<string, any>;
@@ -188,9 +197,9 @@ export default function PatientHistoryVisitCard({
     ['Diagnosis details', normalizeStructuredValue(visit.diagnosis)],
     ['History', normalizeStructuredValue(raw.history) || raw.historySummary],
     ['Examination', normalizeStructuredValue(raw.exam) || raw.examSummary],
-    ['Treatment plan', normalizeStructuredValue(visit.plan) || raw.planSummary],
+    ['Treatment plan', clinicalDisplayValue(normalizeStructuredValue(visit.plan) || raw.planSummary, true)],
     ['Vitals', labeledVitals || normalizeStructuredValue(visit.vitals)],
-    ['Prescription Items', hasClinicalValue(raw.prescriptionItems) ? raw.prescriptionItems : normalizeStructuredValue(raw.prescription?.items)],
+    ['Prescription Items', data.rxItems],
     ['Prescription instructions', { ...raw.prescriptionMeta, ...(raw.prescription?.instructions ? { followUpInstructions: raw.prescription.instructions } : {}), ...(raw.prescription?.pharmacistNotes ? { pharmacistNotes: raw.prescription.pharmacistNotes } : {}), ...(raw.prescription?.validUntil ? { validUntil: formatMaybeDate(String(raw.prescription.validUntil)) } : {}) }],
     ['Follow-up date', visit.followUp ? formatMaybeDate(String(visit.followUp)) : undefined],
     ['Visit notes', normalizeStructuredValue(visit.scribeJson)],
@@ -198,14 +207,14 @@ export default function PatientHistoryVisitCard({
     ['Procedure device records', raw.deviceLogs],
     ['Consents', raw.consents],
     ['Appointment notes', raw.appointmentNotes || raw.appointment?.notes],
-  ].map(([title, value]) => ({ title: String(title), value })).filter(section => hasClinicalValue(section.value));
+  ].map(([title, value]) => ({ title: String(title), value: clinicalDisplayValue(value) })).filter(section => hasClinicalValue(section.value));
   const hasExpandedContent = sections.length > 0 || data.photoPreviews.length > 0 || footerActions;
 
   return (
     <Card
       className={cn(
         'gap-0 overflow-hidden border-border py-0 shadow-none',
-        highlight && 'border-blue-300 bg-blue-50/30 dark:border-blue-800 dark:bg-blue-950/20',
+        highlight && 'border-info-border bg-info-soft/30 dark:border-info-border dark:bg-info/20',
         className
       )}
     >
@@ -232,12 +241,7 @@ export default function PatientHistoryVisitCard({
                 {data.chiefComplaint || 'Not recorded'}
               </dd>
             </div>
-            <div className="flex min-w-0 gap-2">
-              <dt className="w-28 shrink-0 text-xs leading-5 text-muted-foreground">Diagnosis</dt>
-              <dd className={cn('min-w-0 whitespace-pre-wrap break-words', collapsed && 'line-clamp-2', data.primaryDiagnosis ? 'font-medium text-foreground' : 'text-muted-foreground')}>
-                {data.primaryDiagnosis || 'Not recorded'}
-              </dd>
-            </div>
+
           </dl>
         </div>
 
@@ -287,7 +291,13 @@ export default function PatientHistoryVisitCard({
         {hasExpandedContent && (
           <div id={detailsId} hidden={collapsed} className="border-t border-border p-3">
             {!collapsed && <>
-              <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,20rem),1fr))] items-start gap-x-6 gap-y-4">
+              <Button type="button" size="sm" variant="outline" className="mb-3" onClick={() => setFullDetails(value => !value)} aria-expanded={fullDetails}>
+                {fullDetails ? 'Compact summary' : 'Full details'}
+              </Button>
+              {!fullDetails ? <div className="space-y-3">
+                {hasClinicalValue(raw.history || raw.historySummary) && <DetailSection title="History"><ClinicalHistoryDetails value={raw.history || raw.historySummary} /></DetailSection>}
+                {data.rxItems.length > 0 && <DetailSection title="Medicines"><p>{Array.from(new Set(data.rxItems.map((item: any) => formatPrintedDrugName(item.drugName || item.name || '', item)).filter(Boolean))).join(', ')}</p></DetailSection>}
+              </div> : <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,20rem),1fr))] items-start gap-x-6 gap-y-4">
                 {sections.map(section => (
                   <DetailSection key={section.title} title={section.title}>
                     <ClinicalHistoryDetails value={section.value} />
@@ -300,6 +310,7 @@ export default function PatientHistoryVisitCard({
                   ))}</div>
                 </DetailSection>}
               </div>
+              }
               {footerActions && <div className="mt-3 border-t border-border pt-3">{footerActions}</div>}
             </>}
           </div>

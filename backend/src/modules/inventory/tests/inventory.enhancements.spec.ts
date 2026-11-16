@@ -52,6 +52,8 @@ describe('InventoryService - Enhanced Drug Addition Tests', () => {
   describe('Create inventory item with all required fields', () => {
     it('should create inventory item with only required fields', async () => {
       const createItemDto = {
+        dosageForm: 'tablet',
+        strength: '500 mg',
         name: 'Paracetamol 500mg',
         type: InventoryItemType.MEDICINE,
         costPrice: 10.5,
@@ -94,6 +96,8 @@ describe('InventoryService - Enhanced Drug Addition Tests', () => {
   describe('Create inventory item with optional fields', () => {
     it('should create inventory item with all optional fields', async () => {
       const createItemDto = {
+        dosageForm: 'tablet',
+        strength: '500 mg',
         name: 'Amoxicillin 500mg',
         description: 'Antibiotic medication',
         genericName: 'Amoxicillin',
@@ -177,6 +181,8 @@ describe('InventoryService - Enhanced Drug Addition Tests', () => {
   describe('Validate SKU uniqueness per branch', () => {
     it('should throw ConflictException for duplicate SKU in same branch', async () => {
       const createItemDto = {
+        dosageForm: 'tablet',
+        strength: '500 mg',
         name: 'Paracetamol 500mg',
         sku: 'PAR-500',
         type: InventoryItemType.MEDICINE,
@@ -197,6 +203,8 @@ describe('InventoryService - Enhanced Drug Addition Tests', () => {
 
     it('should allow same SKU in different branches', async () => {
       const createItemDto = {
+        dosageForm: 'tablet',
+        strength: '500 mg',
         name: 'Paracetamol 500mg',
         sku: 'PAR-500',
         type: InventoryItemType.MEDICINE,
@@ -238,6 +246,8 @@ describe('InventoryService - Enhanced Drug Addition Tests', () => {
 
     it('should throw ConflictException for duplicate barcode in same branch', async () => {
       const createItemDto = {
+        dosageForm: 'tablet',
+        strength: '500 mg',
         name: 'Ibuprofen 400mg',
         sku: 'IBU-400', // Provide SKU so we have 2 findFirst calls
         barcode: '1234567890123',
@@ -259,6 +269,8 @@ describe('InventoryService - Enhanced Drug Addition Tests', () => {
 
     it('should allow same barcode in different branches', async () => {
       const createItemDto = {
+        dosageForm: 'tablet',
+        strength: '500 mg',
         name: 'Ibuprofen 400mg Different Branch',
         sku: 'IBU-400-B', // Provide SKU so we have 2 findFirst calls
         barcode: '9999999999999',
@@ -306,6 +318,8 @@ describe('InventoryService - Enhanced Drug Addition Tests', () => {
 
       for (const type of types) {
         const createItemDto = {
+          dosageForm: 'tablet',
+          strength: '500 mg',
           name: `Test Item - ${type}`,
           type,
           costPrice: 10.0,
@@ -350,6 +364,8 @@ describe('InventoryService - Enhanced Drug Addition Tests', () => {
 
       for (const unit of units) {
         const createItemDto = {
+          dosageForm: 'tablet',
+          strength: '500 mg',
           name: `Test Item - ${unit}`,
           type: InventoryItemType.MEDICINE,
           costPrice: 10.0,
@@ -387,6 +403,8 @@ describe('InventoryService - Enhanced Drug Addition Tests', () => {
 
       for (const status of statuses) {
         const createItemDto = {
+          dosageForm: 'tablet',
+          strength: '500 mg',
           name: `Test Item - ${status}`,
           type: InventoryItemType.MEDICINE,
           costPrice: 10.0,
@@ -423,6 +441,8 @@ describe('InventoryService - Enhanced Drug Addition Tests', () => {
 
     it('should convert expiryDate string to Date object on create', async () => {
       const createItemDto = {
+        dosageForm: 'tablet',
+        strength: '500 mg',
         name: 'Medicine with expiry',
         type: InventoryItemType.MEDICINE,
         costPrice: 10.0,
@@ -499,6 +519,8 @@ describe('InventoryService - Enhanced Drug Addition Tests', () => {
 
     it('should handle undefined expiryDate', async () => {
       const createItemDto = {
+        dosageForm: 'tablet',
+        strength: '500 mg',
         name: 'Medicine without expiry',
         type: InventoryItemType.MEDICINE,
         costPrice: 10.0,
@@ -536,6 +558,8 @@ describe('InventoryService - Enhanced Drug Addition Tests', () => {
 
     it('should serialize tags array to JSON string on create', async () => {
       const createItemDto = {
+        dosageForm: 'tablet',
+        strength: '500 mg',
         name: 'Medicine with tags',
         type: InventoryItemType.MEDICINE,
         costPrice: 10.0,
@@ -592,6 +616,8 @@ describe('InventoryService - Enhanced Drug Addition Tests', () => {
 
     it('should handle empty tags array', async () => {
       const createItemDto = {
+        dosageForm: 'tablet',
+        strength: '500 mg',
         name: 'Medicine no tags',
         type: InventoryItemType.MEDICINE,
         costPrice: 10.0,

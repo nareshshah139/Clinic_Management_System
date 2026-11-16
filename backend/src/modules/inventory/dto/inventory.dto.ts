@@ -74,6 +74,27 @@ export class InventoryRegimenDefaultsDto {
 
 // Inventory Item DTOs
 export class CreateInventoryItemDto extends InventoryRegimenDefaultsDto {
+  @IsOptional()
+  @IsString()
+  itemCode?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  combinationProduct?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  dispenseLoose?: boolean;
+
+  @IsOptional()
+  @IsString()
+  dosageForm?: string;
+
+  @IsOptional()
+  @IsString()
+  strength?: string;
+
+
   @IsString()
   name: string;
 
@@ -206,6 +227,27 @@ export class CreateInventoryItemDto extends InventoryRegimenDefaultsDto {
 }
 
 export class UpdateInventoryItemDto extends InventoryRegimenDefaultsDto {
+  @IsOptional()
+  @IsString()
+  itemCode?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  combinationProduct?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  dispenseLoose?: boolean;
+
+  @IsOptional()
+  @IsString()
+  dosageForm?: string;
+
+  @IsOptional()
+  @IsString()
+  strength?: string;
+
+
   @IsString()
   @IsOptional()
   name?: string;

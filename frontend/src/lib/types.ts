@@ -63,7 +63,10 @@ export interface RoomSchedule {
 }
 
 // Appointment
+export type AppointmentBill = { id: string; invoiceNo: string; billType: string | null; total: number; received: number; balance: number; status: string };
+
 export interface Appointment {
+  billing?: { invoices: AppointmentBill[] };
   id: string;
   patientId: string;
   doctorId: string;
@@ -100,6 +103,7 @@ export interface Appointment {
 
 // Appointment in slot format (for UI)
 export interface AppointmentInSlot {
+  billing?: { invoices: AppointmentBill[] };
   id: string;
   slot: string;
   patient: { id: string; name: string; phone?: string; email?: string; gender?: string; dob?: string; age?: number };
@@ -405,6 +409,15 @@ export interface PharmacyInvoiceQueryParams {
 }
 
 export interface InventoryItem {
+  brandName?: string | null;
+  dosageForm?: string | null;
+  strength?: string | null;
+  itemCode?: string | null;
+  combinationProduct?: boolean;
+  dispenseLoose?: boolean;
+  packSize?: number | null;
+  packUnit?: string | null;
+  displayName?: string;
   id: string;
   name: string;
   description?: string;
@@ -431,6 +444,11 @@ export interface InventoryItem {
 export type DrugInventoryChangeStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 
 export interface DrugInventoryCatalogRow {
+  brandName?: string | null;
+  itemCode?: string | null;
+  combinationProduct?: boolean;
+  dispenseLoose?: boolean;
+  displayName?: string;
   id: string;
   name: string;
   price: number;
@@ -451,7 +469,7 @@ export interface DrugInventoryCatalogRow {
 
 export interface DrugInventoryChangeRequest {
   id: string;
-  drugId: string;
+  drugId: string | null;
   inventoryItemId?: string | null;
   requestedById: string;
   reviewedById?: string | null;
@@ -465,11 +483,13 @@ export interface DrugInventoryChangeRequest {
   reviewedAt?: string | null;
   createdAt: string;
   updatedAt: string;
-  drug: DrugInventoryCatalogRow;
+  drug: DrugInventoryCatalogRow | null;
+  stockSnapshot?: unknown;
   inventoryItem?: {
     id: string;
     name: string;
     currentStock: number;
+    unit?: string;
     stockStatus?: string | null;
     batchNumber?: string | null;
     expiryDate?: string | null;
@@ -501,6 +521,9 @@ export interface DrugInventoryChangeRequestResponse {
 
 // Visit summaries used in procedures dashboard
 export interface VisitSummary {
+  consultationType?: 'IN_PERSON' | 'TELE_VIDEO';
+  teleVideoConsentById?: string | null;
+  teleVideoConsentAt?: string | null;
   id: string;
   patientId: string;
   doctorId: string;
@@ -565,6 +588,9 @@ export interface VisitPatientSummary {
 }
 
 export interface VisitDetails {
+  consultationType?: 'IN_PERSON' | 'TELE_VIDEO';
+  teleVideoConsentById?: string | null;
+  teleVideoConsentAt?: string | null;
   id: string;
   patientId: string;
   doctorId: string;

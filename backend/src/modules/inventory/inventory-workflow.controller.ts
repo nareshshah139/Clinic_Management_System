@@ -19,6 +19,7 @@ import {
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
 import { InventoryWorkflowService } from './inventory-workflow.service';
 import { InventoryWorkspaceService } from './inventory-workspace.service';
+import type { InventoryMovementQuery } from './inventory-movements';
 import {
   SaveWorkflowDocumentDto,
   TransitionWorkflowDto,
@@ -146,6 +147,9 @@ export class InventoryWorkflowController {
   }
   @Get('overview') overview(@Request() r: any) {
     return this.workspace.overview(r.user);
+  }
+  @Get('movements') movements(@Request() r: any, @Query() q: InventoryMovementQuery) {
+    return this.workspace.movements(r.user, q);
   }
   @Post('stock/bulk-location') bulkLocations(
     @Request() r: any,

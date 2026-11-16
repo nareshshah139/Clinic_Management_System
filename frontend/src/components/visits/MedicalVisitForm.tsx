@@ -1,6 +1,9 @@
 'use client';
 
+import { LoadingSkeleton } from '@/components/ui/skeleton';
+import { Spinner } from '@/components/ui/spinner';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { PRESCRIPTION_LETTERHEAD_URL, PRESCRIPTION_TOP_MARGIN_PX, PRESCRIPTION_BOTTOM_MARGIN_PX, prescriptionLetterheadUrl } from '@/lib/prescription-letterhead';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -10,8 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   Mic, 
-  MicOff, 
-  Loader2,
+  MicOff,
   Save, 
   FileText, 
   User, 
@@ -45,6 +47,7 @@ import {
   Image,
   Keyboard
 } from 'lucide-react';
+import { TELE_VIDEO_CONSENT_REQUIRED, type ConsultationType } from '@/lib/tele-consultation';
 import { apiClient } from '@/lib/api';
 import { handleUnauthorizedRedirect } from '@/lib/authRedirect';
 import { compactClinicalPatch, mergeClinicalPatch } from '@/lib/clinical-patch';
@@ -58,6 +61,7 @@ import type { Patient, VisitDetails, VisitPatientSummary, VisitSummary } from '@
 import { getErrorMessage } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { isUuid } from '@/lib/id';
+import { resolveClinicalPatient, clinicalPatientAge, type ClinicalPatient } from '@/lib/clinical-display';
 import { appendSpeechToText, pickSpeechToTextInsert } from '@/lib/speech-to-text';
 import { useSpeechToTextRecorder } from '@/hooks/useSpeechToTextRecorder';
 
@@ -71,6 +75,7 @@ interface Props {
   appointmentId?: string;
   appointmentData?: VisitDetails | null;
   initialVisitId?: string;
+  onPatientResolved?: (patient: ClinicalPatient | null) => void;
 }
 
 interface PatientHistory {
@@ -100,6 +105,8 @@ type CompositeLabValue = Record<string, SimpleLabValue>;
 type LabResultsMap = Record<string, SimpleLabValue | CompositeLabValue>;
 
 type MedicalVisitDraftState = {
+  consultationType?: ConsultationType;
+  teleVideoConsent?: boolean;
   prescriptionClinical?: Record<string, unknown>;
   labSelections?: string[];
   labResults?: LabResultsMap;
@@ -184,7 +191,12 @@ const ROLE_PERMISSIONS = {
   OWNER: ['all'],
 };
 
-export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCTOR', visitNumber = 1, patientName = '', visitDate, appointmentId, appointmentData, initialVisitId }: Props) {
+/**
+ * @cc [owner:nareshshah139,label:product] consultation-consent-form
+ * New visits default to In-person. Tele-video saves and exports MUST be blocked
+ * until consent is checked; visit recovery MUST restore the consultation choice.
+ */
+export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCTOR', visitNumber = 1, patientName = '', visitDate, appointmentId, appointmentData, initialVisitId, onPatientResolved }: Props) {
   // Parse helper
   const parseJsonValue = useCallback(<T,>(value: unknown): T | undefined => {
     if (!value) return undefined;
@@ -198,6 +210,10 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
     }
     return undefined;
   }, []);
+
+  const [consultationType, setConsultationType] = useState<ConsultationType | undefined>(initialVisitId || appointmentId ? undefined : 'IN_PERSON');
+  const [teleVideoConsent, setTeleVideoConsent] = useState(false);
+  const consentMissing = consultationType === 'TELE_VIDEO' && !teleVideoConsent;
 
   // Core visit data
   const [visitId, setVisitId] = useState<string | null>(initialVisitId || null);
@@ -364,11 +380,11 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
   // Print customization (moved from PrescriptionBuilder)
-  const [printBgUrl, setPrintBgUrl] = useState<string>('/letterhead.png');
-  const [printTopMarginPx, setPrintTopMarginPx] = useState<number>(150);
+  const [printBgUrl, setPrintBgUrl] = useState<string>(PRESCRIPTION_LETTERHEAD_URL);
+  const [printTopMarginPx, setPrintTopMarginPx] = useState<number>(PRESCRIPTION_TOP_MARGIN_PX);
   const [printLeftMarginPx, setPrintLeftMarginPx] = useState<number>(45);
   const [printRightMarginPx, setPrintRightMarginPx] = useState<number>(45);
-  const [printBottomMarginPx, setPrintBottomMarginPx] = useState<number>(45);
+  const [printBottomMarginPx, setPrintBottomMarginPx] = useState<number>(PRESCRIPTION_BOTTOM_MARGIN_PX);
   const [contentOffsetXPx, setContentOffsetXPx] = useState<number>(0);
   const [contentOffsetYPx, setContentOffsetYPx] = useState<number>(0);
   const [designAidsEnabled, setDesignAidsEnabled] = useState<boolean>(false);
@@ -411,7 +427,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
       const frames = localStorage.getItem('rx_frames_enabled');
       const headerMm = localStorage.getItem('rx_header_mm');
       const footerMm = localStorage.getItem('rx_footer_mm');
-      if (bg) setPrintBgUrl(bg);
+      if (bg) setPrintBgUrl(prescriptionLetterheadUrl(bg));
       if (top) setPrintTopMarginPx(Number(top));
       if (left) setPrintLeftMarginPx(Number(left));
       if (right) setPrintRightMarginPx(Number(right));
@@ -506,10 +522,22 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
     return Math.abs(hash).toString(36);
   }, []);
 
+  const visitSaveAttempt = useRef<{ fingerprint: string; key: string } | null>(null);
+  /**
+   * @cc [owner:nareshshah139,label:product] visit-save-attempt-identity
+   * Retries of one failed payload reuse a key, but a later save after success or
+   * a changed payload MUST use a new key, including Tele-video/In-person reversals.
+   */
   const buildIdempotencyKey = useCallback((method: 'POST' | 'PATCH', rid: string | null, payload: Record<string, unknown>) => {
     const base = JSON.stringify(payload);
     const scope = rid ? `visits:${rid}` : `visits:create:${patientId}:${doctorId}:${appointmentId || ''}`;
-    return `cms:${method}:${scope}:${stableHash(base)}`;
+    const fingerprint = `${method}:${scope}:${base}`;
+    if (visitSaveAttempt.current?.fingerprint !== fingerprint) {
+      const nonce = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      visitSaveAttempt.current = { fingerprint, key: `cms:${method}:${scope}:${nonce}` };
+    }
+    return visitSaveAttempt.current.key;
   }, [appointmentId, doctorId, patientId, stableHash]);
 
   const clearAutoSaveTimer = useCallback(() => {
@@ -520,6 +548,8 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   }, []);
 
   const serializeDraft = useCallback((): MedicalVisitDraftState => ({
+    consultationType,
+    teleVideoConsent,
     prescriptionClinical,
     labSelections,
     labResults,
@@ -581,6 +611,8 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
     vitals,
     visitStatus,
     acneSeverity,
+    consultationType,
+    teleVideoConsent,
   ]);
 
   const latestDraftStateRef = useRef(serializeDraft());
@@ -588,6 +620,10 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
 
   const applyDraft = useCallback((draft: MedicalVisitDraftState) => {
     restoredDraftRef.current = true;
+    if (draft.consultationType) {
+      setConsultationType(draft.consultationType);
+      setTeleVideoConsent(draft.consultationType === 'TELE_VIDEO' && draft.teleVideoConsent === true);
+    }
     if (draft.prescriptionClinical) receiveClinicalData(draft.prescriptionClinical);
     if (draft.labSelections) setLabSelections(draft.labSelections);
     if (draft.labResults) setLabResults(draft.labResults);
@@ -683,16 +719,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
         temperatureC = ((n - 32) * 5) / 9;
       }
     }
-    const complaintValues = (() => {
-      if (complaints.length > 0) {
-        return complaints;
-      }
-      if (!visitId) {
-        if (subjective) return [subjective];
-        return ['General consultation'];
-      }
-      return [];
-    })();
+    const complaintValues = complaints.filter((complaint) => complaint.trim());
 
     const payload: Record<string, unknown> = {
       patientId,
@@ -761,10 +788,16 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
     }
 
     const compact = compactClinicalPatch(payload);
+    // New visits require an array, even when no complaint has been entered.
+    if (!visitId) compact.complaints = payload.complaints;
     const merged = mergeClinicalPatch(compact, prescriptionClinicalRef.current);
     if (compact.vitals) merged.vitals = { ...merged.vitals, ...compact.vitals };
+    if (consultationType) {
+      merged.consultationType = consultationType;
+      merged.teleVideoConsent = teleVideoConsent;
+    }
     return merged;
-  }, [triggers, prescriptionClinical, labSelections, labResults, spotSize, assessment, complaints, counseling, dermDx, doctorId, fluence, passes, patientId, plan, priorTx, procType, reviewDate, skinConcerns, skinType, subjective, systemics, topicals, currentVisitNumber, visitStatus, appointmentId, morphology, distribution, acneSeverity, itchScore, painScore, getProgress, completedSections, userRole, vitals, objective, visitId]);
+  }, [consultationType, teleVideoConsent, triggers, prescriptionClinical, labSelections, labResults, spotSize, assessment, complaints, counseling, dermDx, doctorId, fluence, passes, patientId, plan, priorTx, procType, reviewDate, skinConcerns, skinType, subjective, systemics, topicals, currentVisitNumber, visitStatus, appointmentId, morphology, distribution, acneSeverity, itchScore, painScore, getProgress, completedSections, userRole, vitals, objective, visitId]);
 
   const latestPayload = useRef(buildPayload);
   latestPayload.current = buildPayload;
@@ -773,6 +806,11 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   const latestDraftWriter = useRef(persistDraftToStorage);
   latestDraftWriter.current = persistDraftToStorage;
 
+  /**
+   * @cc [owner:nareshshah139,label:reliability] rejected-draft-retries
+   * A rejected draft MUST remain recoverable. Deterministic HTTP 4xx failures
+   * stop automatic resubmission until another edit or manual save; 408, 425 and 429 may retry.
+   */
   const runAutoSave = useCallback(async () => {
     if (!visitId || !hasUnsavedChangesRef.current || manualSaveInFlight.current) {
       return;
@@ -785,6 +823,10 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
     }
 
     const payload = buildPayload();
+    if (payload.consultationType === 'TELE_VIDEO' && payload.teleVideoConsent !== true) {
+      setSaveStatus('unsaved');
+      return;
+    }
     autoSavePromiseRef.current = (async () => {
       let retryAllowed = true;
       try {
@@ -797,6 +839,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
           lastIdempotencyKeyRef.current = idemKey;
         }
         await apiClient.updateVisit(visitId, payload, { idempotencyKey: idemKey });
+        visitSaveAttempt.current = null;
         if (JSON.stringify(payload) !== JSON.stringify(latestPayload.current())) {
           hasUnsavedChangesRef.current = true;
           setSaveStatus('unsaved');
@@ -814,6 +857,9 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
         console.error('Auto-save failed:', error);
         hasUnsavedChangesRef.current = true;
         setSaveStatus('error');
+        const status = (error as { status?: number })?.status;
+        retryAllowed = !status || status >= 500 || [408, 425, 429].includes(status);
+        clearAutoSaveTimer();
         // If unauthorized, prompt sign-in and do not retry
         if ((error as any)?.status === 401) {
           retryAllowed = false;
@@ -830,10 +876,12 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
             description: getErrorMessage(error) || 'We will retry shortly.',
           });
           clearAutoSaveTimer();
-          autoSaveTimerRef.current = window.setTimeout(() => {
-            autoSaveTimerRef.current = null;
-            void autoSaveRunner.current();
-          }, AUTO_SAVE_RETRY_MS);
+          if (retryAllowed) {
+            autoSaveTimerRef.current = window.setTimeout(() => {
+              autoSaveTimerRef.current = null;
+              void autoSaveRunner.current();
+            }, AUTO_SAVE_RETRY_MS);
+          }
         }
       } finally {
         autoSavePromiseRef.current = null;
@@ -974,6 +1022,11 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
       try {
         const initialState = JSON.stringify(latestDraftStateRef.current);
         const res: any = await apiClient.get(`/visits/${visitId}`);
+        if (identityPatientRef.current === patientId && res?.patient?.id === patientId) setVisitPatient(res.patient);
+        if (!latestDraftStateRef.current.consultationType) {
+          setConsultationType(res?.consultationType === 'TELE_VIDEO' ? 'TELE_VIDEO' : 'IN_PERSON');
+          setTeleVideoConsent(res?.consultationType === 'TELE_VIDEO' && !!res.teleVideoConsentById && !!res.teleVideoConsentAt);
+        }
         if (restoredDraftRef.current || initialState !== JSON.stringify(latestDraftStateRef.current)) return;
         // Prefill complaints, vitals, exam, diagnosis, plan when empty
         try {
@@ -1155,7 +1208,12 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   }, [persistDraftToStorage]);
   // Patient context sidebar
   const [showPatientContext, setShowPatientContext] = useState(true);
-  const [patientDetails, setPatientDetails] = useState<VisitPatientSummary | null>(null);
+  const [patientRecord, setPatientDetails] = useState<VisitPatientSummary | null>(null);
+  const [visitPatient, setVisitPatient] = useState<VisitPatientSummary | null>(null);
+  const identityPatientRef = useRef(patientId);
+  identityPatientRef.current = patientId;
+  const patientDetails = resolveClinicalPatient(patientId, visitPatient, patientRecord) as VisitPatientSummary | null;
+  useEffect(() => { onPatientResolved?.(patientDetails); }, [patientDetails, onPatientResolved]);
   const [recentVisits, setRecentVisits] = useState<VisitSummary[]>([]);
 
   
@@ -1187,7 +1245,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
       type="button"
       variant="ghost"
       size="sm"
-      className={`ml-2 ${activeVoiceField === fieldName ? 'bg-red-100 text-red-600' : ''}`}
+      className={`ml-2 ${activeVoiceField === fieldName ? 'bg-destructive-soft text-destructive-text' : ''}`}
       onClick={() => void startVoiceInput(fieldName)}
       disabled={isTranscribing || (isListening && activeVoiceField !== fieldName)}
       aria-label={
@@ -1206,7 +1264,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
       }
     >
       {activeVoiceField === fieldName ? (
-        isListening ? <MicOff className="h-4 w-4" /> : <Loader2 className="h-4 w-4 animate-spin" />
+        isListening ? <MicOff className="h-4 w-4" /> : <Spinner className="h-4 w-4 " />
       ) : (
         <Mic className="h-4 w-4" />
       )}
@@ -1241,11 +1299,12 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
         ? visits
         : visits?.visits || visits?.data || [];
 
+      if (identityPatientRef.current !== patientId) return;
       setPatientDetails(patient as VisitPatientSummary);
       setRecentVisits(visitList as VisitSummary[]);
     } catch (error) {
       console.error('Failed to load patient context:', error);
-      if (appointmentData && 'patient' in appointmentData && appointmentData.patient) {
+      if (identityPatientRef.current === patientId && appointmentData && 'patient' in appointmentData && appointmentData.patient) {
         setPatientDetails(appointmentData.patient as VisitPatientSummary);
       }
     }
@@ -1333,7 +1392,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
         }
         
         // 3. Clinical details (histories, examination, etc.)
-        const hasClinicalDetails = draft.pastHistory || draft.medicationHistory || 
+        const hasClinicalDetails = draft.pastHistory || draft.personalHistory || draft.medicationHistory ||
                                    draft.menstrualHistory || draft.exObjective || 
                                    draft.procedurePlanned;
         if (hasClinicalDetails) {
@@ -1390,6 +1449,10 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
 
   const save = async (complete = false, requireLatest = false) => {
     if (manualSaveInFlight.current) return;
+    if (consentMissing) {
+      toast({ variant: 'destructive', title: 'Patient consent required', description: TELE_VIDEO_CONSENT_REQUIRED });
+      return;
+    }
     if (!patientId || !doctorId) {
       toast({
         variant: 'destructive',
@@ -1460,6 +1523,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
       }
       
       if (!(visit as VisitDetails)?.id) throw new Error('The server did not confirm the saved visit. Your draft is still available.');
+      visitSaveAttempt.current = null;
       const newerChanges = JSON.stringify(payload) !== JSON.stringify(latestPayload.current());
       if ((complete || requireLatest) && newerChanges) throw new Error('New changes were entered while saving. Please save again before completing or exporting.');
       if (complete) {
@@ -1542,15 +1606,15 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   };
 
   return (
-    <div className="flex gap-6">
+    <div className="flex min-w-0 max-w-full flex-col gap-6 lg:flex-row">
       {/* Patient Context Sidebar */}
       {showPatientContext && (
-        <div className="w-80 space-y-4">
+        <div className="w-full min-w-0 space-y-4 lg:w-80 lg:shrink-0">
           <Card>
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-lg">Patient Context</CardTitle>
-                <Button variant="ghost" size="sm" onClick={() => setShowPatientContext(false)}>
+                <Button variant="ghost" size="sm" aria-label="Hide patient context" onClick={() => setShowPatientContext(false)}>
                   <X className="h-4 w-4" />
                 </Button>
               </div>
@@ -1558,50 +1622,36 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
             <CardContent className="space-y-4">
               {patientDetails && (
                 <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <User className="h-4 w-4 text-gray-500" />
-                    <span className="font-medium">{patientDetails.name}</span>
-                    <Badge variant="outline" className="text-xs">ID: {patientId}</Badge>
+                  <div className="flex min-w-0 items-start gap-2">
+                    <User className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" />
+                    <span className="min-w-0 break-words font-medium">{patientDetails.name}</span>
                   </div>
-                  <div className="text-sm text-gray-600">
-                    Age: {(() => {
-                      if ((patientDetails as any).age != null) return (patientDetails as any).age;
-                      if (!patientDetails.dob) return 'N/A';
-                      const dob = new Date(patientDetails.dob);
-                      const today = new Date();
-                      const isToday = 
-                        dob.getFullYear() === today.getFullYear() &&
-                        dob.getMonth() === today.getMonth() &&
-                        dob.getDate() === today.getDate();
-                      if (isToday) return 'N/A';
-                      const age = today.getFullYear() - dob.getFullYear();
-                      const monthDiff = today.getMonth() - dob.getMonth();
-                      const adjustedAge = (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) ? age - 1 : age;
-                      return adjustedAge >= 0 ? adjustedAge : 'N/A';
-                    })()} • {patientDetails.gender || 'N/A'}
+                  <Badge variant="outline" className="max-w-full whitespace-normal break-all text-xs">ID: {patientId}</Badge>
+                  <div className="text-sm text-muted-foreground">
+                    Age: {clinicalPatientAge(patientDetails)} • {patientDetails.gender || 'Sex not recorded'}
                   </div>
-                  <div className="text-sm text-gray-600">
+                  <div className="text-sm text-muted-foreground">
                     Phone: {patientDetails.phone || 'N/A'}
                   </div>
                   {patientDetails.allergies && (
-                    <div className="p-2 bg-red-50 border border-red-200 rounded">
-                      <div className="text-xs font-medium text-red-800">⚠️ ALLERGIES</div>
-                      <div className="text-sm text-red-700">{patientDetails.allergies}</div>
+                    <div className="p-2 bg-destructive-soft border border-destructive-border rounded-md">
+                      <div className="text-xs font-medium text-destructive-text">⚠️ ALLERGIES</div>
+                      <div className="text-sm text-destructive-text">{patientDetails.allergies}</div>
                     </div>
                   )}
                   {patientDetails.medicalHistory && (
-                    <div className="p-2 bg-blue-50 border border-blue-200 rounded">
-                      <div className="text-xs font-medium text-blue-800">Medical History</div>
-                      <div className="text-sm text-blue-700">{patientDetails.medicalHistory}</div>
+                    <div className="p-2 bg-info-soft border border-info-border rounded-md">
+                      <div className="text-xs font-medium text-info-text">Medical History</div>
+                      <div className="text-sm text-info-text">{patientDetails.medicalHistory}</div>
                     </div>
                   )}
                 </div>
               )}
               
               {!patientDetails && patientId && (
-                <div className="p-3 bg-yellow-50 border border-yellow-200 rounded">
-                  <div className="text-xs font-medium text-yellow-800">⚠️ Patient Loading</div>
-                  <div className="text-sm text-yellow-700">
+                <div className="p-3 bg-warning-soft border border-warning-border rounded-md">
+                  <div className="text-xs font-medium text-warning-text">⚠️ Patient Loading</div>
+                  <div className="text-sm text-warning-text">
                     Loading patient data for ID: {patientId}
                     {patientName && <div className="mt-1">Name: {patientName}</div>}
                   </div>
@@ -1617,9 +1667,9 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
               )}
               
               {!patientDetails && !patientId && (
-                <div className="p-3 bg-gray-50 border border-gray-200 rounded">
-                  <div className="text-xs font-medium text-gray-600">No Patient Selected</div>
-                  <div className="text-sm text-gray-500">
+                <div className="p-3 bg-background border border-border rounded-md">
+                  <div className="text-xs font-medium text-muted-foreground">No Patient Selected</div>
+                  <div className="text-sm text-muted-foreground">
                     Patient context will appear when a patient is selected
                   </div>
                 </div>
@@ -1640,11 +1690,11 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                       .slice(0, 2)
                       .join(', ');
                     return (
-                    <div key={visit.id || index} className="p-2 bg-gray-50 rounded text-xs">
+                    <div key={visit.id || index} className="p-2 bg-background rounded-md text-xs">
                         <div className="font-medium">
                           {displayDate}
                         </div>
-                        <div className="text-gray-600">
+                        <div className="text-muted-foreground">
                           {diagnosesList || 'No diagnosis'}
                         </div>
                       </div>
@@ -1658,7 +1708,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
       )}
       
       {/* Main Content */}
-      <div className={`flex-1 space-y-6 ${showPatientContext ? '' : 'max-w-none'}`}>
+      <div className="min-w-0 max-w-full flex-1 space-y-6">
         {!showPatientContext && (
           <Button variant="outline" size="sm" onClick={() => setShowPatientContext(true)} className="mb-4">
             <User className="h-4 w-4 mr-2" />
@@ -1671,16 +1721,16 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
       {/* Visit Header */}
       <Card>
         <CardHeader className="pb-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="min-w-0">
+              <CardTitle className="flex flex-wrap items-center gap-2">
                 <Clock className="h-5 w-5" />
                 Visit #{currentVisitNumber}
                 <Badge variant={visitStatus === 'completed' ? 'default' : visitStatus === 'in-progress' ? 'secondary' : 'outline'}>
                   {visitStatus.replace('-', ' ').toUpperCase()}
                 </Badge>
                 {appointmentData && (
-                  <Badge variant="secondary" className="bg-blue-100 text-blue-700">
+                  <Badge variant="secondary" className="bg-info-soft text-info-text">
                     <Calendar className="h-3 w-3 mr-1" />
                     Linked to Appointment
                   </Badge>
@@ -1690,20 +1740,20 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                 Medical Visit Documentation • Role: {userRole} • Progress: {getProgress()}%
               </CardDescription>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex max-w-full flex-wrap items-center gap-2">
               <Badge variant="outline">{photoCount} Photos</Badge>
-              <div className="w-20 bg-gray-200 rounded-full h-2">
+              <div className="w-20 bg-muted rounded-full h-2">
                 <div 
-                  className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
+                  className="bg-info h-2 rounded-full transition-all duration-300"
                   style={{ width: `${getProgress()}%` }}
                 />
               </div>
-            <div className="text-xs text-gray-500 min-w-[120px] text-right">
+            <div className="text-xs text-muted-foreground min-w-[120px] text-right">
               {saveStatus === 'saving' && 'Saving…'}
               {saveStatus === 'autosaving' && 'Auto-saving…'}
               {saveStatus === 'unsaved' && 'Unsaved changes'}
               {saveStatus === 'saved' && (lastSavedAt ? `Saved ${new Date(lastSavedAt).toLocaleTimeString()}` : 'Saved')}
-              {saveStatus === 'error' && <span className="text-red-600">Save failed</span>}
+              {saveStatus === 'error' && <span className="text-destructive-text">Save failed</span>}
             </div>
               <DoctorTour autoStart={false} />
               <Button variant="outline" size="sm" onClick={() => setShortcutsOpen(true)}>
@@ -1713,6 +1763,31 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
             </div>
           </div>
         </CardHeader>
+        <CardContent className="space-y-3 pt-0">
+          <div className="max-w-xs space-y-1.5">
+            <label htmlFor="visit-consultation-type" className="text-sm font-medium">Consultation type</label>
+            <select id="visit-consultation-type" className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              value={consultationType || 'IN_PERSON'} onChange={event => {
+                setConsultationType(event.target.value as ConsultationType);
+                setTeleVideoConsent(false);
+              }}>
+              <option value="IN_PERSON">In-person</option>
+              <option value="TELE_VIDEO">Tele-video</option>
+            </select>
+          </div>
+          {consultationType === 'TELE_VIDEO' && (
+            <div className="space-y-2 rounded-md border bg-muted/30 p-3">
+              <label className="flex items-start gap-2 text-sm font-medium">
+                <input type="checkbox" className="mt-0.5 h-4 w-4" checked={teleVideoConsent}
+                  required aria-describedby="tele-video-consent-help" onChange={event => setTeleVideoConsent(event.target.checked)} />
+                Patient consented to tele-video consultation
+              </label>
+              <p id="tele-video-consent-help" className={`text-sm ${consentMissing ? 'text-destructive' : 'text-muted-foreground'}`}>
+                {consentMissing ? TELE_VIDEO_CONSENT_REQUIRED : 'Consent will be recorded with your account and the save time.'}
+              </p>
+            </div>
+          )}
+        </CardContent>
       </Card>
 
       <Dialog open={shortcutsOpen} onOpenChange={setShortcutsOpen}>
@@ -1724,23 +1799,23 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
           <div className="space-y-3 text-sm">
             <div className="flex items-center justify-between">
               <span>Save Draft</span>
-              <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded">Cmd/Ctrl + S</span>
+              <span className="font-mono text-xs bg-muted px-2 py-1 rounded-md">Cmd/Ctrl + S</span>
             </div>
             <div className="flex items-center justify-between">
               <span>Complete Visit</span>
-              <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded">Cmd/Ctrl + Shift + S</span>
+              <span className="font-mono text-xs bg-muted px-2 py-1 rounded-md">Cmd/Ctrl + Shift + S</span>
             </div>
             <div className="flex items-center justify-between">
               <span>Patient Search Navigate</span>
-              <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded">↑ / ↓</span>
+              <span className="font-mono text-xs bg-muted px-2 py-1 rounded-md">↑ / ↓</span>
             </div>
             <div className="flex items-center justify-between">
               <span>Patient Search Select</span>
-              <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded">Enter</span>
+              <span className="font-mono text-xs bg-muted px-2 py-1 rounded-md">Enter</span>
             </div>
             <div className="flex items-center justify-between">
               <span>Close Menus</span>
-              <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded">Esc</span>
+              <span className="font-mono text-xs bg-muted px-2 py-1 rounded-md">Esc</span>
             </div>
           </div>
         </DialogContent>
@@ -1749,8 +1824,8 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
       {/* Main Form */}
       <Card>
         <CardContent className="p-6">
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="mb-6 flex flex-wrap gap-2">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="min-w-0 max-w-full">
+            <TabsList className="mb-6 flex h-auto max-w-full flex-nowrap justify-start gap-2 overflow-x-auto">
               {renderTabs().map(tab => {
                 const IconComponent = tab.icon;
                 const showIndicator = tab.id === 'prescription' 
@@ -1760,13 +1835,13 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                   <TabsTrigger 
                     key={tab.id} 
                     value={tab.id}
-                    className="flex items-center gap-2 relative"
+                    className="relative flex shrink-0 items-center gap-2 whitespace-nowrap"
                   >
                     <IconComponent className="h-4 w-4" />
                     {tab.label}
                     {showIndicator && (
                       <div 
-                        className={`w-2 h-2 bg-green-500 rounded-full ${tab.id === 'prescription' ? 'animate-pulse' : ''}`}
+                        className={`w-2 h-2 bg-success rounded-full ${tab.id === 'prescription' ? 'animate-pulse' : ''}`}
                         title={tab.id === 'prescription' ? 'At least 4 key sections filled' : 'Section complete'}
                       />
                     )}
@@ -1784,21 +1859,21 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                   </CardHeader>
                   <CardContent className="space-y-3">
                     <div className="flex justify-between">
-                      <span className="text-sm text-gray-600">Visit Number:</span>
+                      <span className="text-sm text-muted-foreground">Visit Number:</span>
                       <Badge variant="outline">#{currentVisitNumber}</Badge>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-sm text-gray-600">Status:</span>
+                      <span className="text-sm text-muted-foreground">Status:</span>
                       <Badge variant={visitStatus === 'completed' ? 'default' : 'secondary'}>
                         {visitStatus.replace('-', ' ').toUpperCase()}
                       </Badge>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-sm text-gray-600">Photos Captured:</span>
+                      <span className="text-sm text-muted-foreground">Photos Captured:</span>
                       <span className="text-sm font-medium">0</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-sm text-gray-600">Captured By:</span>
+                      <span className="text-sm text-muted-foreground">Captured By:</span>
                       <span className="text-sm font-medium">{userRole}</span>
                     </div>
                   </CardContent>
@@ -1812,7 +1887,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                   <div className="space-y-2">
                     {renderTabs().filter(tab => tab.id !== 'overview' && tab.id !== 'history').map(tab => (
                         <div key={tab.id} className="flex items-center justify-between">
-                          <span className="text-sm text-gray-600">{tab.label}:</span>
+                          <span className="text-sm text-muted-foreground">{tab.label}:</span>
                           <div className="flex items-center gap-2">
                             {isSectionComplete(tab.id) ? (
                               <Badge variant="default" className="text-xs">Complete</Badge>
@@ -1826,11 +1901,11 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                     <div className="pt-2 border-t">
                       <div className="flex justify-between items-center">
                         <span className="text-sm font-medium">Overall Progress:</span>
-                        <span className="text-sm font-bold text-blue-600">{getProgress()}%</span>
+                        <span className="text-sm font-bold text-info-text">{getProgress()}%</span>
                       </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
+                      <div className="w-full bg-muted rounded-full h-2 mt-1">
                         <div 
-                          className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
+                          className="bg-info h-2 rounded-full transition-all duration-300"
                           style={{ width: `${getProgress()}%` }}
                         />
                       </div>
@@ -1869,7 +1944,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
               <TabsContent value="vitals" className="space-y-4" forceMount>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div>
-                    <label className="text-sm font-medium text-gray-700">BP Systolic</label>
+                    <label className="text-sm font-medium text-foreground">BP Systolic</label>
                     <Input 
                       placeholder="mmHg" 
                       value={vitals.bpS} 
@@ -1877,7 +1952,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-700">BP Diastolic</label>
+                    <label className="text-sm font-medium text-foreground">BP Diastolic</label>
                     <Input 
                       placeholder="mmHg" 
                       value={vitals.bpD} 
@@ -1885,7 +1960,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-700">Heart Rate</label>
+                    <label className="text-sm font-medium text-foreground">Heart Rate</label>
                     <Input 
                       placeholder="bpm" 
                       value={vitals.hr} 
@@ -1893,7 +1968,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-700">Temperature</label>
+                    <label className="text-sm font-medium text-foreground">Temperature</label>
                     <Input 
                       placeholder="°F"
                       value={vitals.temp} 
@@ -1901,7 +1976,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-700">Weight</label>
+                    <label className="text-sm font-medium text-foreground">Weight</label>
                     <Input 
                       placeholder="kg" 
                       value={vitals.weight} 
@@ -1909,7 +1984,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-700">Height</label>
+                    <label className="text-sm font-medium text-foreground">Height</label>
                     <Input 
                       placeholder="cm" 
                       value={vitals.height} 
@@ -1917,7 +1992,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-700">BMI</label>
+                    <label className="text-sm font-medium text-foreground">BMI</label>
                     <Input
                       placeholder="kg/m²"
                       readOnly
@@ -1934,7 +2009,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-700">Resp. Rate</label>
+                    <label className="text-sm font-medium text-foreground">Resp. Rate</label>
                     <Input 
                       placeholder="/min" 
                       value={vitals.rr} 
@@ -1945,7 +2020,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="text-sm font-medium text-gray-700">Pain Score (0-10)</label>
+                    <label className="text-sm font-medium text-foreground">Pain Score (0-10)</label>
                     <Input 
                       placeholder="0-10" 
                       value={painScore} 
@@ -1970,7 +2045,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                     <CardTitle className="text-lg">Lab Tests (Investigations)</CardTitle>
                     <CardDescription>Select tests and enter results with units. You can also autofill from a photo.</CardDescription>
                     <div className="mt-2">
-                      <label className="flex items-center gap-2 text-sm text-gray-600">
+                      <label className="flex items-center gap-2 text-sm text-muted-foreground">
                         <input type="checkbox" checked={compareLabs} onChange={(e) => setCompareLabs(e.target.checked)} />
                         Compare with previous visit
                       </label>
@@ -2000,7 +2075,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                             const entry = labResults[test] as any;
                             const isComposite = entry && typeof entry === 'object' && !('value' in entry) && !('unit' in entry);
                             return (
-                              <div key={test} className="border rounded p-3">
+                              <div key={test} className="border rounded-md p-3">
                                 <div className="text-sm font-semibold mb-2">{test}</div>
                                 {!isComposite ? (
                                   <div className="flex gap-2 items-center">
@@ -2022,11 +2097,11 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                                       const hasNums = !Number.isNaN(currNum) && !Number.isNaN(prevNum);
                                       const delta = hasNums ? (currNum - prevNum) : null;
                                       return (
-                                        <div className="text-xs text-gray-600">
+                                        <div className="text-xs text-muted-foreground">
                                           {hasNums ? (
                                             <span>Δ {delta! >= 0 ? '+' : ''}{delta}</span>
                                           ) : (
-                                            <span className="text-gray-400">—</span>
+                                            <span className="text-muted-foreground">—</span>
                                           )}
                                         </div>
                                       );
@@ -2061,11 +2136,11 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                                           const hasNums = !Number.isNaN(currNum) && !Number.isNaN(prevNum);
                                           const delta = hasNums ? (currNum - prevNum) : null;
                                           return (
-                                            <div className="text-xs text-gray-600">
+                                            <div className="text-xs text-muted-foreground">
                                               {hasNums ? (
                                                 <span>Δ {delta! >= 0 ? '+' : ''}{delta}</span>
                                               ) : (
-                                                <span className="text-gray-400">—</span>
+                                                <span className="text-muted-foreground">—</span>
                                               )}
                                             </div>
                                           );
@@ -2082,7 +2157,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                     )}
 
                     <div className="flex items-center justify-between pt-2 border-t">
-                      <div className="text-xs text-gray-500">Selections and results are saved under Treatment Plan → Dermatology.</div>
+                      <div className="text-xs text-muted-foreground">Selections and results are saved under Treatment Plan → Dermatology.</div>
                       <div className="flex gap-2">
                         <div className="flex flex-col gap-0.5">
                           <label className="text-sm">
@@ -2124,7 +2199,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                               }}
                             />
                           </label>
-                          <span className="text-[10px] text-gray-400">Accepts JPG, PNG, or PDF</span>
+                          <span className="text-xs text-muted-foreground">Accepts JPG, PNG, or PDF</span>
                         </div>
                         <Button type="button" variant="outline" disabled={labsAutofillLoading} onClick={async () => { if (await save(false)) markSectionComplete('labs'); }}>
                           {labsAutofillLoading ? 'Processing…' : 'Save Labs'}
@@ -2144,6 +2219,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                   allowDelete={hasPermission('photos') || hasPermission('all')}
                   onChangeCount={(c) => { setPhotoCount(c); }}
                   onVisitNeeded={async () => {
+                    if (consentMissing) throw new Error(TELE_VIDEO_CONSENT_REQUIRED);
                     if (!visitId) {
                       const minimalPayload = buildPayload();
                       const newVisit = await apiClient.createVisit(minimalPayload);
@@ -2169,6 +2245,8 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                   patientId={patientId}
                   doctorId={doctorId}
                   visitId={visitId}
+                  consultationType={consultationType}
+                  teleVideoConsent={teleVideoConsent}
                   onClinicalDataChange={receiveClinicalData}
                   onBeforeExport={async () => {
                     const savedId = await save(false, true);
@@ -2179,6 +2257,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                   }}
                   onChangeChiefComplaints={(value) => setComplaints(value?.trim() ? [value.trim()] : [])}
                   ensureVisitId={async () => {
+                    if (consentMissing) throw new Error(TELE_VIDEO_CONSENT_REQUIRED);
                     if (visitId) return visitId;
                     if (typeof patientId !== 'string' || typeof doctorId !== 'string') {
                       console.warn('[MedicalVisitForm] Missing IDs when ensuring visit', { patientId, doctorId });
@@ -2250,7 +2329,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                   <CardContent>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                       <div className="md:col-span-2 space-y-2">
-                        <label className="text-sm text-gray-700">Print Background Image URL (optional)</label>
+                        <label className="text-sm text-foreground">Print Background Image URL (optional)</label>
                         <Input placeholder="https://.../letterhead.png" value={printBgUrl} onChange={(e) => setPrintBgUrl(e.target.value)} />
                         <div className="flex items-center gap-2 text-sm">
                           <input
@@ -2276,24 +2355,24 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                         </div>
                       </div>
                       <div className="space-y-2">
-                        <label className="text-sm text-gray-700">Top Margin (px)</label>
+                        <label className="text-sm text-foreground">Top Margin (px)</label>
                         <Input type="number" min={0} value={printTopMarginPx} onChange={(e) => setPrintTopMarginPx(Number(e.target.value) || 0)} />
-                        <label className="text-sm text-gray-700">Bottom Margin (px)</label>
+                        <label className="text-sm text-foreground">Bottom Margin (px)</label>
                         <Input type="number" min={0} value={printBottomMarginPx} onChange={(e) => setPrintBottomMarginPx(Number(e.target.value) || 0)} />
                       </div>
                       <div className="space-y-2">
-                        <label className="text-sm text-gray-700">Left Margin (px)</label>
+                        <label className="text-sm text-foreground">Left Margin (px)</label>
                         <Input type="number" min={0} value={printLeftMarginPx} onChange={(e) => setPrintLeftMarginPx(Number(e.target.value) || 0)} />
-                        <label className="text-sm text-gray-700">Right Margin (px)</label>
+                        <label className="text-sm text-foreground">Right Margin (px)</label>
                         <Input type="number" min={0} value={printRightMarginPx} onChange={(e) => setPrintRightMarginPx(Number(e.target.value) || 0)} />
                       </div>
                       <div className="md:col-span-3 grid grid-cols-2 md:grid-cols-4 gap-2 items-end">
                         <div>
-                          <label className="text-sm text-gray-700">Content X Offset (px)</label>
+                          <label className="text-sm text-foreground">Content X Offset (px)</label>
                           <Input type="number" value={contentOffsetXPx} onChange={(e) => setContentOffsetXPx(Number(e.target.value) || 0)} />
                         </div>
                         <div>
-                          <label className="text-sm text-gray-700">Content Y Offset (px)</label>
+                          <label className="text-sm text-foreground">Content Y Offset (px)</label>
                           <Input type="number" value={contentOffsetYPx} onChange={(e) => setContentOffsetYPx(Number(e.target.value) || 0)} />
                         </div>
                         <div className="flex gap-2">
@@ -2308,8 +2387,8 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:col-span-3">
                         <div>
-                          <label className="text-sm text-gray-700">Paper Preset</label>
-                          <select className="border rounded px-2 py-1 w-full" value={paperPreset} onChange={(e) => setPaperPreset(e.target.value === 'LETTER' ? 'LETTER' : 'A4')}>
+                          <label className="text-sm text-foreground">Paper Preset</label>
+                          <select className="border rounded-md px-2 py-1 w-full" value={paperPreset} onChange={(e) => setPaperPreset(e.target.value === 'LETTER' ? 'LETTER' : 'A4')}>
                             <option value="A4">A4 (210x297mm)</option>
                             <option value="LETTER">Letter (8.5x11in)</option>
                           </select>
@@ -2322,7 +2401,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                             <input type="checkbox" checked={showBleedSafe} onChange={(e) => setShowBleedSafe(e.target.checked)} /> Show Safe Margin
                           </label>
                           <Input className="w-28" type="number" min={0} value={safeMarginMm} onChange={(e) => setSafeMarginMm(Number(e.target.value) || 0)} />
-                          <span className="text-sm text-gray-600">mm</span>
+                          <span className="text-sm text-muted-foreground">mm</span>
                         </div>
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:col-span-3">
@@ -2332,11 +2411,11 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                           </label>
                         </div>
                         <div>
-                          <label className="text-sm text-gray-700">Header Height (mm)</label>
+                          <label className="text-sm text-foreground">Header Height (mm)</label>
                           <Input type="number" min={0} value={headerHeightMm} onChange={(e) => setHeaderHeightMm(Number(e.target.value) || 0)} disabled={!framesEnabled} />
                         </div>
                         <div>
-                          <label className="text-sm text-gray-700">Footer Height (mm)</label>
+                          <label className="text-sm text-foreground">Footer Height (mm)</label>
                           <Input type="number" min={0} value={footerHeightMm} onChange={(e) => setFooterHeightMm(Number(e.target.value) || 0)} disabled={!framesEnabled} />
                         </div>
                         <div className="md:col-span-3">
@@ -2361,11 +2440,11 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                         </div>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                           <div>
-                            <label className="text-sm text-gray-700">Grid Size (px)</label>
+                            <label className="text-sm text-foreground">Grid Size (px)</label>
                             <Input type="number" min={2} value={designGridSizePx} onChange={(e) => setDesignGridSizePx(Number(e.target.value) || 8)} disabled={!designAidsEnabled} />
                           </div>
                           <div>
-                            <label className="text-sm text-gray-700">Nudge Step (px)</label>
+                            <label className="text-sm text-foreground">Nudge Step (px)</label>
                             <Input type="number" min={1} value={designNudgeStepPx} onChange={(e) => setDesignNudgeStepPx(Number(e.target.value) || 1)} disabled={!designAidsEnabled} />
                           </div>
                         </div>
@@ -2449,7 +2528,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                         </div>
                       </div>
                   <div className="md:col-span-3">
-                    <label className="text-sm text-gray-700">Print Sections</label>
+                    <label className="text-sm text-foreground">Print Sections</label>
                     <div className="grid grid-cols-3 md:grid-cols-6 gap-2 text-sm mt-1">
                       {Object.keys(rxIncludeSections).map((k) => (
                         <label key={k} className="flex items-center gap-2">
@@ -2470,17 +2549,17 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold">Patient Visit History</h3>
                 <Button variant="outline" onClick={() => void timeline.refresh()} disabled={timeline.loading}>
-                  {timeline.loading ? 'Loading...' : 'Refresh'}
+                  {timeline.loading ? 'Loading…' : 'Refresh'}
                 </Button>
               </div>
 
-              {timeline.error ? (<p role="alert" className="text-red-700">Unable to load history. {timeline.error}</p>) : timeline.loading ? (
-                <div className="text-center py-8 text-gray-500">
-                  <div className="animate-spin h-8 w-8 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-2" />
-                  <p>Loading patient history...</p>
+              {timeline.error ? (<p role="alert" className="text-destructive-text">Unable to load history. {timeline.error}</p>) : timeline.loading ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Spinner className=" h-8 w-8     mx-auto mb-2" />
+                  <LoadingSkeleton label="Loading patient history…" />
                 </div>
               ) : timeline.entries.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
+                <div className="text-center py-8 text-muted-foreground">
                   <History className="h-12 w-12 mx-auto mb-2 opacity-50" />
                   <p>No documented history to show.</p>
                 </div>
@@ -2492,14 +2571,14 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                       <div key={visit.id} className="relative flex items-start space-x-3 pb-4">
                         {/* Timeline line */}
                         {index !== timeline.entries.length - 1 && (
-                          <div className="absolute left-4 top-8 w-0.5 h-full bg-gray-200" />
+                          <div className="absolute left-4 top-8 w-0.5 h-full bg-muted" />
                         )}
                         
                         {/* Timeline dot */}
                         <div className={`relative flex items-center justify-center w-8 h-8 rounded-full ${
-                          visit.status === 'completed' ? 'bg-green-100 text-green-600' : 
-                          visit.status === 'in-progress' ? 'bg-blue-100 text-blue-600' : 
-                          'bg-gray-100 text-gray-600'
+                          visit.status === 'completed' ? 'bg-success-soft text-success-text' :
+                          visit.status === 'in-progress' ? 'bg-info-soft text-info-text' :
+                          'bg-muted text-muted-foreground'
                         }`}>
                           <div className="w-3 h-3 rounded-full bg-current" />
                         </div>
@@ -2524,7 +2603,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
 
           {/* Action Buttons */}
           <div className="flex justify-between items-center pt-6 border-t">
-            <div className="text-sm text-gray-500">
+            <div className="text-sm text-muted-foreground">
               Progress: {getProgress()}% • {completedSections.size} of {hasPermission('all') ? 5 : 3} sections complete
             </div>
             <div className="flex gap-2">

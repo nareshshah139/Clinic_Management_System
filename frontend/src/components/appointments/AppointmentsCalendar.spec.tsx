@@ -13,6 +13,7 @@ jest.mock('@/hooks/use-toast', () => ({
 jest.mock('@/lib/api', () => ({
   apiClient: {
     getDoctorSchedule: jest.fn().mockResolvedValue({ appointments: [] }),
+    getPatient: jest.fn().mockResolvedValue({ id: 'p1', firstName: 'Pat', lastName: 'Ient' }),
     getUsers: jest.fn().mockResolvedValue({ data: [{ id: 'd1', firstName: 'Do', lastName: 'Ctor', role: 'DOCTOR' }] }),
     getRooms: jest.fn().mockResolvedValue({ rooms: [] }),
     getRoomSchedule: jest.fn().mockResolvedValue({ appointments: [] }),

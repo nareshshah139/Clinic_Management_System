@@ -182,7 +182,7 @@ describe('PatientDeduplicationService', () => {
         where: { id: canonical.id },
         data: expect.objectContaining({
           medicalHistory: 'Hypertension\nDiabetes',
-          portalUserId: 'portal-2',
+          portalUser: { connect: { id: 'portal-2' } },
         }),
       }),
     );

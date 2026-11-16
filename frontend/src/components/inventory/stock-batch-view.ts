@@ -34,8 +34,8 @@ export function batchState(item: any, now = new Date()) {
 export function batchRowClass(item: any, now = new Date()) {
   const state = batchState(item, now);
   if (item.currentStock === 0) return 'bg-muted/60 text-foreground [&_.text-muted-foreground]:text-foreground/80';
-  if (state === 'Current / on hand' || state === 'Held, on hand') return 'bg-emerald-50/60 dark:bg-emerald-950/20';
-  return 'bg-amber-50/70 dark:bg-amber-950/20';
+  if (state === 'Current / on hand' || state === 'Held, on hand') return 'bg-success-soft/60 dark:bg-success/20';
+  return 'bg-warning-soft/70 dark:bg-warning/20';
 }
 
 /**

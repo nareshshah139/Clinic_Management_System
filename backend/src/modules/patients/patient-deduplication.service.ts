@@ -153,7 +153,7 @@ export class PatientDeduplicationService {
     }
 
     if (movePortalUserId) {
-      canonicalPatch.portalUserId = movePortalUserId;
+      canonicalPatch.portalUser = { connect: { id: movePortalUserId } };
     }
 
     if (Object.keys(canonicalPatch).length > 0) {

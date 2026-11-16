@@ -92,6 +92,7 @@ model User {
 }
 
 model Branch {
+  investigationOptions     InvestigationOption[]
   id                       String                    @id @default(cuid())
   name                     String
   description              String?
@@ -136,6 +137,7 @@ model Branch {
   pharmacyAgentProposals   PharmacyAgentProposal[]
   pharmacyAgentActions     PharmacyAgentProposalAction[]
   pharmacyAgentAuditEvents PharmacyAgentAuditEvent[]
+  prescriptionLinks PrescriptionInventoryLink[]
   drugInventoryChangeRequests DrugInventoryChangeRequest[]
 
   // Back-relations
@@ -274,11 +276,19 @@ model Appointment {
   @@map("appointments")
 }
 
+enum ConsultationType {
+  IN_PERSON
+  TELE_VIDEO
+}
+
 model Visit {
   id               String            @id @default(cuid())
   patientId        String
   doctorId         String
   appointmentId    String?           @unique
+  consultationType ConsultationType @default(IN_PERSON)
+  teleVideoConsentById String?
+  teleVideoConsentAt DateTime?
   vitals           String?
   complaints       String
   history          String?
@@ -693,6 +703,7 @@ model InvoiceItem {
 }
 
 model NewInvoice {
+  billType       String?
   id             String           @id @default(cuid())
   invoiceNo      String           @unique
   patientId      String
@@ -840,6 +851,11 @@ model Referral {
 }
 
 model InventoryItem {
+  dosageForm           String?
+  strength             String?
+  itemCode             String?
+  combinationProduct   Boolean            @default(false)
+  dispenseLoose        Boolean            @default(false)
   defaultDuration     Int?
   defaultDurationUnit String?
   defaultFrequency    String?
@@ -891,6 +907,7 @@ model InventoryItem {
   stockMovements       StockMovement[]
   transactions         StockTransaction[]
   drugs                Drug[]
+  prescriptionLinks PrescriptionInventoryLink[]
   drugInventoryChangeRequests DrugInventoryChangeRequest[]
 
   @@map("inventory_items")
@@ -1061,6 +1078,10 @@ model AuditLog {
 
 // Drug Database Model
 model Drug {
+  brandName         String?
+  itemCode          String?
+  combinationProduct Boolean @default(false)
+  dispenseLoose     Boolean  @default(false)
   id                String   @id @default(cuid())
   name              String
   price             Float
@@ -1102,10 +1123,44 @@ model Drug {
   @@map("drugs")
 }
 
+model InvestigationOption {
+  id             String   @id @default(cuid())
+  branchId       String
+  name           String
+  normalizedName String
+  version        Int      @default(0)
+  archivedAt     DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  branch         Branch   @relation(fields: [branchId], references: [id])
+
+  @@unique([branchId, normalizedName])
+  @@index([branchId, archivedAt])
+  @@map("investigation_options")
+}
+
+// Pharmacist-confirmed legacy prescription identities. Historical events remain in AuditLog.
+model PrescriptionInventoryLink {
+  id              String   @id @default(cuid())
+  branchId        String
+  sourceKey       String
+  sourceName      String
+  inventoryItemId String
+  linkedBy        String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+  branch          Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  @@unique([branchId, sourceKey])
+  @@index([inventoryItemId])
+  @@map("prescription_inventory_links")
+}
+
 model DrugInventoryChangeRequest {
   id            String                       @id @default(cuid())
   branchId      String
-  drugId        String
+  drugId        String?
   inventoryItemId String?
   requestedById String
   reviewedById  String?
@@ -1113,6 +1168,7 @@ model DrugInventoryChangeRequest {
   proposedPrice Float?
   currentStock  Int?
   proposedStock Int?
+  stockSnapshot Json?
   reason        String?
   status        DrugInventoryChangeRequestStatus @default(PENDING)
   reviewNote    String?
@@ -1121,7 +1177,7 @@ model DrugInventoryChangeRequest {
   updatedAt     DateTime                     @updatedAt
 
   branch      Branch @relation(fields: [branchId], references: [id])
-  drug        Drug   @relation(fields: [drugId], references: [id])
+  drug        Drug?  @relation(fields: [drugId], references: [id], onDelete: Restrict)
   inventoryItem InventoryItem? @relation(fields: [inventoryItemId], references: [id])
   requestedBy User   @relation("DrugInventoryChangeRequestedBy", fields: [requestedById], references: [id])
   reviewedBy  User?  @relation("DrugInventoryChangeReviewedBy", fields: [reviewedById], references: [id])
@@ -1194,6 +1250,7 @@ model PharmacyInvoice {
 
 // Pharmacy Invoice Items
 model PharmacyInvoiceItem {
+  inventoryItemId String?
   id        String  @id @default(cuid())
   invoiceId String
   drugId    String? // Made optional for package items

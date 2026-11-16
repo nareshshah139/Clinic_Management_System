@@ -15,6 +15,13 @@ jest.mock('@/lib/api', () => ({
  * Frontend tests for AddInventoryItemDialog
  * Based on INVENTORY_ALIGNMENT_VERIFICATION.md checklist
  */
+const completeMedicineFields = () => {
+  if (!(screen.getByLabelText(/Item Name/i) as HTMLInputElement).value) return;
+  fireEvent.change(screen.getByLabelText('Form'), { target: { value: 'tablet' } });
+  fireEvent.change(screen.getByLabelText('Strength'), { target: { value: '500 mg' } });
+  if (!(screen.getByLabelText('Brand Name') as HTMLInputElement).value) fireEvent.change(screen.getByLabelText('Brand Name'), { target: { value: 'Test medicine' } });
+};
+
 describe('AddInventoryItemDialog', () => {
   const mockOnOpenChange = jest.fn();
   const mockOnSuccess = jest.fn();
@@ -50,6 +57,7 @@ describe('AddInventoryItemDialog', () => {
       );
 
       const submitButton = screen.getByRole('button', { name: /Add Item/i });
+      completeMedicineFields();
       fireEvent.click(submitButton);
 
       // Form should not submit (HTML5 validation will prevent it)
@@ -81,6 +89,7 @@ describe('AddInventoryItemDialog', () => {
 
       // Submit form
       const submitButton = screen.getByRole('button', { name: /Add Item/i });
+      completeMedicineFields();
       fireEvent.click(submitButton);
 
       await waitFor(() => {
@@ -115,6 +124,7 @@ describe('AddInventoryItemDialog', () => {
         target: { value: '18.00' },
       });
 
+      completeMedicineFields();
       fireEvent.click(screen.getByRole('button', { name: /Add Item/i }));
 
       await waitFor(() => {
@@ -167,6 +177,7 @@ describe('AddInventoryItemDialog', () => {
         target: { value: '100' },
       });
 
+      completeMedicineFields();
       fireEvent.click(screen.getByRole('button', { name: /Add Item/i }));
 
       await waitFor(() => {
@@ -207,6 +218,7 @@ describe('AddInventoryItemDialog', () => {
         target: { value: '12' },
       });
 
+      completeMedicineFields();
       fireEvent.click(screen.getByRole('button', { name: /Add Item/i }));
 
       await waitFor(() => {
@@ -246,6 +258,7 @@ describe('AddInventoryItemDialog', () => {
       const expiryDateInput = screen.getByLabelText(/Expiry Date/i);
       fireEvent.change(expiryDateInput, { target: { value: '2025-12-31' } });
 
+      completeMedicineFields();
       fireEvent.click(screen.getByRole('button', { name: /Add Item/i }));
 
       await waitFor(() => {
@@ -279,6 +292,7 @@ describe('AddInventoryItemDialog', () => {
         target: { value: '15' },
       });
 
+      completeMedicineFields();
       fireEvent.click(screen.getByRole('button', { name: /Add Item/i }));
 
       await waitFor(() => {
@@ -315,6 +329,7 @@ describe('AddInventoryItemDialog', () => {
       const prescriptionCheckbox = screen.getByLabelText(/Requires Prescription/i);
       fireEvent.click(prescriptionCheckbox);
 
+      completeMedicineFields();
       fireEvent.click(screen.getByRole('button', { name: /Add Item/i }));
 
       await waitFor(() => {
@@ -352,6 +367,7 @@ describe('AddInventoryItemDialog', () => {
       const controlledCheckbox = screen.getByLabelText(/Controlled Substance/i);
       fireEvent.click(controlledCheckbox);
 
+      completeMedicineFields();
       fireEvent.click(screen.getByRole('button', { name: /Add Item/i }));
 
       await waitFor(() => {
@@ -385,6 +401,7 @@ describe('AddInventoryItemDialog', () => {
         target: { value: '15' },
       });
 
+      completeMedicineFields();
       fireEvent.click(screen.getByRole('button', { name: /Add Item/i }));
 
       await waitFor(() => {
@@ -547,6 +564,7 @@ describe('AddInventoryItemDialog', () => {
       fireEvent.click(screen.getByLabelText(/Requires Prescription/i));
       fireEvent.click(screen.getByLabelText(/Controlled Substance/i));
 
+      completeMedicineFields();
       fireEvent.click(screen.getByRole('button', { name: /Add Item/i }));
 
       await waitFor(() => {
@@ -560,6 +578,11 @@ describe('AddInventoryItemDialog', () => {
           description: 'Antibiotic medication',
           genericName: 'Amoxicillin',
           brandName: 'Amoxil',
+          dosageForm: 'tablet',
+          strength: '500 mg',
+          itemCode: '',
+          combinationProduct: false,
+          dispenseLoose: false,
           category: 'Antibiotics',
           subCategory: 'Penicillin',
           manufacturer: 'GSK Pharma',
@@ -609,6 +632,7 @@ describe('AddInventoryItemDialog', () => {
         target: { value: '15' },
       });
 
+      completeMedicineFields();
       fireEvent.click(screen.getByRole('button', { name: /Add Item/i }));
 
       await waitFor(() => {
@@ -638,6 +662,7 @@ describe('AddInventoryItemDialog', () => {
         target: { value: '15' },
       });
 
+      completeMedicineFields();
       fireEvent.click(screen.getByRole('button', { name: /Add Item/i }));
 
       await waitFor(() => {
@@ -683,6 +708,7 @@ describe('AddInventoryItemDialog', () => {
         target: { value: '15' },
       });
 
+      completeMedicineFields();
       fireEvent.click(screen.getByRole('button', { name: /Add Item/i }));
 
       await waitFor(() => {
@@ -714,6 +740,7 @@ describe('AddInventoryItemDialog', () => {
         target: { value: '15' },
       });
 
+      completeMedicineFields();
       fireEvent.click(screen.getByRole('button', { name: /Add Item/i }));
 
       await waitFor(() => {
@@ -752,6 +779,7 @@ describe('AddInventoryItemDialog', () => {
       });
 
       const submitButton = screen.getByRole('button', { name: /Add Item/i });
+      completeMedicineFields();
       fireEvent.click(submitButton);
 
       // Button should be disabled during submission

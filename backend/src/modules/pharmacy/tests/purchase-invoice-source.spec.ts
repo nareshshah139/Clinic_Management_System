@@ -113,6 +113,7 @@ describe('Invoice source evidence', () => {
       [{ width: 100, height: 100 }],
     );
     const db: any = {
+      auditLog: { create: jest.fn().mockResolvedValue({}) },
       pharmacyPurchaseInvoiceDocument: {
         updateMany: jest.fn().mockResolvedValue({ count: 0 }),
         findFirst: jest.fn().mockResolvedValue({ sourceMap: map }),
@@ -240,6 +241,7 @@ describe('Invoice source evidence', () => {
   });
   it('locates an older document without changing invoice values or stock, and reuses saved evidence', async () => {
     const db: any = {
+      auditLog: { create: jest.fn().mockResolvedValue({}) },
       pharmacyPurchaseInvoiceDocument: {
         findFirst: jest.fn().mockResolvedValue({
           id: 'doc',
@@ -275,6 +277,7 @@ describe('Invoice source evidence', () => {
   });
   it('does not persist a failed location pass and lets it be retried', async () => {
     const db: any = {
+      auditLog: { create: jest.fn().mockResolvedValue({}) },
       pharmacyPurchaseInvoiceDocument: {
         findFirst: jest.fn().mockResolvedValue({
           data: Buffer.from('test'),
@@ -301,6 +304,7 @@ describe('Invoice source evidence', () => {
   });
   it('does not return another branch document or render invalid page numbers', async () => {
     const db: any = {
+      auditLog: { create: jest.fn().mockResolvedValue({}) },
       pharmacyPurchaseInvoiceDocument: {
         findFirst: jest.fn().mockResolvedValue(null),
       },

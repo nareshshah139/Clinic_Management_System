@@ -15,6 +15,7 @@ import {
   IsString,
   Matches,
   Max,
+  MaxLength,
   Min,
   MinLength,
   ValidateNested,
@@ -72,6 +73,10 @@ export class ImportPharmacyPurchaseInvoiceDto {
 }
 
 export class CreatePharmacyPurchaseInvoiceItemDto {
+  @IsOptional()
+  @IsIn(['MEDICINE', 'COSMETIC', 'CONSUMABLE'])
+  productKind?: 'MEDICINE' | 'COSMETIC' | 'CONSUMABLE';
+
   @IsOptional()
   @IsString()
   @Matches(/^[a-zA-Z0-9_-]{1,64}:[0-9]{1,3}$/)
@@ -550,6 +555,14 @@ export class QueryPharmacyPurchaseAnalyticsDto {
   limit?: number = 25;
 }
 
+export class ReopenPharmacyPurchaseInvoiceDto {
+  @IsString() @MinLength(1) @MaxLength(500)
+  reason: string;
+
+  @IsDateString()
+  expectedUpdatedAt: string;
+}
+
 export class ReviewPharmacyPurchaseInvoiceDto {
   @ApiPropertyOptional({ example: '2026-03-02' })
   @IsOptional()
@@ -563,6 +576,9 @@ export class ReviewPharmacyPurchaseInvoiceDto {
 }
 
 export class SuggestPharmacyPurchaseMasterMatchesDto {
+  @IsOptional() @IsString() distributorName?: string;
+  @IsOptional() @IsString() distributorGstin?: string;
+
   @ApiProperty({ type: [CreatePharmacyPurchaseInvoiceItemDto] })
   @IsArray()
   @ArrayMinSize(1)
@@ -572,6 +588,23 @@ export class SuggestPharmacyPurchaseMasterMatchesDto {
 }
 
 export class PurchaseProductCatalogDto {
+  @IsOptional()
+  @IsString()
+  brandName?: string;
+
+  @IsOptional()
+  @IsString()
+  itemCode?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  combinationProduct?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  dispenseLoose?: boolean;
+
+
   @IsIn(['MEDICINE', 'COSMETIC', 'CONSUMABLE'])
   productKind: 'MEDICINE' | 'COSMETIC' | 'CONSUMABLE';
 
@@ -597,6 +630,14 @@ export class PurchaseProductCatalogDto {
 }
 
 export class ConfirmPharmacyPurchaseMasterDto {
+  @IsOptional() @IsBoolean() creationConfirmed?: boolean;
+  @IsOptional() @IsString() distributorName?: string;
+  @IsOptional() @IsString() distributorGstin?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  mismatchAcknowledged?: boolean;
+
   @ApiProperty({ enum: PharmacyPurchaseMasterActionDto })
   @IsEnum(PharmacyPurchaseMasterActionDto)
   action: PharmacyPurchaseMasterActionDto;

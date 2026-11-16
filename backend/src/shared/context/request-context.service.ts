@@ -12,6 +12,11 @@ export interface RequestContextData {
 export class RequestContextService {
   private readonly storage = new AsyncLocalStorage<RequestContextData>();
 
+  /**
+   * @cc [owner:nareshshah139,label:observability] asynchronous-context-isolation
+   * get() MUST return this context inside the callback and async work it starts,
+   * while concurrent runs and callers outside the callback retain their own context.
+   */
   run<T>(data: RequestContextData, callback: () => T): T {
     // Run the callback within the ALS context so all async work can read the context
     let result!: T;
@@ -24,4 +29,4 @@ export class RequestContextService {
   get(): RequestContextData | undefined {
     return this.storage.getStore();
   }
-} 
+}

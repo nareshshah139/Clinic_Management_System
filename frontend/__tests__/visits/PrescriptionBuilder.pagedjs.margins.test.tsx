@@ -17,24 +17,28 @@ jest.mock('@/lib/api', () => ({
     patch: jest.fn().mockResolvedValue({ id: "saved-rx" }),
     updatePrescription: jest.fn<() => Promise<{ id: string }>>().mockResolvedValue({ id: "saved-rx" }),
     getClinicAssets: jest.fn().mockResolvedValue([]),
+    getDoctorSignature: jest.fn().mockResolvedValue({ signature: null }),
     getPatientVisitHistory: jest.fn().mockResolvedValue({ visits: [] }),
     getPrinterProfiles: jest.fn().mockResolvedValue([
       { id: 'prof-1', name: 'Default', isDefault: true, topMarginPx: 170, bottomMarginPx: 45, leftMarginPx: 45, rightMarginPx: 45 },
     ]),
     getPrescriptionTemplates: jest.fn().mockResolvedValue({ templates: [] }),
     getPrescriptionPrintEvents: jest.fn().mockResolvedValue({ totals: {} }),
+    recordPrescriptionPrintEvent: jest.fn().mockResolvedValue({}),
     autocompletePrescriptionField: jest.fn().mockResolvedValue([]),
     translateTexts: jest.fn().mockResolvedValue({ translations: [] }),
     sharePrescription: jest.fn().mockResolvedValue({}),
+    sharePrescriptionPreview: jest.fn().mockResolvedValue({}),
     previewDrugInteractions: jest.fn().mockResolvedValue({ interactions: [] }),
   },
 }));
 
 const mockPdfOutput = jest.fn<(...args: unknown[]) => Promise<Blob>>().mockResolvedValue(new Blob(['pdf']));
-jest.mock('@/lib/pdf-export', () => ({ renderPrescriptionPages: (...args: unknown[]) => mockPdfOutput(...args) }));
+jest.mock('@/lib/pdf-export', () => ({ renderPrescriptionPages: (...args: unknown[]) => mockPdfOutput(...args), waitForSignatureImages: jest.fn().mockResolvedValue(undefined) }));
 
 // Capture CSS injected for Paged.js via the temp <style> element
 let lastPagedCssText: string | null = null;
+let paginateSourceContent = false;
 const originalRequestAnimationFrame = window.requestAnimationFrame;
 const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect;
 const originalCreateObjectURL = URL.createObjectURL;
@@ -51,6 +55,11 @@ jest.mock('pagedjs', () => {
       const firstCssUrl = Array.isArray(cssArray) ? cssArray[0] : null;
       const firstCssBlob = typeof firstCssUrl === 'string' ? blobUrlMap.get(firstCssUrl) : null;
       lastPagedCssText = firstCssBlob ? await firstCssBlob.text() : null;
+
+      if (paginateSourceContent) {
+        container.innerHTML = `<div class="pagedjs_page"><div class="pagedjs_pagebox"><div class="pagedjs_page_content">${_content}</div></div></div>`;
+        return { pages: 1 };
+      }
 
       // Build minimal paged structure expected by component after preview
       container.innerHTML = `
@@ -92,6 +101,7 @@ beforeAll(() => {
 beforeEach(() => {
   jest.useFakeTimers();
   lastPagedCssText = null;
+  paginateSourceContent = false;
   blobUrlMap.clear();
   blobUrlCounter = 0;
   global.Blob = class MockBlob extends OriginalBlob {
@@ -198,6 +208,103 @@ afterEach(() => {
 // Import after mocks
 import PrescriptionBuilder from '@/components/visits/PrescriptionBuilder';
 import { apiClient } from '@/lib/api';
+import { TELE_VIDEO_DISCLAIMER } from '@/lib/tele-consultation';
+
+it('prints examination between complaints and diagnosis and compacts whitespace without shrinking text', async () => {
+  paginateSourceContent = true;
+  localStorage.setItem('rxDraft:compact-patient:standalone', JSON.stringify({
+    chiefComplaints: 'Itchy patches', diagnosis: 'Eczema', exObjective: 'Dry plaques on both arms',
+    investigations: ['CBC', 'ESR', 'CRP', 'LFT', 'RFT', 'Creatinine', 'FBS', 'HbA1c', 'TSH', 'Vitamin D'],
+    items: Array.from({ length: 9 }, (_, i) => ({ drugName: `Medicine ${i + 1}`, frequency: 'ONCE_DAILY', duration: 7, durationUnit: 'DAYS', dosage: '', dosageUnit: 'TABLET' })),
+  }));
+  try {
+    render(<PrescriptionBuilder patientId="compact-patient" visitId={null} doctorId="doctor" />);
+    await screen.findByDisplayValue('Medicine 9');
+    await openPreview();
+    await settlePreviewPagination();
+    const content = () => document.querySelector('#pagedjs-container #prescription-print-content')!;
+    const firstRow = () => content().querySelector<HTMLElement>('.rx-row')!;
+    const text = content().textContent!;
+    expect(text.indexOf('Chief Complaints')).toBeLessThan(text.indexOf('Examination'));
+    expect(text.indexOf('Examination')).toBeLessThan(text.indexOf('Diagnosis'));
+    expect(firstRow().style.padding).toBe('6px 0px');
+    const rowFontClass = firstRow().parentElement!.className;
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Space-optimized layout' }));
+    await settlePreviewPagination();
+    expect(firstRow().style.padding).toBe('2px 0px');
+    expect(firstRow().parentElement!.className).toBe(rowFontClass);
+    expect(content().querySelector('[data-examination]')).toHaveClass('py-1');
+    fireEvent.change(document.getElementById('examination-summary')!, { target: { value: 'Updated examination' } });
+    await settlePreviewPagination();
+    expect(content().querySelector('[data-examination]')).toHaveTextContent('Updated examination');
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Space-optimized layout' }));
+    await settlePreviewPagination();
+    expect(firstRow().style.padding).toBe('6px 0px');
+    expect(content().querySelector('[data-examination]')).toHaveClass('py-3');
+  } finally { localStorage.removeItem('rxDraft:compact-patient:standalone'); }
+});
+
+it('keeps tele-video metadata in preview, print, PDF, WhatsApp and Email, and removes it on switching back', async () => {
+  paginateSourceContent = true;
+  const item = { drugName: 'Synthetic tele-video medicine', dosageUnit: 'TABLET', frequency: 'ONCE_DAILY', duration: 7, durationUnit: 'DAYS' };
+  const get = jest.spyOn(apiClient, 'get').mockResolvedValue({
+    consultationType: 'TELE_VIDEO',
+    patient: { phone: '+10000000000', email: 'synthetic@example.test' },
+    doctor: { id: 'tele-doctor', firstName: 'Test', lastName: 'Doctor' },
+    prescription: { id: 'tele-rx', items: [item] },
+  });
+  const patch = jest.spyOn(apiClient, 'patch').mockResolvedValue({ id: 'tele-rx' });
+  const print = jest.spyOn(window, 'print').mockImplementation(() => {});
+  const open = jest.spyOn(window, 'open').mockImplementation(() => null);
+  const click = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+  const share = jest.spyOn(apiClient, 'sharePrescriptionPreview').mockResolvedValue({});
+  const props = { patientId: 'tele-patient', visitId: 'tele-visit', doctorId: 'tele-doctor', onBeforeExport: async () => 'tele-visit' };
+  try {
+    const view = render(<PrescriptionBuilder {...props} consultationType="TELE_VIDEO" teleVideoConsent />);
+    await screen.findByDisplayValue(item.drugName);
+    await openPreview();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Space-optimized layout' }));
+    await settlePreviewPagination();
+    const assertTele = (root: Element | null, enabled: boolean) => {
+      if (enabled) {
+        expect(root?.querySelector('[data-consultation-label]')).toHaveTextContent('Consultation: Tele-video');
+        expect(root?.querySelector('[data-tele-video-disclaimer]')).toHaveTextContent(TELE_VIDEO_DISCLAIMER);
+        const signoff = root?.querySelector('[data-prescription-signoff]');
+        expect(signoff?.firstElementChild).toHaveAttribute('data-tele-video-disclaimer');
+        expect(signoff).toHaveStyle({ breakInside: 'avoid' });
+      } else {
+        expect(root?.querySelector('[data-consultation-label]')).toBeNull();
+        expect(root?.querySelector('[data-tele-video-disclaimer]')).toBeNull();
+      }
+    };
+    for (const enabled of [true, false]) {
+      if (!enabled) {
+        view.rerender(<PrescriptionBuilder {...props} consultationType="IN_PERSON" teleVideoConsent={false} />);
+        await settlePreviewPagination();
+      }
+      assertTele(document.getElementById('prescription-print-root'), enabled);
+      assertTele(document.getElementById('pagedjs-container'), enabled);
+      await act(async () => fireEvent.click(screen.getByRole('button', { name: /^Print$/ })));
+      expect(print).toHaveBeenCalled();
+      assertTele(document.getElementById('prescription-print-host'), enabled);
+      act(() => window.dispatchEvent(new Event('afterprint')));
+      for (const action of ['Download PDF', 'PDF via WhatsApp', 'Email']) {
+        mockPdfOutput.mockClear();
+        await act(async () => fireEvent.click(screen.getByRole('button', { name: action })));
+        await waitFor(() => expect(mockPdfOutput).toHaveBeenCalledTimes(1));
+        assertTele(mockPdfOutput.mock.calls[0][0] as Element, enabled);
+      }
+      expect(share).toHaveBeenCalledWith('tele-rx', expect.any(File), expect.objectContaining({ channel: 'EMAIL' }));
+    }
+    view.rerender(<PrescriptionBuilder {...props} consultationType="TELE_VIDEO" teleVideoConsent includeSections={{ doctorSignature: false }} />);
+    await settlePreviewPagination();
+    assertTele(document.getElementById('prescription-print-root'), true);
+    expect(document.querySelector('#prescription-print-root .doctor-signature-block')).toBeNull();
+  } finally {
+    get.mockRestore(); patch.mockRestore(); print.mockRestore(); open.mockRestore(); click.mockRestore(); share.mockRestore();
+    localStorage.removeItem('rxDraft:tele-patient:tele-visit');
+  }
+});
 
 function pxToMm(px: number): number {
   // Component rounds to 0.1mm: Math.round((px/3.78)*10)/10
@@ -223,7 +330,219 @@ async function settlePreviewPagination() {
   });
 }
 
+it('refreshes personal history in an already-open paginated preview', async () => {
+  paginateSourceContent = true;
+  const get = jest.spyOn(apiClient, 'get').mockResolvedValue({ history: { personalHistory: 'Original personal history' } });
+  try {
+    render(<PrescriptionBuilder patientId="live-personal-patient" visitId="live-personal-visit" doctorId="doctor" />);
+    await screen.findByDisplayValue('Original personal history');
+    await openPreview();
+    await settlePreviewPagination();
+    fireEvent.change(document.getElementById('personal-history')!, { target: { value: 'Updated products and occupation' } });
+    await settlePreviewPagination();
+    expect(document.querySelector('#pagedjs-container [data-personal-history]')).toHaveTextContent('Updated products and occupation');
+    fireEvent.change(document.getElementById('personal-history')!, { target: { value: '' } });
+    await settlePreviewPagination();
+    expect(document.querySelector('#pagedjs-container [data-personal-history]')).toBeNull();
+  } finally {
+    get.mockRestore();
+    localStorage.removeItem('rxDraft:live-personal-patient:live-personal-visit');
+  }
+});
+
+it.each([
+  ['Diet: vegetarian\nSleep: 6 hours; teacher; sunscreen daily', false],
+  ['Diet: vegetarian\nSleep: 6 hours; teacher; sunscreen daily', true],
+  ['', false], ['', true], ['  \n  ', false], ['  \n  ', true],
+])('prints personal history %j only when populated (space-optimized: %j)', async (personalHistory, optimized) => {
+  paginateSourceContent = true;
+  const item = { drugName: 'Synthetic medicine', dosage: 1, dosageUnit: 'TABLET', frequency: 'ONCE_DAILY', duration: 7, durationUnit: 'DAYS' };
+  const get = jest.spyOn(apiClient, 'get').mockResolvedValue({
+    history: { personalHistory: 'Previously saved personal history' },
+    prescription: { id: 'personal-rx', items: [item] },
+  });
+  const patch = jest.spyOn(apiClient, 'patch').mockResolvedValue({ id: 'personal-rx' });
+  const print = jest.spyOn(window, 'print').mockImplementation(() => {});
+  const click = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+  mockPdfOutput.mockClear();
+  try {
+    render(<PrescriptionBuilder patientId="personal-patient" visitId="personal-visit" doctorId="doctor" onBeforeExport={async () => 'personal-visit'} />);
+    await screen.findByDisplayValue('Previously saved personal history');
+    fireEvent.change(screen.getByRole('textbox', { name: 'Personal history' }), { target: { value: personalHistory } });
+    await openPreview();
+    if (optimized) fireEvent.click(screen.getByRole('checkbox', { name: 'Space-optimized layout' }));
+    await settlePreviewPagination();
+    const assertHistory = (element: Element | null) => {
+      expect(element).toHaveTextContent(item.drugName);
+      const section = element?.querySelector('[data-personal-history]');
+      if (personalHistory.trim()) {
+        expect(section).toHaveTextContent('Personal history');
+        expect(section).toHaveTextContent(personalHistory.replace(/\s+/g, ' '));
+        expect(section?.firstElementChild?.classList.contains('flex')).toBe(optimized);
+      } else {
+        expect(section).toBeNull();
+        expect(element).not.toHaveTextContent('Personal history');
+      }
+    };
+    assertHistory(document.getElementById('prescription-print-root'));
+    assertHistory(document.getElementById('pagedjs-container'));
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Print', exact: true })); });
+    expect(print).toHaveBeenCalled();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Download PDF' })); });
+    await waitFor(() => expect(mockPdfOutput).toHaveBeenCalled());
+    assertHistory(mockPdfOutput.mock.calls.at(-1)![0] as Element);
+    expect(patch).toHaveBeenLastCalledWith('/prescriptions/personal-rx', expect.objectContaining({
+      clinicalData: expect.objectContaining({ history: { personalHistory } }),
+    }), expect.anything());
+  } finally {
+    get.mockRestore(); patch.mockRestore(); print.mockRestore(); click.mockRestore();
+    localStorage.removeItem('rxDraft:personal-patient:personal-visit');
+  }
+});
+
+it.each([
+  ['', 'Table', ''], ['  \n  ', 'Text', '  \n  '], ['Itchy rash', 'Table', 'Itchy rash'], ['General consultation', 'Text', 'General consultation'],
+  ['', 'Table', 'Recorded complaint'], ['  \n  ', 'Text', 'Recorded complaint'],
+])('renders complaint %j consistently in %s preview, print, PDF and WhatsApp (saved: %j)', async (complaint, format, savedComplaint) => {
+  paginateSourceContent = true;
+  const item = { drugName: 'Synthetic medicine', dosage: 1, dosageUnit: 'TABLET', frequency: 'ONCE_DAILY', duration: 7, durationUnit: 'DAYS' };
+  const get = jest.spyOn(apiClient, 'get').mockResolvedValue({
+    patient: { phone: '+10000000000', email: 'synthetic@example.test' },
+    complaints: savedComplaint ? [{ complaint: savedComplaint }] : [],
+    prescription: { id: 'complaint-rx', items: [item] },
+  });
+  const patch = jest.spyOn(apiClient, 'patch').mockResolvedValue({ id: 'complaint-rx' });
+  const share = jest.spyOn(apiClient, 'sharePrescriptionPreview').mockResolvedValue({});
+  const print = jest.spyOn(window, 'print').mockImplementation(() => {});
+  const open = jest.spyOn(window, 'open').mockImplementation(() => null);
+  const click = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+  mockPdfOutput.mockClear();
+  try {
+    render(<PrescriptionBuilder patientId="complaint-patient" visitId="complaint-visit" doctorId="doctor" onBeforeExport={async () => 'complaint-visit'} />);
+    await screen.findByDisplayValue(item.drugName);
+    const field = screen.getByRole('textbox', { name: 'Chief Complaints' });
+    expect(field).toHaveValue(savedComplaint);
+    if (complaint !== savedComplaint) fireEvent.change(field, { target: { value: complaint } });
+    if (format === 'Text') {
+      fireEvent.keyDown(screen.getByText('Table').closest('button')!, { key: 'ArrowDown' });
+      fireEvent.click(await screen.findByRole('option', { name: 'Text' }));
+    }
+    await openPreview();
+    await settlePreviewPagination();
+    const assertComplaints = (element: Element | null) => {
+      expect(element).toHaveTextContent(item.drugName);
+      if (complaint.trim()) {
+        expect(element).toHaveTextContent('Chief Complaints');
+        expect(element).toHaveTextContent(complaint);
+      } else {
+        expect(element).not.toHaveTextContent('Chief Complaints');
+        expect(element).not.toHaveTextContent('General consultation');
+      }
+    };
+    assertComplaints(document.getElementById('prescription-print-root'));
+    assertComplaints(document.getElementById('pagedjs-container'));
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Print', exact: true })); });
+    expect(print).toHaveBeenCalled();
+    for (const action of ['Download PDF', 'PDF via WhatsApp']) {
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: action })); });
+      await waitFor(() => expect(mockPdfOutput).toHaveBeenCalled());
+      assertComplaints(mockPdfOutput.mock.calls.at(-1)![0] as Element);
+      mockPdfOutput.mockClear();
+    }
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Email', exact: true })); });
+    expect(share).toHaveBeenCalledWith('complaint-rx', expect.any(File), { channel: 'EMAIL', to: 'synthetic@example.test', message: 'Your prescription is attached.' });
+    assertComplaints(mockPdfOutput.mock.calls.at(-1)![0] as Element);
+    if (complaint !== savedComplaint) {
+      expect(patch).toHaveBeenLastCalledWith('/prescriptions/complaint-rx', expect.objectContaining({ clinicalData: expect.objectContaining({ complaints: [] }) }), expect.anything());
+    }
+  } finally {
+    get.mockRestore(); patch.mockRestore(); share.mockRestore(); print.mockRestore(); open.mockRestore(); click.mockRestore();
+    localStorage.removeItem('rxDraft:complaint-patient:complaint-visit');
+  }
+});
+
+it.each([
+  ['Table', 'Download PDF'], ['Text', 'Download PDF'],
+  ['Table', 'PDF via WhatsApp'], ['Text', 'PDF via WhatsApp'],
+])('omits the loose-tablet selling label from %s preview, print and %s while saving the catalog name', async (format, exportAction) => {
+  paginateSourceContent = true;
+  const item = { drugName: 'Test Medicine 7.5 mg (SR) (loose tablets)', dosage: 1, dosageUnit: 'TABLET', frequency: 'ONCE_DAILY', duration: 7, durationUnit: 'DAYS', instructions: 'Synthetic instructions' };
+  const items = [item, { ...item, drugName: 'Test Medicine 10 mg (  LOOSE   TABLETS  ) ' }, { ...item, drugName: 'Test Medicine 5 mg (enteric coated)' }];
+  const draftKey = 'rxDraft:print-name:visit';
+  localStorage.setItem(draftKey, JSON.stringify({ items }));
+  const createRx = jest.spyOn(apiClient, 'createPrescription').mockResolvedValue({ id: 'saved-rx' } as any);
+  const updateRx = jest.spyOn(apiClient, 'updatePrescription').mockResolvedValue({ id: 'saved-rx' } as any);
+  const get = jest.spyOn(apiClient, 'get').mockResolvedValue({ patient: { phone: '+10000000000' } });
+  const recordPrint = jest.spyOn(apiClient, 'recordPrescriptionPrintEvent').mockResolvedValue({});
+  const open = jest.spyOn(window, 'open').mockImplementation(() => null);
+  const click = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+  const print = jest.spyOn(window, 'print').mockImplementation(() => {});
+  mockPdfOutput.mockClear();
+  try {
+    render(<PrescriptionBuilder patientId="print-name" visitId="visit" doctorId="doctor" onBeforeExport={async () => 'visit'} />);
+    await screen.findByDisplayValue(item.drugName);
+    if (format === 'Text') {
+      fireEvent.keyDown(screen.getByText('Table').closest('button')!, { key: 'ArrowDown' });
+      fireEvent.click(await screen.findByRole('option', { name: 'Text' }));
+    }
+    await openPreview();
+    await settlePreviewPagination();
+    const assertPrintedName = (element: Element | null) => {
+      expect(element).toHaveTextContent('Test Medicine 7.5 mg (SR)');
+      expect(element).toHaveTextContent('Test Medicine 10 mg');
+      expect(element).toHaveTextContent('Test Medicine 5 mg (enteric coated)');
+      expect(element).toHaveTextContent('Synthetic instructions');
+      expect(element?.textContent).not.toMatch(/loose\s+tablets/i);
+    };
+    assertPrintedName(document.getElementById('prescription-print-root'));
+    assertPrintedName(document.getElementById('pagedjs-container'));
+    if (format === 'Text') expect(document.querySelector('.rx-text')).toBeTruthy();
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: exportAction })); });
+    await waitFor(() => expect(mockPdfOutput).toHaveBeenCalledTimes(1));
+    assertPrintedName(mockPdfOutput.mock.calls[0][0] as Element);
+    expect(createRx).toHaveBeenCalledWith(expect.objectContaining({ items: expect.arrayContaining([expect.objectContaining(item)]) }));
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Print', exact: true })); });
+    await waitFor(() => expect(print).toHaveBeenCalledTimes(1));
+    assertPrintedName(document.getElementById('prescription-print-host'));
+  } finally {
+    await act(async () => { window.dispatchEvent(new Event('afterprint')); });
+    localStorage.removeItem(draftKey);
+    createRx.mockRestore();
+    updateRx.mockRestore();
+    get.mockRestore();
+    recordPrint.mockRestore();
+    open.mockRestore();
+    click.mockRestore();
+    print.mockRestore();
+  }
+});
+
 describe('PrescriptionBuilder - Paged.js margin wiring', () => {
+  it('migrates the legacy letterhead and keeps saved printer margins clear of its header and footer', async () => {
+    render(<PrescriptionBuilder patientId="letterhead-proof" doctorId="d1" printBgUrl="/letterhead.png" printTopMarginPx={150} printBottomMarginPx={45} />);
+    await openPreview();
+    await settlePreviewPagination();
+    expect(lastPagedCssText).toContain(`margin-top: ${pxToMm(200)}mm`);
+    expect(lastPagedCssText).toContain(`margin-bottom: ${pxToMm(86)}mm`);
+    const styles = Array.from(document.querySelectorAll('style')).map(style => style.textContent).join('\n');
+    expect(styles).toContain("url('/prescription-letterhead-praneeta.jpg')");
+    expect(styles).not.toContain("url('/letterhead.png')");
+    const pages = document.querySelectorAll('#pagedjs-container .pagedjs_page_content');
+    expect(pages.length).toBe(2);
+    pages.forEach(page => expect((page as HTMLElement).style.transform).toBe('translate(0px, 0px)'));
+  });
+
+  it('preserves explicit custom letterheads and their margins', async () => {
+    render(<PrescriptionBuilder patientId="custom-letterhead" doctorId="d1" printBgUrl="/custom-clinic.jpg" printTopMarginPx={170} printBottomMarginPx={45} />);
+    await openPreview();
+    await settlePreviewPagination();
+    expect(lastPagedCssText).toContain(`margin-top: ${pxToMm(170)}mm`);
+    expect(lastPagedCssText).toContain(`margin-bottom: ${pxToMm(45)}mm`);
+    expect(Array.from(document.querySelectorAll('style')).some(style => style.textContent?.includes("url('/custom-clinic.jpg')"))).toBe(true);
+  });
+
   it('applies @page margin-top from the Top margin slider (UI -> Paged.js)', async () => {
     render(<PrescriptionBuilder patientId="p1" doctorId="d1" /> as any);
 
@@ -289,8 +608,8 @@ describe('PrescriptionBuilder - Paged.js margin wiring', () => {
     printSpy.mockRestore();
   });
 
-  it('copies the first text offset from page 1 onto continuation pages', async () => {
-    render(<PrescriptionBuilder patientId="p4" doctorId="d4" /> as any);
+  it('preserves custom-letterhead continuation offsets', async () => {
+    render(<PrescriptionBuilder patientId="p4" doctorId="d4" printBgUrl="/custom-clinic.jpg" /> as any);
 
     await openPreview();
     await settlePreviewPagination();
@@ -480,5 +799,73 @@ it('retains an explicitly entered zero in a current draft, shows validation, and
     createRx.mockRestore();
     click.mockRestore();
     localStorage.removeItem('rxDraft:validation-patient:visit');
+  }
+});
+
+it('toggles and remembers the doctor signature across preview, print, PDF, WhatsApp and Email', async () => {
+  paginateSourceContent = true;
+  const url = 'data:image/png;base64,c2lnbmF0dXJl';
+  const signature = jest.spyOn(apiClient, 'getDoctorSignature').mockResolvedValue({ signature: { id: 'sig', url } });
+  const item = { drugName: 'Synthetic medicine', dosage: 1, dosageUnit: 'TABLET', frequency: 'ONCE_DAILY', duration: 7, durationUnit: 'DAYS' };
+  const get = jest.spyOn(apiClient, 'get').mockResolvedValue({
+    doctor: { id: 'signature-doctor', firstName: 'Praneeta', lastName: 'Jain' },
+    patient: { phone: '+10000000000', email: 'synthetic@example.test' },
+    prescription: { id: 'signature-rx', items: [item] },
+  });
+  const patch = jest.spyOn(apiClient, 'patch').mockResolvedValue({ id: 'signature-rx' });
+  const print = jest.spyOn(window, 'print').mockImplementation(() => {});
+  const open = jest.spyOn(window, 'open').mockImplementation(() => null);
+  const click = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+  const share = jest.spyOn(apiClient, 'sharePrescriptionPreview').mockResolvedValue({});
+  mockPdfOutput.mockClear();
+  const key = 'cms:prescription:showSignature:signature-doctor';
+  localStorage.removeItem(key);
+  try {
+    const view = render(<PrescriptionBuilder patientId="signature-patient" visitId="signature-visit" doctorId="signature-doctor" onBeforeExport={async () => 'signature-visit'} />);
+    await screen.findByDisplayValue(item.drugName);
+    await openPreview();
+    await settlePreviewPagination();
+    const toggle = screen.getByRole('checkbox', { name: 'Show signature', exact: true });
+    expect(toggle).not.toBeChecked();
+    for (const enabled of [true, false, true]) {
+      fireEvent.click(toggle);
+      // Exports stay disabled until pagination reflects the new selection.
+      expect(screen.getByRole('button', { name: 'Print', exact: true })).toBeDisabled();
+      await settlePreviewPagination();
+      const assertSignature = (root: Element | null) => {
+        expect(root).toHaveTextContent('Dr. Praneeta Jain');
+        const image = root?.querySelector('img[data-doctor-signature]');
+        if (enabled) {
+          expect(image).toHaveAttribute('src', url);
+          expect(image?.nextElementSibling).toHaveTextContent('Dr. Praneeta Jain');
+          expect(image?.closest('.doctor-signature-block')).toHaveStyle({ breakInside: 'avoid' });
+        } else expect(image).toBeNull();
+      };
+      assertSignature(document.getElementById('pagedjs-container'));
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Print', exact: true })); });
+      expect(print).toHaveBeenCalled();
+      assertSignature(document.getElementById('prescription-print-host'));
+      act(() => { window.dispatchEvent(new Event('afterprint')); });
+      for (const action of ['Download PDF', 'PDF via WhatsApp', 'Email']) {
+        mockPdfOutput.mockClear();
+        await act(async () => { fireEvent.click(screen.getByRole('button', { name: action, exact: true })); });
+        await waitFor(() => expect(mockPdfOutput).toHaveBeenCalledTimes(1));
+        assertSignature(mockPdfOutput.mock.calls[0][0] as Element);
+      }
+      expect(share).toHaveBeenCalledWith('signature-rx', expect.any(File), expect.objectContaining({ channel: 'EMAIL' }));
+      expect(localStorage.getItem(key)).toBe(String(enabled));
+    }
+    view.unmount();
+    render(<PrescriptionBuilder patientId="signature-other-patient" visitId="signature-other-visit" doctorId="signature-doctor" onBeforeExport={async () => 'signature-other-visit'} />);
+    await screen.findByDisplayValue(item.drugName);
+    await openPreview();
+    await settlePreviewPagination();
+    expect(screen.getByRole('checkbox', { name: 'Show signature', exact: true })).toBeChecked();
+    await waitFor(() => expect(document.querySelector('#pagedjs-container img[data-doctor-signature]')).toHaveAttribute('src', url));
+  } finally {
+    signature.mockRestore(); get.mockRestore(); patch.mockRestore(); print.mockRestore(); open.mockRestore(); click.mockRestore(); share.mockRestore();
+    localStorage.removeItem(key);
+    localStorage.removeItem('rxDraft:signature-patient:signature-visit');
+    localStorage.removeItem('rxDraft:signature-other-patient:signature-other-visit');
   }
 });

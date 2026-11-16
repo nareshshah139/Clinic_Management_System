@@ -57,6 +57,20 @@ it('stops automatic retries when authentication expires', async () => {
   expect((apiClient.updateVisit as jest.Mock).mock.calls.length).toBe(attempts);
   expect(screen.getByText('Save failed')).toBeInTheDocument();
 });
+it.each([400, 403, 404, 409, 422])('does not repeatedly resubmit a rejected draft (HTTP %s)', async status => {
+  (apiClient.updateVisit as jest.Mock).mockRejectedValue(Object.assign(new Error('Correct the input'), { status }));
+  await openForm();
+  fireEvent.change(screen.getByLabelText('Clinical note'), { target: { value: 'Keep rejected draft' } });
+  await act(async () => { jest.advanceTimersByTime(8100); });
+  const attempts = (apiClient.updateVisit as jest.Mock).mock.calls.length;
+  await act(async () => { jest.advanceTimersByTime(30000); });
+  expect((apiClient.updateVisit as jest.Mock).mock.calls.length).toBe(attempts);
+  expect(screen.getByText('Save failed')).toBeInTheDocument();
+  expect(Object.values(localStorage).some(value => String(value).includes('Keep rejected draft'))).toBe(true);
+  fireEvent.change(screen.getByLabelText('Clinical note'), { target: { value: 'Corrected draft' } });
+  await act(async () => { jest.advanceTimersByTime(8100); });
+  expect((apiClient.updateVisit as jest.Mock).mock.calls.length).toBeGreaterThan(attempts);
+});
 it('saves all parent-form sections together, including independent subjective and assessment notes', async () => {
   localStorage.setItem('clinic:visit-draft:d:p:visit-v', JSON.stringify({ version: 1, visitId: 'v', data: {
     complaints: ['Complaint'], subjective: 'Subjective narrative', objective: 'Objective narrative', assessment: 'Assessment narrative', plan: 'Treatment narrative',
@@ -90,6 +104,24 @@ it('saves the full current form and returns the confirmed visit ID before export
   await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Export saved visit' })); });
   await expect(mockExportResult).resolves.toBe('v');
   expect(apiClient.updateVisit).toHaveBeenCalledWith('v', expect.objectContaining({ history: { pastHistory: 'Latest note for PDF' } }), expect.anything());
+});
+
+it.each(['', 'History entered without a chief complaint'])('creates a new visit with no complaints before export (subjective: %j)', async (subjective) => {
+  (apiClient.createVisit as jest.Mock).mockResolvedValue({ id: 'new-visit' });
+  localStorage.setItem('clinic:visit-draft:d:p:new', JSON.stringify({ version: 1, data: { subjective } }));
+  render(<MedicalVisitForm patientId="p" doctorId="d" userRole="ADMIN" />);
+  await flush();
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Export saved visit' })); });
+  await expect(mockExportResult).resolves.toBe('new-visit');
+  expect(apiClient.createVisit).toHaveBeenCalledWith(expect.objectContaining({ complaints: [] }), expect.anything());
+});
+
+it('preserves an existing saved General consultation complaint on an unrelated edit', async () => {
+  (apiClient.get as jest.Mock).mockResolvedValue({ id: 'v', patientId: 'p', complaints: [{ complaint: 'General consultation' }], history: {}, plan: {}, exam: {} });
+  await openForm();
+  fireEvent.change(screen.getByLabelText('Clinical note'), { target: { value: 'Updated history' } });
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save Draft' })); });
+  expect(apiClient.updateVisit).toHaveBeenCalledWith('v', expect.objectContaining({ complaints: [{ complaint: 'General consultation' }], history: { pastHistory: 'Updated history' } }), expect.anything());
 });
 
 it('blocks export if newer form edits arrive while saving', async () => {

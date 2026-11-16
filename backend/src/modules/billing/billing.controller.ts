@@ -115,7 +115,7 @@ export class BillingController {
   @Permissions('billing:invoice:delete')
   cancelInvoice(
     @Param('id') id: string,
-    @Query('reason') reason?: string,
+    @Query('reason') reason: string | undefined,
     @Request() req: AuthenticatedRequest,
   ) {
     return this.billingService.cancelInvoice(id, req.user.branchId, reason);
@@ -200,8 +200,8 @@ export class BillingController {
   @Roles(UserRole.ADMIN)
   @Permissions('billing:statistics:read')
   getStatistics(
-    @Query('startDate') startDate?: string,
-    @Query('endDate') endDate?: string,
+    @Query('startDate') startDate: string | undefined,
+    @Query('endDate') endDate: string | undefined,
     @Request() req: AuthenticatedRequest,
   ) {
     return this.billingService.getPaymentSummary(

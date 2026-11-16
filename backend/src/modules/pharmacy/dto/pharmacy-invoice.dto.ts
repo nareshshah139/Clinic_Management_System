@@ -26,6 +26,10 @@ export enum PharmacyInvoiceItemType {
 }
 
 export class PharmacyInvoiceItemDto {
+  @IsOptional()
+  @IsString()
+  inventoryItemId?: string;
+
   @ApiPropertyOptional({
     description: 'Drug ID (required if itemType is DRUG)',
     example: 'drug-123',

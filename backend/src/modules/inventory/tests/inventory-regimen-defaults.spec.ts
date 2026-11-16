@@ -25,7 +25,7 @@ it('persists defaults through the inventory create and update services', async (
   const stored = { id: 'item', branchId: 'clinic', ...defaults };
   const db = { inventoryItem: { findFirst: jest.fn().mockResolvedValue(stored), create: jest.fn().mockResolvedValue(stored), update: jest.fn().mockResolvedValue(stored) } };
   const service = new InventoryService(db as any);
-  await service.createInventoryItem({ ...defaults, name: 'Cream', type: 'MEDICINE', unit: 'TUBES', costPrice: 1, sellingPrice: 2 } as any, 'clinic');
+  await service.createInventoryItem({ ...defaults, name: 'Synthetic cream', dosageForm: 'cream', type: 'MEDICINE', unit: 'TUBES', costPrice: 1, sellingPrice: 2 } as any, 'clinic');
   expect(db.inventoryItem.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining(defaults) }));
   await service.updateInventoryItem('item', { defaultDuration: null, defaultInstructions: '' }, 'clinic');
   expect(db.inventoryItem.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ defaultDuration: null, defaultInstructions: null }) }));

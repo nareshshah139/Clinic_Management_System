@@ -1,3 +1,8 @@
+import { medicineNameParts } from '@cms/shared-types/medicine-name';
+import { findPurchaseCandidates, PurchaseCandidate, PurchaseSupplier, purchaseMemoryKey, purchaseNameQuery, purchaseSupplierKey, purchaseTargetKey, samePurchaseBrand, withoutLooseAnnotation } from './purchase-match-identity';
+import { checkedProductQuery, matchProductSearch, normalizeProductSearch, ocrProductSearchQuery, productEditDistance, searchPackKey } from '../../shared/search/product-search';
+import { loadReviewedProductAliases, searchableDrug } from '../../shared/search/drug-search';
+import { hasPurchaseNameEvidence, purchaseMatchMismatches } from './purchase-match-safety';
 import { Prisma } from '@prisma/client';
 import { alignPurchaseSource, matchingSourceRows, readPurchaseSourcePages, PurchaseSourceMap } from './purchase-invoice-source';
 import { purchaseCatalogData, purchaseCatalogIssues, purchaseInventoryClassification, purchaseProductKind } from './purchase-product-catalog';
@@ -160,8 +165,25 @@ export class PharmacyPurchaseInvoiceService {
       : 'Automatic intake requires one active saved supplier with matching name and GSTIN. Select a saved supplier or review manually.'];
   }
 
-  private async enrichKnownProducts(draft: CreatePharmacyPurchaseInvoiceDto, branchId: string) {
+  /**
+   * @cc [owner:nareshshah139,label:product] purchase-upload-reuses-reviewed-mapping
+   * A new upload MAY reuse a supplier-confirmed name only with unchanged active target identity
+   * and compatible source pack, form, kind and strength. Quantities and prices MUST stay unchanged;
+   * missing or incompatible memory MUST fall back to the existing exact-name review path.
+   */
+  private async enrichKnownProducts(draft: CreatePharmacyPurchaseInvoiceDto, branchId: string, reuseReviewedNames = true) {
+    const memory = reuseReviewedNames ? await this.loadPurchaseMatchMemory(branchId, draft) : new Map<string, any>();
     for (const item of draft.items) {
+      const remembered = memory.get(purchaseMemoryKey(item));
+      if (remembered) {
+        const drug = await this.prisma.drug.findFirst({ where: { id: remembered.drug.id, branchId, isActive: true, isDiscontinued: false } });
+        if (drug && purchaseTargetKey(drug) === remembered.targetKey && this.canReusePurchaseMatch(item, drug)) {
+          item.productName = drug.name;
+          item.manufacturer = drug.manufacturerName;
+          item.packSize = drug.packSizeLabel;
+          continue;
+        }
+      }
       const candidates = await this.prisma.drug.findMany({ where: { branchId, isActive: true, isDiscontinued: false,
         name: { equals: item.productName.trim(), mode: 'insensitive' } } });
       const exact = candidates.filter(drug => canonicalPurchasePack(drug.packSizeLabel || '') === canonicalPurchasePack(item.packSize, item.packUnitType)
@@ -266,7 +288,7 @@ export class PharmacyPurchaseInvoiceService {
     if (linked.count !== 1) throw new ConflictException('Original document is unavailable or already linked to another invoice.');
   }
 
-  private async extractArchivedDocument(file: Express.Multer.File, branchId: string, sourceDocument: Awaited<ReturnType<PharmacyPurchaseInvoiceService['archiveOriginal']>>) {
+  private async extractArchivedDocument(file: Express.Multer.File, branchId: string, sourceDocument: Awaited<ReturnType<PharmacyPurchaseInvoiceService['archiveOriginal']>>, reuseReviewedNames = false) {
     try {
       const extracted = await this.extractDocumentDraft(file, branchId);
       let sourceMap = extracted.sourceMap;
@@ -282,7 +304,7 @@ export class PharmacyPurchaseInvoiceService {
           item.ocrSourceRef = indexes[index] === undefined ? undefined : `${sourceDocument.id}:${sourceMap!.rows[indexes[index]!].index}`;
         });
       }
-      extracted.draft = await this.enrichKnownProducts(extracted.draft, branchId);
+      extracted.draft = await this.enrichKnownProducts(extracted.draft, branchId, reuseReviewedNames);
       await this.prisma.auditLog.create({ data: { entity: 'PharmacyPurchaseInvoiceDocument', entityId: sourceDocument.id,
         userId: sourceDocument.uploadedBy, action: 'OCR_EXTRACTED', newValues: JSON.stringify({ branchId, lineCount: extracted.draft.items.length, sourceMapAvailable: !!sourceMap }) } });
       return { ...extracted, draft: { ...extracted.draft, sourceDocumentId: sourceDocument.id }, sourceDocument };
@@ -322,7 +344,7 @@ export class PharmacyPurchaseInvoiceService {
       const invoice = await this.findOne(sourceDocument.purchaseInvoiceId, branchId);
       return { draft: invoice, sourceDocument, ...this.automationResult(invoice, 'DUPLICATE') };
     }
-    const extracted = await this.extractArchivedDocument(file, branchId, sourceDocument);
+    const extracted = await this.extractArchivedDocument(file, branchId, sourceDocument, true);
     // Receipt date is supplied by the operator; an invoice date is not proof of receipt.
     const draft = { ...extracted.draft, sourceDocumentIds, goodsReceivedDate: goodsReceivedDate || undefined };
     const dto = plainToInstance(CreatePharmacyPurchaseInvoiceDto, draft);
@@ -496,7 +518,7 @@ export class PharmacyPurchaseInvoiceService {
     const sourceDocument = await this.archiveOriginal(file, branchId, userId);
     const result = await this.extractArchivedDocument(file, branchId, sourceDocument);
     // Matching availability must not discard a successful extraction or its original.
-    const masterMatches = await this.suggestMasterMatches(result.draft.items, branchId).catch(() => ({ matches: [] }));
+    const masterMatches = await this.suggestMasterMatches(result.draft.items, branchId, result.draft).catch(() => ({ matches: [] }));
     return {
       ...result,
       masterMatches,
@@ -568,34 +590,98 @@ export class PharmacyPurchaseInvoiceService {
     };
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:security] purchase-manual-search-scope
+   * Manual selection search MUST return only active products in the caller's branch and MUST NOT
+   * mutate catalogue or stock. An empty query MUST return no products.
+   */
+  async searchMasterProducts(q: string, branchId: string) {
+    if (!checkedProductQuery(q).trim()) return [];
+    const aliases = await loadReviewedProductAliases(this.prisma, branchId);
+    const products = await findPurchaseCandidates(this.prisma, q, branchId, aliases);
+    return products.map(drug => ({ drug, match: matchProductSearch(purchaseNameQuery(q), {
+      ...searchableDrug(drug), names: [purchaseNameQuery(drug.name)], aliases: drug.aliases.map(purchaseNameQuery),
+    }, 'name') })).filter(row => !!row.match)
+      .sort((a, b) => Number(b.drug.inInventory) - Number(a.drug.inInventory) || b.match!.score - a.match!.score || a.drug.name.localeCompare(b.drug.name))
+      .slice(0, 10).map(({ drug }) => ({ ...this.masterDrugSummary(drug), inInventory: drug.inInventory }));
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:product] purchase-suggestions-inventory-and-memory
+   * Suggestions MUST rank compatible clinic inventory before catalogue products and expose up to
+   * five review choices even with weak evidence. Unrelated alternatives MUST NOT be labelled matches.
+   * Same-brand candidates MUST block creation. Only a supplier-scoped, previously confirmed mapping
+   * with unchanged target identity and compatible pack/kind/strength MAY be automatically selected.
+   * Refresh MUST NOT write catalogue, invoice or stock records.
+   */
   async suggestMasterMatches(
     items: CreatePharmacyPurchaseInvoiceItemDto[],
     branchId: string,
+    supplier: PurchaseSupplier = {},
   ) {
-    if (!Array.isArray(items) || items.length === 0) {
-      throw new BadRequestException(
-        'At least one purchase line is required for drug master matching',
-      );
+    if (!Array.isArray(items) || !items.length) throw new BadRequestException('At least one purchase line is required for drug master matching');
+    for (const item of items) checkedProductQuery(item.productName);
+    const aliases = await loadReviewedProductAliases(this.prisma, branchId);
+    const memory = await this.loadPurchaseMatchMemory(branchId, supplier);
+    const cache = new Map<string, Promise<PurchaseCandidate[]>>();
+    const matches: any[] = [];
+    for (const [lineIndex, item] of items.entries()) {
+      const key = purchaseNameQuery(item.productName);
+      if (!cache.has(key)) cache.set(key, findPurchaseCandidates(this.prisma, item.productName, branchId, aliases, [...memory.values()].map(row => row.drug.id)));
+      const products = await cache.get(key)!;
+      const remembered = memory.get(purchaseMemoryKey(item));
+      const rememberedDrug = remembered && products.find(drug => drug.id === remembered.drug.id && purchaseTargetKey(drug) === remembered.targetKey);
+      const automatic = rememberedDrug && this.canReusePurchaseMatch(item, rememberedDrug);
+      let candidates = this.rankMasterMatchCandidates(item, products);
+      if (automatic) {
+        const candidate = { drug: this.masterDrugSummary(rememberedDrug), score: 100, confidence: 'HIGH' as const,
+          reasons: ['Previously confirmed for this supplier'], searchMatch: { kind: 'alias' }, mismatches: [], inInventory: rememberedDrug.inInventory };
+        candidates = [candidate as any, ...candidates.filter(c => c.drug.id !== rememberedDrug.id)].slice(0, 5);
+      }
+      const best = candidates[0];
+      const sameBrandExists = products.some(drug => samePurchaseBrand(item.productName, drug)) || !!rememberedDrug;
+      const alternatives = products.filter(drug => !candidates.some(c => c.drug.id === drug.id))
+        .map(drug => ({ drug: this.masterDrugSummary(drug), score: this.purchaseAlternativeScore(item.productName, drug.name), confidence: 'LOW', inInventory: drug.inInventory,
+          sameBrand: samePurchaseBrand(item.productName, drug), mismatches: purchaseMatchMismatches(item, drug),
+          reasons: ['Review product identity and pack before selecting'] }))
+        .sort((a, b) => Number(b.sameBrand) - Number(a.sameBrand) || Number(b.inInventory) - Number(a.inInventory) || b.score - a.score || a.drug.name.localeCompare(b.drug.name) || a.drug.id.localeCompare(b.drug.id))
+        .slice(0, 5 - candidates.length);
+      matches.push({ lineIndex, ocr: this.masterLineSummary(item), candidates, alternatives, sameBrandExists,
+        automaticMatch: automatic ? { drug: this.masterDrugSummary(rememberedDrug), linePatch: { ...this.linePatchFromDrug(rememberedDrug, item), mrp: item.mrp, purchaseRate: item.purchaseRate } } : undefined,
+        matchLabel: automatic ? 'Remembered match' : best ? best.mismatches.length === 0 && best.searchMatch.kind === 'exact' ? 'Same product' : 'Possible match' : sameBrandExists ? 'Review existing item' : 'Not in inventory',
+        recommendedAction: best ? best.score >= 65 ? 'MATCH_EXISTING' : 'REVIEW_MATCHES' : sameBrandExists ? 'REVIEW_MATCHES' : 'CREATE_NEW' });
     }
+    return { matches };
+  }
 
-    const matches = await Promise.all(
-      items.map(async (item, index) => ({
-        lineIndex: index,
-        ocr: this.masterLineSummary(item),
-        candidates: await this.findMasterMatchCandidates(item, branchId),
-      })),
-    );
+  /**
+   * @cc [owner:nareshshah139,label:security;product] purchase-confirmed-supplier-memory
+   * Only successful, audited confirmations in the same branch and supplier scope MAY establish
+   * memory. The latest confirmation for the exact normalized source name and pack MUST win.
+   * Missing supplier identity or malformed/legacy audit entries MUST NOT establish an automatic match.
+   */
+  private async loadPurchaseMatchMemory(branchId: string, supplier: PurchaseSupplier) {
+    const memory = new Map<string, any>();
+    const supplierKey = purchaseSupplierKey(supplier);
+    if (!supplierKey) return memory;
+    const events = await this.prisma.auditLog.findMany({ where: { entity: 'PurchaseProductMatch', action: 'MATCH_CONFIRMED',
+      AND: [{ oldValues: { contains: JSON.stringify({ branchId }).slice(1, -1) } }, { newValues: { contains: JSON.stringify({ supplierKey }).slice(1, -1) } }] },
+      orderBy: [{ timestamp: 'desc' }, { id: 'desc' }], select: { oldValues: true, newValues: true } });
+    for (const event of events || []) {
+      try {
+        const original = JSON.parse(event.oldValues || '{}'), saved = JSON.parse(event.newValues || '{}');
+        if (original.branchId !== branchId || saved.branchId !== branchId || saved.supplierKey !== supplierKey || !saved.sourceKey || !saved.targetKey || !saved.drug?.id) continue;
+        if (!memory.has(saved.sourceKey)) memory.set(saved.sourceKey, saved);
+      } catch { /* Legacy audit data is not an identity mapping. */ }
+    }
+    return memory;
+  }
 
-    return {
-      matches: matches.map((match) => {
-        const best = match.candidates[0];
-        return {
-          ...match,
-          recommendedAction:
-            best && best.score >= 65 ? 'MATCH_EXISTING' : 'CREATE_NEW',
-        };
-      }),
-    };
+  private canReusePurchaseMatch(item: CreatePharmacyPurchaseInvoiceItemDto, drug: any): boolean {
+    const pack = searchPackKey(item.packSize || '');
+    return !!pack && pack === searchPackKey(drug.packSizeLabel || '') &&
+      !purchaseMatchMismatches(item, drug).some(reason => reason !== 'Product names differ') &&
+      !this.purchaseFormsConflict(item.productName, drug) && withoutLooseAnnotation(drug.name) === drug.name;
   }
 
   /**
@@ -605,9 +691,23 @@ export class PharmacyPurchaseInvoiceService {
    * Acceptance: INV-13. Validation and open gaps:
    * docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
    */
+  /**
+   * @cc [owner:nareshshah139,label:product] purchase-mismatch-explicit-acknowledgement
+   * Matching different names, known kinds, forms, strengths or pack dimensions MUST fail before writes
+   * unless mismatchAcknowledged is true. A successful match MUST atomically retain the original
+   * line, selected product, mismatch reasons and acknowledgement in audit history with catalogue
+   * updates; confirming a match MUST NOT change stock.
+   */
+  /**
+   * @cc [owner:nareshshah139,label:product] purchase-create-confirmed-without-brand-duplicate
+   * New product creation MUST require creationConfirmed=true and MUST reject active same-brand
+   * products in the branch, even when manufacturer, spelling, form or pack differ. Concurrent
+   * purchase-created products in a branch MUST recheck for duplicates under the same transaction lock.
+   */
   async confirmMasterRecord(
     dto: ConfirmPharmacyPurchaseMasterDto,
     branchId: string,
+    userId?: string,
   ) {
     if (!dto?.item) {
       throw new BadRequestException(
@@ -632,17 +732,33 @@ export class PharmacyPurchaseInvoiceService {
         throw new NotFoundException('Drug master record not found');
       }
 
+      const mismatches = purchaseMatchMismatches(item, existing);
+      if (mismatches.length && dto.mismatchAcknowledged !== true) {
+        throw new ConflictException({ code: 'PURCHASE_PRODUCT_MISMATCH',
+          message: 'These look like different products. Confirm anyway?', mismatches });
+      }
       const updateData: Record<string, unknown> = {};
       if (this.money(item.mrp) > 0) {
         updateData.price = this.money(item.mrp);
       }
-      const updated =
-        Object.keys(updateData).length > 0
-          ? await this.prisma.drug.update({
+      const updated = await this.prisma.$transaction(async tx => {
+        const saved = Object.keys(updateData).length > 0
+          ? await tx.drug.update({
               where: { id: existing.id },
               data: updateData,
             })
           : existing;
+        const suggestion = this.scoreMasterCandidate(item, { ...existing, aliases: [] });
+        await tx.auditLog.create({ data: { entity: 'PurchaseProductMatch', entityId: existing.id,
+          action: 'MATCH_CONFIRMED', userId,
+          oldValues: JSON.stringify({ branchId, item }),
+          newValues: JSON.stringify({ branchId, drug: this.masterDrugSummary(existing), mismatches,
+            mismatchAcknowledged: dto.mismatchAcknowledged === true, score: suggestion?.score ?? null,
+            reasons: suggestion?.reasons || [], nameEvidence: hasPurchaseNameEvidence(item, existing),
+            supplierKey: purchaseSupplierKey(dto), sourceKey: purchaseMemoryKey(item), targetKey: purchaseTargetKey(existing) }),
+        } });
+        return saved;
+      });
 
       return {
         action: PharmacyPurchaseMasterActionDto.MATCH_EXISTING,
@@ -656,42 +772,53 @@ export class PharmacyPurchaseInvoiceService {
       throw new BadRequestException('Unsupported drug master confirmation action');
     }
 
+    if (dto.creationConfirmed !== true) throw new BadRequestException('Confirm creation of a new inventory item first.');
     const catalogData = purchaseCatalogData(dto.catalog);
+    const presentation = medicineNameParts(item.productName, { ...catalogData, brandName: catalogData.brandName || undefined });
+    Object.assign(catalogData, { brandName: presentation.brandName, itemCode: presentation.itemCode,
+      combinationProduct: presentation.combinationProduct, dispenseLoose: presentation.dispenseLoose });
+    const created = await this.prisma.$transaction(async tx => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`purchase-product-create:${branchId}`}))`;
+      const duplicates = await findPurchaseCandidates(tx, item.productName, branchId, await loadReviewedProductAliases(tx, branchId));
+      if (duplicates.some(drug => samePurchaseBrand(item.productName, drug))) {
+        throw new ConflictException({ code: 'PURCHASE_SAME_BRAND_EXISTS', message: 'A same-brand item already exists. Select an existing item and review its pack.', candidates: duplicates.filter(drug => samePurchaseBrand(item.productName, drug)).slice(0, 5).map(drug => this.masterDrugSummary(drug)) });
+      }
 
-    const existingExact = await this.prisma.drug.findFirst({
-      where: {
-        branchId,
-        isActive: true,
-        name: {
-          equals: item.productName.trim(),
-          mode: 'insensitive',
+      const existingExact = await tx.drug.findFirst({
+        where: {
+          branchId,
+          isActive: true,
+          name: {
+            equals: item.productName.trim(),
+            mode: 'insensitive',
+          },
+          ...(item.manufacturer?.trim() ? { manufacturerName: {
+            equals: item.manufacturer.trim(),
+            mode: 'insensitive' as const,
+          } } : {}),
         },
-        ...(item.manufacturer?.trim() ? { manufacturerName: {
-          equals: item.manufacturer.trim(),
-          mode: 'insensitive' as const,
-        } } : {}),
-      },
-    });
-    if (existingExact) {
-      throw new ConflictException(
-        'A matching drug master record already exists. Confirm that match instead of creating a duplicate.',
-      );
-    }
+      });
+      if (existingExact) {
+        throw new ConflictException(
+          'A matching drug master record already exists. Confirm that match instead of creating a duplicate.',
+        );
+      }
 
-    const created = await this.prisma.drug.create({
-      data: {
-        branchId,
-        name: item.productName.trim(),
-        price: this.money(item.mrp),
-        manufacturerName: this.cleanString(item.manufacturer),
-        packSizeLabel: item.packSize.trim(),
-        ...catalogData,
-        description: 'Created from an invoice with explicitly reviewed product kind and catalog details.',
-        minStockLevel: 10,
-        maxStockLevel: 1000,
-        isActive: true,
-        isDiscontinued: false,
-      },
+      return tx.drug.create({
+        data: {
+          branchId,
+          name: withoutLooseAnnotation(item.productName),
+          price: this.money(item.mrp),
+          manufacturerName: this.cleanString(item.manufacturer),
+          packSizeLabel: item.packSize.trim(),
+          ...catalogData,
+          description: 'Created from an invoice with explicitly reviewed product kind and catalog details.',
+          minStockLevel: 10,
+          maxStockLevel: 1000,
+          isActive: true,
+          isDiscontinued: false,
+        },
+      });
     });
 
     return {
@@ -1079,6 +1206,7 @@ export class PharmacyPurchaseInvoiceService {
       );
     }
 
+    await this.validateLinkedReceipt(prismaAny, invoice);
     const updated = await prismaAny.pharmacyPurchaseInvoice.update({
       where: { id, branchId, status: invoice.status, updatedAt: invoice.updatedAt },
       data: {
@@ -1189,13 +1317,7 @@ export class PharmacyPurchaseInvoiceService {
       );
     }
 
-    let receipt: any = null;
-    if (invoice.workflowReceiptId) {
-      receipt = await tx.inventoryWorkflowDocument.findFirst({where:{id:invoice.workflowReceiptId,branchId,kind:'INWARD_CHALLAN',status:'POSTED'}});
-      if (!receipt || receipt.supplierGstin !== invoice.distributorGstin) throw new BadRequestException('Select a posted inward challan for this supplier');
-      if (await tx.pharmacyPurchaseInvoice.count({where:{branchId,workflowReceiptId:receipt.id,status:'STOCK_COMMITTED',id:{not:id}}})) throw new ConflictException('This inward challan is already billed');
-      if (receipt.payload.lines.length !== invoice.items.length) throw new BadRequestException('The bill must contain every inward challan line exactly once');
-    }
+    const receipt = await this.validateLinkedReceipt(tx, invoice);
     const receivedIds = new Set<string>();
     const committedItems: Array<{
       lineNumber: number;
@@ -1288,6 +1410,71 @@ export class PharmacyPurchaseInvoiceService {
       ...this.formatPurchaseInvoice(updated),
       committedItems,
     };
+  }
+
+  /**
+   * @cc [owner:nareshshah139] reviewed-purchase-recovery
+   * Reopening MUST require an unchanged, unposted REVIEWED invoice and an authenticated
+   * actor with a reason; the DRAFT status and audit MUST commit together without stock effects.
+   */
+  async reopenDraft(id: string, dto: { reason: string; expectedUpdatedAt: string }, branchId: string, userId?: string) {
+    const reason = dto.reason?.trim();
+    const revision = new Date(dto.expectedUpdatedAt);
+    if (!userId || !reason || reason.length > 500 || !Number.isFinite(revision.getTime())) {
+      throw new BadRequestException('An authenticated actor, reason and invoice revision are required');
+    }
+    return this.prisma.$transaction(async (tx: any) => {
+      const before = await tx.pharmacyPurchaseInvoice.findFirst({ where: { id, branchId } });
+      if (!before) throw new NotFoundException('Purchase invoice not found');
+      if (before.status !== 'REVIEWED' || before.stockCommittedAt) {
+        throw new BadRequestException('Only unposted reviewed invoices can be reopened');
+      }
+      const changed = await tx.pharmacyPurchaseInvoice.updateMany({
+        where: { id, branchId, status: 'REVIEWED', stockCommittedAt: null, updatedAt: revision },
+        data: { status: 'DRAFT', updatedAt: new Date() },
+      });
+      if (changed.count !== 1) throw new ConflictException('Invoice changed. Refresh before reopening.');
+      const after = await tx.pharmacyPurchaseInvoice.findFirst({ where: { id, branchId },
+        include: { documents: { select: this.documentMetadata }, items: { orderBy: { lineNumber: 'asc' } } } });
+      await this.purchaseAudit(tx, id, branchId, userId, 'REOPENED_FOR_CORRECTION', before, { ...after, reason });
+      return this.formatPurchaseInvoice(after);
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  }
+
+  /**
+   * @cc [owner:nareshshah139] linked-receipt-validation
+   * A linked receipt MUST belong to this branch, be posted and unbilled, and match every
+   * bill line's batch, quantities, expiry, MRP and stock unit before review or stock commit.
+   */
+  private async validateLinkedReceipt(tx: any, invoice: any) {
+    if (!invoice.workflowReceiptId) return null;
+    const receipt = await tx.inventoryWorkflowDocument.findFirst({ where: {
+      id: invoice.workflowReceiptId, branchId: invoice.branchId, kind: 'INWARD_CHALLAN', status: 'POSTED',
+    } });
+    if (!receipt || receipt.supplierGstin !== invoice.distributorGstin) {
+      throw new BadRequestException('Select a posted inward challan for this branch and supplier');
+    }
+    const billed = await tx.pharmacyPurchaseInvoice.count({ where: {
+      branchId: invoice.branchId, workflowReceiptId: receipt.id, status: 'STOCK_COMMITTED', id: { not: invoice.id },
+    } });
+    if (billed) throw new BadRequestException('Inward challan is already billed');
+    const lines = receipt.payload?.lines;
+    if (!Array.isArray(lines) || lines.length !== invoice.items.length) {
+      throw new BadRequestException('Bill lines must match the inward challan');
+    }
+    const used = new Set<string>();
+    for (const item of invoice.items) {
+      const line = lines.find((l: any) => !used.has(l.id) && normalizedIdentity(l.name) === normalizedIdentity(item.productName)
+        && l.batchNumber === item.batchNumber && l.quantity === item.quantityPurchased && (l.freeQuantity || 0) === item.freeQuantity);
+      if (!line) throw new BadRequestException('Bill product, batch, paid and free quantities must match the inward challan');
+      const batch = await tx.inventoryItem.findFirst({ where: { id: line.inventoryId, branchId: invoice.branchId } });
+      if (!batch || batch.unit !== this.mapUnitType(item.packUnitType, item.packSize)
+        || !this.isSamePurchaseBatch(batch, item, this.getExpiryDate(item))) {
+        throw new BadRequestException('Inward challan expiry, MRP or quantity unit differs from the bill');
+      }
+      used.add(line.id);
+    }
+    return receipt;
   }
 
   private async purchaseAudit(tx: any, id: string, branchId: string, userId: string | undefined, action: string, before: any, after: any) {
@@ -1550,6 +1737,12 @@ export class PharmacyPurchaseInvoiceService {
       .sort((a: any, b: any) => b.dropPercent - a.dropPercent);
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product] purchase-stock-name-annotation-only
+   * Stock resolution MAY ignore a legacy parenthesized loose annotation in a saved product name.
+   * It MUST still require one active branch product with the exact remaining name and compatible
+   * pack; a spelling suggestion or ignored annotation MUST NOT authorize pack conversion.
+   */
   private async resolvePurchaseLineDrug(
     tx: any,
     item: any,
@@ -1560,10 +1753,10 @@ export class PharmacyPurchaseInvoiceService {
         branchId,
         isActive: true,
         isDiscontinued: false,
-        name: {
-          equals: item.productName.trim(),
-          mode: 'insensitive',
-        },
+        OR: [
+          { name: { equals: item.productName.trim(), mode: 'insensitive' } },
+          { name: { startsWith: `${withoutLooseAnnotation(item.productName)} (loose`, mode: 'insensitive' } },
+        ],
         ...(item.manufacturer?.trim() ? { manufacturerName: {
           equals: item.manufacturer.trim(),
           mode: 'insensitive',
@@ -1586,7 +1779,7 @@ export class PharmacyPurchaseInvoiceService {
       },
     });
 
-    const candidates = rawCandidates.filter((drug: any) => canonicalPurchasePack(drug.packSizeLabel || '') === canonicalPurchasePack(item.packSize, item.packUnitType));
+    const candidates = rawCandidates.filter((drug: any) => normalizedIdentity(withoutLooseAnnotation(drug.name)) === normalizedIdentity(withoutLooseAnnotation(item.productName)) && canonicalPurchasePack(drug.packSizeLabel || '') === canonicalPurchasePack(item.packSize, item.packUnitType));
     if (candidates.length === 0) {
       throw new BadRequestException(
         `${this.lineLabel(item)}: product master is missing or inactive for ${item.productName}. Create a complete drug master before committing stock.`,
@@ -1699,7 +1892,12 @@ export class PharmacyPurchaseInvoiceService {
         name: drug.name,
         metadata: JSON.stringify({priceBasis:'Purchase rate per stock unit',landingCostPerStockUnit:quantities.totalQuantity ? this.money(item.taxableAmount/quantities.totalQuantity) : 0}),
         genericName: drug.composition1,
-        brandName: drug.name,
+        brandName: drug.brandName || drug.name,
+        dosageForm: drug.dosageForm,
+        strength: drug.strength,
+        itemCode: drug.itemCode,
+        combinationProduct: drug.combinationProduct,
+        dispenseLoose: drug.dispenseLoose,
         ...purchaseInventoryClassification(drug),
         category: drug.category,
         manufacturer: drug.manufacturerName,
@@ -1913,161 +2111,54 @@ export class PharmacyPurchaseInvoiceService {
     return `Line ${item.lineNumber ?? '?'}`;
   }
 
-  private async findMasterMatchCandidates(
-    item: CreatePharmacyPurchaseInvoiceItemDto,
-    branchId: string,
-  ) {
-    const terms = this.matchTerms(item);
-    const whereOr = terms.map((term) => ({
-      OR: [
-        { name: { contains: term, mode: 'insensitive' as const } },
-        {
-          manufacturerName: {
-            contains: term,
-            mode: 'insensitive' as const,
-          },
-        },
-        { packSizeLabel: { contains: term, mode: 'insensitive' as const } },
-        { composition1: { contains: term, mode: 'insensitive' as const } },
-      ],
-    }));
-
-    const candidates = await this.prisma.drug.findMany({
-      where: {
-        branchId,
-        isActive: true,
-        isDiscontinued: false,
-        ...(whereOr.length ? { OR: whereOr } : {}),
-      },
-      select: {
-        id: true,
-        name: true,
-        price: true,
-        manufacturerName: true,
-        type: true,
-        requiresPrescription: true,
-        packSizeLabel: true,
-        composition1: true,
-        composition2: true,
-        category: true,
-        dosageForm: true,
-        strength: true,
-      },
-      orderBy: { name: 'asc' },
-      take: whereOr.length ? 200 : 50,
-    });
-
-    return candidates
-      .map((drug) => this.scoreMasterCandidate(item, drug))
-      .filter((candidate) => candidate.score >= 35)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 3);
+  /**
+   * @cc [owner:nareshshah139,label:product] ocr-shared-search-suggestions-only
+   * OCR suggestions MUST use shared name/alias scoring, exclude known strength, dosage-form and
+   * pack conflicts, and break score ties deterministically. Suggesting a product MUST NOT write
+   * catalogue, invoice or stock data or bypass explicit selection and exact commitment checks.
+   * A low-confidence candidate MUST request review instead of recommending a duplicate new record.
+   * Every candidate MUST have distinguishing name/alias evidence; generic forms or pack metadata
+   * alone MUST produce no candidates, regardless of manufacturer, price or combined score.
+   */
+  private rankMasterMatchCandidates(item: CreatePharmacyPurchaseInvoiceItemDto, candidates: PurchaseCandidate[]) {
+    return candidates.map(drug => this.scoreMasterCandidate(item, drug))
+      .filter((c): c is NonNullable<typeof c> => !!c)
+      .sort((a,b) => Number(b.inInventory) - Number(a.inInventory) || b.score-a.score || b.searchMatch.score-a.searchMatch.score || a.drug.name.localeCompare(b.drug.name) || a.drug.id.localeCompare(b.drug.id))
+      .slice(0,5);
   }
 
-  private scoreMasterCandidate(
-    item: CreatePharmacyPurchaseInvoiceItemDto,
-    drug: MasterMatchDrug,
-  ) {
-    const nameScore = this.textSimilarity(item.productName, drug.name);
-    const manufacturerScore = this.textSimilarity(
-      item.manufacturer,
-      drug.manufacturerName,
-    );
-    const packScore = this.textSimilarity(item.packSize, drug.packSizeLabel);
-    const inferredStrength = this.inferStrength(item.productName);
-    const strengthScore =
-      drug.strength && !!inferredStrength
-        ? this.textSimilarity(inferredStrength, drug.strength)
-      : 0;
-    const dosageScore = drug.dosageForm
-      ? this.textSimilarity(this.inferDosageForm(item), drug.dosageForm)
-      : 0;
-
-    const score = Math.min(
-      100,
-      this.money(
-        nameScore * 58 +
-          manufacturerScore * 18 +
-          packScore * 14 +
-          strengthScore * 6 +
-          dosageScore * 4,
-      ),
-    );
-
-    const reasons = [];
-    if (nameScore >= 0.9) reasons.push('name exact/near match');
-    else if (nameScore >= 0.65) reasons.push('name token overlap');
-    if (manufacturerScore >= 0.8) reasons.push('manufacturer match');
-    if (packScore >= 0.8) reasons.push('pack size match');
-    if (strengthScore >= 0.8) reasons.push('strength match');
-
-    return {
-      drug: this.masterDrugSummary(drug),
-      score,
-      confidence: score >= 85 ? 'HIGH' : score >= 65 ? 'MEDIUM' : 'LOW',
-      reasons,
-    };
+  private scoreMasterCandidate(item: CreatePharmacyPurchaseInvoiceItemDto, drug: PurchaseCandidate) {
+    if (!hasPurchaseNameEvidence(item, drug)) return null;
+    const mismatches = purchaseMatchMismatches(item, drug);
+    if (mismatches.includes('Product kinds differ')) return null;
+    const { query, notes } = ocrProductSearchQuery(item.productName);
+    const name = matchProductSearch(purchaseNameQuery(query), { ...searchableDrug(drug), names: [purchaseNameQuery(drug.name)], aliases: drug.aliases.map(purchaseNameQuery) }, 'name');
+    if (!name) return null;
+    const pack = searchPackKey(item.packSize || ''), candidatePack = searchPackKey(drug.packSizeLabel || '');
+    if (pack && candidatePack && pack !== candidatePack) return null;
+    if (this.purchaseFormsConflict(item.productName, drug)) return null;
+    const wantedForms = this.purchaseForms(item.productName), actualForms = this.purchaseForms(drug.name + ' ' + (drug.dosageForm || ''));
+    const manufacturer = item.manufacturer ? matchProductSearch(item.manufacturer, {names:[drug.manufacturerName || '']}, 'name') : null;
+    const score = this.money(Math.min(100, name.quality * 64 + (manufacturer?.quality || 0) * 18 + (pack && candidatePack && pack===candidatePack ? 14 : 0) + (wantedForms.some(f => actualForms.includes(f)) ? 4 : 0)));
+    const reasons = [name.kind==='fuzzy' ? 'similar spelling: '+name.corrections.join(', ') : name.kind==='alias' ? 'reviewed earlier name' : 'name '+name.kind+' match'];
+    reasons.push(...notes);
+    if (manufacturer) reasons.push('manufacturer match');
+    if (pack && pack===candidatePack) reasons.push('pack size match');
+    return { drug:this.masterDrugSummary(drug), score, confidence:score>=85?'HIGH':score>=65?'MEDIUM':'LOW', reasons, searchMatch:name, mismatches, inInventory: !!drug.inInventory };
   }
 
-  private matchTerms(item: CreatePharmacyPurchaseInvoiceItemDto): string[] {
-    const inferredStrength = this.inferStrength(item.productName);
-    const raw = [
-      item.productName,
-      item.manufacturer,
-      item.packSize,
-      inferredStrength,
-    ];
-    const terms = new Set<string>();
-    for (const value of raw) {
-      for (const token of this.normalizeText(value).split(' ')) {
-        if (token.length >= 4) terms.add(token);
-      }
-    }
-    return [...terms].slice(0, 8);
+  private purchaseAlternativeScore(source: string, target: string): number {
+    const a = purchaseNameQuery(source).slice(0, 200), b = purchaseNameQuery(target).slice(0, 200);
+    return this.money(34 * Math.max(0, 1 - productEditDistance(a, b) / Math.max(a.length, b.length, 1)));
   }
 
-  private textSimilarity(a: unknown, b: unknown): number {
-    const left = this.normalizeText(a);
-    const right = this.normalizeText(b);
-    if (!left || !right) return 0;
-    if (left === right) return 1;
-    if (left.includes(right) || right.includes(left)) return 0.86;
-
-    const leftTokens = new Set(left.split(' ').filter(Boolean));
-    const rightTokens = new Set(right.split(' ').filter(Boolean));
-    const intersection = [...leftTokens].filter((token) =>
-      rightTokens.has(token),
-    ).length;
-    const union = new Set([...leftTokens, ...rightTokens]).size;
-    const tokenScore = union ? intersection / union : 0;
-    const editScore =
-      1 -
-      this.levenshtein(left, right) / Math.max(left.length, right.length, 1);
-    return Math.max(tokenScore, editScore * 0.9);
+  private purchaseForms(value: string) {
+    return normalizeProductSearch(withoutLooseAnnotation(value)).split(' ').filter(t => ['tablet','capsule','cream','ointment','gel','lotion','solution','syrup','suspension','injection','drops'].includes(t));
   }
 
-  private normalizeText(value: unknown): string {
-    return this.cleanString(value)
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, ' ')
-      .replace(/\b(tab|tabs|tablet|tablets|cap|caps|capsule|capsules|strip|strips|of|the)\b/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-  }
-
-  private levenshtein(a: string, b: string): number {
-    const previous = Array.from({ length: b.length + 1 }, (_, index) => index);
-    for (let i = 1; i <= a.length; i += 1) {
-      const current = [i];
-      for (let j = 1; j <= b.length; j += 1) {
-        current[j] =
-          a[i - 1] === b[j - 1]
-            ? previous[j - 1]
-            : Math.min(previous[j - 1], previous[j], current[j - 1]) + 1;
-      }
-      for (let j = 0; j < current.length; j += 1) previous[j] = current[j];
-    }
-    return previous[b.length] ?? 0;
+  private purchaseFormsConflict(name: string, drug: any) {
+    const wanted = this.purchaseForms(name), actual = this.purchaseForms(drug.name + ' ' + (drug.dosageForm || ''));
+    return wanted.length > 0 && actual.length > 0 && !wanted.some(form => actual.includes(form));
   }
 
   private masterLineSummary(item: CreatePharmacyPurchaseInvoiceItemDto) {
@@ -2103,6 +2194,10 @@ export class PharmacyPurchaseInvoiceService {
       category: drug.category,
       dosageForm: drug.dosageForm,
       strength: drug.strength,
+      brandName: drug.brandName,
+      itemCode: drug.itemCode,
+      combinationProduct: drug.combinationProduct,
+      dispenseLoose: drug.dispenseLoose,
     };
   }
 
@@ -2111,31 +2206,13 @@ export class PharmacyPurchaseInvoiceService {
     item: CreatePharmacyPurchaseInvoiceItemDto,
   ) {
     return {
-      productName: drug.name,
+      productName: withoutLooseAnnotation(drug.name),
       manufacturer: drug.manufacturerName,
       packSize: drug.packSizeLabel,
       packUnitType: item.packUnitType,
       mrp: this.money(item.mrp || drug.price || 0),
       purchaseRate: this.money(item.purchaseRate),
     };
-  }
-
-  private inferDosageForm(item: CreatePharmacyPurchaseInvoiceItemDto): string {
-    const text = `${item.productName || ''} ${item.packUnitType || ''}`.toLowerCase();
-    if (/\b(cap|capsule)\b/.test(text)) return 'Capsule';
-    if (/\b(cream|ointment|gel|lotion)\b/.test(text)) return 'Topical';
-    if (/\b(syrup|suspension)\b/.test(text)) return 'Liquid';
-    if (/\b(inj|injection)\b/.test(text)) return 'Injection';
-    if (/\b(drop|drops)\b/.test(text)) return 'Drops';
-    if (/\b(tab|tablet)\b/.test(text)) return 'Tablet';
-    return '';
-  }
-
-  private inferStrength(productName: string): string {
-    const match = this.cleanString(productName).match(
-      /\b\d+(?:\.\d+)?\s*(?:mg|mcg|g|gm|ml|iu|%)\b/i,
-    );
-    return match?.[0] || '';
   }
 
   private async buildOcrImageDataUrls(file: Express.Multer.File): Promise<{
@@ -2362,9 +2439,9 @@ export class PharmacyPurchaseInvoiceService {
   ): CreatePharmacyPurchaseInvoiceItemDto {
     const flags = this.stringArray(raw?.ocrFlags);
     const expiry = this.normalizeExpiry(raw);
-    const productName = this.cleanString(
+    const productName = withoutLooseAnnotation(this.cleanString(
       raw?.productName ?? raw?.itemName ?? raw?.drugName ?? raw?.description,
-    );
+    ));
     const manufacturer = this.cleanString(
       raw?.manufacturer ?? raw?.manufacturerName ?? raw?.mfg,
     );

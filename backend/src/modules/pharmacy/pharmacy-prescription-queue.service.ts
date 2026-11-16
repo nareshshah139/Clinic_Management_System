@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { availableStock, inventoryIdentityInclude, prescriptionSourceKey, resolvePrescriptionInventory, searchClinicInventory } from './pharmacy-stock-identity';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../shared/database/prisma.service';
 import { DrugService } from './drug.service';
 import {
@@ -13,6 +14,8 @@ import {
 } from './dto/pharmacy-dispense-task.dto';
 
 type QueueMedication = {
+  inventoryItemId?: string | null;
+  drugId?: string | null;
   lineId?: string;
   drugName: string;
   genericName?: string | null;
@@ -23,8 +26,10 @@ type QueueMedication = {
   durationUnit?: string | null;
   instructions?: string | null;
   prescribedQuantity: number | null;
+  prescribedQuantityUnit: string | null;
   quantityInferred: boolean;
   dispensedQuantity: number;
+  billingDispensedQuantity: number | null;
   coverageStatus: 'unknown' | 'not_started' | 'partial' | 'covered';
   action?: string;
   reasonType?: string | null;
@@ -42,12 +47,15 @@ type QueueMedication = {
 type QueueEntry = {
   dispenseTaskId?: string;
   prescriptionId: string;
+  prescriptionUpdatedAt?: Date;
   patient: { id: string; name: string; patientCode?: string | null };
   doctor: { id: string; name: string };
   createdAt: Date;
   pendingHours: number;
   isOverTwoHours: boolean;
   medications: QueueMedication[];
+  billedInventoryItemIds?: string[] | null;
+  hasPostedInvoices?: boolean;
   linkedInvoiceIds: string[];
   status: PrescriptionQueueStatus;
   dispenseStatus?: string;
@@ -65,12 +73,15 @@ type QueueEntry = {
 };
 
 type PrescriptionItem = {
+  inventoryItemId?: string | null;
+  drugId?: string | null;
   drugName?: string;
   genericName?: string | null;
   brandName?: string | null;
   dosage?: string | number | null;
   dosageUnit?: string | null;
   frequency?: string | null;
+  dosePattern?: string | null;
   duration?: string | number | null;
   durationUnit?: string | null;
   instructions?: string | null;
@@ -78,10 +89,12 @@ type PrescriptionItem = {
   prescribedQuantity?: string | number | null;
   totalQuantity?: string | number | null;
   qty?: string | number | null;
+  quantityUnit?: string | null;
 };
 
 type LoadedPrescription = {
   id: string;
+  updatedAt?: Date;
   items: string;
   createdAt: Date;
   visit: {
@@ -98,6 +111,7 @@ type LoadedInvoice = {
 };
 
 type LoadedInvoiceItem = {
+  inventoryItemId?: string | null;
   quantity: number;
   drug?: { id: string; name: string } | null;
 };
@@ -123,6 +137,12 @@ type InventoryBatch = {
 };
 
 type StockCheckResult = {
+  inventoryItemId?: string | null;
+  unit?: string | null;
+  totalOnHandStock?: number;
+  heldStock?: number;
+  expiredStock?: number;
+  suggestions?: any[];
   drugName: string;
   matchedDrug: {
     id: string;
@@ -274,22 +294,57 @@ export class PharmacyPrescriptionQueueService {
     };
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product] stock-check-billing-quantity
+   * Stock checks MUST return each line's prescribed quantity, including the queue's
+   * duration/frequency inference when no explicit quantity was recorded.
+   */
+  /**
+   * @cc [owner:nareshshah139,label:product] stock-check-remaining-quantity
+   * Stock checks return remaining quantities only when posted invoice lines are uniquely
+   * attributable and prescription and inventory units agree; otherwise remaining is null.
+   */
   async stockCheck(prescriptionId: string, branchId: string) {
     const entry = await this.findOne(prescriptionId, branchId);
+    const postedUnitsMatch = !entry.hasPostedInvoices || await this.coverageUnitsMatch(entry, branchId);
     const items = await Promise.all(
-      entry.medications.map(async (item) =>
-        this.stockCheckMedication(item, branchId),
-      ),
+      entry.medications.map(async (item) => {
+        const stock = await this.stockCheckMedication(item, branchId);
+        const stockUnit = this.stockUnit(stock.unit);
+        let quantityUnavailableReason: string | null = null;
+        if (item.prescribedQuantity === null || !Number.isInteger(item.prescribedQuantity)) {
+          quantityUnavailableReason = `Prescription quantity is unavailable in whole stock units. Enter the quantity${stock.unit ? ` in ${stock.unit}` : ''}.`;
+        } else if (!stockUnit || !item.prescribedQuantityUnit || stockUnit !== item.prescribedQuantityUnit) {
+          quantityUnavailableReason = `Prescription quantity cannot be matched to the stock unit${stock.unit ? ` ${stock.unit}` : ''}. Enter the stock quantity manually.`;
+        } else if (item.billingDispensedQuantity === null) {
+          quantityUnavailableReason = 'Previously billed quantity could not be attributed to this prescription line. Review and enter the remaining quantity manually.';
+        } else if (!postedUnitsMatch) {
+          quantityUnavailableReason = 'Previously billed stock units cannot be matched to this prescription. Review and enter the remaining quantity manually.';
+        }
+        return {
+          ...stock,
+          prescribedQuantity: item.prescribedQuantity,
+          dispensedQuantity: item.billingDispensedQuantity,
+          remainingQuantity: quantityUnavailableReason === null
+            ? Math.max(0, item.prescribedQuantity! - item.billingDispensedQuantity!) : null,
+          quantityUnavailableReason,
+        };
+      }),
     );
     await this.persistStockCheck(prescriptionId, branchId, items);
 
     return {
       prescriptionId,
       checkedAt: new Date(),
-      items,
+      items: items.map(item => ({ ...item, prescriptionVersion: entry.prescriptionUpdatedAt?.toISOString() })),
     };
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product] dispense-requires-posted-coverage
+   * A manual Dispensed transition MUST be rejected unless a branch prescription has posted
+   * invoice coverage for every line with matching stock units; rejection MUST NOT update the task.
+   */
   async updateTaskStatus(
     taskId: string,
     body: UpdateDispenseTaskStatusDto,
@@ -308,6 +363,17 @@ export class PharmacyPrescriptionQueueService {
 
     if (!task) {
       throw new NotFoundException('Dispense task not found in this branch');
+    }
+
+    if (body.status === PharmacyDispenseTaskStatusDto.DISPENSED) {
+      const prescription = task.prescriptionId ? await this.prisma.prescription.findFirst({
+        where: { id: task.prescriptionId, visit: { patient: { branchId } } },
+        include: this.prescriptionInclude(branchId),
+      }) as LoadedPrescription | null : null;
+      const entry = prescription ? this.toQueueEntry(prescription) : null;
+      if (!entry || entry.status !== PrescriptionQueueStatus.DISPENSED || !(await this.coverageUnitsMatch(entry, branchId))) {
+        throw new BadRequestException('Complete and post the pharmacy bill for all prescribed items before dispensing');
+      }
     }
 
     const now = new Date();
@@ -398,11 +464,40 @@ export class PharmacyPrescriptionQueueService {
     entry: QueueEntry,
     branchId: string,
   ): Promise<QueueEntry> {
+    if (entry.status === PrescriptionQueueStatus.DISPENSED && !(await this.coverageUnitsMatch(entry, branchId))) {
+      entry = { ...entry, status: PrescriptionQueueStatus.PARTIAL };
+    }
     const delegate = this.taskDelegate();
     if (!delegate) return entry;
 
     const task = await this.ensureTaskForEntry(entry, branchId);
     return this.mergeTask(entry, task);
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:product] coverage-stock-units
+   * Quantity coverage may be complete only when posted invoice stock units can be
+   * verified to match the prescription units; missing, mixed, or unreadable evidence remains partial.
+   */
+  private async coverageUnitsMatch(entry: QueueEntry, branchId: string): Promise<boolean> {
+    const ids = entry.billedInventoryItemIds;
+    if (!ids?.length) return false;
+    let batches: Array<{ id: string; unit: string }>;
+    try {
+      batches = await this.prisma.inventoryItem.findMany({
+        where: { id: { in: ids }, branchId },
+        select: { id: true, unit: true },
+      });
+    } catch {
+      return false;
+    }
+    if (batches.length !== ids.length) return false;
+    const units = new Set(batches.map((batch) => this.stockUnit(batch.unit)));
+    if (units.size !== 1 || units.has(null)) return false;
+    const [unit] = units;
+    return entry.medications.every((item) =>
+      item.prescribedQuantity !== null && Number.isInteger(item.prescribedQuantity) && item.prescribedQuantityUnit === unit,
+    );
   }
 
   private async ensureTaskForEntry(
@@ -716,15 +811,32 @@ export class PharmacyPrescriptionQueueService {
     return currentStatus;
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product] billed-prescription-not-pending
+   * A prescription with invoice-derived Partial or Dispensed status MUST NOT return to
+   * Pending because its workflow task remains In Review, Ready to Bill, or Paid.
+   */
+  /**
+   * @cc [owner:nareshshah139,label:product] incomplete-coverage-not-dispensed
+   * A persisted Dispensed task MUST NOT override invoice-derived Partial coverage.
+   */
+  /**
+   * @cc [owner:nareshshah139,label:product] complete-coverage-not-partial
+   * A persisted Partially Filled task MUST NOT override invoice-derived Dispensed coverage.
+   */
   private queueStatusFromTask(
     taskStatus: string,
     fallback: PrescriptionQueueStatus,
   ): PrescriptionQueueStatus {
     if (taskStatus === PharmacyDispenseTaskStatusDto.DISPENSED) {
-      return PrescriptionQueueStatus.DISPENSED;
+      return fallback === PrescriptionQueueStatus.PARTIAL
+        ? fallback
+        : PrescriptionQueueStatus.DISPENSED;
     }
     if (taskStatus === PharmacyDispenseTaskStatusDto.PARTIALLY_FILLED) {
-      return PrescriptionQueueStatus.PARTIAL;
+      return fallback === PrescriptionQueueStatus.DISPENSED
+        ? fallback
+        : PrescriptionQueueStatus.PARTIAL;
     }
     if (
       taskStatus === PharmacyDispenseTaskStatusDto.PAUSED ||
@@ -737,7 +849,9 @@ export class PharmacyPrescriptionQueueService {
       taskStatus === PharmacyDispenseTaskStatusDto.PAID ||
       taskStatus === PharmacyDispenseTaskStatusDto.IN_REVIEW
     ) {
-      return PrescriptionQueueStatus.PENDING;
+      return fallback === PrescriptionQueueStatus.PARTIAL || fallback === PrescriptionQueueStatus.DISPENSED
+        ? fallback
+        : PrescriptionQueueStatus.PENDING;
     }
     return fallback;
   }
@@ -859,7 +973,7 @@ export class PharmacyPrescriptionQueueService {
           branchId,
         },
         orderBy: {
-          invoiceDate: 'desc',
+          invoiceDate: 'desc' as const,
         },
         select: {
           id: true,
@@ -867,6 +981,7 @@ export class PharmacyPrescriptionQueueService {
           items: {
             select: {
               quantity: true,
+              inventoryItemId: true,
               drug: {
                 select: {
                   id: true,
@@ -880,6 +995,17 @@ export class PharmacyPrescriptionQueueService {
     };
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product] prescription-coverage-posted-invoices-only
+   * Only CONFIRMED, DISPENSED and COMPLETED invoices may contribute fulfilled quantities.
+   * Draft/pending invoices alone MUST leave the prescription pending (or age-expired),
+   * including after a failed stock confirmation; linked invoice IDs remain available for review.
+   */
+  /**
+   * @cc [owner:nareshshah139,label:product] prescription-coverage-requires-all-lines
+   * Posted invoices mark a prescription dispensed only when every line has a known
+   * prescribed quantity and uniquely attributable posted quantity covering it.
+   */
   private toQueueEntry(prescription: LoadedPrescription): QueueEntry {
     const nowMs = Date.now();
     const pendingHours = Math.max(
@@ -890,31 +1016,29 @@ export class PharmacyPrescriptionQueueService {
       (invoice) => invoice.id,
     );
     const activeInvoices = prescription.pharmacyInvoices.filter(
-      (invoice) => invoice.status !== 'CANCELLED',
+      (invoice) => ['CONFIRMED', 'DISPENSED', 'COMPLETED'].includes(invoice.status),
     );
     const rawItems = this.parsePrescriptionItems(prescription.items);
-    const medications = rawItems.map((item) =>
-      this.toMedicationCoverage(item, activeInvoices),
+    const billedItems = activeInvoices.flatMap((invoice) => invoice.items);
+    const billedInventoryItemIds = billedItems.length && billedItems.every((item) => item.inventoryItemId)
+      ? [...new Set(billedItems.map((item) => item.inventoryItemId!))] : null;
+    const billingQuantities = this.billingDispensedQuantities(rawItems, activeInvoices);
+    const medications = rawItems.map((item, index) =>
+      this.toMedicationCoverage(item, activeInvoices, billingQuantities[index]),
     );
-    const hasCompletedInvoice = activeInvoices.some((invoice) =>
-      ['DISPENSED', 'COMPLETED'].includes(invoice.status),
-    );
-    const inferredMedications = medications.filter(
-      (medication) => medication.quantityInferred,
-    );
-
     let status: PrescriptionQueueStatus;
-    if (prescription.pharmacyInvoices.length === 0) {
+    if (activeInvoices.length === 0 && !prescription.pharmacyInvoices.some(invoice => invoice.status === 'CANCELLED')) {
       status =
         pendingHours > this.expiredAfterHours
           ? PrescriptionQueueStatus.EXPIRED
           : PrescriptionQueueStatus.PENDING;
     } else if (
-      hasCompletedInvoice ||
-      (inferredMedications.length > 0 &&
-        inferredMedications.every(
-          (medication) => medication.coverageStatus === 'covered',
-        ))
+      activeInvoices.length > 0 && medications.length > 0 &&
+      medications.every((medication) =>
+        medication.prescribedQuantity !== null &&
+        medication.billingDispensedQuantity !== null &&
+        medication.billingDispensedQuantity >= medication.prescribedQuantity,
+      )
     ) {
       status = PrescriptionQueueStatus.DISPENSED;
     } else {
@@ -923,6 +1047,7 @@ export class PharmacyPrescriptionQueueService {
 
     return {
       prescriptionId: prescription.id,
+      prescriptionUpdatedAt: prescription.updatedAt,
       patient: prescription.visit.patient,
       doctor: {
         id: prescription.visit.doctor.id,
@@ -932,6 +1057,8 @@ export class PharmacyPrescriptionQueueService {
       pendingHours: Number(pendingHours.toFixed(2)),
       isOverTwoHours: pendingHours > this.warningAfterHours,
       medications,
+      billedInventoryItemIds,
+      hasPostedInvoices: activeInvoices.length > 0,
       linkedInvoiceIds: invoiceIds,
       status,
     };
@@ -940,6 +1067,7 @@ export class PharmacyPrescriptionQueueService {
   private toMedicationCoverage(
     item: PrescriptionItem,
     invoices: LoadedInvoice[],
+    billingDispensedQuantity: number | null,
   ): QueueMedication {
     const drugName = this.itemDrugName(item);
     const prescribedQuantity = this.inferQuantity(item);
@@ -947,9 +1075,11 @@ export class PharmacyPrescriptionQueueService {
       return (
         sum +
         invoice.items
-          .filter((invoiceItem) =>
-            this.namesMatch(drugName, invoiceItem.drug?.name || ''),
-          )
+          .filter((invoiceItem) => {
+            if (item.inventoryItemId && invoiceItem.inventoryItemId) return item.inventoryItemId === invoiceItem.inventoryItemId;
+            if (item.drugId) return item.drugId === invoiceItem.drug?.id;
+            return this.namesMatch(drugName, invoiceItem.drug?.name || '');
+          })
           .reduce((itemSum, invoiceItem) => itemSum + invoiceItem.quantity, 0)
       );
     }, 0);
@@ -964,6 +1094,8 @@ export class PharmacyPrescriptionQueueService {
 
     return {
       drugName,
+      drugId: item.drugId || null,
+      inventoryItemId: item.inventoryItemId || null,
       genericName: item.genericName || null,
       dosage: item.dosage ?? null,
       dosageUnit: item.dosageUnit || null,
@@ -972,149 +1104,153 @@ export class PharmacyPrescriptionQueueService {
       durationUnit: item.durationUnit || null,
       instructions: item.instructions || null,
       prescribedQuantity,
+      prescribedQuantityUnit: this.prescriptionQuantityUnit(item),
       quantityInferred: prescribedQuantity !== null,
       dispensedQuantity,
+      billingDispensedQuantity,
       coverageStatus,
     };
   }
 
-  private async stockCheckMedication(
-    medication: QueueMedication,
-    branchId: string,
-  ): Promise<StockCheckResult> {
-    const matchedDrug = await this.matchDrug(medication.drugName, branchId);
-    if (!matchedDrug) {
-      return {
-        drugName: medication.drugName,
-        matchedDrug: null,
-        stockStatus: 'UNMATCHED',
-        totalNonExpiredStock: 0,
-        batches: [],
-        lowStock: true,
-        nearExpiry: false,
-        alternatives: [],
-      };
-    }
+  /**
+   * @cc [owner:nareshshah139,label:product] prescription-quantity-unit
+   * An explicit quantity without a unit is counted as pieces; an unrecognized explicit
+   * unit or an inferred dose outside tablets and capsules has no known quantity unit.
+   */
+  private prescriptionQuantityUnit(item: PrescriptionItem): string | null {
+    const explicit = this.toPositiveNumber(item.quantity ?? item.prescribedQuantity ?? item.totalQuantity ?? item.qty);
+    if (explicit !== null) return item.quantityUnit ? this.stockUnit(item.quantityUnit) : 'PIECES';
+    const doseUnit = this.normalizeName(item.dosageUnit || '');
+    return ['tablet', 'tablets', 'capsule', 'capsules'].includes(doseUnit) ? 'PIECES' : null;
+  }
 
+  private stockUnit(unit?: string | null): string | null {
+    const normalized = this.normalizeName(unit || '');
+    const units: Record<string, string> = {
+      piece: 'PIECES', pieces: 'PIECES', tablet: 'PIECES', tablets: 'PIECES', capsule: 'PIECES', capsules: 'PIECES',
+      strip: 'STRIPS', strips: 'STRIPS', bottle: 'BOTTLES', bottles: 'BOTTLES', tube: 'TUBES', tubes: 'TUBES',
+      vial: 'VIALS', vials: 'VIALS', ampoule: 'AMPOULES', ampoules: 'AMPOULES', syringe: 'SYRINGES', syringes: 'SYRINGES',
+      kit: 'KITS', kits: 'KITS', box: 'BOXES', boxes: 'BOXES', pack: 'PACKS', packs: 'PACKS',
+    };
+    return units[normalized] ?? null;
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:product] billed-quantity-attribution
+   * Posted quantities are assigned only to uniquely matched prescription lines. If an invoice
+   * has no lines or a billed line is ambiguous, unmatched or invalid, every quantity is null.
+   */
+  private billingDispensedQuantities(items: PrescriptionItem[], invoices: LoadedInvoice[]): Array<number | null> {
+    const quantities = items.map(() => 0);
+    for (const invoice of invoices) {
+      if (invoice.items.length === 0) return items.map(() => null);
+      for (const billed of invoice.items) {
+        const matches = items.flatMap((item, index) => {
+          const sameInventory = item.inventoryItemId && billed.inventoryItemId && item.inventoryItemId === billed.inventoryItemId;
+          const sameDrug = item.drugId && billed.drug?.id && item.drugId === billed.drug.id;
+          const identifiersConflict = (item.drugId && billed.drug?.id && item.drugId !== billed.drug.id)
+            || (item.inventoryItemId && billed.inventoryItemId && item.inventoryItemId !== billed.inventoryItemId && !sameDrug);
+          if (identifiersConflict) return [];
+          const name = item.drugName || item.brandName || item.genericName || '';
+          const invoiceName = billed.drug?.name || '';
+          const exact = Boolean(this.normalizeName(name)) && this.normalizeName(name) === this.normalizeName(invoiceName);
+          const possible = sameInventory || sameDrug || this.namesMatch(name, invoiceName);
+          return possible ? [{ index, certain: Boolean(sameInventory || sameDrug || exact) }] : [];
+        });
+        if (matches.length !== 1 || !matches[0].certain || !Number.isFinite(billed.quantity) || billed.quantity < 0) {
+          return items.map(() => null);
+        }
+        quantities[matches[0].index] += billed.quantity;
+      }
+    }
+    return quantities;
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:product] queue-stock-available-units
+   * Every prescribed line MUST report current branch stock using saved inventory identity.
+   * Available quantity excludes held and expired units; expiry remains valid through its UTC
+   * calendar day. Failed reads MUST propagate instead of becoming zero-stock results.
+   */
+  private async stockCheckMedication(medication: QueueMedication, branchId: string): Promise<StockCheckResult> {
+    const resolved = await resolvePrescriptionInventory(this.prisma, medication, branchId);
+    if (!resolved) return {
+      drugName: medication.drugName, matchedDrug: null, inventoryItemId: null,
+      stockStatus: 'UNMATCHED', totalNonExpiredStock: 0, batches: [], lowStock: false,
+      nearExpiry: false, alternatives: [],
+      suggestions: await searchClinicInventory(this.prisma, medication.drugName, branchId, 5),
+    };
+    const { anchor, drug } = resolved;
     const now = new Date();
-    const nearExpiryCutoff = new Date(
-      now.getTime() + this.nearExpiryDays * 24 * 60 * 60 * 1000,
-    );
-    const batches = matchedDrug.inventoryItems
-      .filter(
-        (batch) =>
-          batch.currentStock > 0 &&
-          batch.stockStatus !== 'EXPIRED' &&
-          (!batch.expiryDate || batch.expiryDate >= now),
-      )
-      .sort((a, b) => this.compareExpiry(a.expiryDate, b.expiryDate))
-      .map((batch) => ({
-        id: batch.id,
-        batchNumber: batch.batchNumber,
-        currentStock: batch.currentStock,
-        expiryDate: batch.expiryDate,
-        sellingPrice: batch.sellingPrice,
-        mrp: batch.mrp,
-        stockStatus: batch.stockStatus,
-        storageLocation: batch.storageLocation,
-      }));
-    const totalNonExpiredStock = batches.reduce(
-      (sum, batch) => sum + batch.currentStock,
-      0,
-    );
-    const minStock = matchedDrug.minStockLevel ?? 0;
-    const lowStock = totalNonExpiredStock <= minStock;
-    const nearExpiry = batches.some(
-      (batch) => batch.expiryDate && batch.expiryDate <= nearExpiryCutoff,
-    );
-    const stockStatus =
-      totalNonExpiredStock <= 0
-        ? 'OUT_OF_STOCK'
-        : lowStock
-          ? 'LOW_STOCK'
-          : 'IN_STOCK';
-
-    let alternatives: unknown[] = [];
-    try {
-      alternatives = await this.drugService.getAlternatives(
-        matchedDrug.id,
-        branchId,
-      );
-    } catch {
-      alternatives = [];
-    }
-
+    const batches = resolved.batches.filter((b: any) => availableStock(b, now) > 0)
+      .sort((a: any, b: any) => this.compareExpiry(a.expiryDate, b.expiryDate) || a.id.localeCompare(b.id))
+      .map((b: any) => ({ ...b, currentStock: availableStock(b, now) }));
+    const quantity = batches.reduce((sum: number, b: any) => sum + b.currentStock, 0);
+    const thresholds = resolved.batches.map((b: any) => b.reorderLevel ?? b.minStockLevel).filter((n: any) => n != null);
+    const threshold = thresholds.length ? Math.max(...thresholds) : drug?.minStockLevel ?? 0;
+    const lowStock = quantity > 0 && quantity <= threshold;
     return {
-      drugName: medication.drugName,
-      matchedDrug: {
-        id: matchedDrug.id,
-        name: matchedDrug.name,
-        manufacturerName: matchedDrug.manufacturerName,
-      },
-      stockStatus,
-      totalNonExpiredStock,
-      batches,
-      lowStock,
-      nearExpiry,
-      alternatives,
+      drugName: medication.drugName, inventoryItemId: anchor.id, unit: anchor.unit,
+      matchedDrug: drug ? { id: drug.id, name: drug.name, manufacturerName: drug.manufacturerName } : null,
+      stockStatus: quantity === 0 ? 'OUT_OF_STOCK' : lowStock ? 'LOW_STOCK' : 'IN_STOCK',
+      totalNonExpiredStock: quantity,
+      totalOnHandStock: resolved.batches.reduce((n: number, b: any) => n + b.currentStock, 0),
+      heldStock: resolved.batches.reduce((n: number, b: any) => n + (b.heldStock || 0), 0),
+      expiredStock: resolved.batches.reduce((n: number, b: any) => n + (b.expiryDate && new Date(b.expiryDate) < new Date(now.toISOString().slice(0, 10)) ? b.currentStock : 0), 0),
+      batches, lowStock,
+      nearExpiry: batches.some((b: any) => b.expiryDate && new Date(b.expiryDate).getTime() <= now.getTime() + this.nearExpiryDays * 86400000),
+      alternatives: [], suggestions: [],
     };
   }
 
-  private async matchDrug(drugName: string, branchId: string) {
-    const baseWhere = {
-      branchId,
-      isActive: true,
-      isDiscontinued: false,
-    };
-    const select = {
-      id: true,
-      name: true,
-      manufacturerName: true,
-      minStockLevel: true,
-      inventoryItems: {
-        where: {
-          branchId,
-          status: 'ACTIVE',
-        },
-        select: {
-          id: true,
-          currentStock: true,
-          minStockLevel: true,
-          batchNumber: true,
-          expiryDate: true,
-          sellingPrice: true,
-          mrp: true,
-          stockStatus: true,
-          storageLocation: true,
-        },
-      },
-    };
+  async inventoryStock(inventoryItemId: string, branchId: string) {
+    return this.stockCheckMedication({ drugName: '', inventoryItemId } as QueueMedication, branchId);
+  }
 
-    const exact = (await this.prisma.drug.findFirst({
-      where: {
-        ...baseWhere,
-        name: {
-          equals: drugName,
-          mode: 'insensitive',
-        },
-      },
-      select,
-    })) as DrugMatch | null;
-    if (exact) return exact;
+  async inventorySuggestions(query: string, branchId: string) {
+    return searchClinicInventory(this.prisma, query, branchId);
+  }
 
-    return (await this.prisma.drug.findFirst({
-      where: {
-        ...baseWhere,
-        name: {
-          contains: drugName,
-          mode: 'insensitive',
-        },
-      },
-      orderBy: {
-        name: 'asc',
-      },
-      select,
-    })) as DrugMatch | null;
+  /**
+   * @cc [owner:nareshshah139,label:product] pharmacist-link-confirmation
+   * Only an explicitly selected active inventory item in the prescription's branch may become
+   * a remembered mapping, and its prescription revision MUST match the reviewed stock check.
+   * Mapping and actor/before-after audit MUST commit together, leave stock
+   * unchanged, and apply to the same source identity across patients in that branch.
+   */
+  async linkInventory(prescriptionId: string, index: number, inventoryItemId: string, branchId: string, userId: string, expectedVersion: string) {
+    if (!Number.isSafeInteger(index) || index < 0 || !inventoryItemId || !userId) throw new BadRequestException('Select a prescription line and inventory item');
+    await this.prisma.$transaction(async (tx) => {
+      const prescription = await tx.prescription.findFirst({ where: { id: prescriptionId, visit: { patient: { branchId } } } });
+      if (!prescription) throw new NotFoundException('Prescription not found in this branch');
+      if (!expectedVersion || prescription.updatedAt.toISOString() !== expectedVersion) throw new BadRequestException('Prescription changed. Refresh before linking inventory.');
+      const items = this.parsePrescriptionItems(prescription.items);
+      const source = items[index];
+      if (!source) throw new BadRequestException('Prescription line no longer exists');
+      const inventory = await tx.inventoryItem.findFirst({ where: { id: inventoryItemId, branchId, status: 'ACTIVE' }, include: inventoryIdentityInclude });
+      if (!inventory) throw new NotFoundException('Inventory item not found in this branch');
+      if (inventory.drugs.some(d => d.branchId !== branchId || !d.isActive || d.isDiscontinued)) throw new BadRequestException('Review inactive or invalid product links in Inventory first');
+      if (inventory.drugs.length > 1) throw new BadRequestException('This inventory item has multiple product links. Review duplicate products first.');
+      // Unmapped inventory is promoted to a clinic catalog product only after this explicit choice.
+      if (!inventory.drugs.length) await tx.drug.create({ data: {
+        name: inventory.name, price: inventory.sellingPrice, manufacturerName: inventory.manufacturer || '',
+        packSizeLabel: `${inventory.packSize || 1} ${inventory.packUnit || inventory.unit}`,
+        branchId, inventoryItems: { connect: { id: inventory.id } },
+      } });
+      const sourceKey = prescriptionSourceKey({ ...source, drugName: this.itemDrugName(source) });
+      const where = { branchId_sourceKey: { branchId, sourceKey } };
+      const previous = await tx.prescriptionInventoryLink.findUnique({ where });
+      const link = await tx.prescriptionInventoryLink.upsert({ where,
+        create: { branchId, sourceKey, sourceName: this.itemDrugName(source), inventoryItemId, linkedBy: userId },
+        update: { inventoryItemId, linkedBy: userId },
+      });
+      // Bind this historical prescription too, so a later alias edit cannot silently change it.
+      items[index] = { ...source, inventoryItemId };
+      await tx.prescription.update({ where: { id: prescription.id, updatedAt: prescription.updatedAt }, data: { items: JSON.stringify(items) } });
+      await tx.auditLog.create({ data: { userId, action: 'PRESCRIPTION_INVENTORY_LINKED', entity: 'PrescriptionInventoryLink', entityId: link.id,
+        oldValues: JSON.stringify(previous), newValues: JSON.stringify({ ...link, prescriptionId, lineIndex: index, reason: 'Pharmacist confirmed inventory match' }) } });
+    }, { isolationLevel: 'Serializable' });
+    return this.stockCheck(prescriptionId, branchId);
   }
 
   private parsePrescriptionItems(items: string): PrescriptionItem[] {
@@ -1126,6 +1262,11 @@ export class PharmacyPrescriptionQueueService {
     }
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product] infer-dispensing-units
+   * Explicit quantity wins. Otherwise infer only tablet or capsule counts from a
+   * recognized daily dose and duration; ambiguous strengths and schedules return null.
+   */
   private inferQuantity(item: PrescriptionItem): number | null {
     const explicitQuantity = this.toPositiveNumber(
       item.quantity ??
@@ -1135,8 +1276,23 @@ export class PharmacyPrescriptionQueueService {
     );
     if (explicitQuantity !== null) return explicitQuantity;
 
-    const perDay = this.frequencyToPerDay(item.frequency);
-    const duration = this.toPositiveNumber(item.duration);
+    const unit = this.normalizeName(item.dosageUnit || '');
+    if (!['tablet', 'tablets', 'capsule', 'capsules'].includes(unit)) return null;
+    const pattern = (item.dosePattern || '').trim();
+    let perDay: number | null;
+    if (/^\d+(?:\.\d+)?(?:\s*-\s*\d+(?:\.\d+)?){2,3}$/.test(pattern)) {
+      const doses = pattern.split('-').map((part) => Number(part.trim()));
+      const dose = this.strictPositiveNumber(item.dosage);
+      if (item.dosage != null && item.dosage !== '' && (dose === null || doses.some((n) => n > 0 && n !== dose))) return null;
+      if (item.frequency && this.frequencyToPerDay(item.frequency) !== doses.filter((n) => n > 0).length) return null;
+      perDay = doses.reduce((sum, part) => sum + part, 0);
+      if (perDay <= 0) return null;
+    } else {
+      const frequency = pattern ? this.frequencyToPerDay(pattern) : this.frequencyToPerDay(item.frequency);
+      const dose = this.strictPositiveNumber(item.dosage);
+      perDay = frequency !== null && dose !== null ? frequency * dose : null;
+    }
+    const duration = this.strictPositiveNumber(item.duration);
     const multiplier = this.durationToDaysMultiplier(item.durationUnit);
     if (perDay === null || duration === null || multiplier === null) {
       return null;
@@ -1150,20 +1306,30 @@ export class PharmacyPrescriptionQueueService {
     const map: Record<string, number> = {
       once_daily: 1,
       od: 1,
+      qd: 1,
+      once: 1,
+      hs: 1,
+      qhs: 1,
       daily: 1,
       twice_daily: 2,
       bid: 2,
       bd: 2,
+      twice: 2,
       three_times_daily: 3,
       tid: 3,
       tds: 3,
+      thrice: 3,
       four_times_daily: 4,
       qid: 4,
       qds: 4,
       every_12_hours: 2,
+      q12h: 2,
       every_8_hours: 3,
+      q8h: 3,
       every_6_hours: 4,
+      q6h: 4,
       every_4_hours: 6,
+      q4h: 6,
       weekly: 1 / 7,
       monthly: 1 / 30,
     };
@@ -1193,6 +1359,12 @@ export class PharmacyPrescriptionQueueService {
     if (value === undefined || value === null || value === '') return null;
     const parsed =
       typeof value === 'number' ? value : Number.parseFloat(String(value));
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  }
+
+  private strictPositiveNumber(value?: string | number | null): number | null {
+    if (value === undefined || value === null || String(value).trim() === '') return null;
+    const parsed = Number(value);
     return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
   }
 

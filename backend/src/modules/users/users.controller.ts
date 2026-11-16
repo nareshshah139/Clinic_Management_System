@@ -1,5 +1,8 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, Request, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, Request, UseGuards, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { MAX_SIGNATURE_BYTES } from './doctor-signature';
 import { ValidationPipe } from '@nestjs/common';
+import { UpdateTextSizeDto } from './dto/user.dto';
 import { UsersService } from './users.service';
 import { CreateUserDto, UpdateUserDto, ChangePasswordDto, ResetPasswordDto, SetPasswordDto, UpdateProfileDto, AssignRoleDto, UpdatePermissionsDto, UserStatusDto, CreateBranchDto, UpdateBranchDto, CreatePermissionDto, UpdatePermissionDto, CreateRoleDto, UpdateRoleDto } from './dto/user.dto';
 import { QueryUsersDto, QueryBranchesDto, QueryPermissionsDto, QueryRolesDto, UserStatisticsDto, UserActivityDto, UserDashboardDto } from './dto/query-user.dto';
@@ -17,6 +20,22 @@ interface AuthenticatedRequest {
 @UseGuards(JwtAuthGuard)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
+
+  @Post('me/signature')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_SIGNATURE_BYTES, files: 1 } }))
+  uploadOwnSignature(@Request() req: AuthenticatedRequest, @UploadedFile() file?: Express.Multer.File) {
+    return this.usersService.uploadOwnSignature(req.user, file);
+  }
+
+  @Delete('me/signature')
+  removeOwnSignature(@Request() req: AuthenticatedRequest) {
+    return this.usersService.removeOwnSignature(req.user);
+  }
+
+  @Get(':id/signature')
+  getDoctorSignature(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
+    return this.usersService.getDoctorSignature(id, req.user.branchId);
+  }
 
   // User Management Endpoints
   @Post()
@@ -67,6 +86,11 @@ export class UsersController {
   @Post('set-password')
   setPassword(@Body() setPasswordDto: SetPasswordDto) {
     return this.usersService.setPassword(setPasswordDto);
+  }
+
+  @Patch(':id/text-size')
+  updateTextSize(@Param('id') id: string, @Body(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true })) dto: UpdateTextSizeDto, @Request() req: AuthenticatedRequest) {
+    return this.usersService.updateTextSize(id, dto.textSize, req.user);
   }
 
   @Patch(':id/profile')

@@ -591,6 +591,11 @@ export class InventoryImportService {
     };
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product] opening-import-existing-batch-preserved
+   * Importing an existing batch MUST NOT write its quantity or overwrite a newer revision.
+   * A different existing product link MUST reject the row atomically instead of creating ambiguity.
+   */
   private async upsertImportRow(
     row: InventoryStarterImportRow,
     branchId: string,
@@ -756,6 +761,8 @@ export class InventoryImportService {
           drugs: { some: { id: drug.id } },
         },
       });
+      if (await tx.inventoryItem.count({ where: { id: existingInventory.id, drugs: { some: { id: { not: drug.id } } } } }))
+        throw new BadRequestException('This batch is linked to another product. Review its product identity before importing.');
       const updatePayload: any = {
         name: row.name,
         description: row.description,
@@ -794,10 +801,6 @@ export class InventoryImportService {
       if (row.hasCostPrice) updatePayload.costPrice = row.costPrice;
       if (row.hasSellingPrice) updatePayload.sellingPrice = row.sellingPrice;
       if (row.hasMrp) updatePayload.mrp = row.mrp;
-      if (row.hasCurrentStock) {
-        updatePayload.currentStock = row.currentStock;
-        updatePayload.stockStatus = stockStatus;
-      }
       if (isDrugLinked === 0) {
         updatePayload.drugs = {
           connect: { id: drug.id },
@@ -805,7 +808,9 @@ export class InventoryImportService {
       }
 
       await tx.inventoryItem.update({
-        where: { id: existingInventory.id },
+        where: { id: existingInventory.id, branchId, updatedAt: existingInventory.updatedAt,
+          currentStock: existingInventory.currentStock, heldStock: existingInventory.heldStock,
+          metadata: existingInventory.metadata },
         data: updatePayload,
       });
 
@@ -839,7 +844,7 @@ export class InventoryImportService {
         drugCreated: !existingDrug,
         stockAdjusted,
       };
-    });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   }
 
   private normalizeImportRow(sourceRow: Record<string, unknown>) {

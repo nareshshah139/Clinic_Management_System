@@ -7,6 +7,7 @@ export type WorkflowLine = {
   id: string; inventoryId: string; name?: string; batchNumber?: string; expiryDate?: string;
   unit?: string; quantity: number; freeQuantity?: number; unitPrice?: number; mrp?: number;
   discountPercent?: number; schemeAmount?: number; gstRate?: number; sourceLineId?: string;
+  countedBatchNumber?: string; countedExpiryDate?: string; countRevision?: string;
   physicalStock?: number; systemStock?: number; disposition?: 'RESTOCK' | 'QUARANTINE' | 'LOSS';
   minStockLevel?: number; maxStockLevel?: number; beforeMin?: number | null; beforeMax?: number | null;
   originalTerms?: Record<string,any>; fefoOverrideReason?:string;
@@ -25,7 +26,7 @@ export class SaveWorkflowDocumentDto {
 }
 export class TransitionWorkflowDto {
   @IsInt() @Min(1) version: number;
-  @IsIn(['SUBMIT', 'APPROVE', 'REJECT', 'CHALLAN', 'POST', 'CANCEL', 'RELEASE', 'REVERSE', 'ACCEPT', 'CREATE_PO', 'CONVERT_SALE']) action: string;
+  @IsIn(['SUBMIT', 'APPROVE', 'REJECT', 'CHALLAN', 'POST', 'CANCEL', 'RELEASE', 'REVERSE', 'RECOUNT', 'ACCEPT', 'CREATE_PO', 'CONVERT_SALE']) action: string;
   @IsOptional() @IsString() reason?: string;
   @IsOptional() @IsArray() @IsString({ each: true }) lineIds?: string[];
 }

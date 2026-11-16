@@ -1,5 +1,11 @@
+import { medicinePresentationData } from './medicine-presentation';
+import { formatMedicineName } from '@cms/shared-types/medicine-name';
 import { autocompleteDrugCatalog } from '../../shared/search/drug-search';
-import { purchaseCatalogIssues } from './purchase-product-catalog';
+import { loadInventoryGstRates } from './pharmacy-inventory-gst';
+import { purchaseCatalogIssues, purchaseProductKind } from './purchase-product-catalog';
+import { writeStockMovement } from '../inventory/inventory-stock';
+import { availableStock, stockIdentityKey, searchClinicInventory } from './pharmacy-stock-identity';
+import { isDeepStrictEqual } from 'node:util';
 import {
   Injectable,
   NotFoundException,
@@ -20,7 +26,6 @@ import {
   DrugInventoryChangeRequestStatus,
   InventoryStatus,
   Prisma,
-  StockStatus,
   TransactionType,
   UserRole,
 } from '@prisma/client';
@@ -29,19 +34,27 @@ import {
 export class DrugService {
   constructor(private prisma: PrismaService) {}
 
+  /**
+   * @cc [owner:nareshshah139,label:product] optional-drug-identifiers
+   * Creating a drug with a blank barcode or SKU MUST store that identifier as null so multiple
+   * drugs may omit it; nonblank identifiers remain subject to uniqueness checks.
+   */
   async create(createDrugDto: CreateDrugDto, branchId: string) {
     try {
+      if (purchaseProductKind(createDrugDto.type) === 'MEDICINE') Object.assign(createDrugDto, medicinePresentationData(createDrugDto));
       this.assertProductMasterComplete(createDrugDto);
+      const barcode = createDrugDto.barcode?.trim() || null;
+      const sku = createDrugDto.sku?.trim() || null;
 
       // Duplicate checks: barcode/SKU, and soft match by name+manufacturer in same branch
       const dup = await this.prisma.drug.findFirst({
         where: {
           branchId,
           OR: [
-            createDrugDto.barcode
-              ? { barcode: createDrugDto.barcode }
+            barcode
+              ? { barcode }
               : undefined,
-            createDrugDto.sku ? { sku: createDrugDto.sku } : undefined,
+            sku ? { sku } : undefined,
             {
               AND: [
                 { name: { equals: createDrugDto.name, mode: 'insensitive' } },
@@ -58,12 +71,12 @@ export class DrugService {
       });
 
       if (dup) {
-        if (createDrugDto.barcode && dup.barcode === createDrugDto.barcode) {
+        if (barcode && dup.barcode === barcode) {
           throw new ConflictException(
             'A drug with this barcode already exists',
           );
         }
-        if (createDrugDto.sku && dup.sku === createDrugDto.sku) {
+        if (sku && dup.sku === sku) {
           throw new ConflictException('A drug with this SKU already exists');
         }
         // Same name+manufacturer — treat as duplicate
@@ -75,6 +88,8 @@ export class DrugService {
       const drug = await this.prisma.drug.create({
         data: {
           ...createDrugDto,
+          barcode,
+          sku,
           branchId,
         },
         include: {
@@ -207,6 +222,7 @@ export class DrugService {
         this.prisma.drug.count({ where }),
       ]);
 
+      const gstRates = await loadInventoryGstRates(this.prisma, drugs.map(drug => drug.id), branchId);
       const enrichedDrugs = drugs.map((drug) => {
         const inventoryItems = drug.inventoryItems || [];
         const totalStock = inventoryItems.reduce(
@@ -216,6 +232,8 @@ export class DrugService {
         const primaryInventoryItem = inventoryItems[0] || null;
         return {
           ...drug,
+          displayName: formatMedicineName(drug.name, drug),
+          gstRate: gstRates.get(drug.id) ?? null,
           totalStock,
           primaryInventoryItemId: primaryInventoryItem?.id || null,
           primaryStockStatus: primaryInventoryItem?.stockStatus || null,
@@ -236,6 +254,11 @@ export class DrugService {
     }
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product] billing-drug-detail-inventory-gst
+   * A branch-scoped product lookup MUST expose its Inventory GST rate, including zero.
+   * Missing or conflicting inventory rates MUST remain null for pharmacist review.
+   */
   async findOne(id: string, branchId: string) {
     try {
       const drug = await this.prisma.drug.findFirst({
@@ -297,7 +320,8 @@ export class DrugService {
         throw new NotFoundException('Drug not found');
       }
 
-      return drug;
+      const rates = await loadInventoryGstRates(this.prisma, [drug.id], branchId);
+      return { ...drug, displayName: formatMedicineName(drug.name, drug), gstRate: rates.get(drug.id) ?? null };
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
@@ -328,10 +352,13 @@ export class DrugService {
         updateDrugDto.price !== existingDrug.price
       ) {
         throw new BadRequestException(
-          'Pharmacist price edits must be submitted through Inventory Updates for doctor approval.',
+          'Pharmacist price edits must be submitted from Inventory Stock for doctor or admin approval.',
         );
       }
 
+      if (purchaseProductKind(updateDrugDto.type ?? existingDrug.type) === 'MEDICINE' && ['name','brandName','dosageForm','strength','combinationProduct','dispenseLoose','itemCode'].some(key => (updateDrugDto as any)[key] !== undefined)) {
+        Object.assign(updateDrugDto, medicinePresentationData({ ...existingDrug, ...updateDrugDto }));
+      }
       this.assertProductMasterComplete(updateDrugDto, existingDrug);
 
       // Check for duplicate barcode or SKU (excluding current drug)
@@ -389,8 +416,13 @@ export class DrugService {
     branchId: string,
     requestedById: string,
   ) {
+    if (dto.changes.some(change => change.scope === 'BATCH')) {
+      if (dto.changes.length !== 1) throw new BadRequestException('Submit one batch edit at a time.');
+      return this.createBatchChangeRequest(dto.changes[0], branchId, requestedById);
+    }
+    if (dto.changes.some(change => !change.drugId)) throw new BadRequestException('A drug ID is required for product-total edits.');
     const dedupedDrugIds = Array.from(
-      new Set(dto.changes.map((change) => change.drugId)),
+      new Set(dto.changes.map((change) => change.drugId!)),
     );
 
     if (dedupedDrugIds.length !== dto.changes.length) {
@@ -411,15 +443,7 @@ export class DrugService {
             branchId,
             status: InventoryStatus.ACTIVE,
           },
-          select: {
-            id: true,
-            currentStock: true,
-            stockStatus: true,
-            reorderLevel: true,
-            minStockLevel: true,
-            expiryDate: true,
-            updatedAt: true,
-          },
+          include: { drugs: { select: { id: true } } },
           orderBy: {
             updatedAt: 'desc',
           },
@@ -454,7 +478,7 @@ export class DrugService {
     if (existingPending.length > 0) {
       throw new ConflictException(
         `Pending inventory request already exists for ${existingPending
-          .map((request) => request.drug.name)
+          .map((request) => request.drug?.name || 'this item')
           .join(', ')}.`,
       );
     }
@@ -464,7 +488,7 @@ export class DrugService {
 
     const created = await this.prisma.$transaction(
       dto.changes.map((change) => {
-        const drug = drugById.get(change.drugId);
+        const drug = drugById.get(change.drugId!);
         if (!drug) {
           throw new NotFoundException(`Drug not found: ${change.drugId}`);
         }
@@ -481,6 +505,9 @@ export class DrugService {
         const hasStockChange =
           proposedStock !== undefined &&
           proposedStock !== stockSnapshot.totalStock;
+        const savedSnapshot = hasStockChange
+          ? this.inventoryApprovalSnapshot(drug.inventoryItems, drug.id)
+          : undefined;
 
         if (!hasPriceChange && !hasStockChange) {
           throw new BadRequestException(
@@ -499,6 +526,7 @@ export class DrugService {
             proposedPrice: hasPriceChange ? proposedPrice : null,
             currentStock: hasStockChange ? stockSnapshot.totalStock : null,
             proposedStock: hasStockChange ? proposedStock : null,
+            stockSnapshot: savedSnapshot,
             reason: change.reason?.trim() || null,
             createdAt: now,
           },
@@ -533,6 +561,7 @@ export class DrugService {
     if (search?.trim()) {
       const term = search.trim();
       where.OR = [
+        { inventoryItem: { name: { contains: term, mode: 'insensitive' } } },
         { drug: { name: { contains: term, mode: 'insensitive' } } },
         {
           drug: {
@@ -568,58 +597,77 @@ export class DrugService {
     };
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product] inventory-approval-atomic-claim
+   * Only a pending branch request may be approved. Its status, unchanged price basis,
+   * stock change and signed ledger movement MUST commit together once; concurrent changes fail.
+   */
   async approveInventoryChangeRequest(
     id: string,
     dto: ReviewDrugInventoryChangeRequestDto,
     branchId: string,
     reviewedById: string,
   ) {
-    return this.prisma.$transaction(async (tx) => {
-      const request = await tx.drugInventoryChangeRequest.findFirst({
-        where: { id, branchId },
-        include: {
-          drug: true,
-          inventoryItem: true,
-        },
-      });
-
-      if (!request) {
-        throw new NotFoundException('Inventory change request not found');
-      }
-
-      if (request.status !== DrugInventoryChangeRequestStatus.PENDING) {
-        throw new ConflictException(
-          'Only pending inventory change requests can be approved.',
-        );
-      }
-
-      if (request.proposedPrice !== null && request.proposedPrice !== undefined) {
-        await tx.drug.update({
-          where: { id: request.drugId },
-          data: { price: request.proposedPrice },
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const request = await tx.drugInventoryChangeRequest.findFirst({
+          where: { id, branchId },
+          include: {
+            drug: true,
+            inventoryItem: true,
+          },
         });
-      }
 
-      if (request.proposedStock !== null && request.proposedStock !== undefined) {
-        await this.applyApprovedStockChange(
-          tx,
-          request,
-          branchId,
-          reviewedById,
-        );
-      }
+        if (!request) {
+          throw new NotFoundException('Inventory change request not found');
+        }
 
-      return tx.drugInventoryChangeRequest.update({
-        where: { id },
-        data: {
-          status: DrugInventoryChangeRequestStatus.APPROVED,
-          reviewedById,
-          reviewNote: dto.reviewNote?.trim() || null,
-          reviewedAt: new Date(),
-        },
-        include: this.inventoryChangeRequestInclude(),
-      });
-    });
+        if (request.status !== DrugInventoryChangeRequestStatus.PENDING) {
+          throw new ConflictException(
+            'Only pending inventory change requests can be approved.',
+          );
+        }
+
+        const batchEdit = (request.stockSnapshot as any)?.scope === 'BATCH';
+        if (!batchEdit && (!request.drugId || !request.drug)) throw new ConflictException('Product link missing. Reject this legacy request and resubmit from Stock.');
+        if (batchEdit) {
+          await this.applyApprovedBatchChange(tx, request, branchId, reviewedById);
+        } else if (request.proposedPrice !== null && request.proposedPrice !== undefined) {
+          if (request.currentPrice !== request.drug!.price) {
+            throw new ConflictException('Price changed since this request. Reject it and resubmit.');
+          }
+          await tx.drug.update({
+            where: { id: request.drugId!, branchId, price: request.currentPrice },
+            data: { price: request.proposedPrice },
+          });
+        }
+
+        if (!batchEdit && request.proposedStock !== null && request.proposedStock !== undefined) {
+          await this.applyApprovedStockChange(
+            tx,
+            { ...request, drugId: request.drugId!, drug: request.drug! },
+            branchId,
+            reviewedById,
+          );
+        }
+
+        return tx.drugInventoryChangeRequest.update({
+          where: { id, branchId, status: DrugInventoryChangeRequestStatus.PENDING },
+          data: {
+            status: DrugInventoryChangeRequestStatus.APPROVED,
+            reviewedById,
+            reviewNote: dto.reviewNote?.trim() || null,
+            reviewedAt: new Date(),
+          },
+          include: this.inventoryChangeRequestInclude(),
+        });
+      }, { isolationLevel: 'Serializable' });
+    } catch (error) {
+      if (['P2025', 'P2034'].includes((error as any)?.code)) {
+        throw new ConflictException('Request or inventory changed. Refresh before reviewing again.');
+      }
+      throw error;
+    }
   }
 
   async rejectInventoryChangeRequest(
@@ -642,8 +690,9 @@ export class DrugService {
       );
     }
 
-    return this.prisma.drugInventoryChangeRequest.update({
-      where: { id },
+    try {
+      return await this.prisma.drugInventoryChangeRequest.update({
+      where: { id, branchId, status: DrugInventoryChangeRequestStatus.PENDING },
       data: {
         status: DrugInventoryChangeRequestStatus.REJECTED,
         reviewedById,
@@ -651,7 +700,11 @@ export class DrugService {
         reviewedAt: new Date(),
       },
       include: this.inventoryChangeRequestInclude(),
-    });
+      });
+    } catch (error) {
+      if ((error as any)?.code === 'P2025') throw new ConflictException('Request was already reviewed. Refresh the approval queue.');
+      throw error;
+    }
   }
 
   async remove(id: string, branchId: string) {
@@ -696,11 +749,15 @@ export class DrugService {
   /**
    * @cc [owner:nareshshah139,label:product] drug-autocomplete-shared-search
    * Autocomplete MUST use the shared product matcher and branch-scoped active catalogue
-   * candidates. Ingredient/name modes MUST restrict matches to their requested fields. It MUST
+   * candidates, or only linked clinic inventory when clinicInventoryOnly is true. Ingredient/name modes MUST restrict matches to their requested fields. It MUST
    * rank before limiting results and MUST NOT change products, prices, mappings or stock.
    */
   async autocomplete(query: DrugAutocompleteDto, branchId: string) {
-    return autocompleteDrugCatalog(this.prisma, query, branchId);
+    if (query.clinicInventoryOnly) return (await searchClinicInventory(this.prisma, query.q || '', branchId, Number(query.limit) || 20)).filter(row => row.id);
+
+    const drugs = await autocompleteDrugCatalog(this.prisma, query, branchId);
+    const gstRates = await loadInventoryGstRates(this.prisma, drugs.map(drug => drug.id), branchId);
+    return drugs.map(drug => ({ ...drug, gstRate: gstRates.get(drug.id) ?? null }));
   }
 
   async getCategories(branchId: string) {
@@ -780,6 +837,11 @@ export class DrugService {
     }
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product] alternatives-available-stock-only
+   * Alternative quantities MUST exclude holds and expired batches, accepting expiry through
+   * its calendar day. Ambiguous product links or mixed stock units/packs MUST not be aggregated.
+   */
   async getAlternatives(id: string, branchId: string) {
     try {
       const source = await this.prisma.drug.findFirst({
@@ -819,7 +881,6 @@ export class DrugService {
         );
       }
 
-      const now = new Date();
       const alternatives = await this.prisma.drug.findMany({
         where: {
           branchId,
@@ -845,7 +906,13 @@ export class DrugService {
             },
             select: {
               id: true,
+              status: true,
               currentStock: true,
+              heldStock: true,
+              unit: true,
+              packSize: true,
+              packUnit: true,
+              drugs: { select: { id: true } },
               batchNumber: true,
               expiryDate: true,
               mrp: true,
@@ -861,12 +928,11 @@ export class DrugService {
 
       return alternatives
         .map((drug) => {
+          const unambiguous = drug.inventoryItems.every(batch =>
+            batch.drugs.length === 1 && batch.drugs[0].id === drug.id,
+          ) && new Set(drug.inventoryItems.map(stockIdentityKey)).size === 1;
           const usableBatches = drug.inventoryItems
-            .filter(
-              (batch) =>
-                batch.stockStatus !== 'EXPIRED' &&
-                (!batch.expiryDate || batch.expiryDate >= now),
-            )
+            .filter(batch => unambiguous && availableStock(batch) > 0)
             .sort((a, b) => {
               const aExpiry = a.expiryDate
                 ? a.expiryDate.getTime()
@@ -877,7 +943,7 @@ export class DrugService {
               return aExpiry - bExpiry;
             });
           const totalStock = usableBatches.reduce(
-            (sum, batch) => sum + batch.currentStock,
+            (sum, batch) => sum + availableStock(batch),
             0,
           );
           const nearestBatch = usableBatches[0];
@@ -1015,6 +1081,7 @@ export class DrugService {
           id: true,
           name: true,
           currentStock: true,
+          unit: true,
           stockStatus: true,
           batchNumber: true,
           expiryDate: true,
@@ -1038,6 +1105,97 @@ export class DrugService {
         },
       },
     } satisfies Prisma.DrugInventoryChangeRequestInclude;
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:product] batch-edit-snapshot
+   * Batch edit snapshots MUST retain identity, revision, stock, holds, selling price and linked
+   * drug prices, so approval detects concurrent changes without inferring a catalog match.
+   */
+  private batchEditSnapshot(item: any) {
+    return {
+      scope: 'BATCH', id: item.id, updatedAt: new Date(item.updatedAt).toISOString(),
+      currentStock: item.currentStock, heldStock: item.heldStock, sellingPrice: item.sellingPrice,
+      unit: item.unit, status: item.status,
+      drugs: item.drugs.map((drug: any) => ({ id: drug.id, price: drug.price })).sort((a: any, b: any) => a.id.localeCompare(b.id)),
+    };
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:product] batch-edit-awaits-approval
+   * A batch edit MUST use an exact item in the authenticated branch, a matching displayed
+   * revision and a nonblank reason. Submission MUST only create a pending request, including
+   * for unlinked items; conflicting pending item/product edits and ambiguous price links fail.
+   */
+  private async createBatchChangeRequest(change: CreateDrugInventoryChangeRequestDto['changes'][number], branchId: string, requestedById: string) {
+    if (!change.inventoryItemId || !change.reason?.trim() || !change.expectedUpdatedAt) {
+      throw new BadRequestException('Select a batch and provide its current revision and an invoice or shelf-count reason.');
+    }
+    return this.prisma.$transaction(async tx => {
+      const item = await tx.inventoryItem.findFirst({
+        where: { id: change.inventoryItemId, branchId },
+        include: { drugs: { select: { id: true, price: true, branchId: true } } },
+      });
+      if (!item) throw new NotFoundException('Clinic inventory item not found.');
+      if (new Date(item.updatedAt).toISOString() !== change.expectedUpdatedAt) throw new ConflictException('Batch changed. Refresh before editing.');
+      const price = change.proposedPrice, stock = change.proposedStock;
+      if (price !== undefined && (!Number.isFinite(price) || price < 0) || stock !== undefined && (!Number.isSafeInteger(stock) || stock < 0)) {
+        throw new BadRequestException('Price must be nonnegative and stock must be a nonnegative whole number.');
+      }
+      const priceChanged = price !== undefined && price !== item.sellingPrice;
+      const stockChanged = stock !== undefined && stock !== item.currentStock;
+      if (!priceChanged && !stockChanged) throw new BadRequestException('Change the price or stock before submitting.');
+      if (stockChanged && stock! < item.heldStock) throw new BadRequestException('Physical stock cannot be below held stock.');
+      if (priceChanged && (item.drugs.length > 1 || item.drugs.some(drug => drug.branchId !== branchId))) {
+        throw new BadRequestException('Resolve ambiguous product links before editing the price.');
+      }
+      const pending = await tx.drugInventoryChangeRequest.findFirst({ where: {
+        branchId, status: 'PENDING', OR: [
+          { inventoryItemId: item.id },
+          ...(item.drugs.length ? [{ drugId: { in: item.drugs.map(drug => drug.id) } }] : []),
+        ],
+      } });
+      if (pending) throw new ConflictException('A price/stock edit for this item is already awaiting approval.');
+      const request = await tx.drugInventoryChangeRequest.create({ data: {
+        branchId, inventoryItemId: item.id, drugId: item.drugs.length === 1 ? item.drugs[0].id : null,
+        requestedById, currentPrice: priceChanged ? item.sellingPrice : null,
+        proposedPrice: priceChanged ? price : null, currentStock: stockChanged ? item.currentStock : null,
+        proposedStock: stockChanged ? stock : null, reason: change.reason!.trim(),
+        stockSnapshot: this.batchEditSnapshot(item),
+      }, include: this.inventoryChangeRequestInclude() });
+      return { data: [request], summary: { submitted: 1 } };
+    }, { isolationLevel: 'Serializable' });
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:product] approved-batch-edit-exact-item
+   * Approval MUST reject changed snapshots, preserve holds and every other batch, and commit
+   * the selected item's price/count, exact signed stock movement and request status atomically.
+   * A uniquely linked drug's price MUST follow an approved selling price; unlinked edits MUST
+   * NOT create or guess a catalog identity.
+   */
+  private async applyApprovedBatchChange(tx: Prisma.TransactionClient, request: any, branchId: string, reviewedById: string) {
+    const item = await tx.inventoryItem.findFirst({
+      where: { id: request.inventoryItemId, branchId },
+      include: { drugs: { select: { id: true, price: true, branchId: true } } },
+    });
+    if (!item || !isDeepStrictEqual(this.batchEditSnapshot(item), request.stockSnapshot)) {
+      throw new ConflictException('Batch changed since this request. Reject it and resubmit after checking the stock and price.');
+    }
+    if (request.proposedStock != null) {
+      if (request.proposedStock < item.heldStock) throw new BadRequestException('Physical stock cannot be below held stock.');
+      const delta = request.proposedStock - item.currentStock;
+      if (delta) await writeStockMovement(tx, {
+        itemId: item.id, branchId, userId: reviewedById, type: TransactionType.ADJUSTMENT, delta,
+        reason: request.reason, reference: `INVENTORY-APPROVAL-${request.id}`,
+        notes: `Approved batch count ${request.id}`,
+      });
+    }
+    if (request.proposedPrice != null) {
+      if (item.drugs.length > 1 || item.drugs.some(drug => drug.branchId !== branchId)) throw new ConflictException('Product links changed. Review the item before editing its price.');
+      await tx.inventoryItem.update({ where: { id: item.id, branchId }, data: { sellingPrice: request.proposedPrice } });
+      if (item.drugs.length === 1) await tx.drug.update({ where: { id: item.drugs[0].id, branchId }, data: { price: request.proposedPrice } });
+    }
   }
 
   private resolveStockSnapshot(
@@ -1070,6 +1228,34 @@ export class DrugService {
     };
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product] inventory-approval-batch-snapshot
+   * Aggregate count requests MUST snapshot every linked active batch's balance, hold, revision
+   * and unit basis. Ambiguous product links or different unit/pack bases MUST reject the request.
+   */
+  private inventoryApprovalSnapshot(items: any[], drugId: string) {
+    const bases = new Set(items.map(item => JSON.stringify([item.unit, item.packSize ?? null, item.packUnit ?? null])));
+    if (bases.size !== 1 || items.some(item => item.drugs?.length !== 1 || item.drugs[0].id !== drugId)) {
+      throw new BadRequestException('Stock units, packs or product links differ. Use a batch-specific physical count.');
+    }
+    return [...items].sort((a, b) => a.id.localeCompare(b.id)).map(item => ({
+      id: item.id,
+      currentStock: item.currentStock,
+      heldStock: item.heldStock,
+      updatedAt: new Date(item.updatedAt).toISOString(),
+      unit: item.unit,
+      packSize: item.packSize ?? null,
+      packUnit: item.packUnit ?? null,
+      drugId,
+    }));
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:product] approved-count-preserves-stock-history
+   * Approval MUST reject missing or changed batch snapshots and counts below held stock.
+   * A nonzero count change MUST write the exact signed on-hand delta with before/after balances
+   * in the approval transaction, preserving all other batches and holds; unchanged counts write no movement.
+   */
   private async applyApprovedStockChange(
     tx: Prisma.TransactionClient,
     request: {
@@ -1077,6 +1263,7 @@ export class DrugService {
       drugId: string;
       inventoryItemId: string | null;
       proposedStock: number | null;
+      stockSnapshot?: Prisma.JsonValue;
       drug: { name: string };
     },
     branchId: string,
@@ -1094,15 +1281,7 @@ export class DrugService {
           some: { id: request.drugId },
         },
       },
-      select: {
-        id: true,
-        currentStock: true,
-        costPrice: true,
-        reorderLevel: true,
-        minStockLevel: true,
-        expiryDate: true,
-        updatedAt: true,
-      },
+      include: { drugs: { select: { id: true } } },
       orderBy: {
         updatedAt: 'desc',
       },
@@ -1118,6 +1297,14 @@ export class DrugService {
       );
     }
 
+    if (!request.stockSnapshot) {
+      throw new ConflictException('This request has no stock snapshot. Reject it and resubmit the count.');
+    }
+    const snapshot = this.inventoryApprovalSnapshot(inventoryItems, request.drugId);
+    if (!isDeepStrictEqual(snapshot, request.stockSnapshot)) {
+      throw new ConflictException('Inventory changed since this count. Reject it and resubmit after recounting.');
+    }
+
     const currentTotalStock = inventoryItems.reduce(
       (sum, item) => sum + Number(item.currentStock || 0),
       0,
@@ -1129,57 +1316,19 @@ export class DrugService {
     }
 
     const newTargetStock = Number(targetItem.currentStock || 0) + stockDelta;
-    if (newTargetStock < 0) {
+    if (newTargetStock < targetItem.heldStock) {
       throw new BadRequestException(
-        `Cannot set total stock for ${request.drug.name} to ${request.proposedStock}; other linked batches already exceed that value.`,
+        `Cannot set total stock for ${request.drug.name} to ${request.proposedStock}; preserve held stock and the other linked batches.`,
       );
     }
 
-    await tx.inventoryItem.update({
-      where: { id: targetItem.id },
-      data: {
-        currentStock: newTargetStock,
-        stockStatus: this.deriveStockStatus({
-          currentStock: newTargetStock,
-          reorderLevel: targetItem.reorderLevel,
-          minStockLevel: targetItem.minStockLevel,
-          expiryDate: targetItem.expiryDate,
-        }),
-      },
+    await writeStockMovement(tx, {
+      itemId: targetItem.id, branchId, userId: reviewedById,
+      type: TransactionType.ADJUSTMENT, delta: stockDelta,
+      reason: 'Approved inventory update',
+      reference: `INVENTORY-APPROVAL-${request.id}`,
+      notes: `Inventory change request ${request.id}`,
     });
-
-    await tx.stockTransaction.create({
-      data: {
-        itemId: targetItem.id,
-        branchId,
-        userId: reviewedById,
-        type: TransactionType.ADJUSTMENT,
-        quantity: Math.abs(stockDelta),
-        unitPrice: Number(targetItem.costPrice || 0),
-        totalAmount: Math.abs(stockDelta) * Number(targetItem.costPrice || 0),
-        reason: 'Doctor-approved inventory update',
-        notes: `Inventory change request ${request.id}`,
-      },
-    });
-  }
-
-  private deriveStockStatus(input: {
-    currentStock: number;
-    reorderLevel?: number | null;
-    minStockLevel?: number | null;
-    expiryDate?: Date | null;
-  }) {
-    if (input.expiryDate && input.expiryDate < new Date()) {
-      return StockStatus.EXPIRED;
-    }
-    if (input.currentStock <= 0) {
-      return StockStatus.OUT_OF_STOCK;
-    }
-    const lowStockThreshold = input.reorderLevel ?? input.minStockLevel;
-    if (lowStockThreshold && input.currentStock <= lowStockThreshold) {
-      return StockStatus.LOW_STOCK;
-    }
-    return StockStatus.IN_STOCK;
   }
 
   private assertProductMasterComplete(
@@ -1192,6 +1341,7 @@ export class DrugService {
       category?: string | null;
       dosageForm?: string | null;
       strength?: string | null;
+      combinationProduct?: boolean;
     },
   ): void {
     const candidate = {
