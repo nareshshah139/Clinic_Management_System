@@ -20,6 +20,9 @@ import {
   requestKey,
 } from "./workspace-model";
 import { NativeSelect } from '@/components/ui/native-select';
+import { useVoiceBarForm } from '@/components/voice/VoiceBarProvider';
+import { inventoryVoiceDraftLines } from '@/lib/voice-fill-inventory';
+import type { VoiceFillFields } from '@/lib/voice-fill';
 
 type Props = {
   query: Record<string, string>;
@@ -68,6 +71,10 @@ type Props = {
  * A batch that needs a count or identity correction MUST show its recovery reference and the
  * required colleague access when the current user lacks count-write permission.
  */
+/**
+ * @cc [owner:nareshshah139,label:product] inventory-voice-prefill-never-saves
+ * A voice draft applied on the stock list MUST only open the add-item dialog with the kept fields filled and a visible note, and MUST NOT create or change an item until the user saves that dialog.
+ */
 export function WorkspaceStock({
   query,
   navigate,
@@ -92,11 +99,25 @@ export function WorkspaceStock({
     [moreColumns, setMoreColumns] = useState(false),
     [search, setSearch] = useState(query.search || ""),
     [add, setAdd] = useState(false),
+    [voiceFields, setVoiceFields] = useState<VoiceFillFields | null>(null),
     [selected, setSelected] = useState<string[]>([]),
     [notice, setNotice] = useState(""),
     [location, setLocation] = useState(""),
     [locationReason, setLocationReason] = useState(""),
     [showLocation, setShowLocation] = useState(false);
+  const voiceBar = useVoiceBarForm(capabilities?.itemCreate && !itemId && !stockEdit ? {
+    form: 'inventory-item',
+    label: 'New stock item',
+    hint: 'Say or type a new item, e.g. Paracetamol tablet 500 mg, batch B12, expiry 2027-06-30, MRP 30',
+    scope: 'inventory-stock-list',
+    preview: inventoryVoiceDraftLines,
+    apply: (fields) => {
+      const filled = inventoryVoiceDraftLines(fields).map(({ label }) => ({ label }));
+      setVoiceFields(fields);
+      setAdd(true);
+      return { filled, undo: null };
+    },
+  } : null);
   const load = async () => {
     if (itemId) return;
     setBusy(true);
@@ -719,7 +740,8 @@ export function WorkspaceStock({
           </div>
           <AddInventoryItemDialog
             open={add}
-            onOpenChange={setAdd}
+            onOpenChange={(next) => { setAdd(next); if (!next) { setVoiceFields(null); voiceBar.settle(); } }}
+            voiceFields={voiceFields}
             onSuccess={load}
           />
       </>

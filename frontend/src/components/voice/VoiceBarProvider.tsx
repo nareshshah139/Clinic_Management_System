@@ -81,7 +81,7 @@ export function useVoiceBar(): Pick<VoiceBarContextValue, 'active' | 'state' | '
 }
 
 /** Registers the page's form with the bar while mounted. Outside a provider it does nothing. */
-export function useVoiceBarForm(form: VoiceBarForm | null): { busy: boolean } {
+export function useVoiceBarForm(form: VoiceBarForm | null): { busy: boolean; settle: () => void } {
   const context = useContext(VoiceBarContext);
   const formRef = useRef(form);
   if (form) formRef.current = form;
@@ -105,5 +105,13 @@ export function useVoiceBarForm(form: VoiceBarForm | null): { busy: boolean } {
   const state = context?.state;
   const busy = !!state && (state.kind === 'listening' || state.kind === 'working')
     && idRef.current !== null && voiceBarRegistrationOf(state) === idRef.current;
-  return { busy };
+  const dispatch = context?.dispatch;
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  /** Clears "the form is open" once the page's dialog has closed, so the bar does not describe a dialog that is gone. */
+  const settle = useCallback(() => {
+    const current = stateRef.current;
+    if (current?.kind === 'applied' && current.registrationId === idRef.current) dispatch?.({ type: 'dismiss' });
+  }, [dispatch]);
+  return { busy, settle };
 }
