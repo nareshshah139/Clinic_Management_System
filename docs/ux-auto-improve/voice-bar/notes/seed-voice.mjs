@@ -3,7 +3,7 @@
 //   DATABASE_URL=postgresql://<user>@localhost:5432/cms_ux_voice_20261116 \
 //     node docs/ux-auto-improve/voice-bar/notes/seed-voice.mjs
 import { createRequire } from 'node:module';
-const require = createRequire('backend/package.json');
+const require = createRequire(new URL('../../../../backend/package.json', import.meta.url));
 const { PrismaClient } = require('@prisma/client');
 
 const url = process.env.DATABASE_URL || '';
