@@ -1,16 +1,14 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
+import { useVoiceBar, VoiceBarProvider } from '@/components/voice/VoiceBarProvider';
 import PrescriptionBuilder from '@/components/visits/PrescriptionBuilder';
 import { apiClient } from '@/lib/api';
-import type { VoiceFillApply, VoiceFillRow } from '@/lib/voice-fill';
+import type { VoiceFillRow } from '@/lib/voice-fill';
 
-let applyVoiceFill: VoiceFillApply = () => ({ filled: [], undo: () => {} });
-
-jest.mock('@/components/voice/VoiceFillButton', () => ({
-  VoiceFillButton: ({ apply }: { apply: VoiceFillApply }) => {
-    applyVoiceFill = apply;
-    return null;
-  },
-}));
+let bar: ReturnType<typeof useVoiceBar>;
+function Probe() {
+  bar = useVoiceBar();
+  return null;
+}
 jest.mock('@/lib/api', () => ({ apiClient: {
   get: jest.fn(), getPatient: jest.fn().mockResolvedValue({}),
   getClinicAssets: jest.fn().mockResolvedValue([]), getPrinterProfiles: jest.fn().mockResolvedValue([]),
@@ -45,9 +43,14 @@ const drugInputs = () => screen.getAllByPlaceholderText('Search medicine name...
 const chips = () => screen.queryAllByText(/Did you mean/).map((chip) => chip.textContent);
 
 async function speak(prescriptionItems: VoiceFillRow[]) {
-  render(<PrescriptionBuilder patientId="voice-suggest" visitId={null} doctorId="doctor" />);
+  render(
+    <VoiceBarProvider>
+      <Probe />
+      <PrescriptionBuilder patientId="voice-suggest" visitId={null} doctorId="doctor" />
+    </VoiceBarProvider>,
+  );
   await act(async () => { jest.advanceTimersByTime(1000); });
-  await act(async () => { await applyVoiceFill({ prescriptionItems }); });
+  await act(async () => { await bar.active!.form.current!.apply({ prescriptionItems }); });
   await act(async () => { jest.advanceTimersByTime(0); });
 }
 

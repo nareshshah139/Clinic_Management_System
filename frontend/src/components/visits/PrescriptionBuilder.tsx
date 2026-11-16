@@ -34,10 +34,10 @@ import { buildLearnedPrescriptionPlan, type LearnedPlanSuggestion } from '@/lib/
 import { editRegimenRow, beginRegimenSelection, applyRegimenSuggestion, acceptRegimenField, regimenLabels, type RegimenField, type RegimenRow } from '@/lib/medicine-regimen-defaults';
 import { appendSpeechToText, type SpeechToTextPreference } from '@/lib/speech-to-text';
 import { useSpeechToTextRecorder } from '@/hooks/useSpeechToTextRecorder';
-import { VoiceFillButton } from '@/components/voice/VoiceFillButton';
-import { applyVoiceFillRegistry, type VoiceFillFields } from '@/lib/voice-fill';
+import { useVoiceBarForm } from '@/components/voice/VoiceBarProvider';
+import { applyVoiceFillRegistry, voiceDraftLines, type VoiceFillFields } from '@/lib/voice-fill';
 import { visitVoiceRegistry, type ExtraVitalsPatch } from '@/lib/voice-fill-visit';
-import { applySpokenPrescriptionItems, inventoryNamesOf } from '@/lib/voice-fill-prescription';
+import { applySpokenPrescriptionItems, inventoryNamesOf, spokenPrescriptionDraftLines } from '@/lib/voice-fill-prescription';
 import { usePrescriptionSignature } from '@/hooks/usePrescriptionSignature';
 import { useDoctorLetterhead } from '@/hooks/useDoctorLetterhead';
 import { PRINT_FIT_MIN_FONT_PX, PRINT_FIT_STEPS, fitPrintMarkup, pageContentBoxPx } from '@/lib/print-fit';
@@ -547,46 +547,10 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     },
   });
 
-  const [voiceFillBusy, setVoiceFillBusy] = useState(false);
   // Stocked items offered for spoken medicines that did not resolve, keyed by the name voice wrote on the row.
   const [spokenSuggestions, setSpokenSuggestions] = useState<Record<string, { name?: string }>>({});
   const forgetSpokenSuggestion = (rowDrugName: string) =>
     setSpokenSuggestions((prev) => Object.fromEntries(Object.entries(prev).filter(([name]) => name !== rowDrugName)));
-  const VoiceButton = useCallback(({ fieldName }: { fieldName: VoiceField }) => (
-    <Button
-      type="button"
-      variant="ghost"
-      size="sm"
-      className={`ml-2 ${activeVoiceField === fieldName ? 'bg-destructive-soft text-destructive-text' : ''}`}
-      onClick={() => void startVoiceInput(fieldName)}
-      disabled={isTranscribing || voiceFillBusy || ((isConnecting || isListening) && activeVoiceField !== fieldName)}
-      aria-label={
-        activeVoiceField === fieldName
-          ? isConnecting
-            ? 'Connecting microphone'
-            : isListening
-              ? 'Stop voice input'
-              : 'Transcribing recording'
-          : 'Start voice input'
-      }
-      title={
-        activeVoiceField === fieldName
-          ? isConnecting
-            ? 'Connecting microphone'
-            : isListening
-              ? 'Stop voice input'
-              : 'Transcribing recording'
-          : 'Start voice input'
-      }
-    >
-      {activeVoiceField === fieldName ? (
-        isListening ? <MicOff className="h-4 w-4" /> : <Spinner className="h-4 w-4 " />
-      ) : (
-        <Mic className="h-4 w-4" />
-      )}
-    </Button>
-  ), [activeVoiceField, isConnecting, isListening, isTranscribing, startVoiceInput, voiceFillBusy]);
-
   const renderVoicePreview = (fieldName: VoiceField) =>
     activeVoiceField === fieldName && livePreview ? (
       <p aria-live="polite" className="mt-1 text-xs italic text-muted-foreground">{livePreview}</p>
@@ -4570,10 +4534,15 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       setFollowUpInstructions(label);
     }
   }, [onChangeReviewDate, formatSuggestedReviewDate, followUpInstructions]);
-  const applyVoiceFill = async ({ prescriptionItems, ...fields }: VoiceFillFields) => {
+  /**
+   * @cc [owner:nareshshah139,label:product] visit-voice-preview-is-pure
+   * Building the registry and previewing a draft MUST NOT change the form, and the preview MUST list only the registry
+   * fields and medicine rows that `applyVoiceFill` handles.
+   */
+  const buildVisitVoiceRegistry = () => {
     const touchFamilyHistory = (key: string) => setFamilyHistoryTouched((prev) => Array.from(new Set([...prev, key])));
     const previousReviewDate = reviewDate || '';
-    const filledFields = applyVoiceFillRegistry(visitVoiceRegistry({
+    return visitVoiceRegistry({
       heightCm: [vitalsHeightCm, setVitalsHeightCm],
       weightKg: [vitalsWeightKg, setVitalsWeightKg],
       bpSystolic: [vitalsBpSys, setVitalsBpSys],
@@ -4604,7 +4573,10 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
         onChangeReviewDate?.(previousReviewDate);
       }],
       applyExtraVitals,
-    }), fields);
+    });
+  };
+  const applyVoiceFill = async ({ prescriptionItems, ...fields }: VoiceFillFields) => {
+    const filledFields = applyVoiceFillRegistry(buildVisitVoiceRegistry(), fields);
     const medicines = await applySpokenPrescriptionItems(prescriptionItems, {
       lookup: async (q) => {
         const res: any = await apiClient.get('/prescriptions/drugs/autocomplete', { q, limit: 30 });
@@ -4625,6 +4597,51 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       undo: () => { medicines.undo(); filledFields.undo(); },
     };
   };
+  const { busy: voiceFillBusy } = useVoiceBarForm({
+    form: 'visit-consultation',
+    label: 'Visit notes',
+    hint: 'Say or type the visit notes',
+    scope: `${patientId}:${visitId || 'standalone'}:${doctorId}`,
+    preview: ({ prescriptionItems, ...fields }) => [
+      ...voiceDraftLines(buildVisitVoiceRegistry(), fields),
+      ...spokenPrescriptionDraftLines(prescriptionItems),
+    ],
+    apply: applyVoiceFill,
+  });
+  const VoiceButton = useCallback(({ fieldName }: { fieldName: VoiceField }) => (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      className={`ml-2 ${activeVoiceField === fieldName ? 'bg-destructive-soft text-destructive-text' : ''}`}
+      onClick={() => void startVoiceInput(fieldName)}
+      disabled={isTranscribing || voiceFillBusy || ((isConnecting || isListening) && activeVoiceField !== fieldName)}
+      aria-label={
+        activeVoiceField === fieldName
+          ? isConnecting
+            ? 'Connecting microphone'
+            : isListening
+              ? 'Stop voice input'
+              : 'Transcribing recording'
+          : 'Start voice input'
+      }
+      title={
+        activeVoiceField === fieldName
+          ? isConnecting
+            ? 'Connecting microphone'
+            : isListening
+              ? 'Stop voice input'
+              : 'Transcribing recording'
+          : 'Start voice input'
+      }
+    >
+      {activeVoiceField === fieldName ? (
+        isListening ? <MicOff className="h-4 w-4" /> : <Spinner className="h-4 w-4 " />
+      ) : (
+        <Mic className="h-4 w-4" />
+      )}
+    </Button>
+  ), [activeVoiceField, isConnecting, isListening, isTranscribing, startVoiceInput, voiceFillBusy]);
 
   return (
     <div className="space-y-6 overflow-visible">
@@ -4719,13 +4736,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
             const toolbar = (
               <>
                 {templatesBar}
-                <VoiceFillButton
-                  form="visit-consultation"
-                  apply={applyVoiceFill}
-                  hint="Say vitals, complaints, diagnosis, history, examination, medicines, follow-up…"
-                  disabled={isConnecting || isListening || isTranscribing}
-                  onBusyChange={setVoiceFillBusy}
-                />
               </>
             );
             return toolbarTarget ? createPortal(toolbar, toolbarTarget) : toolbar;
