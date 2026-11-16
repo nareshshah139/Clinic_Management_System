@@ -1,44 +1,37 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { AppointmentStatus } from '@cms/shared-types';
 import { ArrowRight, Check } from 'lucide-react';
 import { useOverbookConfirm } from '@/components/appointments/useOverbookConfirm';
-import { useDashboardUser } from '@/components/layout/dashboard-user-context';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { NativeSelect } from '@/components/ui/native-select';
 import { Spinner } from '@/components/ui/spinner';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { useToast } from '@/hooks/use-toast';
-import { useAudioRecorder } from '@/hooks/useAudioRecorder';
-import type { VoiceFillPhase } from '@/hooks/useVoiceFill';
 import { apiClient, type ApiError } from '@/lib/api';
 import { appointmentsHref } from '@/lib/appointments-link';
 import { overbookFlag } from '@/lib/overbooking';
-import { cn, getErrorMessage } from '@/lib/utils';
+import { getErrorMessage } from '@/lib/utils';
 import {
   clinicClock,
-  COMMAND_EXAMPLE,
   confirmedStep,
   createVoiceCommandSource,
   dayLabel,
   dayWithDate,
-  parseVoiceCommand,
   resolveVoiceCommand,
   withPick,
   type Choice,
-  type VoiceCommand,
+  type HeardCommand,
   type VoiceCommandAction,
   type VoiceCommandPicks,
   type VoiceCommandPlan,
   type VoiceCommandStep,
 } from '@/lib/voice-command';
-import { fetchVoiceFillStatus, requestVoiceFill } from '@/lib/voice-fill';
 import type { VisitType } from '@/lib/types';
-import { useCancelOnEscape, VoicePillFace, voicePillClass } from './VoiceFillButton';
+
+export type { HeardCommand };
 
 const TITLE: Record<VoiceCommandAction, string> = {
   schedule_appointment: 'Book appointment',
@@ -61,18 +54,11 @@ const CONFIRM: Record<VoiceCommandAction, string> = {
 const VISIT_TYPE: Record<VisitType, string> = { OPD: 'In clinic (OPD)', TELEMED: 'Video consult', PROCEDURE: 'Procedure' };
 const CHIP_LIMIT = 6;
 
-export interface HeardCommand {
-  id: number;
-  transcript: string;
-  command: VoiceCommand;
-}
-
 const CHANGE_CLASS = 'rounded-sm text-xs text-muted-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50';
 
 type Done = { title: string; href: string; linkText: string };
 
 const slotRange = (slot: string) => slot.replace('-', '–');
-
 
 interface ChoiceViewProps<T> {
   label: string;
@@ -375,83 +361,6 @@ export function VoiceCommandDialog({ heard, role, onClose, now: fixedNow }: Voic
         </DialogContent>
       </Dialog>
       {overbookDialog}
-    </>
-  );
-}
-
-const IDLE: VoiceFillPhase = { kind: 'idle' };
-const UNDERSTANDING: VoiceFillPhase = { kind: 'filling' };
-
-/** The global mic: speak a command, then confirm it in the card. */
-export function VoiceCommandButton({ className }: { className?: string }) {
-  const { user } = useDashboardUser();
-  const { toast } = useToast();
-  const [available, setAvailable] = useState(false);
-  const [understanding, setUnderstanding] = useState(false);
-  const [heard, setHeard] = useState<HeardCommand | null>(null);
-  const mountedRef = useRef(true);
-
-  useEffect(() => {
-    mountedRef.current = true;
-    let cancelled = false;
-    void fetchVoiceFillStatus().then((ok) => { if (!cancelled) setAvailable(ok); });
-    return () => { cancelled = true; mountedRef.current = false; };
-  }, []);
-
-  const understand = async (audio: Blob, filename: string) => {
-    setUnderstanding(true);
-    try {
-      const { transcript, fields } = await requestVoiceFill('voice-command', audio, filename);
-      if (!mountedRef.current) return;
-      if (!transcript.trim()) {
-        toast({ variant: 'info', title: 'Nothing heard', description: 'No speech was heard. Try speaking closer to the microphone.' });
-        return;
-      }
-      setHeard({ id: Date.now(), transcript: transcript.trim(), command: parseVoiceCommand(fields) });
-    } catch (error) {
-      if (mountedRef.current) toast({ variant: 'warning', title: 'Voice command failed', description: getErrorMessage(error) || 'Please try again.' });
-    } finally {
-      if (mountedRef.current) setUnderstanding(false);
-    }
-  };
-
-  const { recording, toggle, cancel } = useAudioRecorder({ toast, onRecorded: (_key, audio, filename) => void understand(audio, filename) });
-  const phase: VoiceFillPhase = understanding ? UNDERSTANDING : recording ? { kind: 'listening', startedAt: recording.startedAt } : IDLE;
-  useCancelOnEscape(phase.kind === 'listening', cancel);
-  const onClick = useCallback(() => {
-    if (!understanding) void toggle('voice-command');
-  }, [understanding, toggle]);
-
-  if (!available || !user) return null;
-
-  const label = { idle: 'Speak a command', listening: 'Stop recording and run command', filling: 'Understanding…', filled: '' }[phase.kind];
-  return (
-    <>
-      <span role="status" aria-live="polite" className="sr-only">
-        {phase.kind === 'listening' ? 'Listening. Click to stop, or press Escape to cancel.' : understanding ? 'Understanding…' : ''}
-      </span>
-      <TooltipProvider delayDuration={300}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={onClick}
-              aria-label={label}
-              aria-disabled={understanding || undefined}
-              className={cn(voicePillClass(phase), className)}
-            >
-              <VoicePillFace phase={phase} busyText="Understanding…" />
-            </button>
-          </TooltipTrigger>
-          {phase.kind === 'idle' && (
-            <TooltipContent className="max-w-64 text-center">
-              <div className="font-medium">Voice command</div>
-              <div className="text-xs text-muted-foreground">Say a command, e.g. {COMMAND_EXAMPLE}</div>
-            </TooltipContent>
-          )}
-        </Tooltip>
-      </TooltipProvider>
-      {heard && <VoiceCommandDialog key={heard.id} heard={heard} role={user.role} onClose={() => setHeard(null)} />}
     </>
   );
 }

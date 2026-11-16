@@ -1,7 +1,16 @@
 import { applyPatientVoiceFill, type PatientVoiceState } from '@/lib/voice-fill-patient';
 import { applyInventoryVoiceFill, type InventoryVoiceState } from '@/lib/voice-fill-inventory';
 import { mergeCaseInsensitive, visitVoiceRegistry, type VisitVoiceBindings } from '@/lib/voice-fill-visit';
-import { appendOnNewLine, applyVoiceFillRegistry, formatVoiceFillError, requestVoiceFill } from '@/lib/voice-fill';
+import {
+  appendOnNewLine,
+  applyVoiceFillRegistry,
+  formatVoiceFillError,
+  mergeVoiceFillFields,
+  requestVoiceFill,
+  requestVoiceFillFromText,
+  voiceDraftLines,
+  type VoiceFillRegistry,
+} from '@/lib/voice-fill';
 
 jest.mock('@/lib/api', () => ({ apiClient: {} }));
 
@@ -174,6 +183,85 @@ describe('requestVoiceFill', () => {
   it('turns an error status into a short message', async () => {
     fetchMock.mockResolvedValue({ ok: false, status: 403, text: async () => '{"message":"Forbidden resource"}' });
     await expect(requestVoiceFill('inventory-item', new Blob(['a']), 'recording.webm')).rejects.toThrow('Your role cannot fill this form by voice.');
+  });
+});
+
+describe('requestVoiceFillFromText', () => {
+  const fetchMock = jest.fn();
+  beforeEach(() => {
+    fetchMock.mockReset();
+    global.fetch = fetchMock as unknown as typeof fetch;
+  });
+
+  it('posts the typed text as JSON to the form text route and returns the transcript and fields', async () => {
+    fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({ transcript: 'BP 120 by 80', fields: { bpSystolic: 120 } }) });
+
+    const response = await requestVoiceFillFromText('visit-consultation', 'BP 120 by 80');
+
+    expect(response).toEqual({ transcript: 'BP 120 by 80', fields: { bpSystolic: 120 } });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect([url, init.method, init.credentials, init.headers, init.body]).toEqual([
+      '/api/voice-fill/visit-consultation/text', 'POST', 'include', { 'Content-Type': 'application/json' }, '{"text":"BP 120 by 80"}',
+    ]);
+  });
+
+  it('formats an error status the same way as the audio route', async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 403, text: async () => '{"message":"Forbidden resource"}' });
+    await expect(requestVoiceFillFromText('inventory-item', 'paracetamol')).rejects.toThrow('Your role cannot fill this form by voice.');
+  });
+});
+
+describe('mergeVoiceFillFields', () => {
+  it('joins the kept slices and concatenates rows of the same list field in slice order', () => {
+    expect(mergeVoiceFillFields([
+      { diagnosis: 'Eczema' },
+      { items: [{ name: 'Cetirizine', dose: '10 mg' }] },
+      { items: [{ name: 'Moisturiser', frequency: 'Twice a day' }] },
+      { advice: 'Avoid hot water' },
+    ])).toEqual({
+      diagnosis: 'Eczema',
+      items: [{ name: 'Cetirizine', dose: '10 mg' }, { name: 'Moisturiser', frequency: 'Twice a day' }],
+      advice: 'Avoid hot water',
+    });
+  });
+
+  it('leaves out an unticked line', () => {
+    const lines = voiceDraftLines(
+      { diagnosis: { label: 'Diagnosis', apply: () => null }, advice: { label: 'Advice', apply: () => null } },
+      { diagnosis: 'Eczema', advice: 'Avoid hot water' },
+    );
+    const kept = lines.filter((line) => line.id !== 'diagnosis');
+    expect(mergeVoiceFillFields(kept.map((line) => line.fields))).toEqual({ advice: 'Avoid hot water' });
+  });
+});
+
+describe('voiceDraftLines', () => {
+  const registry: VoiceFillRegistry = {
+    diagnosis: { label: 'Diagnosis', apply: () => null },
+    followUpDays: { label: 'Follow-up in days', apply: () => null },
+    pregnant: { label: 'Pregnant', apply: () => null },
+    allergies: { label: 'Allergies', apply: () => null },
+    items: { label: 'Medicine', apply: () => null },
+    notes: { label: 'Notes', apply: () => null },
+  };
+
+  it('gives one readable line per field the registry knows, one per row for row lists, in registry order', () => {
+    expect(voiceDraftLines(registry, {
+      items: [{ name: 'Cetirizine', dose: '10 mg' }, { name: 'Moisturiser', frequency: 'Twice a day' }],
+      unknownField: 'ignored',
+      allergies: ['Penicillin', 'Peanuts'],
+      pregnant: false,
+      followUpDays: 28,
+      diagnosis: 'Eczema',
+      notes: '   ',
+    })).toEqual([
+      { id: 'diagnosis', label: 'Diagnosis', value: 'Eczema', fields: { diagnosis: 'Eczema' } },
+      { id: 'followUpDays', label: 'Follow-up in days', value: '28', fields: { followUpDays: 28 } },
+      { id: 'pregnant', label: 'Pregnant', value: 'No', fields: { pregnant: false } },
+      { id: 'allergies', label: 'Allergies', value: 'Penicillin, Peanuts', fields: { allergies: ['Penicillin', 'Peanuts'] } },
+      { id: 'items:0', label: 'Medicine 1', value: 'Cetirizine, 10 mg', fields: { items: [{ name: 'Cetirizine', dose: '10 mg' }] } },
+      { id: 'items:1', label: 'Medicine 2', value: 'Moisturiser, Twice a day', fields: { items: [{ name: 'Moisturiser', frequency: 'Twice a day' }] } },
+    ]);
   });
 });
 

@@ -53,7 +53,7 @@ function statusText(phase: VoiceFillPhase): string {
   }
 }
 
-/** Classes for the mic pill in every phase; the global command mic shares them so both read as one control. */
+/** Classes for the mic pill in every phase. */
 export function voicePillClass(phase: VoiceFillPhase): string {
   return cn(
     'inline-flex h-8 shrink-0 items-center justify-center gap-2 overflow-hidden whitespace-nowrap rounded-full px-2 text-sm font-medium',
