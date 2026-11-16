@@ -229,6 +229,7 @@ export function VoiceBar() {
     if (state.kind === 'failed' && state.retry) void send(state.target, state.retry);
   };
 
+  const hasText = text.trim().length > 0;
   const hintId = `${idPrefix}-nothing-ticked`;
   const lineId = (id: string) => `${idPrefix}-line-${id}`;
   const tapTarget = 'min-h-11 md:min-h-8';
@@ -323,7 +324,7 @@ export function VoiceBar() {
               value={toCommand ? 'command' : 'form'}
               disabled={listening || working}
               onChange={(event) => setToCommand(event.target.value === 'command')}
-              className="h-11 max-w-36 shrink-0 md:h-9"
+              className="h-11 max-w-28 shrink-0 md:h-9 md:max-w-36"
             >
               <option value="form">{form.label}</option>
               <option value="command">{COPY.commandTarget}</option>
@@ -349,7 +350,8 @@ export function VoiceBar() {
             type="button"
             size="icon"
             variant={listening ? 'destructive' : 'outline'}
-            className="size-11 md:size-9"
+            // On a phone the row has room for one action: the mic while the box is empty, Send once there is text.
+            className={cn('size-11 md:size-9', hasText && !listening && 'max-md:hidden')}
             aria-label={listening ? COPY.stopAndSend : COPY.speak}
             disabled={working}
             onClick={onMic}
@@ -359,9 +361,9 @@ export function VoiceBar() {
           <Button
             type="button"
             size="icon"
-            className="size-11 md:size-9"
+            className={cn('size-11 md:size-9', (!hasText || listening) && 'max-md:hidden')}
             aria-label={COPY.send}
-            disabled={working || listening || !text.trim()}
+            disabled={working || listening || !hasText}
             onClick={sendText}
           >
             {working ? <Spinner aria-hidden="true" /> : <ArrowUp aria-hidden="true" />}
