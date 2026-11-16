@@ -338,7 +338,11 @@ export function VoiceBar() {
             placeholder={target.kind === 'form' && form ? form.hint : COPY.commandHint}
             aria-label={COPY.textBoxLabel}
             maxLength={MAX_TYPED_CHARS}
-            className="max-h-28 min-h-11 resize-none md:min-h-9"
+            className={cn(
+              'max-h-28 min-h-11 resize-none md:min-h-9',
+              // An empty box would grow to fit a wrapped placeholder, so it is held to one line until text is typed.
+              !text && 'field-sizing-fixed h-11 overflow-hidden placeholder:overflow-hidden placeholder:text-ellipsis placeholder:whitespace-nowrap md:h-9',
+            )}
           />
           {listening && <ListeningClock startedAt={state.startedAt} />}
           <Button
