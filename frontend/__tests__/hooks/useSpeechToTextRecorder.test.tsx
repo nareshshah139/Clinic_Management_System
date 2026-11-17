@@ -163,6 +163,8 @@ it('turns notices, empty results, errors and microphone failures into toasts', a
   await press(hook, 'exam');
   start.mockRejectedValueOnce(new MicUnavailableError('Microphone recording is not supported in this browser.', 'unsupported'));
   await press(hook, 'exam');
+  start.mockRejectedValueOnce(new MicUnavailableError('Another dictation is already running. Stop it first.', 'busy'));
+  await press(hook, 'exam');
 
   expect(toast.mock.calls.map(([t]) => t)).toEqual([
     { variant: 'info', title: 'Live preview unavailable', description: 'detail' },
@@ -174,6 +176,7 @@ it('turns notices, empty results, errors and microphone failures into toasts', a
     { variant: 'warning', title: 'Speech-to-text error', description: 'Server returned 500.' },
     { variant: 'warning', title: 'Microphone access denied', description: 'Permission denied' },
     { variant: 'warning', title: 'Voice capture unavailable', description: 'Microphone recording is not supported in this browser.' },
+    { variant: 'warning', title: 'Dictation already running', description: 'Another dictation is already running. Stop it first.' },
   ]);
   expect(hook.result.current.activeVoiceField).toBeNull();
 });

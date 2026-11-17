@@ -23,10 +23,10 @@ export type DictationOutcome =
   | { kind: 'cancelled' }
   | { kind: 'error'; title: string; description: string };
 export interface DictationSession { readonly outcome: Promise<DictationOutcome>; stop(): void; dispose(): void }
-type DictationNotice = { title: string; description: string };
+export type DictationNotice = { title: string; description: string };
 
 export class MicUnavailableError extends Error {
-  constructor(message: string, readonly reason: 'unsupported' | 'denied') {
+  constructor(message: string, readonly reason: 'unsupported' | 'denied' | 'busy') {
     super(message);
     this.name = 'MicUnavailableError';
   }
@@ -66,13 +66,36 @@ const DEMOTED_NOTICE: DictationNotice = {
   description: 'Still recording. Your dictation will be transcribed when you stop.',
 };
 
-export async function startDictationSession(o: {
+/**
+ * @cc [owner:nareshshah139,label:reliability] one-dictation-at-a-time
+ * At most one dictation session MUST hold the microphone at a time, and a second start MUST be refused with a clear message until the first has settled or been disposed.
+ */
+let microphoneHolder: object | null = null;
+
+type DictationOptions = {
   preference: SpeechToTextPreference;
   onView(v: DictationView): void;
   onNotice(n: DictationNotice): void;
   limits?: Partial<typeof DICTATION_LIMITS>;
   deps?: Partial<DictationDeps>;
-}): Promise<DictationSession> {
+};
+
+export async function startDictationSession(o: DictationOptions): Promise<DictationSession> {
+  if (microphoneHolder) throw new MicUnavailableError('Another dictation is already running. Stop it first.', 'busy');
+  const holder = {};
+  microphoneHolder = holder;
+  const release = () => {
+    if (microphoneHolder === holder) microphoneHolder = null;
+  };
+  try {
+    return await openDictationSession(o, release);
+  } catch (error) {
+    release();
+    throw error;
+  }
+}
+
+async function openDictationSession(o: DictationOptions, release: () => void): Promise<DictationSession> {
   const limits = { ...DICTATION_LIMITS, ...o.limits };
   const deps: DictationDeps = { ...browserDeps(), ...o.deps };
   const Recorder = deps.MediaRecorder;
@@ -173,6 +196,7 @@ export async function startDictationSession(o: {
     timers.clear();
     leaveLive();
     stopCapture();
+    release();
     resolveOutcome(result);
   };
 

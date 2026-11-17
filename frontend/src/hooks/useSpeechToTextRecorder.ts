@@ -22,6 +22,12 @@ interface UseSpeechToTextRecorderOptions<F extends string> {
   applyText: (field: F, text: string) => void;
 }
 
+const MIC_UNAVAILABLE_TITLE: Record<MicUnavailableError['reason'], string> = {
+  unsupported: 'Voice capture unavailable',
+  denied: 'Microphone access denied',
+  busy: 'Dictation already running',
+};
+
 interface ActiveDictation<F extends string> {
   field: F;
   phase: DictationPhase;
@@ -79,10 +85,9 @@ export function useSpeechToTextRecorder<F extends string>({
     } catch (error) {
       if (!isCurrent()) return;
       release();
-      const unsupported = error instanceof MicUnavailableError && error.reason === 'unsupported';
       latest.current.toast({
         variant: 'warning',
-        title: unsupported ? 'Voice capture unavailable' : 'Microphone access denied',
+        title: error instanceof MicUnavailableError ? MIC_UNAVAILABLE_TITLE[error.reason] : MIC_UNAVAILABLE_TITLE.denied,
         description: error instanceof Error && error.message ? error.message : 'Check browser permissions and try again.',
       });
       return;

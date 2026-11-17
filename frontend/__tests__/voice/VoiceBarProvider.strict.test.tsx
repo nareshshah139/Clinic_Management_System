@@ -5,11 +5,16 @@ import userEvent from '@testing-library/user-event';
 import { DashboardUserProvider } from '@/components/layout/dashboard-user-context';
 import { VoiceBar } from '@/components/voice/VoiceBar';
 import { VoiceBarProvider, useVoiceBarForm } from '@/components/voice/VoiceBarProvider';
+import { startDictationSession, type DictationOutcome } from '@/lib/dictation-session';
 import type { User } from '@/lib/types';
 import { resetVoiceFillStatusForTests, voiceDraftLines, type VoiceBarApplyResult, type VoiceFillFields, type VoiceFillRegistry } from '@/lib/voice-fill';
 
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }) }));
 jest.mock('@/lib/api', () => ({ apiClient: { get: async () => ({ available: true }) } }));
+jest.mock('@/lib/dictation-session', () => ({
+  ...jest.requireActual('@/lib/dictation-session'),
+  startDictationSession: jest.fn(),
+}));
 
 const user = { id: 'u1', role: UserRole.DOCTOR } as User;
 const registry: VoiceFillRegistry = {
@@ -122,5 +127,20 @@ describe('VoiceBarProvider under Strict Mode', () => {
     expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
     expect(screen.getByRole('status')).toHaveTextContent('The page changed, so this draft was discarded.');
     expect(undo.mock.calls).toEqual([]);
+  });
+
+  it('opens one dictation for one press and releases it when the bar unmounts', async () => {
+    const log: string[] = [];
+    jest.mocked(startDictationSession).mockImplementation(async () => {
+      log.push('start');
+      return { outcome: new Promise<DictationOutcome>(() => {}), stop: () => log.push('stop'), dispose: () => log.push('dispose') };
+    });
+    const view = render(<Shell><VisitPage scope="visit-1" apply={jest.fn()} /></Shell>);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Speak' }));
+    expect(screen.getByText('Voice is working on this visit')).toBeInTheDocument();
+    view.unmount();
+
+    expect(log).toEqual(['start', 'dispose']);
   });
 });

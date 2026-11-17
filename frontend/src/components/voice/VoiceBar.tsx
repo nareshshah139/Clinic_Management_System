@@ -8,10 +8,15 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { NativeSelect } from '@/components/ui/native-select';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
-import { useAudioRecorder, type RecorderToast } from '@/hooks/useAudioRecorder';
+import {
+  MicUnavailableError,
+  startDictationSession,
+  type DictationNotice,
+  type DictationPhase,
+  type DictationSession,
+} from '@/lib/dictation-session';
 import { cn, getErrorMessage } from '@/lib/utils';
 import {
-  recorderFailureMessage,
   VOICE_BAR_COPY as COPY,
   type VoiceBarEvent,
   type VoiceBarRetry,
@@ -22,14 +27,14 @@ import {
   flashFilledElements,
   fetchVoiceFillStatus,
   mergeVoiceFillFields,
-  requestVoiceFill,
   requestVoiceFillFromText,
 } from '@/lib/voice-fill';
 import { useVoiceBar } from './VoiceBarProvider';
 import { VoiceCommandDialog } from './VoiceCommandDialog';
 import { formatElapsed, useCancelOnEscape, useElapsedSeconds } from './VoiceFillButton';
 
-const RECORDING_KEY = 'voice-bar';
+// Matches useAudioRecorder's clip cap, so a long dictation is cut off at the same point on every voice surface.
+const MAX_SPEECH_MS = 40 * 60_000;
 // Well under the server's 60000-character cap, even for 3-byte scripts.
 const MAX_TYPED_CHARS = 8000;
 
@@ -38,7 +43,7 @@ function statusText(state: VoiceBarState, formLabel: string): string {
     case 'idle':
       return state.notice ?? '';
     case 'listening':
-      return COPY.listening;
+      return { connecting: COPY.opening, listening: COPY.listening, finishing: COPY.finishing }[state.phase];
     case 'working':
       return COPY.working;
     case 'draft':
@@ -49,6 +54,25 @@ function statusText(state: VoiceBarState, formLabel: string): string {
     case 'confirming':
       return '';
   }
+}
+
+const joinSpoken = (typed: string, spoken: string) => [typed.trim(), spoken.trim()].filter(Boolean).join(' ');
+
+function micFailureMessage(error: unknown): string {
+  if (!(error instanceof MicUnavailableError)) return COPY.cannotRecord;
+  switch (error.reason) {
+    case 'denied':
+      return COPY.micBlocked;
+    case 'unsupported':
+      return COPY.cannotRecord;
+    case 'busy':
+      return error.message;
+  }
+}
+
+interface SpeechEntry {
+  session: DictationSession | null;
+  stopRequested: boolean;
 }
 
 const MODIFIER_KEYS = new Set(['Shift', 'Control', 'Alt', 'Meta']);
@@ -80,6 +104,85 @@ function useDropUndoWhenFormTouched(
       for (const type of types) document.removeEventListener(type, touch, true);
     };
   }, [undoable, barRef, dispatch]);
+}
+
+/**
+ * @cc [owner:nareshshah139,label:product] voice-bar-speech-is-reviewed-like-text
+ * Speech in the voice bar MUST only appear in the bar's text box while it is spoken and MUST then go through the same typed path and review as typed text, never straight into a form.
+ */
+function useSpeechIntoBox() {
+  const [speech, setSpeech] = useState<{ preview: string; notice: DictationNotice | null }>({ preview: '', notice: null });
+  const entryRef = useRef<SpeechEntry | null>(null);
+
+  const release = useCallback(() => {
+    const entry = entryRef.current;
+    entryRef.current = null;
+    entry?.session?.dispose();
+  }, []);
+  useEffect(() => release, [release]);
+
+  const stop = useCallback(() => {
+    const entry = entryRef.current;
+    if (!entry) return;
+    if (entry.session) entry.session.stop();
+    else entry.stopRequested = true;
+  }, []);
+
+  /** Resolves with the dictated text, or null once the dictation failed, was discarded or the bar moved on. */
+  const listen = useCallback(async (on: {
+    phase(phase: DictationPhase): void;
+    failed(message: string): void;
+    cancelled(): void;
+  }): Promise<string | null> => {
+    const entry: SpeechEntry = { session: null, stopRequested: false };
+    entryRef.current = entry;
+    setSpeech({ preview: '', notice: null });
+    const isCurrent = () => entryRef.current === entry;
+    let session: DictationSession;
+    try {
+      session = await startDictationSession({
+        preference: 'full-transcript',
+        limits: { maxMs: MAX_SPEECH_MS },
+        onView: (view) => {
+          if (!isCurrent()) return;
+          on.phase(view.phase);
+          setSpeech((current) => (current.preview === view.preview ? current : { ...current, preview: view.preview }));
+        },
+        onNotice: (notice) => {
+          if (isCurrent()) setSpeech((current) => ({ ...current, notice }));
+        },
+      });
+    } catch (error) {
+      if (!isCurrent()) return null;
+      entryRef.current = null;
+      on.failed(micFailureMessage(error));
+      return null;
+    }
+    if (!isCurrent()) {
+      session.dispose();
+      return null;
+    }
+    entry.session = session;
+    if (entry.stopRequested) session.stop();
+    const outcome = await session.outcome;
+    if (!isCurrent()) return null;
+    entryRef.current = null;
+    switch (outcome.kind) {
+      case 'text':
+        return outcome.text;
+      case 'empty':
+        on.failed(COPY.nothingHeard);
+        return null;
+      case 'error':
+        on.failed(outcome.description || outcome.title);
+        return null;
+      case 'cancelled':
+        on.cancelled();
+        return null;
+    }
+  }, []);
+
+  return { speech, listen, stop, release };
 }
 
 /**
@@ -144,9 +247,7 @@ export function VoiceBar() {
     dispatch({ type: 'send', target: to, retry, attempt });
     const form = registration ? registration.form.current.form : 'voice-command';
     try {
-      const { transcript, fields } = retry.kind === 'audio'
-        ? await requestVoiceFill(form, retry.audio, retry.filename)
-        : await requestVoiceFillFromText(form, retry.text);
+      const { transcript, fields } = await requestVoiceFillFromText(form, retry.text);
       const lines = registration ? registration.form.current.preview(fields) : [];
       if (registration && transcript.trim() && !lines.length && attemptRef.current === attempt && activeRef.current?.id === registration.id) {
         setText((current) => current || transcript.trim());
@@ -157,16 +258,7 @@ export function VoiceBar() {
     }
   }, [dispatch]);
 
-  const recorderToast = useCallback<RecorderToast>(({ title }) => {
-    dispatch({ type: 'recorder-failed', message: recorderFailureMessage(title) });
-  }, [dispatch]);
-  const { recording, toggle, cancel } = useAudioRecorder({
-    toast: recorderToast,
-    onRecorded: (_key, audio, filename) => {
-      const current = stateRef.current;
-      if (current.kind === 'listening') void send(current.target, { kind: 'audio', audio, filename });
-    },
-  });
+  const { speech, listen, stop: stopSpeech, release: releaseSpeech } = useSpeechIntoBox();
 
   useDropUndoWhenFormTouched(barRef, state, dispatch);
 
@@ -178,11 +270,16 @@ export function VoiceBar() {
   }, [confirming]);
 
   const listening = state.kind === 'listening';
+  useEffect(() => {
+    // The newest words are the ones being checked, so a box that has grown past its height follows them.
+    const box = boxRef.current;
+    if (listening && box) box.scrollTop = box.scrollHeight;
+  }, [listening, speech.preview]);
   const working = state.kind === 'working';
   useEffect(() => {
-    // The page changed or the bar was dismissed mid-recording: stop the mic and upload nothing.
-    if (!listening && recording) cancel();
-  }, [listening, recording, cancel]);
+    // The page changed or the bar was dismissed mid-dictation: release the mic and send nothing.
+    if (!listening) releaseSpeech();
+  }, [listening, releaseSpeech]);
 
   const restoreFocus = useCallback(() => {
     const previous = returnFocusRef.current;
@@ -191,10 +288,10 @@ export function VoiceBar() {
   }, []);
 
   const discardRecording = useCallback(() => {
-    cancel();
+    releaseSpeech();
     dispatch({ type: 'discard-recording' });
     restoreFocus();
-  }, [cancel, dispatch, restoreFocus]);
+  }, [releaseSpeech, dispatch, restoreFocus]);
   useCancelOnEscape(listening, discardRecording);
 
   useEffect(() => {
@@ -222,9 +319,21 @@ export function VoiceBar() {
   const target: VoiceBarTarget = active && !toCommand ? { kind: 'form', registrationId: active.id } : { kind: 'command' };
   const status = statusText(state, formLabel);
 
+  const speak = async (to: VoiceBarTarget, typed: string) => {
+    dispatch({ type: 'listen', target: to, startedAt: Date.now() });
+    const spoken = await listen({
+      phase: (phase) => dispatch({ type: 'dictation-phase', phase }),
+      failed: (message) => dispatch({ type: 'dictation-failed', message }),
+      cancelled: () => dispatch({ type: 'dismiss' }),
+    });
+    if (spoken === null || stateRef.current.kind !== 'listening') return;
+    setText('');
+    void send(to, { kind: 'text', text: joinSpoken(typed, spoken) });
+  };
+
   const onMic = () => {
-    if (!listening) dispatch({ type: 'listen', target, startedAt: Date.now() });
-    void toggle(RECORDING_KEY);
+    if (listening) stopSpeech();
+    else if (!working && !applying) void speak(target, text);
   };
 
   const sendText = () => {
@@ -238,7 +347,7 @@ export function VoiceBar() {
     if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return;
     event.preventDefault();
     if (applying) return;
-    if (listening) void toggle(RECORDING_KEY);
+    if (listening) stopSpeech();
     else sendText();
   };
 
@@ -296,6 +405,7 @@ export function VoiceBar() {
   };
 
   const hasText = text.trim().length > 0;
+  const boxValue = listening ? joinSpoken(text, speech.preview) : text;
   const hintId = `${idPrefix}-nothing-ticked`;
   const lineId = (id: string) => `${idPrefix}-line-${id}`;
   const tapTarget = 'min-h-11 md:min-h-8';
@@ -377,6 +487,9 @@ export function VoiceBar() {
           >
             {status}
           </p>
+          {listening && speech.notice && (
+            <p aria-live="polite" className="w-full text-sm text-muted-foreground">{COPY.speechNotice(speech.notice)}</p>
+          )}
           {state.kind === 'applied' && (
             <>
               {!state.opened && (
@@ -406,7 +519,8 @@ export function VoiceBar() {
               value={toCommand ? 'command' : 'form'}
               disabled={listening || working || applying}
               onChange={(event) => setToCommand(event.target.value === 'command')}
-              className="h-11 max-w-28 shrink-0 md:h-9 md:max-w-36"
+              // On a phone the picker steps aside while listening, so the live words get the width.
+              className={cn('h-11 max-w-28 shrink-0 md:h-9 md:max-w-36', listening && 'max-md:hidden')}
             >
               <option value="form">{form.label}</option>
               <option value="command">{COPY.commandTarget}</option>
@@ -415,9 +529,10 @@ export function VoiceBar() {
           <Textarea
             ref={boxRef}
             rows={1}
-            value={text}
+            value={boxValue}
             onChange={(event) => setText(event.target.value)}
             onKeyDown={onBoxKeyDown}
+            readOnly={listening}
             disabled={applying}
             placeholder={target.kind === 'form' && form ? form.hint : COPY.commandHint}
             aria-label={COPY.textBoxLabel}
@@ -425,7 +540,7 @@ export function VoiceBar() {
             className={cn(
               'max-h-28 min-h-11 resize-none md:min-h-9',
               // An empty box would grow to fit a wrapped placeholder, so it is held to one line until text is typed.
-              !text && 'field-sizing-fixed h-11 overflow-hidden placeholder:overflow-hidden placeholder:text-ellipsis placeholder:whitespace-nowrap md:h-9',
+              !boxValue && 'field-sizing-fixed h-11 overflow-hidden placeholder:overflow-hidden placeholder:text-ellipsis placeholder:whitespace-nowrap md:h-9',
             )}
           />
           {listening && <ListeningClock startedAt={state.startedAt} />}

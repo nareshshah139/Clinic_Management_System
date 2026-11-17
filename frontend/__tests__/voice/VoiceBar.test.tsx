@@ -6,6 +6,7 @@ import { DashboardUserProvider } from '@/components/layout/dashboard-user-contex
 import { VoiceBar } from '@/components/voice/VoiceBar';
 import { VoiceBarProvider, useVoiceBarForm } from '@/components/voice/VoiceBarProvider';
 import { apiClient } from '@/lib/api';
+import { MicUnavailableError, startDictationSession, type DictationOutcome, type DictationView } from '@/lib/dictation-session';
 import type { User } from '@/lib/types';
 import { resetVoiceFillStatusForTests, voiceDraftLines, type VoiceBarApplyResult, type VoiceFillFields, type VoiceFillRegistry } from '@/lib/voice-fill';
 
@@ -19,21 +20,34 @@ jest.mock('@/lib/api', () => ({
   },
 }));
 
-const api = jest.mocked(apiClient);
+jest.mock('@/lib/dictation-session', () => ({
+  ...jest.requireActual('@/lib/dictation-session'),
+  startDictationSession: jest.fn(),
+}));
 
-class FakeMediaRecorder {
-  static isTypeSupported = (type: string) => type === 'audio/webm';
-  state: 'inactive' | 'recording' = 'inactive';
-  ondataavailable: ((event: { data: Blob }) => void) | null = null;
-  onstop: (() => void) | null = null;
-  start() {
-    this.state = 'recording';
-  }
-  stop() {
-    this.state = 'inactive';
-    this.ondataavailable?.({ data: new Blob(['audio'], { type: 'audio/webm' }) });
-    this.onstop?.();
-  }
+const api = jest.mocked(apiClient);
+const startDictation = jest.mocked(startDictationSession);
+type DictationOptions = Parameters<typeof startDictationSession>[0];
+
+/** Stands in for the live engine: the test emits views and notices and decides the outcome. */
+function fakeDictation() {
+  let settle!: (outcome: DictationOutcome) => void;
+  const outcome = new Promise<DictationOutcome>((resolve) => { settle = resolve; });
+  const stop = jest.fn();
+  const dispose = jest.fn();
+  let options: DictationOptions | null = null;
+  startDictation.mockImplementationOnce(async (o) => {
+    options = o;
+    return { outcome, stop, dispose };
+  });
+  return {
+    stop,
+    dispose,
+    options: () => options!,
+    view: (view: DictationView) => act(() => options!.onView(view)),
+    notice: (title: string, description: string) => act(() => options!.onNotice({ title, description })),
+    finish: (result: DictationOutcome) => act(async () => { settle(result); await outcome; }),
+  };
 }
 
 const user = { id: 'u1', role: UserRole.RECEPTION } as User;
@@ -90,7 +104,7 @@ function Shell({ children }: { children?: ReactNode }) {
 const ok = (body: unknown) => ({ ok: true, status: 200, json: async () => body, text: async () => '' });
 const failure = (status: number) => ({ ok: false, status, json: async () => ({}), text: async () => '' });
 let fetchMock: jest.Mock;
-const calls = () => fetchMock.mock.calls.map(([url, init]: [string, RequestInit]) => [url, typeof init.body === 'string' ? init.body : 'audio']);
+const calls = () => fetchMock.mock.calls.map(([url, init]: [string, RequestInit]) => [url, init.body]);
 
 beforeEach(() => {
   localStorage.clear();
@@ -99,11 +113,7 @@ beforeEach(() => {
   resetVoiceFillStatusForTests();
   fetchMock = jest.fn().mockResolvedValue(ok(heardVisit));
   global.fetch = fetchMock as unknown as typeof fetch;
-  Object.defineProperty(window, 'MediaRecorder', { value: FakeMediaRecorder, configurable: true, writable: true });
-  Object.defineProperty(navigator, 'mediaDevices', {
-    value: { getUserMedia: jest.fn().mockResolvedValue({ getTracks: () => [{ stop: jest.fn() }] }) },
-    configurable: true,
-  });
+  startDictation.mockReset();
 });
 
 const textBox = () => screen.findByRole('textbox', { name: 'Say or type a request' });
@@ -219,42 +229,6 @@ describe('VoiceBar', () => {
     ]);
   });
 
-  it('records, uploads the audio to the form, and Try again re-sends the same recording', async () => {
-    fetchMock.mockResolvedValueOnce(failure(500));
-    render(<Shell><VisitPage apply={jest.fn()} /></Shell>);
-
-    await userEvent.click(await screen.findByRole('button', { name: 'Speak' }));
-    expect(screen.getByRole('status')).toHaveTextContent('Listening. Press Enter to send, or Escape to discard.');
-    await userEvent.click(screen.getByRole('button', { name: 'Stop and send' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Voice fill failed (server returned 500).');
-
-    await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
-    await screen.findByRole('button', { name: 'Add to form' });
-
-    const uploads = fetchMock.mock.calls.map(([url, init]: [string, RequestInit]) => {
-      const file = (init.body as FormData).get('file') as File;
-      return [url, file.name, file.type, file.size];
-    });
-    expect(uploads).toEqual([
-      ['/api/voice-fill/visit-consultation', 'recording.webm', 'audio/webm', 5],
-      ['/api/voice-fill/visit-consultation', 'recording.webm', 'audio/webm', 5],
-    ]);
-  });
-
-  it('reports a blocked microphone in the bar instead of a toast', async () => {
-    Object.defineProperty(navigator, 'mediaDevices', {
-      value: { getUserMedia: jest.fn().mockRejectedValue(new Error('Permission denied')) },
-      configurable: true,
-    });
-    render(<Shell><VisitPage apply={jest.fn()} /></Shell>);
-
-    await userEvent.click(await screen.findByRole('button', { name: 'Speak' }));
-
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Microphone is blocked. Allow it from the lock icon in the address bar, then try again. You can also type here.',
-    );
-  });
-
   it('sends a command to the command route and opens the confirm card', async () => {
     fetchMock.mockResolvedValue(ok({
       transcript: 'Book Ramesh Kumar tomorrow at 10',
@@ -310,18 +284,6 @@ describe('VoiceBar', () => {
 
     await userEvent.keyboard('{Escape}');
     expect(document.activeElement).toBe(field);
-  });
-
-  it('discards a recording on Escape without uploading it', async () => {
-    render(<Shell><VisitPage apply={jest.fn()} /></Shell>);
-    await userEvent.click(await screen.findByRole('button', { name: 'Speak' }));
-    await screen.findByRole('button', { name: 'Stop and send' });
-
-    await userEvent.keyboard('{Escape}');
-
-    expect(screen.getByRole('status')).toHaveTextContent('Recording discarded.');
-    expect(screen.getByRole('button', { name: 'Speak' })).toBeEnabled();
-    expect(calls()).toEqual([]);
   });
 
   it('keeps Shift+Enter as a new line instead of sending', async () => {
@@ -707,5 +669,279 @@ describe('VoiceBar collapse', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Show voice bar' }));
 
     expect(await screen.findByRole('combobox', { name: 'Send to' })).toHaveDisplayValue('Visit notes');
+  });
+});
+
+const LISTENING = 'Listening. Press Enter to send, or Escape to discard.';
+const box = () => screen.getByRole('textbox', { name: 'Say or type a request' });
+
+function BusyPage({ scope = 'visit-1' }: { scope?: string }) {
+  const { busy } = useVoiceBarForm({
+    form: 'visit-consultation',
+    label: 'Visit notes',
+    hint: 'Say or type the visit notes',
+    scope,
+    preview: (fields) => voiceDraftLines(registry, fields),
+    apply: jest.fn(),
+  });
+  return <p>{busy ? 'Voice is working on this visit' : 'Voice is idle'}</p>;
+}
+
+describe('VoiceBar live speech', () => {
+  it('opens the microphone, then shows the live words in a read-only box as they are spoken', async () => {
+    const speech = fakeDictation();
+    render(<Shell><VisitPage apply={jest.fn()} /></Shell>);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Speak' }));
+
+    expect(screen.getByRole('status')).toHaveTextContent('Opening the microphone…');
+    expect(speech.options()).toMatchObject({ preference: 'full-transcript', limits: { maxMs: 2_400_000 } });
+
+    speech.view({ phase: 'listening', live: true, preview: 'itching on both' });
+    expect(box()).toHaveValue('itching on both');
+    expect(box()).toHaveAttribute('readonly');
+    expect(screen.getByRole('status')).toHaveTextContent(LISTENING);
+
+    speech.view({ phase: 'listening', live: true, preview: 'itching on both elbows' });
+    expect(box()).toHaveValue('itching on both elbows');
+
+    speech.view({ phase: 'finishing', live: true, preview: 'itching on both elbows' });
+    expect(screen.getByRole('status')).toHaveTextContent('Finishing…');
+  });
+
+  it('puts the dictation after what was typed and sends it all through the typed route to a draft', async () => {
+    const speech = fakeDictation();
+    render(<Shell><VisitPage apply={jest.fn()} /></Shell>);
+    await userEvent.type(await textBox(), 'Follow up.');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Speak' }));
+    speech.view({ phase: 'listening', live: true, preview: 'itching for two weeks' });
+    expect(box()).toHaveValue('Follow up. itching for two weeks');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Stop and send' }));
+    expect(speech.stop.mock.calls).toEqual([[]]);
+    expect(calls()).toEqual([]);
+    await speech.finish({ kind: 'text', text: 'itching for two weeks', via: 'live' });
+
+    expect(await screen.findByRole('button', { name: 'Add to form' })).toBeEnabled();
+    expect(calls()).toEqual([['/api/voice-fill/visit-consultation/text', '{"text":"Follow up. itching for two weeks"}']]);
+    expect(screen.getByText('“Eczema on both elbows. Moisturise twice a day. Review in four weeks.”')).toBeInTheDocument();
+    expect(box()).toHaveValue('');
+    expect(box()).not.toHaveAttribute('readonly');
+  });
+
+  it('sends speech on a page with no form to the command route and opens the confirm card', async () => {
+    fetchMock.mockResolvedValue(ok({ transcript: 'Open Ramesh Kumar', fields: { action: 'open_patient', patientName: 'Ramesh Kumar' } }));
+    api.getPatients.mockResolvedValue({ data: [] } as never);
+    const speech = fakeDictation();
+    render(<Shell />);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Speak' }));
+    speech.view({ phase: 'listening', live: true, preview: 'open ramesh' });
+    await userEvent.click(screen.getByRole('button', { name: 'Stop and send' }));
+    await speech.finish({ kind: 'text', text: 'open ramesh', via: 'live' });
+
+    expect(await screen.findByRole('dialog', { name: 'Open patient chart' })).toHaveTextContent('Heard “Open Ramesh Kumar”');
+    expect(calls()).toEqual([['/api/voice-fill/voice-command/text', '{"text":"open ramesh"}']]);
+  });
+
+  it('discards the dictation on Escape, puts back what was typed, and sends nothing', async () => {
+    const speech = fakeDictation();
+    render(<Shell><VisitPage apply={jest.fn()} /></Shell>);
+    await userEvent.type(await textBox(), 'Follow up.');
+    await userEvent.click(screen.getByRole('button', { name: 'Speak' }));
+    speech.view({ phase: 'listening', live: true, preview: 'itching' });
+
+    await userEvent.keyboard('{Escape}');
+
+    expect(speech.dispose.mock.calls).toEqual([[]]);
+    expect(screen.getByRole('status')).toHaveTextContent('Recording discarded.');
+    expect(box()).toHaveValue('Follow up.');
+    expect(screen.getByRole('button', { name: 'Speak' })).toBeEnabled();
+
+    await speech.finish({ kind: 'cancelled' });
+    expect(calls()).toEqual([]);
+    expect(speech.dispose.mock.calls).toEqual([[]]);
+  });
+
+  it.each([
+    ['nothing was heard', { kind: 'empty' } as DictationOutcome, 'Did not catch anything. Please try again.'],
+    [
+      'transcription failed',
+      { kind: 'error', title: 'Speech-to-text error', description: 'Speech transcription is temporarily unavailable. Try again shortly.' } as DictationOutcome,
+      'Speech transcription is temporarily unavailable. Try again shortly.',
+    ],
+    ['transcription failed with no detail', { kind: 'error', title: 'Speech-to-text error', description: '' } as DictationOutcome, 'Speech-to-text error'],
+  ])('shows an alert with no Try again when %s, and puts back what was typed', async (_case, outcome, message) => {
+    const speech = fakeDictation();
+    render(<Shell><VisitPage apply={jest.fn()} /></Shell>);
+    await userEvent.type(await textBox(), 'Follow up.');
+    await userEvent.click(screen.getByRole('button', { name: 'Speak' }));
+    speech.view({ phase: 'listening', live: true, preview: 'mumble' });
+    await userEvent.click(screen.getByRole('button', { name: 'Stop and send' }));
+
+    await speech.finish(outcome);
+
+    expect(screen.getByRole('alert')).toHaveTextContent(message);
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+    expect(box()).toHaveValue('Follow up.');
+    expect(calls()).toEqual([]);
+  });
+
+  it.each([
+    ['denied', new MicUnavailableError('Permission denied', 'denied'),
+      'Microphone is blocked. Allow it from the lock icon in the address bar, then try again. You can also type here.'],
+    ['unsupported', new MicUnavailableError('Microphone recording is not supported in this browser.', 'unsupported'),
+      'This browser cannot record audio. Type here instead.'],
+    ['busy', new MicUnavailableError('Another dictation is already running. Stop it first.', 'busy'),
+      'Another dictation is already running. Stop it first.'],
+  ])('reports a microphone that is %s in the bar', async (_reason, error, message) => {
+    startDictation.mockRejectedValueOnce(error);
+    render(<Shell><BusyPage /></Shell>);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Speak' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(message);
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+    expect(screen.getByText('Voice is idle')).toBeInTheDocument();
+  });
+
+  it('shows a notice from the engine while listening and drops it once the dictation ends', async () => {
+    const speech = fakeDictation();
+    render(<Shell><VisitPage apply={jest.fn()} /></Shell>);
+    await userEvent.click(await screen.findByRole('button', { name: 'Speak' }));
+    speech.view({ phase: 'listening', live: false, preview: '' });
+
+    speech.notice('Live preview unavailable', 'Still recording. Your dictation will be transcribed when you stop.');
+
+    expect(screen.getByText('Live preview unavailable. Still recording. Your dictation will be transcribed when you stop.')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).toBeNull();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Stop and send' }));
+    await speech.finish({ kind: 'text', text: 'itching', via: 'recorded' });
+
+    await screen.findByRole('button', { name: 'Add to form' });
+    expect(screen.queryByText(/Live preview unavailable/)).toBeNull();
+  });
+
+  it('releases the microphone and sends nothing when the page scope changes mid-dictation', async () => {
+    const speech = fakeDictation();
+    const view = render(<Shell><BusyPage scope="visit-1" /></Shell>);
+    await userEvent.click(await screen.findByRole('button', { name: 'Speak' }));
+    speech.view({ phase: 'listening', live: true, preview: 'itching' });
+
+    view.rerender(<Shell><BusyPage scope="visit-2" /></Shell>);
+
+    expect(speech.dispose.mock.calls).toEqual([[]]);
+    expect(screen.getByRole('status')).toHaveTextContent('The page changed, so this draft was discarded.');
+    await speech.finish({ kind: 'text', text: 'itching', via: 'live' });
+    await settle();
+    expect(calls()).toEqual([]);
+    expect(screen.getByRole('status')).toHaveTextContent('The page changed, so this draft was discarded.');
+    expect(box()).toHaveValue('');
+  });
+
+  it('releases the microphone and sends nothing when the page unmounts while finishing', async () => {
+    const speech = fakeDictation();
+    render(<Shell><TogglePage apply={jest.fn()} /></Shell>);
+    await userEvent.click(await screen.findByRole('button', { name: 'Speak' }));
+    speech.view({ phase: 'listening', live: true, preview: 'itching' });
+    await userEvent.click(screen.getByRole('button', { name: 'Stop and send' }));
+    speech.view({ phase: 'finishing', live: true, preview: 'itching' });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Toggle page' }));
+
+    expect(speech.dispose.mock.calls).toEqual([[]]);
+    expect(screen.getByRole('status')).toHaveTextContent('The page changed, so this draft was discarded.');
+    await speech.finish({ kind: 'text', text: 'itching', via: 'live' });
+    await settle();
+    expect(calls()).toEqual([]);
+  });
+
+  it('disposes a session that finishes opening after the page changed', async () => {
+    let open!: () => void;
+    const opened = new Promise<void>((resolve) => { open = resolve; });
+    const dispose = jest.fn();
+    startDictation.mockImplementationOnce(async () => {
+      await opened;
+      return { outcome: new Promise<DictationOutcome>(() => {}), stop: jest.fn(), dispose };
+    });
+    render(<Shell><TogglePage apply={jest.fn()} /></Shell>);
+    await userEvent.click(await screen.findByRole('button', { name: 'Speak' }));
+    expect(screen.getByRole('status')).toHaveTextContent('Opening the microphone…');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Toggle page' }));
+    await act(async () => { open(); });
+
+    expect(dispose.mock.calls).toEqual([[]]);
+    expect(screen.getByRole('status')).toHaveTextContent('The page changed, so this draft was discarded.');
+  });
+
+  it('tells the page it is busy from the mic press until the request after stop settles', async () => {
+    const pending = deferred<ReturnType<typeof ok>>();
+    fetchMock.mockReturnValueOnce(pending.promise);
+    const speech = fakeDictation();
+    render(<Shell><BusyPage /></Shell>);
+    await screen.findByRole('button', { name: 'Speak' });
+    expect(screen.getByText('Voice is idle')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Speak' }));
+    expect(screen.getByText('Voice is working on this visit')).toBeInTheDocument();
+    speech.view({ phase: 'listening', live: true, preview: 'eczema' });
+    await userEvent.click(screen.getByRole('button', { name: 'Stop and send' }));
+    speech.view({ phase: 'finishing', live: true, preview: 'eczema' });
+    expect(screen.getByText('Voice is working on this visit')).toBeInTheDocument();
+    await speech.finish({ kind: 'text', text: 'eczema', via: 'live' });
+    expect(screen.getByText('Voice is working on this visit')).toBeInTheDocument();
+
+    await act(async () => { pending.resolve(ok(heardVisit)); });
+
+    expect(await screen.findByRole('button', { name: 'Add to form' })).toBeEnabled();
+    expect(screen.getByText('Voice is idle')).toBeInTheDocument();
+  });
+
+  it('stops on Enter in the box while listening, with the mic labelled Stop and send', async () => {
+    const speech = fakeDictation();
+    render(<Shell><VisitPage apply={jest.fn()} /></Shell>);
+    await userEvent.click(await screen.findByRole('button', { name: 'Speak' }));
+    speech.view({ phase: 'listening', live: true, preview: 'eczema' });
+
+    expect(screen.getByRole('button', { name: 'Stop and send' })).toBeEnabled();
+    await userEvent.type(box(), '{Enter}');
+
+    expect(speech.stop.mock.calls).toEqual([[]]);
+    expect(box()).toHaveValue('eczema');
+    expect(calls()).toEqual([]);
+  });
+
+  it('stops once the microphone opens when Stop was pressed while it was still opening', async () => {
+    let open!: () => void;
+    const opened = new Promise<void>((resolve) => { open = resolve; });
+    const stop = jest.fn();
+    startDictation.mockImplementationOnce(async () => {
+      await opened;
+      return { outcome: new Promise<DictationOutcome>(() => {}), stop, dispose: jest.fn() };
+    });
+    render(<Shell><VisitPage apply={jest.fn()} /></Shell>);
+    await userEvent.click(await screen.findByRole('button', { name: 'Speak' }));
+
+    await userEvent.click(screen.getByRole('button', { name: 'Stop and send' }));
+    expect(stop.mock.calls).toEqual([]);
+    await act(async () => { open(); });
+
+    expect(stop.mock.calls).toEqual([[]]);
+  });
+
+  it('releases the microphone when the bar unmounts', async () => {
+    const speech = fakeDictation();
+    const view = render(<Shell><VisitPage apply={jest.fn()} /></Shell>);
+    await userEvent.click(await screen.findByRole('button', { name: 'Speak' }));
+    speech.view({ phase: 'listening', live: true, preview: 'eczema' });
+
+    view.unmount();
+    await speech.finish({ kind: 'text', text: 'eczema', via: 'live' });
+
+    expect(speech.dispose.mock.calls).toEqual([[]]);
+    expect(calls()).toEqual([]);
   });
 });
