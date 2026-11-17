@@ -1,4 +1,4 @@
-import { MicUnavailableError, startDictationSession, type DictationView } from '@/lib/dictation-session';
+import { MicUnavailableError, startDictationSession, type DictationSession, type DictationView } from '@/lib/dictation-session';
 import { handleUnauthorizedRedirect } from '@/lib/authRedirect';
 import type { SpeechToTextPreference } from '@/lib/speech-to-text';
 
@@ -119,14 +119,17 @@ function harness(o: {
     clearTimeout: (id: unknown) => { timers.delete(id as number); },
   };
 
-  const start = (preference: SpeechToTextPreference = 'full-transcript') =>
-    startDictationSession({
+  const start = async (preference: SpeechToTextPreference = 'full-transcript') => {
+    const session = await startDictationSession({
       preference,
       onView: (view) => views.push(view),
       onNotice: (notice) => notices.push(notice),
       limits: { maxMs: 120_000, connectMs: 1_000, finishMs: 2_000, tailMs: TAIL_MS, minRecordedBytes: 1_000 },
       deps,
     });
+    opened.push(session);
+    return session;
+  };
 
   const advance = async (ms: number) => {
     now += ms;
@@ -164,8 +167,14 @@ async function startListening(h: ReturnType<typeof harness>, preference?: Speech
   return session;
 }
 
+const opened: DictationSession[] = [];
+
 beforeEach(() => {
   jest.clearAllMocks();
+});
+
+afterEach(() => {
+  opened.splice(0).forEach((session) => session.dispose());
 });
 
 describe('startDictationSession over live transcription', () => {
@@ -411,5 +420,79 @@ describe('startDictationSession over live transcription', () => {
     await h.advance(TAIL_MS);
     await expect(session.outcome).resolves.toEqual({ kind: 'error', title: 'Speech-to-text error', description: 'The recording is too large. Try a shorter clip.' });
     expect(h.urls()).toEqual(['/api/visits/transcribe']);
+  });
+});
+
+describe('startDictationSession holds the microphone for one dictation at a time', () => {
+  const BUSY = new MicUnavailableError('Another dictation is already running. Stop it first.', 'busy');
+
+  it('refuses a second start while the first is listening, without opening the microphone again', async () => {
+    const h = harness();
+    await startListening(h);
+    const second = harness();
+
+    await expect(second.start()).rejects.toEqual(BUSY);
+    await expect(second.start()).rejects.toMatchObject({ reason: 'busy' });
+    expect(second.calls).toEqual([]);
+    expect(second.views).toEqual([]);
+  });
+
+  it('refuses a second start while the first is still waiting for the microphone', async () => {
+    let grant!: () => void;
+    const granted = new Promise<void>((resolve) => { grant = resolve; });
+    const h = harness();
+    const first = startDictationSession({
+      preference: 'full-transcript',
+      onView: () => {},
+      onNotice: () => {},
+      deps: {
+        getUserMedia: async () => { await granted; return h.stream as unknown as MediaStream; },
+        RTCPeerConnection: undefined,
+        MediaRecorder: fakeRecorder(5_000) as unknown as typeof MediaRecorder,
+      },
+    });
+
+    await expect(harness().start()).rejects.toEqual(BUSY);
+    grant();
+    (await first).dispose();
+  });
+
+  it('lets a new dictation start once the first has settled with text', async () => {
+    const h = harness({ rtc: false });
+    const first = await h.start();
+    first.stop();
+    await h.advance(TAIL_MS);
+    await expect(first.outcome).resolves.toEqual({ kind: 'text', text: 'Recorded words', via: 'recorded' });
+
+    const next = harness({ rtc: false });
+    await next.start();
+    expect(next.views).toEqual([{ phase: 'listening', live: false, preview: '' }]);
+  });
+
+  it('lets a new dictation start once the first was disposed', async () => {
+    const h = harness();
+    const first = await startListening(h);
+    first.dispose();
+
+    const next = harness({ rtc: false });
+    await next.start();
+    expect(next.views).toEqual([{ phase: 'listening', live: false, preview: '' }]);
+  });
+
+  it('lets a new dictation start after a start that failed for the microphone', async () => {
+    await expect(harness({ micError: new Error('Permission denied') }).start()).rejects.toEqual(new MicUnavailableError('Permission denied', 'denied'));
+
+    const next = harness({ rtc: false });
+    await next.start();
+    expect(next.views).toEqual([{ phase: 'listening', live: false, preview: '' }]);
+  });
+
+  it('lets a new dictation start after a start in a browser that cannot record', async () => {
+    const refused = startDictationSession({ preference: 'full-transcript', onView: () => {}, onNotice: () => {}, deps: { getUserMedia: undefined } });
+    await expect(refused).rejects.toEqual(new MicUnavailableError('Microphone recording is not supported in this browser.', 'unsupported'));
+
+    const next = harness({ rtc: false });
+    await next.start();
+    expect(next.views).toEqual([{ phase: 'listening', live: false, preview: '' }]);
   });
 });

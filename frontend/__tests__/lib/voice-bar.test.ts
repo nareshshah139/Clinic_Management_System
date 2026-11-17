@@ -5,8 +5,6 @@ jest.mock('@/lib/api', () => ({ apiClient: {} }));
 
 const visit: VoiceBarTarget = { kind: 'form', registrationId: 'r1' };
 const command: VoiceBarTarget = { kind: 'command' };
-// A plain stand-in: jest crashes printing a diff that holds a jsdom Blob.
-const audio = { size: 5, type: 'audio/webm' } as unknown as Blob;
 const lines: VoiceDraftLine[] = [
   { id: 'diagnosis', label: 'Diagnosis', value: 'Eczema', fields: { diagnosis: 'Eczema' } },
   { id: 'advice', label: 'Advice', value: 'Moisturise twice a day', fields: { advice: 'Moisturise twice a day' } },
@@ -15,32 +13,44 @@ const lines: VoiceDraftLine[] = [
 const undo = () => {};
 
 const idle: VoiceBarState = { kind: 'idle', notice: null };
-const listening: VoiceBarState = { kind: 'listening', target: visit, startedAt: 1000 };
+const listening: VoiceBarState = { kind: 'listening', target: visit, startedAt: 1000, phase: 'connecting' };
 const working: VoiceBarState = { kind: 'working', target: visit, attempt: 3, retry: { kind: 'text', text: 'eczema' } };
 const draft: VoiceBarState = { kind: 'draft', registrationId: 'r1', heard: 'eczema', lines, kept: ['diagnosis', 'advice', 'followUp'], error: null };
 const applied: VoiceBarState = { kind: 'applied', registrationId: 'r1', labels: ['Diagnosis'], undo, opened: false };
 
 describe('voiceBarReducer', () => {
-  it('starts listening from idle with the chosen target', () => {
-    expect(voiceBarReducer(idle, { type: 'listen', target: visit, startedAt: 1000 })).toEqual(listening);
+  it('starts listening from idle with the chosen target while the microphone opens', () => {
+    expect(voiceBarReducer(idle, { type: 'listen', target: visit, startedAt: 1000 }))
+      .toEqual({ kind: 'listening', target: visit, startedAt: 1000, phase: 'connecting' });
   });
 
-  it('does not start a second recording while one is in flight', () => {
+  it('does not start a second dictation while one is in flight', () => {
     expect(voiceBarReducer(working, { type: 'listen', target: command, startedAt: 2000 })).toBe(working);
+    expect(voiceBarReducer(listening, { type: 'listen', target: command, startedAt: 2000 })).toBe(listening);
   });
 
-  it('discards a recording with Escape and says so', () => {
+  it('follows the dictation through listening and finishing, and ignores a phase once it is no longer listening', () => {
+    const live = voiceBarReducer(listening, { type: 'dictation-phase', phase: 'listening' });
+    expect(live).toEqual({ kind: 'listening', target: visit, startedAt: 1000, phase: 'listening' });
+    expect(voiceBarReducer(live, { type: 'dictation-phase', phase: 'listening' })).toBe(live);
+    expect(voiceBarReducer(live, { type: 'dictation-phase', phase: 'finishing' }))
+      .toEqual({ kind: 'listening', target: visit, startedAt: 1000, phase: 'finishing' });
+    expect(voiceBarReducer(working, { type: 'dictation-phase', phase: 'finishing' })).toBe(working);
+  });
+
+  it('discards a dictation with Escape and says so', () => {
     expect(voiceBarReducer(listening, { type: 'discard-recording' })).toEqual({ kind: 'idle', notice: 'Recording discarded.' });
   });
 
-  it('turns a recorder failure into a failure with nothing to retry', () => {
-    expect(voiceBarReducer(listening, { type: 'recorder-failed', message: 'Microphone is blocked.' }))
+  it('turns a dictation failure into a failure with nothing to retry', () => {
+    expect(voiceBarReducer(listening, { type: 'dictation-failed', message: 'Microphone is blocked.' }))
       .toEqual({ kind: 'failed', target: visit, message: 'Microphone is blocked.', retry: null });
+    expect(voiceBarReducer(working, { type: 'dictation-failed', message: 'late' })).toBe(working);
   });
 
-  it('sends recorded audio as the current attempt', () => {
-    expect(voiceBarReducer(listening, { type: 'send', target: visit, retry: { kind: 'audio', audio, filename: 'recording.webm' }, attempt: 4 }))
-      .toEqual({ kind: 'working', target: visit, attempt: 4, retry: { kind: 'audio', audio, filename: 'recording.webm' } });
+  it('sends the dictated text as the current attempt', () => {
+    expect(voiceBarReducer(listening, { type: 'send', target: visit, retry: { kind: 'text', text: 'itching for two weeks' }, attempt: 4 }))
+      .toEqual({ kind: 'working', target: visit, attempt: 4, retry: { kind: 'text', text: 'itching for two weeks' } });
   });
 
   it('opens a draft with every line kept when the current attempt is heard', () => {
@@ -84,12 +94,6 @@ describe('voiceBarReducer', () => {
     expect(voiceBarReducer(next, { type: 'dismiss' })).toEqual({ kind: 'idle', notice: null });
   });
 
-  it('keeps the recorded audio for retry when the request fails', () => {
-    const sending: VoiceBarState = { kind: 'working', target: visit, attempt: 5, retry: { kind: 'audio', audio, filename: 'recording.webm' } };
-    expect(voiceBarReducer(sending, { type: 'request-failed', attempt: 5, message: 'Voice fill failed (server returned 500).' }))
-      .toEqual({ kind: 'failed', target: visit, message: 'Voice fill failed (server returned 500).', retry: { kind: 'audio', audio, filename: 'recording.webm' } });
-  });
-
   it('keeps the typed text for retry when the request fails', () => {
     expect(voiceBarReducer(working, { type: 'request-failed', attempt: 3, message: 'Offline' }))
       .toEqual({ kind: 'failed', target: visit, message: 'Offline', retry: { kind: 'text', text: 'eczema' } });
@@ -122,7 +126,9 @@ describe('voiceBarReducer', () => {
   });
 
   it.each([
-    ['listening', listening],
+    ['listening while the microphone opens', listening],
+    ['listening', { ...listening, phase: 'listening' } as VoiceBarState],
+    ['listening while finishing', { ...listening, phase: 'finishing' } as VoiceBarState],
     ['working', working],
     ['draft', draft],
     ['applied', applied],
@@ -138,6 +144,8 @@ describe('voiceBarReducer', () => {
     expect(voiceBarReducer(draft, { type: 'registration', activeId: 'r1' })).toBe(draft);
     const commandWork: VoiceBarState = { kind: 'working', target: command, attempt: 1, retry: { kind: 'text', text: 'book' } };
     expect(voiceBarReducer(commandWork, { type: 'registration', activeId: null })).toBe(commandWork);
+    const commandSpeech: VoiceBarState = { kind: 'listening', target: command, startedAt: 1000, phase: 'listening' };
+    expect(voiceBarReducer(commandSpeech, { type: 'registration', activeId: null })).toBe(commandSpeech);
   });
 
   it('dismisses with an optional notice', () => {

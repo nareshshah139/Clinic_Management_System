@@ -1,3 +1,4 @@
+import type { DictationNotice, DictationPhase } from '@/lib/dictation-session';
 import { COMMAND_EXAMPLE, parseVoiceCommand, type HeardCommand } from '@/lib/voice-command';
 import type { VoiceDraftLine, VoiceFillFields } from '@/lib/voice-fill';
 
@@ -13,7 +14,10 @@ export const VOICE_BAR_COPY = {
   showBar: 'Show voice bar',
   showBarTitle: 'Show voice bar (Ctrl+/)',
   stripLabel: 'Voice bar',
+  opening: 'Opening the microphone…',
   listening: 'Listening. Press Enter to send, or Escape to discard.',
+  finishing: 'Finishing…',
+  speechNotice: ({ title, description }: DictationNotice) => `${title}. ${description}`,
   working: 'Working it out…',
   heard: 'Heard',
   edit: 'Edit',
@@ -43,10 +47,10 @@ export const VOICE_BAR_COPY = {
 export const VOICE_BAR_COLLAPSED_KEY = 'cms-voice-bar-collapsed';
 
 export type VoiceBarTarget = { kind: 'command' } | { kind: 'form'; registrationId: string };
-export type VoiceBarRetry = { kind: 'audio'; audio: Blob; filename: string } | { kind: 'text'; text: string };
+export type VoiceBarRetry = { kind: 'text'; text: string };
 export type VoiceBarState =
   | { kind: 'idle'; notice: string | null }
-  | { kind: 'listening'; target: VoiceBarTarget; startedAt: number }
+  | { kind: 'listening'; target: VoiceBarTarget; startedAt: number; phase: DictationPhase }
   | { kind: 'working'; target: VoiceBarTarget; attempt: number; retry: VoiceBarRetry }
   | { kind: 'draft'; registrationId: string; heard: string; lines: VoiceDraftLine[]; kept: string[]; error: string | null }
   | { kind: 'applied'; registrationId: string; labels: string[]; undo: (() => void) | null; opened: boolean }
@@ -55,8 +59,9 @@ export type VoiceBarState =
 
 export type VoiceBarEvent =
   | { type: 'listen'; target: VoiceBarTarget; startedAt: number }
+  | { type: 'dictation-phase'; phase: DictationPhase }
   | { type: 'discard-recording' }
-  | { type: 'recorder-failed'; message: string }
+  | { type: 'dictation-failed'; message: string }
   | { type: 'send'; target: VoiceBarTarget; retry: VoiceBarRetry; attempt: number }
   | { type: 'heard'; attempt: number; transcript: string; fields: VoiceFillFields; lines: VoiceDraftLine[] }
   | { type: 'request-failed'; attempt: number; message: string }
@@ -86,13 +91,6 @@ export function voiceBarRegistrationOf(state: VoiceBarState): string | null {
   }
 }
 
-/** Maps the recorder's own failure titles to the bar's wording. */
-export function recorderFailureMessage(title: string): string {
-  if (title === 'Voice capture unavailable') return VOICE_BAR_COPY.cannotRecord;
-  if (title === 'Microphone access denied') return VOICE_BAR_COPY.micBlocked;
-  return VOICE_BAR_COPY.nothingHeard;
-}
-
 /**
  * @cc [owner:nareshshah139,label:product] voice-bar-draft-bound-to-scope
  * A recording, request, draft, failure or pending Undo that belongs to a form registration MUST become idle with the
@@ -108,10 +106,12 @@ export function voiceBarReducer(state: VoiceBarState, event: VoiceBarEvent): Voi
     case 'listen':
       return state.kind === 'listening' || state.kind === 'working'
         ? state
-        : { kind: 'listening', target: event.target, startedAt: event.startedAt };
+        : { kind: 'listening', target: event.target, startedAt: event.startedAt, phase: 'connecting' };
+    case 'dictation-phase':
+      return state.kind === 'listening' && state.phase !== event.phase ? { ...state, phase: event.phase } : state;
     case 'discard-recording':
       return state.kind === 'listening' ? idle(VOICE_BAR_COPY.recordingDiscarded) : state;
-    case 'recorder-failed':
+    case 'dictation-failed':
       return state.kind === 'listening'
         ? { kind: 'failed', target: state.target, message: event.message, retry: null }
         : state;
