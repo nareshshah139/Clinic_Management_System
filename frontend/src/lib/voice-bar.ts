@@ -64,6 +64,7 @@ export type VoiceBarEvent =
   | { type: 'applied'; registrationId: string; labels: string[]; undo: (() => void) | null }
   | { type: 'apply-failed'; registrationId: string }
   | { type: 'registration'; activeId: string | null }
+  | { type: 'form-touched' }
   | { type: 'dismiss'; notice?: string };
 
 export const VOICE_BAR_IDLE: VoiceBarState = { kind: 'idle', notice: null };
@@ -152,6 +153,8 @@ export function voiceBarReducer(state: VoiceBarState, event: VoiceBarEvent): Voi
       return state.kind === 'draft' && state.registrationId === event.registrationId
         ? { ...state, error: VOICE_BAR_COPY.applyFailed }
         : state;
+    case 'form-touched':
+      return state.kind === 'applied' && state.undo ? idle() : state;
     case 'dismiss':
       return idle(event.notice ?? null);
   }

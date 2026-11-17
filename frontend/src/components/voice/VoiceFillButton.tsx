@@ -54,7 +54,7 @@ function statusText(phase: VoiceFillPhase): string {
 }
 
 /** Classes for the mic pill in every phase. */
-export function voicePillClass(phase: VoiceFillPhase): string {
+function voicePillClass(phase: VoiceFillPhase): string {
   return cn(
     'inline-flex h-8 shrink-0 items-center justify-center gap-2 overflow-hidden whitespace-nowrap rounded-full px-2 text-sm font-medium',
     'transition-[max-width,background-color,color] duration-200 ease-out motion-reduce:transition-none',
@@ -66,7 +66,7 @@ export function voicePillClass(phase: VoiceFillPhase): string {
   );
 }
 
-export function VoicePillFace({ phase, busyText }: { phase: VoiceFillPhase; busyText: string }) {
+function VoicePillFace({ phase, busyText }: { phase: VoiceFillPhase; busyText: string }) {
   const elapsed = useElapsedSeconds(phase);
   switch (phase.kind) {
     case 'idle':

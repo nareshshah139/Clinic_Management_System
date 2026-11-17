@@ -1,5 +1,6 @@
 import { UserRole } from '@cms/shared-types';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { DashboardUserProvider } from '@/components/layout/dashboard-user-context';
 import { VoiceBar } from '@/components/voice/VoiceBar';
 import { useVoiceBar, VoiceBarProvider } from '@/components/voice/VoiceBarProvider';
@@ -233,5 +234,34 @@ describe('voice bar end to end', () => {
 
     expect((document.getElementById('visit-diagnosis') as HTMLInputElement).value).toBe('');
     expect(screen.queryAllByPlaceholderText('Search medicine name...')).toEqual([]);
+  });
+});
+
+describe('typing into the form after a voice fill', () => {
+  it('stops offering Undo and keeps the hand-typed text in Chief complaints', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true, status: 200, text: async () => '',
+      json: async () => ({ transcript: 'Itchy rash.', fields: { chiefComplaints: 'Itchy rash' } }),
+    }) as unknown as typeof fetch;
+    renderBuilder();
+    await act(async () => { jest.advanceTimersByTime(1000); });
+
+    const box = await screen.findByRole('textbox', { name: 'Say or type a request' });
+    fireEvent.change(box, { target: { value: 'itchy rash' } });
+    await act(async () => { fireEvent.keyDown(box, { key: 'Enter', code: 'Enter' }); });
+    await act(async () => { fireEvent.click(await screen.findByRole('button', { name: 'Add to form' })); });
+
+    const complaints = document.getElementById('visit-chief-complaints') as HTMLTextAreaElement;
+    expect(complaints.value).toBe('Itchy rash');
+    expect(screen.getByRole('status')).toHaveTextContent('Added to Visit notes: Chief complaints.');
+    const bar = within(screen.getByRole('region', { name: 'Voice bar' }));
+    expect(bar.getByRole('button', { name: 'Undo' })).toBeEnabled();
+
+    const typist = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+    await typist.type(complaints, ' for two days');
+
+    expect(complaints.value).toBe('Itchy rash for two days');
+    expect(bar.queryByRole('button', { name: 'Undo' })).toBeNull();
+    expect(screen.queryByText(/Added to Visit notes/)).toBeNull();
   });
 });

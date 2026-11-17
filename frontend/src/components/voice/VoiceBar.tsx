@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type Dispatch, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from 'react';
 import { ArrowUp, ChevronDown, ChevronUp, Mic, Square } from 'lucide-react';
 import { useDashboardUser } from '@/components/layout/dashboard-user-context';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,7 @@ import { cn, getErrorMessage } from '@/lib/utils';
 import {
   recorderFailureMessage,
   VOICE_BAR_COPY as COPY,
+  type VoiceBarEvent,
   type VoiceBarRetry,
   type VoiceBarState,
   type VoiceBarTarget,
@@ -29,7 +30,7 @@ import { VoiceCommandDialog } from './VoiceCommandDialog';
 import { formatElapsed, useCancelOnEscape, useElapsedSeconds } from './VoiceFillButton';
 
 const RECORDING_KEY = 'voice-bar';
-// Well under the server's 60000-character cap and Express's 100 KB body limit, even for 3-byte scripts.
+// Well under the server's 60000-character cap, even for 3-byte scripts.
 const MAX_TYPED_CHARS = 8000;
 
 function statusText(state: VoiceBarState, formLabel: string): string {
@@ -50,6 +51,33 @@ function statusText(state: VoiceBarState, formLabel: string): string {
   }
 }
 
+const MODIFIER_KEYS = new Set(['Shift', 'Control', 'Alt', 'Meta']);
+
+/**
+ * @cc [owner:nareshshah139,label:product] voice-bar-undo-only-while-form-untouched
+ * The voice bar MUST stop offering Undo as soon as the user presses, types or clicks anywhere on the page outside the bar, so Undo can never discard edits made after the fill.
+ */
+function useDropUndoWhenFormTouched(
+  barRef: RefObject<HTMLElement | null>,
+  state: VoiceBarState,
+  dispatch: Dispatch<VoiceBarEvent>,
+) {
+  const undoable = state.kind === 'applied' && state.undo !== null;
+  useEffect(() => {
+    if (!undoable) return;
+    const touch = (event: Event) => {
+      if (event.target instanceof Node && barRef.current?.contains(event.target)) return;
+      if (event instanceof KeyboardEvent && (MODIFIER_KEYS.has(event.key) || (event.key === '/' && (event.ctrlKey || event.metaKey)))) return;
+      dispatch({ type: 'form-touched' });
+    };
+    const types = ['pointerdown', 'input', 'keydown'] as const;
+    for (const type of types) document.addEventListener(type, touch, true);
+    return () => {
+      for (const type of types) document.removeEventListener(type, touch, true);
+    };
+  }, [undoable, barRef, dispatch]);
+}
+
 /**
  * @cc [owner:nareshshah139,label:product] voice-bar-review-before-fill
  * The voice bar MUST show the heard text and every line it would fill before it changes a form, MUST pass only the lines the user kept to the page, and MUST NOT save.
@@ -64,7 +92,9 @@ export function VoiceBar() {
   const stripRef = useRef<HTMLButtonElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const attemptRef = useRef(0);
+  const barRef = useRef<HTMLElement>(null);
   const applyingRef = useRef(false);
+  const [applying, setApplying] = useState(false);
   const stateRef = useRef(state);
   stateRef.current = state;
   const activeRef = useRef(active);
@@ -107,7 +137,9 @@ export function VoiceBar() {
         ? await requestVoiceFill(form, retry.audio, retry.filename)
         : await requestVoiceFillFromText(form, retry.text);
       const lines = registration ? registration.form.current.preview(fields) : [];
-      if (registration && transcript.trim() && !lines.length) setText(transcript.trim());
+      if (registration && transcript.trim() && !lines.length && attemptRef.current === attempt && activeRef.current?.id === registration.id) {
+        setText((current) => current || transcript.trim());
+      }
       dispatch({ type: 'heard', attempt, transcript, fields, lines });
     } catch (error) {
       dispatch({ type: 'request-failed', attempt, message: getErrorMessage(error) || COPY.requestFailed });
@@ -124,6 +156,15 @@ export function VoiceBar() {
       if (current.kind === 'listening') void send(current.target, { kind: 'audio', audio, filename });
     },
   });
+
+  useDropUndoWhenFormTouched(barRef, state, dispatch);
+
+  const confirming = state.kind === 'confirming';
+  const wasConfirmingRef = useRef(false);
+  useEffect(() => {
+    if (wasConfirmingRef.current && !confirming) boxRef.current?.focus();
+    wasConfirmingRef.current = confirming;
+  }, [confirming]);
 
   const listening = state.kind === 'listening';
   const working = state.kind === 'working';
@@ -191,7 +232,7 @@ export function VoiceBar() {
 
   const onBarKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
     // The command card is portalled, but its key events still bubble here through React; it handles its own Escape.
-    if (event.key !== 'Escape' || listening || state.kind === 'confirming') return;
+    if (event.key !== 'Escape' || listening || applying || state.kind === 'confirming') return;
     if (state.kind === 'draft' || state.kind === 'applied' || state.kind === 'failed' || (state.kind === 'idle' && state.notice)) {
       dispatch({ type: 'dismiss' });
     }
@@ -215,6 +256,7 @@ export function VoiceBar() {
     if (registration?.id !== state.registrationId) return;
     const fields = mergeVoiceFillFields(state.lines.filter((line) => state.kept.includes(line.id)).map((line) => line.fields));
     applyingRef.current = true;
+    setApplying(true);
     try {
       const { filled, undo } = await registration.form.current.apply(fields);
       if (!filled.length) throw new Error('nothing applied');
@@ -226,6 +268,7 @@ export function VoiceBar() {
       dispatch({ type: 'apply-failed', registrationId: registration.id });
     } finally {
       applyingRef.current = false;
+      setApplying(false);
     }
   };
 
@@ -247,6 +290,7 @@ export function VoiceBar() {
 
   return (
     <section
+      ref={barRef}
       aria-label="Voice bar"
       aria-busy={working}
       onKeyDown={onBarKeyDown}
@@ -254,13 +298,13 @@ export function VoiceBar() {
     >
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-2">
         {state.kind === 'draft' && (
-          <div className="flex flex-col rounded-lg border border-border bg-background">
+          <div aria-busy={applying} className="flex flex-col rounded-lg border border-border bg-background">
             <div className="max-h-[45dvh] overflow-y-auto p-3">
               <div className="flex items-start gap-2">
                 <p className="min-w-0 flex-1 text-sm">
                   <span className="text-muted-foreground">{COPY.heard} </span>“{state.heard}”
                 </p>
-                <Button type="button" variant="ghost" size="sm" className={tapTarget} aria-label={COPY.editLabel} onClick={onEdit}>
+                <Button type="button" variant="ghost" size="sm" className={tapTarget} aria-label={COPY.editLabel} disabled={applying} onClick={onEdit}>
                   {COPY.edit}
                 </Button>
               </div>
@@ -272,6 +316,7 @@ export function VoiceBar() {
                         id={lineId(line.id)}
                         aria-label={`${line.label}: ${line.value}`}
                         checked={state.kept.includes(line.id)}
+                        disabled={applying}
                         onCheckedChange={() => dispatch({ type: 'toggle-line', id: line.id })}
                         className="mt-0.5"
                       />
@@ -290,13 +335,13 @@ export function VoiceBar() {
               <Button
                 type="button"
                 className={tapTarget}
-                disabled={state.kept.length === 0}
+                disabled={applying || state.kept.length === 0}
                 aria-describedby={state.kept.length === 0 ? hintId : undefined}
                 onClick={() => void addToForm()}
               >
                 {COPY.addToForm}
               </Button>
-              <Button type="button" variant="outline" className={tapTarget} onClick={dismissToBox}>{COPY.discard}</Button>
+              <Button type="button" variant="outline" className={tapTarget} disabled={applying} onClick={dismissToBox}>{COPY.discard}</Button>
             </div>
           </div>
         )}
@@ -408,11 +453,11 @@ export function VoiceBar() {
  */
 function CollapsedVoiceBar({ buttonRef, onShow }: { buttonRef: RefObject<HTMLButtonElement | null>; onShow: () => void }) {
   return (
-    <section aria-label="Voice bar" className="shrink-0 border-t border-border bg-card pb-[env(safe-area-inset-bottom)]">
+    <section aria-label="Voice bar" className="shrink-0 bg-card pb-[env(safe-area-inset-bottom)]">
       <button
         ref={buttonRef}
         type="button"
-        className="block h-8 w-full px-4 text-sm text-muted-foreground outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset md:px-6"
+        className="box-border block h-8 w-full border-t border-border px-4 text-sm text-muted-foreground outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset md:px-6"
         aria-label={COPY.showBar}
         aria-expanded="false"
         title={COPY.showBarTitle}

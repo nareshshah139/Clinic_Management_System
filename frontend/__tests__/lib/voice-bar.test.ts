@@ -139,4 +139,29 @@ describe('voiceBarReducer', () => {
     expect(voiceBarReducer(applied, { type: 'dismiss', notice: 'Undone. The form is back to how it was.' }))
       .toEqual({ kind: 'idle', notice: 'Undone. The form is back to how it was.' });
   });
+
+  describe('form-touched', () => {
+    const noUndo: VoiceBarState = { kind: 'applied', registrationId: 'r1', labels: ['Diagnosis'], undo: null };
+    const failed: VoiceBarState = { kind: 'failed', target: visit, message: 'Offline', retry: { kind: 'text', text: 'eczema' } };
+    const confirming = {
+      kind: 'confirming', heard: { id: 2, transcript: 'Open Ramesh Kumar', command: { action: 'open_patient', patientName: 'Ramesh Kumar' } },
+    } as unknown as VoiceBarState;
+
+    it('turns an applied state with an undo into idle with no notice', () => {
+      expect(voiceBarReducer(applied, { type: 'form-touched' })).toEqual({ kind: 'idle', notice: null });
+    });
+
+    it.each([
+      ['applied without undo', noUndo],
+      ['idle with a notice', { kind: 'idle', notice: 'Undone. The form is back to how it was.' } as VoiceBarState],
+      ['idle', idle],
+      ['listening', listening],
+      ['working', working],
+      ['draft', draft],
+      ['failed', failed],
+      ['confirming', confirming],
+    ])('leaves %s unchanged', (_kind, state) => {
+      expect(voiceBarReducer(state, { type: 'form-touched' })).toBe(state);
+    });
+  });
 });

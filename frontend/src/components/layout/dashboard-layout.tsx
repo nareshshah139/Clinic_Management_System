@@ -119,7 +119,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     <DashboardUserProvider value={contextValue}>
       <AnalyticsMount user={user} />
       <VoiceBarProvider>
-        <div className="h-dvh flex bg-background">
+        <div className="h-screen supports-[height:100dvh]:h-dvh flex bg-background">
           {/* Sidebar */}
           <div className="hidden shrink-0 md:block">
             <Suspense
