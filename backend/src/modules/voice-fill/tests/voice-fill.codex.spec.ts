@@ -1,7 +1,10 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { Logger } from '@nestjs/common';
 import { completeJsonWithCodexOAuth, isCodexOAuthReady, resetCodexOAuthReadiness } from '../../../shared/codex/codex-oauth';
+import { findVoiceFillForm } from '../voice-fill.registry';
+import { VoiceFillService } from '../voice-fill.service';
 
 const OUTPUT = '{"bpSystolic":120}';
 
@@ -75,5 +78,31 @@ describe('codex exec helpers', () => {
   it('reports not ready when codex cannot start', async () => {
     process.env.PHARMACY_AGENT_CODEX_PATH = path.join(directory, 'missing');
     expect(await isCodexOAuthReady()).toBe(false);
+  });
+
+  it('logs an exec failure with its exit code and Codex error line, and none of the typed text', async () => {
+    const notSupported = 'ERROR: unexpected status 400 Bad Request: {"detail":"The \'gpt-x\' model is not supported when using Codex with a ChatGPT account."}';
+    const script = path.join(directory, 'codex');
+    fs.writeFileSync(script, `#!/usr/bin/env bash
+if [ "$1" = "login" ]; then echo "Logged in using ChatGPT"; exit 0; fi
+echo user; cat; echo
+cat "${directory}/error.txt" >&2
+exit 1
+`, { mode: 0o755 });
+    fs.writeFileSync(path.join(directory, 'error.txt'), `${notSupported}\n`);
+    process.env.PHARMACY_AGENT_CODEX_PATH = script;
+    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    try {
+      const text = 'Meera Iyer has had a dry cough for nine days';
+      const error = await new VoiceFillService().fillText('patient-intake', findVoiceFillForm('patient-intake')!, text).catch((caught) => caught);
+      expect(error.getStatus()).toBe(503);
+      expect(error.message).toBe('Voice fill is unavailable right now. Please fill the form manually. (code: codex-exec)');
+      expect(warn.mock.calls.map((call) => String(call[0]).replace(/ms=\d+/, 'ms=N'))).toEqual([
+        'voice-fill form=patient-intake ms=N textChars=44 failed step=codex-exec exit=1 signal=none ' +
+          `reason="Codex request failed. Check the server OAuth login and model availability." detail="${notSupported.replace(/"/g, "'")}"`,
+      ]);
+    } finally {
+      warn.mockRestore();
+    }
   });
 });
