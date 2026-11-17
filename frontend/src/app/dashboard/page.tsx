@@ -12,7 +12,7 @@ import { QuickGuide } from '@/components/common/QuickGuide';
 import { DoctorPatientPanels } from '@/components/dashboard/DoctorPatientPanels';
 import {
   AttentionList, DashboardSection, DoctorQueue, Loaded, TodayByDoctor, useLoad,
-  type AttentionRow, type DayAppointment,
+  type AttentionRow, type DayAppointment, type DoctorQueueAppointment,
 } from '@/components/dashboard/ClinicDay';
 import { fmtMoney } from '@/components/inventory/workspace-model';
 import { getErrorMessage, getISTDateString } from '@/lib/utils';
@@ -31,7 +31,7 @@ const viewFor = (role: string): DashboardView =>
           : 'billing';
 
 const GUIDE: Record<DashboardView, string[]> = {
-  doctor: ['Your appointments today are listed in time order.', 'Click a row to start that visit, or to reopen it once started.'],
+  doctor: ['Your confirmed patients today are listed in time order.', 'Click a row to start that visit, or to reopen it once started.', 'Patients reception has not confirmed yet are counted under the list. Open the count to see them.'],
   pharmacist: ['Each row counts one job and opens the matching list.', `Low stock means ${LOW_STOCK_DEFINITION}, the same count Inventory shows.`],
   admin: ['Each row counts one job and opens the matching page.', `Upcoming appointments covers the ${UPCOMING_DEFINITION}.`, "Click a patient in today's list to open their record."],
   'front-desk': ['Each row counts one job and opens the appointments page.', "Today's appointments are grouped by doctor. Click a patient to open their record."],
@@ -100,10 +100,10 @@ export default function DashboardPage() {
 
 function DoctorDashboard({ doctorId }: { doctorId: string }) {
   const load = useCallback(async () => (await apiClient.getDoctorSchedule(doctorId, getISTDateString()))?.appointments ?? [], [doctorId]);
-  const [queue, retry] = useLoad<DayAppointment[]>(load);
+  const [queue, retry] = useLoad<DoctorQueueAppointment[]>(load);
   return (
     <>
-      <DashboardSection title="Your queue today" description="Click a patient to start the visit, or to reopen it.">
+      <DashboardSection title="Your queue today" description="Confirmed patients in time order. Click one to start the visit, or to reopen it.">
         <Loaded state={queue} subject="today's appointments" retry={retry}>
           {(appointments) => <DoctorQueue appointments={appointments} />}
         </Loaded>
