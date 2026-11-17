@@ -9,6 +9,9 @@ export const VOICE_BAR_COPY = {
   speak: 'Speak',
   stopAndSend: 'Stop and send',
   send: 'Send',
+  hideBar: 'Hide voice bar',
+  showBar: 'Show voice bar',
+  showBarTitle: 'Show voice bar (Ctrl+/)',
   listening: 'Listening. Press Enter to send, or Escape to discard.',
   working: 'Working it out…',
   heard: 'Heard',
@@ -35,6 +38,8 @@ export const VOICE_BAR_COPY = {
   notSavedWithUndo: 'Nothing is saved until you save the form.',
   notSavedDialog: (form: string) => `${form} is open. Nothing is saved until you press its save button.`,
 } as const;
+
+export const VOICE_BAR_COLLAPSED_KEY = 'cms-voice-bar-collapsed';
 
 export type VoiceBarTarget = { kind: 'command' } | { kind: 'form'; registrationId: string };
 export type VoiceBarRetry = { kind: 'audio'; audio: Blob; filename: string } | { kind: 'text'; text: string };

@@ -4,6 +4,7 @@ import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { DashboardUserProvider } from '@/components/layout/dashboard-user-context';
 import { VoiceBar } from '@/components/voice/VoiceBar';
+import { VoiceBarOpener } from '@/components/voice/VoiceBarOpener';
 import { VoiceBarProvider, useVoiceBarForm } from '@/components/voice/VoiceBarProvider';
 import { apiClient } from '@/lib/api';
 import type { User } from '@/lib/types';
@@ -66,6 +67,7 @@ function Shell({ children }: { children?: ReactNode }) {
     <DashboardUserProvider value={{ user, loading: false, refresh: async () => {}, logout: async () => {} }}>
       <VoiceBarProvider>
         {children}
+        <VoiceBarOpener />
         <VoiceBar />
       </VoiceBarProvider>
     </DashboardUserProvider>
@@ -78,6 +80,7 @@ let fetchMock: jest.Mock;
 const calls = () => fetchMock.mock.calls.map(([url, init]: [string, RequestInit]) => [url, typeof init.body === 'string' ? init.body : 'audio']);
 
 beforeEach(() => {
+  localStorage.clear();
   Object.values(api).forEach((fn) => (fn as jest.Mock).mockReset());
   api.get.mockResolvedValue({ available: true });
   resetVoiceFillStatusForTests();
@@ -314,5 +317,110 @@ describe('VoiceBar', () => {
 
     expect(box).toHaveValue('eczema\nitchy');
     expect(calls()).toEqual([]);
+  });
+});
+
+describe('VoiceBar collapse', () => {
+  const STORE = 'cms-voice-bar-collapsed';
+  const hideButton = () => screen.queryByRole('button', { name: 'Hide voice bar' });
+
+  it('hides the bar, remembers it, and moves focus to the Show voice bar button', async () => {
+    render(<Shell />);
+    const hide = await screen.findByRole('button', { name: 'Hide voice bar' });
+    expect(hide).toHaveAttribute('aria-expanded', 'true');
+    expect(hide).toHaveAttribute('title', 'Hide voice bar');
+
+    await userEvent.click(hide);
+
+    expect(screen.queryByRole('textbox', { name: 'Say or type a request' })).toBeNull();
+    const opener = screen.getByRole('button', { name: 'Show voice bar' });
+    expect(opener).toHaveAttribute('aria-expanded', 'false');
+    expect(opener).toHaveAttribute('title', 'Show voice bar (Ctrl+/)');
+    expect(localStorage.getItem(STORE)).toBe('1');
+    expect(document.activeElement).toBe(opener);
+  });
+
+  it('shows the bar again, focuses the text box and forgets the preference', async () => {
+    render(<Shell />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Hide voice bar' }));
+
+    await userEvent.click(screen.getByRole('button', { name: 'Show voice bar' }));
+
+    const box = await textBox();
+    expect(document.activeElement).toBe(box);
+    expect(screen.queryByRole('button', { name: 'Show voice bar' })).toBeNull();
+    expect(localStorage.getItem(STORE)).toBeNull();
+  });
+
+  it('starts collapsed when the browser remembers it', async () => {
+    localStorage.setItem(STORE, '1');
+    render(<Shell />);
+
+    expect(await screen.findByRole('button', { name: 'Show voice bar' })).toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'Say or type a request' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Voice bar' })).toBeNull();
+  });
+
+  it('keeps typed text across hide and show', async () => {
+    render(<Shell />);
+    await userEvent.type(await textBox(), 'abc');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Hide voice bar' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Show voice bar' }));
+
+    expect(await textBox()).toHaveValue('abc');
+  });
+
+  it('expands and focuses the text box on Ctrl+/ while collapsed', async () => {
+    localStorage.setItem(STORE, '1');
+    render(<Shell />);
+    await screen.findByRole('button', { name: 'Show voice bar' });
+
+    await userEvent.keyboard('{Control>}/{/Control}');
+
+    expect(document.activeElement).toBe(await textBox());
+    expect(localStorage.getItem(STORE)).toBeNull();
+  });
+
+  it('offers Hide only while nothing is in flight', async () => {
+    fetchMock.mockResolvedValueOnce(failure(500));
+    render(<Shell><VisitPage apply={jest.fn()} /></Shell>);
+    await typeAndSend('eczema');
+    await screen.findByRole('alert');
+    expect(hideButton()).toBeNull();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(hideButton()).toBeInTheDocument();
+
+    await typeAndSend('eczema');
+    await screen.findByRole('button', { name: 'Add to form' });
+    expect(hideButton()).toBeNull();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Discard' }));
+    expect(hideButton()).toBeInTheDocument();
+  });
+
+  it('renders no opener when voice is unavailable or the bar is expanded', async () => {
+    api.get.mockResolvedValue({ available: false });
+    localStorage.setItem(STORE, '1');
+    render(<Shell />);
+    await act(async () => {});
+    expect(screen.queryByRole('button', { name: 'Show voice bar' })).toBeNull();
+
+    localStorage.removeItem(STORE);
+    resetVoiceFillStatusForTests();
+    api.get.mockResolvedValue({ available: true });
+    render(<Shell />);
+    await screen.findByRole('region', { name: 'Voice bar' });
+    expect(screen.queryByRole('button', { name: 'Show voice bar' })).toBeNull();
+  });
+
+  it('targets a page that registered while the bar was collapsed once it is expanded', async () => {
+    localStorage.setItem(STORE, '1');
+    render(<Shell><VisitPage apply={jest.fn()} /></Shell>);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Show voice bar' }));
+
+    expect(await screen.findByRole('combobox', { name: 'Send to' })).toHaveDisplayValue('Visit notes');
   });
 });

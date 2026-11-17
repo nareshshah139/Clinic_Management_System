@@ -11,9 +11,10 @@ import {
   useState,
   type Dispatch,
   type ReactNode,
+  type MutableRefObject,
   type RefObject,
 } from 'react';
-import { VOICE_BAR_IDLE, voiceBarReducer, voiceBarRegistrationOf, type VoiceBarEvent, type VoiceBarState } from '@/lib/voice-bar';
+import { VOICE_BAR_COLLAPSED_KEY, VOICE_BAR_IDLE, voiceBarReducer, voiceBarRegistrationOf, type VoiceBarEvent, type VoiceBarState } from '@/lib/voice-bar';
 import type { VoiceBarApplyResult, VoiceDraftLine, VoiceFillFields, VoiceFillFormId } from '@/lib/voice-fill';
 
 export interface VoiceBarForm {
@@ -38,6 +39,10 @@ interface VoiceBarContextValue {
   active: VoiceBarRegistration | null;
   state: VoiceBarState;
   dispatch: Dispatch<VoiceBarEvent>;
+  collapsed: boolean;
+  setCollapsed(collapsed: boolean): void;
+  /** Where focus goes once the bar has re-rendered after a collapse or expand; the bar consumes it. */
+  pendingFocus: MutableRefObject<'box' | 'opener' | null>;
   register(form: RefObject<VoiceBarForm>): string;
   unregister(id: string): void;
 }
@@ -52,7 +57,24 @@ const VoiceBarContext = createContext<VoiceBarContextValue | null>(null);
 export function VoiceBarProvider({ children }: { children: ReactNode }) {
   const [registrations, setRegistrations] = useState<VoiceBarRegistration[]>([]);
   const [state, dispatch] = useReducer(voiceBarReducer, VOICE_BAR_IDLE);
+  const [collapsed, setCollapsedState] = useState(false);
+  const pendingFocus = useRef<'box' | 'opener' | null>(null);
   const nextIdRef = useRef(0);
+
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(VOICE_BAR_COLLAPSED_KEY) === '1') setCollapsedState(true);
+    } catch {}
+  }, []);
+
+  const setCollapsed = useCallback((next: boolean) => {
+    pendingFocus.current = next ? 'opener' : 'box';
+    setCollapsedState(next);
+    try {
+      if (next) localStorage.setItem(VOICE_BAR_COLLAPSED_KEY, '1');
+      else localStorage.removeItem(VOICE_BAR_COLLAPSED_KEY);
+    } catch {}
+  }, []);
 
   const register = useCallback((form: RefObject<VoiceBarForm>) => {
     nextIdRef.current += 1;
@@ -70,11 +92,14 @@ export function VoiceBarProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'registration', activeId });
   }, [activeId]);
 
-  const value = useMemo(() => ({ active, state, dispatch, register, unregister }), [active, state, register, unregister]);
+  const value = useMemo(
+    () => ({ active, state, dispatch, collapsed, setCollapsed, pendingFocus, register, unregister }),
+    [active, state, collapsed, setCollapsed, register, unregister],
+  );
   return <VoiceBarContext.Provider value={value}>{children}</VoiceBarContext.Provider>;
 }
 
-export function useVoiceBar(): Pick<VoiceBarContextValue, 'active' | 'state' | 'dispatch'> {
+export function useVoiceBar(): Pick<VoiceBarContextValue, 'active' | 'state' | 'dispatch' | 'collapsed' | 'setCollapsed' | 'pendingFocus'> {
   const context = useContext(VoiceBarContext);
   if (!context) throw new Error('useVoiceBar must be used within a VoiceBarProvider');
   return context;

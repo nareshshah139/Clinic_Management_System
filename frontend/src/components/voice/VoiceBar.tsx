@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
-import { ArrowUp, Mic, Square } from 'lucide-react';
+import { ArrowUp, ChevronDown, Mic, Square } from 'lucide-react';
 import { useDashboardUser } from '@/components/layout/dashboard-user-context';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -18,13 +18,14 @@ import {
   type VoiceBarTarget,
 } from '@/lib/voice-bar';
 import {
-  fetchVoiceFillStatus,
   flashFilledElements,
   mergeVoiceFillFields,
   requestVoiceFill,
   requestVoiceFillFromText,
 } from '@/lib/voice-fill';
 import { useVoiceBar } from './VoiceBarProvider';
+import { useVoiceBarShown } from './useVoiceBarShown';
+import { focusVoiceBarOpener } from './VoiceBarOpener';
 import { VoiceCommandDialog } from './VoiceCommandDialog';
 import { formatElapsed, useCancelOnEscape, useElapsedSeconds } from './VoiceFillButton';
 
@@ -56,8 +57,7 @@ function statusText(state: VoiceBarState, formLabel: string): string {
  */
 export function VoiceBar() {
   const { user } = useDashboardUser();
-  const { active, state, dispatch } = useVoiceBar();
-  const [available, setAvailable] = useState(false);
+  const { active, state, dispatch, collapsed, setCollapsed, pendingFocus } = useVoiceBar();
   const [text, setText] = useState('');
   const [toCommand, setToCommand] = useState(false);
   const boxRef = useRef<HTMLTextAreaElement>(null);
@@ -69,17 +69,15 @@ export function VoiceBar() {
   const activeRef = useRef(active);
   activeRef.current = active;
   const idPrefix = useId();
-  const shown = available && !!user;
+  const shown = useVoiceBarShown();
 
   useEffect(() => {
-    let cancelled = false;
-    void fetchVoiceFillStatus().then((ok) => {
-      if (!cancelled) setAvailable(ok);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    const target = pendingFocus.current;
+    if (!target) return;
+    pendingFocus.current = null;
+    if (target === 'box') boxRef.current?.focus();
+    else focusVoiceBarOpener();
+  }, [collapsed, pendingFocus]);
 
   const activeId = active?.id ?? null;
   useEffect(() => {
@@ -141,18 +139,19 @@ export function VoiceBar() {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== '/' || !(event.ctrlKey || event.metaKey)) return;
       const box = boxRef.current;
-      if (!box) return;
+      if (!box && !collapsed) return;
       event.preventDefault();
       if (document.activeElement !== box && document.activeElement instanceof HTMLElement) {
         returnFocusRef.current = document.activeElement;
       }
-      box.focus();
+      if (box) box.focus();
+      else setCollapsed(false);
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [shown]);
+  }, [shown, collapsed, setCollapsed]);
 
-  if (!shown) return null;
+  if (!shown || collapsed) return null;
 
   const form = active?.form.current ?? null;
   const formLabel = form?.label ?? '';
@@ -368,6 +367,20 @@ export function VoiceBar() {
           >
             {working ? <Spinner aria-hidden="true" /> : <ArrowUp aria-hidden="true" />}
           </Button>
+          {state.kind === 'idle' && (
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className={cn('size-11 md:size-9', hasText && 'max-md:hidden')}
+              aria-label={COPY.hideBar}
+              aria-expanded="true"
+              title={COPY.hideBar}
+              onClick={() => setCollapsed(true)}
+            >
+              <ChevronDown aria-hidden="true" />
+            </Button>
+          )}
         </div>
       </div>
       {state.kind === 'confirming' && user && (

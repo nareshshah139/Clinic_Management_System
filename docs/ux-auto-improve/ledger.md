@@ -18,6 +18,8 @@ bar was rebuilt on main as a front end over that back end. The older notes below
 - Everywhere else, and on request on those two pages: commands. They open the existing confirm card.
 - Server: `POST /voice-fill/:form/text` for typed text.
 - Removed: the header mic, the mobile top-bar mic and the visit toolbar mic. The bar replaces them.
+- The bar can be hidden. Hide is offered only while nothing is in flight, a hidden bar takes no space, and a mic
+  button in the header (or `Ctrl+/`) brings it back. The choice is remembered per browser.
 
 **Checked by hand** in Chromium on a throwaway database with fake data, model answers stubbed in the browser, at 1440
 and 390 px, in the original and branded palettes, keyboard only: typed and spoken command to the confirm card and a
