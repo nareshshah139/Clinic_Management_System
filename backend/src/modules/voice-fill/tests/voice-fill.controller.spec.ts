@@ -295,7 +295,7 @@ describe('POST /voice-fill/:form with the real service', () => {
         name: 'a failed codex exec',
         arrange: () => codex.mockRejectedValue(new CodexFailure(REQUEST_FAILED, 'codex-exec', 1, null, NOT_SUPPORTED)),
         code: 'codex-exec',
-        log: `step=codex-exec exit=1 signal=none reason="${REQUEST_FAILED}" detail="${NOT_SUPPORTED}"`,
+        log: `step=codex-exec exit=1 signal=none reason="${REQUEST_FAILED}" detail="${NOT_SUPPORTED.replace(/"/g, "'")}"`,
       },
       {
         name: 'a killed codex exec',
@@ -347,7 +347,7 @@ describe('POST /voice-fill/:form with the real service', () => {
         .map((call) => call.map(String).join(' '));
       expect(logged.filter((line) => sharesRunWith(line, PATIENT))).toEqual([]);
       expect(bodies.filter((body) => sharesRunWith(JSON.stringify(body), PATIENT))).toEqual([]);
-      expect(jest.mocked(Logger.prototype.warn).mock.calls[0][0]).toContain(`detail="${NOT_SUPPORTED}"`);
+      expect(jest.mocked(Logger.prototype.warn).mock.calls[0][0]).toContain(`detail="${NOT_SUPPORTED.replace(/"/g, "'")}"`);
     });
 
     const typed = (form: string, role: string, body: unknown) =>

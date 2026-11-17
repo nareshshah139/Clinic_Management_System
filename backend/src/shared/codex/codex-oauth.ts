@@ -37,7 +37,7 @@ export class CodexFailure extends ServiceUnavailableException {
 
 // Only lines Codex itself marks as a report are kept. Matching a phrase anywhere in a line would let a line of
 // model output through when it happens to contain a word such as "certificate".
-const ERROR_LINE_START = /^(?:\[?\d{4}-\d{2}-\d{2}[T ][\d:.]+Z?\]?\s*)?(?:ERROR|Error|error:|[Ff]atal|[Pp]anic|stream error|stream disconnected)/;
+const ERROR_LINE_START = /^(?:\[?\d{4}-\d{2}-\d{2}[T ][\d:.]+Z?\]?\s*)?(?:ERROR\b|[Ee]rror:|[Ff]atal:|[Pp]anic:|stream error|stream disconnected)/;
 const CREDENTIALS: Array<[RegExp, string]> = [
   [/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer [redacted]'],
   [/\bsk-[A-Za-z0-9_-]{8,}/g, '[redacted]'],
@@ -45,7 +45,16 @@ const CREDENTIALS: Array<[RegExp, string]> = [
   [/\b[0-9a-fA-F]{32,}\b/g, '[redacted]'],
   [/(?=[A-Za-z0-9+/_-]*\d)[A-Za-z0-9+/_-]{32,}={0,2}/g, '[redacted]'],
 ];
-const flatten = (text: string) => text.toLowerCase().replace(/\s+/g, ' ').trim();
+// An API error can quote a short piece of its input, too short for the 16-character check: a name, a phone number.
+// Identifier-like quoted values such as a model or field name are kept, since they are the useful part.
+const looksLikeInput = (value: string) => /[\s\u0080-\uffff]/.test(value);
+// Quotes are paired left to right in one pass, so an identifier's closing quote cannot open the next span.
+const redactQuotedInput = (line: string) => line
+  .replace(/'([^']*)'/g, (span, value: string) => (looksLikeInput(value) ? "'[redacted]'" : span))
+  .replace(/`([^`]*)`/g, (span, value: string) => (looksLikeInput(value) ? '`[redacted]`' : span))
+  .replace(/\d[\d\s-]{5,}\d/g, '[redacted]');
+// An API error can quote its input JSON-escaped, where a written backslash-n would otherwise break every 16-character run.
+const flatten = (text: string) => text.toLowerCase().replace(/\\[nrt]/g, ' ').replace(/\s+/g, ' ').trim();
 
 /**
  * @cc [owner:nareshshah139,label:security] codex-diagnostic-never-echoes-input
@@ -76,7 +85,7 @@ export function codexDiagnostic(output: string, secrets: readonly string[]): str
   return reports
     .filter((line) => !echoesSecret(line))
     .slice(-3)
-    .map((line) => CREDENTIALS.reduce((kept, [pattern, replacement]) => kept.replace(pattern, replacement), line).slice(0, 300))
+    .map((line) => redactQuotedInput(CREDENTIALS.reduce((kept, [pattern, replacement]) => kept.replace(pattern, replacement), line)).slice(0, 300))
     .join(' | ');
 }
 

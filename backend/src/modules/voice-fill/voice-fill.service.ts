@@ -127,7 +127,8 @@ export class VoiceFillService {
       return { transcript, fields };
     } catch (error) {
       const { kind, exitCode, signal, reason, detail } = voiceFillFailure(error, step);
-      const oneLine = (text: string) => text.replace(/\s+/g, ' ');
+      // Double quotes delimit the values, so one inside a value would make the line ambiguous to read.
+      const oneLine = (text: string) => text.replace(/\s+/g, ' ').replace(/"/g, "'");
       this.logger.warn(outcome(
         `failed step=${kind} exit=${exitCode ?? 'none'} signal=${signal ?? 'none'} reason="${oneLine(reason)}" detail="${oneLine(detail)}"`,
       ));

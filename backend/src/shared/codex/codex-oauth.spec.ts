@@ -81,6 +81,28 @@ describe('codexDiagnostic', () => {
     expect(codexDiagnostic(output, [])).toBe('ERROR: unexpected status 429 Too Many Requests');
   });
 
+  it('redacts a short quoted piece of input and a phone number, and keeps a quoted identifier', () => {
+    const output = [
+      "ERROR: unexpected status 400: {\"error\":{\"message\":\"Invalid value 'Meera Iyer' at input, call 98450 12301\"}}",
+      "ERROR: unexpected status 400: The 'gpt-x' model is not supported; field `chiefComplaints` rejected 'సునీత దేవి'",
+    ].join('\n');
+    expect(codexDiagnostic(output, [])).toBe(
+      "ERROR: unexpected status 400: {\"error\":{\"message\":\"Invalid value '[redacted]' at input, call [redacted]\"}} | "
+      + "ERROR: unexpected status 400: The 'gpt-x' model is not supported; field `chiefComplaints` rejected '[redacted]'",
+    );
+  });
+
+  it('drops an error line that echoes short transcript lines JSON-escaped', () => {
+    const secret = 'Transcript:\nMeera Iyer\n9876543210\nfever 3 days';
+    const output = 'ERROR: invalid input="Meera Iyer\\n9876543210\\nfever 3 days"\nERROR: unexpected status 400';
+    expect(codexDiagnostic(output, [secret])).toBe('ERROR: unexpected status 400');
+  });
+
+  it('drops a sentence that merely begins with the word Error', () => {
+    const output = 'Error in prescription noted for Ms Iyer; filling chief complaint.\nerror: stream closed';
+    expect(codexDiagnostic(output, [])).toBe('error: stream closed');
+  });
+
   it('returns an empty string for empty output', () => {
     expect(codexDiagnostic('', [PROMPT])).toBe('');
   });
