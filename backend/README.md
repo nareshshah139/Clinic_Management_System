@@ -53,7 +53,7 @@ WHATSAPP_PHONE_NUMBER_ID="your-meta-whatsapp-phone-number-id"
 # Optional – enable "Report a problem" (files GitHub issues; screenshots are committed to a branch of the attachments repo)
 GITHUB_ISSUES_TOKEN="fine-grained-token-with-issues-and-contents-write"
 GITHUB_ISSUES_REPO="nareshshah139/Clinic_Management_System"
-GITHUB_ISSUES_ATTACHMENTS_REPO="nareshshah139/clinic-issue-attachments" # should be a private repo (screenshots may show patient data); defaults to GITHUB_ISSUES_REPO
+GITHUB_ISSUES_ATTACHMENTS_REPO="nareshshah139/clinic-issue-attachments" # keep private (screenshots may show patient data); this is the default
 GITHUB_ISSUES_ATTACHMENTS_BRANCH="issue-attachments"
 ```
 

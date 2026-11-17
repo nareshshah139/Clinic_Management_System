@@ -5,6 +5,7 @@ export const GITHUB_REJECTED_MESSAGE = "GitHub didn't accept the report. Try aga
 
 const API = 'https://api.github.com';
 const DEFAULT_REPO = 'nareshshah139/Clinic_Management_System';
+const DEFAULT_ATTACHMENTS_REPO = 'nareshshah139/clinic-issue-attachments';
 const DEFAULT_BRANCH = 'issue-attachments';
 const LOGGED_BODY_CHARS = 500;
 const REQUEST_TIMEOUT_MS = 20_000;
@@ -72,7 +73,7 @@ export class GithubIssuesClient {
   }
 
   private get attachmentsRepo(): string {
-    return this.config.get<string>('GITHUB_ISSUES_ATTACHMENTS_REPO')?.trim() || this.repo;
+    return this.config.get<string>('GITHUB_ISSUES_ATTACHMENTS_REPO')?.trim() || DEFAULT_ATTACHMENTS_REPO;
   }
 
   private get branch(): string {

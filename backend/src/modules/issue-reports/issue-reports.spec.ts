@@ -126,15 +126,14 @@ describe('issue reports over HTTP', () => {
     expect(res.status).toBe(201);
     expect(res.body).toEqual({ number: 42, url: 'https://github.com/nareshshah139/Clinic_Management_System/issues/42' });
 
-    const repo = 'https://api.github.com/repos/nareshshah139/Clinic_Management_System';
-    expect(calls.map((c) => `${c.method} ${c.url.replace(repo, '')}`)).toEqual([
-      'GET /git/ref/heads/issue-attachments',
-      'GET ',
-      'GET /git/ref/heads/main',
-      'POST /git/refs',
-      expect.stringMatching(/^PUT \/contents\/reports\/2026\/11\/[0-9a-f-]{36}\/screenshot-1\.png$/),
-      expect.stringMatching(/^PUT \/contents\/reports\/2026\/11\/[0-9a-f-]{36}\/screenshot-2\.jpg$/),
-      'POST /issues',
+    expect(calls.map((c) => `${c.method} ${c.url.replace('https://api.github.com/repos/', '')}`)).toEqual([
+      'GET nareshshah139/clinic-issue-attachments/git/ref/heads/issue-attachments',
+      'GET nareshshah139/clinic-issue-attachments',
+      'GET nareshshah139/clinic-issue-attachments/git/ref/heads/main',
+      'POST nareshshah139/clinic-issue-attachments/git/refs',
+      expect.stringMatching(/^PUT nareshshah139\/clinic-issue-attachments\/contents\/reports\/2026\/11\/[0-9a-f-]{36}\/screenshot-1\.png$/),
+      expect.stringMatching(/^PUT nareshshah139\/clinic-issue-attachments\/contents\/reports\/2026\/11\/[0-9a-f-]{36}\/screenshot-2\.jpg$/),
+      'POST nareshshah139/Clinic_Management_System/issues',
     ]);
     expect(calls[3].body).toEqual({ ref: 'refs/heads/issue-attachments', sha: 'abc123' });
     expect(calls[4].body).toEqual({
@@ -152,7 +151,7 @@ describe('issue reports over HTTP', () => {
     expect(issue.title).toBe('[Bug] Save fails');
     expect(issue.labels).toEqual(['user-report', 'bug']);
     expect(issue.body).toContain(
-      `![Screenshot 1](https://github.com/nareshshah139/Clinic_Management_System/blob/issue-attachments/${folder}/screenshot-1.png?raw=true)`,
+      `![Screenshot 1](https://github.com/nareshshah139/clinic-issue-attachments/blob/issue-attachments/${folder}/screenshot-1.png?raw=true)`,
     );
     expect(issue.body).toContain('| Reported by | role RECEPTION · user `u1` · branch `b1` |');
   });
