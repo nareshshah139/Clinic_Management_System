@@ -161,6 +161,8 @@ function DoctorDayCalendarForSelection({
   const [billAccess, setBillAccess] = useState<ClinicBillAccess>(NO_BILL_ACCESS);
   const [billForId, setBillForId] = useState<string | null>(null);
   const [focusFold, setFocusFold] = useState<AppointmentCalendar | null>(null);
+  // Focus follows one press of Show or Hide. A later remount of the control must not take focus again.
+  useEffect(() => { if (focusFold) setFocusFold(null); }, [focusFold]);
   const billFor = billForId ? schedule.find((a) => a.id === billForId) ?? null : null;
 
   const slotMinutes = Math.max(5, timeSlotConfig.stepMinutes || 10);
@@ -552,8 +554,8 @@ function DoctorDayCalendarForSelection({
                   onOpenBill={billAccess.read ? (appointment) => setBillForId(appointment.id) : undefined}
                   onBook={(slot) => onSelectSlot?.(slot, calendar)}
                   onMove={(slot) => void moveInto({ slot, calendar })}
-                  onFold={foldedCalendars.includes(calendar) ? () => hideCalendar(calendar) : undefined}
-                  autoFocusFold={focusFold === calendar && !move}
+                  onFold={foldedCalendars.includes(calendar) && move?.refused?.calendar !== calendar ? () => hideCalendar(calendar) : undefined}
+                  autoFocusFold={focusFold === calendar}
                 />
                 )
               ))}

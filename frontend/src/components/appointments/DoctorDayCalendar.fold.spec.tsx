@@ -100,11 +100,28 @@ describe('DoctorDayCalendar folded calendars', () => {
     expect(await screen.findByText('Moving Priya Nair to Scheduled')).toBeInTheDocument();
     expect(screen.getByText('11:00-11:30 is taken in Scheduled. Click a free time in the Scheduled calendar, or change the date to pick another day.')).toBeInTheDocument();
     expect(region('Scheduled').getByRole('button', { name: 'Move to 14:00-14:30' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Hide Scheduled calendar' })).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     await waitFor(() => expect(screen.queryByText('Moving Priya Nair to Scheduled')).toBeNull());
     expect(show()).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Move to 14:00-14:30' })).toBeNull();
+  });
+
+  it('leaves focus alone when the folded calendar returns after a refused move', async () => {
+    await renderDay([{ ...ravi, slot: '11:00-11:30' }, priya], FOLDED);
+    fireEvent.click(show());
+    fireEvent.click(hide());
+    expect(show()).toHaveFocus();
+    api.rescheduleAppointment.mockRejectedValueOnce(conflict());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Priya Nair, 11:00-11:30, Confirmed' }));
+    fireEvent.click(within(await screen.findByRole('dialog', { name: 'Appointment Details' })).getByRole('button', { name: 'Move to Scheduled' }));
+    await screen.findByText('Moving Priya Nair to Scheduled');
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByText('Moving Priya Nair to Scheduled')).toBeNull());
+
+    expect(show()).not.toHaveFocus();
   });
 
   it('names the one open calendar in the reschedule hint', async () => {
