@@ -15,7 +15,6 @@ import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { useDashboardUser } from './dashboard-user-context';
 import { GlobalSearch } from './global-search';
-import { VoiceCommandButton } from '@/components/voice/VoiceCommandButton';
 import { ColourThemeSetting } from './colour-theme-setting';
 import { ReportIssueButton } from '@/components/issue-report/ReportIssueButton';
 import { apiClient } from '@/lib/api';
@@ -368,7 +367,6 @@ export function Header() {
     <header className="h-16 bg-white border-b border-border flex items-center justify-between px-6">
       <div className="flex min-w-0 flex-1 items-center gap-2">
         <GlobalSearch />
-        <VoiceCommandButton />
       </div>
 
       {/* Right section */

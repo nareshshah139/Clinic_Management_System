@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  Body,
   Controller,
   ForbiddenException,
   Get,
@@ -18,7 +19,8 @@ import { memoryStorage } from 'multer';
 import { CLINIC_STAFF_ROLES } from '../../shared/decorators/clinic-staff-roles';
 import { Roles } from '../../shared/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
-import { findVoiceFillForm, VOICE_FILL_ROUTE_ROLES } from './voice-fill.registry';
+import { VoiceFillTextDto } from './voice-fill-text.dto';
+import { findVoiceFillForm, VOICE_FILL_ROUTE_ROLES, type VoiceFillForm } from './voice-fill.registry';
 import { VoiceFillService, type VoiceFillAudioExtension } from './voice-fill.service';
 
 const AUDIO_EXTENSIONS: Record<string, VoiceFillAudioExtension> = {
@@ -38,6 +40,15 @@ const audioExtension = (mimetype: string): VoiceFillAudioExtension | undefined =
 
 const configuredMaxMb = Number(process.env.VOICE_FILL_MAX_AUDIO_MB);
 const MAX_AUDIO_BYTES = (Number.isFinite(configuredMaxMb) && configuredMaxMb > 0 ? configuredMaxMb : 25) * 1024 * 1024;
+
+function authorizedForm(formId: string, role: string): VoiceFillForm {
+  const form = findVoiceFillForm(formId);
+  if (!form) throw new NotFoundException('Unknown form');
+  if (!(form.roles as readonly string[]).includes(role)) {
+    throw new ForbiddenException('Your role cannot use voice fill on this form');
+  }
+  return form;
+}
 
 @ApiTags('Voice Fill')
 @ApiBearerAuth()
@@ -71,13 +82,25 @@ export class VoiceFillController {
     @UploadedFile() file: Express.Multer.File | undefined,
     @Request() req: { user: { role: string } },
   ) {
-    const form = findVoiceFillForm(formId);
-    if (!form) throw new NotFoundException('Unknown form');
-    if (!(form.roles as readonly string[]).includes(req.user.role)) {
-      throw new ForbiddenException('Your role cannot use voice fill on this form');
-    }
+    const form = authorizedForm(formId, req.user.role);
     const extension = file && file.size > 0 ? audioExtension(file.mimetype) : undefined;
     if (!file || !extension) throw new BadRequestException('Attach a non-empty audio recording as "file".');
     return this.voiceFill.fill(formId, form, { bytes: file.buffer, extension });
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:security] voice-fill-text-same-policy
+   * The typed route MUST enforce the same unknown-form 404 and per-form role 403 as the audio route before any model call. It MUST NOT log the submitted text.
+   */
+  @Post(':form/text')
+  @HttpCode(200)
+  @Roles(...VOICE_FILL_ROUTE_ROLES)
+  async fillText(
+    @Param('form') formId: string,
+    @Body() body: VoiceFillTextDto,
+    @Request() req: { user: { role: string } },
+  ) {
+    const form = authorizedForm(formId, req.user.role);
+    return this.voiceFill.fillText(formId, form, body.text);
   }
 }

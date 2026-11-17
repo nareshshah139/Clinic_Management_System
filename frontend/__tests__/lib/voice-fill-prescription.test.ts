@@ -1,4 +1,4 @@
-import { applySpokenPrescriptionItems, resolveSpokenDrug, spokenRowPatch, spokenStrength, suggestSpokenDrug, withStrength } from '@/lib/voice-fill-prescription';
+import { applySpokenPrescriptionItems, resolveSpokenDrug, spokenPrescriptionDraftLines, spokenRowPatch, spokenStrength, suggestSpokenDrug, withStrength } from '@/lib/voice-fill-prescription';
 import { applyRegimenSuggestion, beginRegimenSelection, type RegimenRow } from '@/lib/medicine-regimen-defaults';
 import type { VoiceFillRow } from '@/lib/voice-fill';
 
@@ -240,5 +240,20 @@ describe('suggestions while applying spoken medicines', () => {
 
     expect(box.items.map((row) => row.drugName)).toEqual(['texine 10 mg', 'Tab. Cetirizine 10 mg', 'kojic soap', '']);
     expect(offers).toEqual([['texine 10 mg', 'Tab. Teczine 10 mg']]);
+  });
+});
+
+describe('spokenPrescriptionDraftLines', () => {
+  it('gives one line per spoken medicine with its dose, pattern and duration, and none for a row without a drug name', () => {
+    const rows = [
+      { drugName: 'telma', dosage: 40, dosageUnit: 'MG', frequency: 'ONCE_DAILY', duration: 2, durationUnit: 'WEEKS' },
+      { drugName: '', duration: 3 },
+      { drugName: 'kojic soap' },
+    ];
+    expect(spokenPrescriptionDraftLines(rows)).toEqual([
+      { id: 'prescriptionItems:0', label: 'Medicine 1', value: 'telma, 40 mg, once daily, 2 weeks', fields: { prescriptionItems: [rows[0]] } },
+      { id: 'prescriptionItems:1', label: 'Medicine 2', value: 'kojic soap', fields: { prescriptionItems: [rows[2]] } },
+    ]);
+    expect(spokenPrescriptionDraftLines(undefined)).toEqual([]);
   });
 });

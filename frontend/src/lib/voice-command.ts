@@ -31,6 +31,13 @@ export interface VoiceCommand {
   notes?: string;
 }
 
+/** A command as heard, ready for the confirm card; `id` keys one card and its idempotency key. */
+export interface HeardCommand {
+  id: number;
+  transcript: string;
+  command: VoiceCommand;
+}
+
 export type Choice<T> =
   | { kind: 'resolved'; value: T }
   | { kind: 'choose'; options: T[]; note?: string }

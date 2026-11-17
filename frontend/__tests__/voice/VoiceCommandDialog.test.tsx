@@ -1,7 +1,7 @@
 import { UserRole } from '@cms/shared-types';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { VoiceCommandDialog, type HeardCommand } from '@/components/voice/VoiceCommandButton';
+import { VoiceCommandDialog, type HeardCommand } from '@/components/voice/VoiceCommandDialog';
 import { apiClient } from '@/lib/api';
 
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }) }));
