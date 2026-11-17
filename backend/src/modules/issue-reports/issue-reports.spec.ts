@@ -157,6 +157,38 @@ describe('issue reports over HTTP', () => {
     expect(issue.body).toContain('| Reported by | role RECEPTION · user `u1` · branch `b1` |');
   });
 
+  it('sends the branch and screenshots to the attachments repo and the issue to the issues repo', async () => {
+    env = {
+      ...env,
+      GITHUB_ISSUES_REPO: 'acme/clinic',
+      GITHUB_ISSUES_ATTACHMENTS_REPO: ' acme/clinic-attachments ',
+    };
+    replies = [
+      respond(404),
+      respond(200, { default_branch: 'main' }),
+      respond(200, { object: { sha: 'abc123' } }),
+      respond(201, {}),
+      respond(201, {}),
+      respond(201, { number: 3, html_url: 'https://github.com/acme/clinic/issues/3' }),
+    ];
+
+    const res = await post().field('kind', 'bug').field('title', 'Private shot').attach('screenshots', PNG, 'a.png');
+
+    expect(res.status).toBe(201);
+    const folder = calls[4].url.match(/contents\/(reports\/2026\/11\/[0-9a-f-]{36})\//)![1];
+    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
+      'GET https://api.github.com/repos/acme/clinic-attachments/git/ref/heads/issue-attachments',
+      'GET https://api.github.com/repos/acme/clinic-attachments',
+      'GET https://api.github.com/repos/acme/clinic-attachments/git/ref/heads/main',
+      'POST https://api.github.com/repos/acme/clinic-attachments/git/refs',
+      `PUT https://api.github.com/repos/acme/clinic-attachments/contents/${folder}/screenshot-1.png`,
+      'POST https://api.github.com/repos/acme/clinic/issues',
+    ]);
+    expect((calls[5].body as { body: string }).body).toContain(
+      `![Screenshot 1](https://github.com/acme/clinic-attachments/blob/issue-attachments/${folder}/screenshot-1.png?raw=true)`,
+    );
+  });
+
   it('skips the branch when the report has no screenshots and the branch already exists', async () => {
     replies = [respond(201, { number: 7, html_url: 'https://github.com/o/r/issues/7' })];
     const res = await post().field('kind', 'question').field('title', 'How do I?');

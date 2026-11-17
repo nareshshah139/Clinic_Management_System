@@ -50,9 +50,10 @@ OPENAI_TRANSCRIBE_MODEL="gpt-4o-transcribe" # or whisper-1, gpt-4o-mini-transcri
 # Optional – enable outbound WhatsApp via Meta Cloud
 WHATSAPP_TOKEN="your-meta-whatsapp-cloud-api-token"
 WHATSAPP_PHONE_NUMBER_ID="your-meta-whatsapp-phone-number-id"
-# Optional – enable "Report a problem" (files GitHub issues; screenshots are committed to a branch of the repo)
+# Optional – enable "Report a problem" (files GitHub issues; screenshots are committed to a branch of the attachments repo)
 GITHUB_ISSUES_TOKEN="fine-grained-token-with-issues-and-contents-write"
 GITHUB_ISSUES_REPO="nareshshah139/Clinic_Management_System"
+GITHUB_ISSUES_ATTACHMENTS_REPO="nareshshah139/clinic-issue-attachments" # should be a private repo (screenshots may show patient data); defaults to GITHUB_ISSUES_REPO
 GITHUB_ISSUES_ATTACHMENTS_BRANCH="issue-attachments"
 ```
 

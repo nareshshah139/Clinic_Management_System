@@ -30,28 +30,28 @@ export class GithubIssuesClient {
   }
 
   attachmentUrl(path: string): string {
-    return `https://github.com/${this.repo}/blob/${this.branch}/${path}?raw=true`;
+    return `https://github.com/${this.attachmentsRepo}/blob/${this.branch}/${path}?raw=true`;
   }
 
   async ensureBranch(): Promise<void> {
-    const ref = `/repos/${this.repo}/git/ref/heads/${this.branch}`;
+    const ref = `/repos/${this.attachmentsRepo}/git/ref/heads/${this.branch}`;
     const existing = await this.send('GET', ref);
     if (existing.status === 200) return;
     if (existing.status !== 404) throw this.reject('GET', ref, existing);
 
-    const repo = await this.expectOk('GET', `/repos/${this.repo}`);
+    const repo = await this.expectOk('GET', `/repos/${this.attachmentsRepo}`);
     const defaultBranch = this.field<string>(repo, 'default_branch');
-    const head = await this.expectOk('GET', `/repos/${this.repo}/git/ref/heads/${defaultBranch}`);
+    const head = await this.expectOk('GET', `/repos/${this.attachmentsRepo}/git/ref/heads/${defaultBranch}`);
     const sha = this.field<string>(head, 'object', 'sha');
 
-    const createPath = `/repos/${this.repo}/git/refs`;
+    const createPath = `/repos/${this.attachmentsRepo}/git/refs`;
     const created = await this.send('POST', createPath, { ref: `refs/heads/${this.branch}`, sha });
     const alreadyExists = created.status === 422 && created.body.includes('already exists');
     if (created.status !== 201 && !alreadyExists) throw this.reject('POST', createPath, created);
   }
 
   async putFile(path: string, bytes: Buffer, message: string): Promise<void> {
-    await this.expectOk('PUT', `/repos/${this.repo}/contents/${path}`, {
+    await this.expectOk('PUT', `/repos/${this.attachmentsRepo}/contents/${path}`, {
       message,
       content: bytes.toString('base64'),
       branch: this.branch,
@@ -69,6 +69,10 @@ export class GithubIssuesClient {
 
   private get repo(): string {
     return this.config.get<string>('GITHUB_ISSUES_REPO')?.trim() || DEFAULT_REPO;
+  }
+
+  private get attachmentsRepo(): string {
+    return this.config.get<string>('GITHUB_ISSUES_ATTACHMENTS_REPO')?.trim() || this.repo;
   }
 
   private get branch(): string {
