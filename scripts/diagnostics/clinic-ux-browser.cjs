@@ -54,8 +54,13 @@ async function main() {
     await page.keyboard.press('Escape');
     console.log('PASS patient action menu opens and closes by keyboard');
     await page.goto(`${base}/dashboard/appointments`, { waitUntil: 'networkidle2', timeout: 90000 });
-    await page.waitForSelector('[aria-label^="First Patient, "]', { timeout: 30000 });
     const column = calendar => page.$eval(`section[data-calendar="${calendar}"]`, e => e.textContent);
+    await page.waitForSelector('button[aria-label="Show Scheduled calendar"]', { timeout: 30000 });
+    const folded = await column('SCHEDULED');
+    assert(folded.includes('1 to confirm') && !folded.includes('First Patient'));
+    console.log('PASS the doctor day opens with Scheduled folded to its count');
+    await page.click('button[aria-label="Show Scheduled calendar"]');
+    await page.waitForSelector('[aria-label^="First Patient, "]', { timeout: 30000 });
     const scheduled = await column('SCHEDULED');
     const confirmed = await column('CONFIRMED');
     assert(scheduled.includes('First Patient') && !scheduled.includes('Second Patient'));

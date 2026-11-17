@@ -1,3 +1,5 @@
+import { hhmmToMinutes } from '@/lib/utils';
+
 export interface DayInterval {
   id: string;
   startMin: number;
@@ -41,4 +43,42 @@ export function layoutDay(items: readonly DayInterval[]): Map<string, LanePlacem
   }
   closeCluster();
   return result;
+}
+
+export interface Timeline {
+  start: number;
+  end: number;
+  topPadding: string;
+  bottomPadding: string;
+}
+
+export interface PlacedAppointment<T extends { id?: string; slot?: string }> extends LanePlacement {
+  apt: T;
+  key: string;
+  start: string;
+  end: string;
+  startMin: number;
+  endMin: number;
+  topPct: number;
+  heightPct: number;
+}
+
+/** Positions each appointment on the timeline as percentages of its height, with its side-by-side lane. */
+export function placeAppointments<T extends { id?: string; slot?: string }>(appointments: readonly T[], timeline: Timeline): PlacedAppointment<T>[] {
+  const totalDayMin = Math.max(1, timeline.end - timeline.start);
+  const spans = appointments.flatMap((apt, index) => {
+    const [start, end] = (apt.slot || '').split('-');
+    if (!start || !end) return [];
+    const startMin = Math.max(timeline.start, Math.min(hhmmToMinutes(start), timeline.end));
+    const endMin = Math.max(timeline.start, Math.min(hhmmToMinutes(end), timeline.end));
+    if (endMin <= startMin) return [];
+    return [{ apt, key: apt.id || `${apt.slot}#${index}`, start, end, startMin, endMin }];
+  });
+  const lanes = layoutDay(spans.map(({ key, startMin, endMin }) => ({ id: key, startMin, endMin })));
+  return spans.map((span) => ({
+    ...span,
+    ...lanes.get(span.key)!,
+    topPct: ((span.startMin - timeline.start) * 100) / totalDayMin,
+    heightPct: ((span.endMin - span.startMin) * 100) / totalDayMin,
+  }));
 }

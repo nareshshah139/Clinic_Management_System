@@ -31,6 +31,7 @@ import { overbookFlag } from '@/lib/overbooking';
 import { displayCalendarDate } from '@/lib/date-display';
 import { CALENDARS, CALENDAR_ORDER, canMove, type SlotChoice } from './appointment-calendars';
 import CalendarColumn, { type SlotAction } from './CalendarColumn';
+import FoldedCalendar from './FoldedCalendar';
 import { AppointmentBillDialog } from './AppointmentBillDialog';
 import { BILL_TYPE_LABEL, billingChip } from './appointment-billing-view';
 import { enumLabel } from '@/lib/labels';
@@ -60,6 +61,8 @@ export interface DoctorDayCalendarProps {
   selectedRoomName?: string;
   /** Patients the doctor may see in one slot of one calendar. 1 (the default) keeps every occupied tile closed. */
   maxBookingsPerSlot?: number;
+  /** Calendars this viewer starts with folded to a count and may open. */
+  foldedCalendars?: readonly AppointmentCalendar[];
 }
 
 /**
@@ -68,6 +71,7 @@ export interface DoctorDayCalendarProps {
  */
 type Move = { appointment: AppointmentInSlot; from: string; refused?: SlotChoice };
 type MoveState = { move: Move | null; setMove: (move: Move | null) => void };
+type OpenedState = { opened: readonly AppointmentCalendar[]; setOpened: (opened: readonly AppointmentCalendar[]) => void };
 
 /**
  * @cc [owner:nareshshah139,label:product] schedule-selection-isolation
@@ -84,11 +88,14 @@ export default function DoctorDayCalendar(props: DoctorDayCalendarProps) {
 
 function DoctorDayCalendarForDoctor(props: DoctorDayCalendarProps) {
   const [move, setMove] = useState<Move | null>(null);
-  return <DoctorDayCalendarForSelection key={props.date} {...props} move={move} setMove={setMove} />;
+  const [opened, setOpened] = useState<readonly AppointmentCalendar[]>([]);
+  return <DoctorDayCalendarForSelection key={props.date} {...props} move={move} setMove={setMove} opened={opened} setOpened={setOpened} />;
 }
 
-function moveHint(move: Move, date: string): string {
-  const where = move.refused ? `the ${CALENDARS[move.refused.calendar].title} calendar` : 'either calendar';
+function moveHint(move: Move, date: string, openCalendars: readonly AppointmentCalendar[]): string {
+  const where = move.refused
+    ? `the ${CALENDARS[move.refused.calendar].title} calendar`
+    : openCalendars.length === CALENDAR_ORDER.length ? 'either calendar' : `the ${CALENDARS[openCalendars[0]].title} calendar`;
   if (move.from !== date) {
     return `Click a free time in ${where} to move this appointment from ${displayCalendarDate(move.from)} to ${displayCalendarDate(date)}.`;
   }
@@ -105,7 +112,9 @@ function moveHint(move: Move, date: string): string {
  * @cc [owner:nareshshah139,label:product] scheduled-and-confirmed-calendars
  * The day shows the Scheduled and Confirmed calendars side by side over one time gutter. Each
  * appointment appears only in the column its `calendar` field names, and a free time books or
- * moves into that column's calendar, counting only that column's appointments.
+ * moves into that column's calendar, counting only that column's appointments. A calendar folded
+ * for the viewer shows its count in place of its appointments and takes no bookings or moves until
+ * opened.
  */
 /**
  * @cc [owner:nareshshah139,label:product] confirm-keeps-time
@@ -132,9 +141,12 @@ function DoctorDayCalendarForSelection({
   disableSlotBooking = false,
   selectedRoomName,
   maxBookingsPerSlot = 1,
+  foldedCalendars = [],
   move,
   setMove,
-}: DoctorDayCalendarProps & MoveState) {
+  opened,
+  setOpened,
+}: DoctorDayCalendarProps & MoveState & OpenedState) {
   const router = useRouter();
   const { toast } = useToast();
   const { sendWithOverbookConfirm, overbookDialog } = useOverbookConfirm();
@@ -148,6 +160,9 @@ function DoctorDayCalendarForSelection({
   const [placing, setPlacing] = useState<boolean>(false);
   const [billAccess, setBillAccess] = useState<ClinicBillAccess>(NO_BILL_ACCESS);
   const [billForId, setBillForId] = useState<string | null>(null);
+  const [focusFold, setFocusFold] = useState<AppointmentCalendar | null>(null);
+  // Focus follows one press of Show or Hide. A later remount of the control must not take focus again.
+  useEffect(() => { if (focusFold) setFocusFold(null); }, [focusFold]);
   const billFor = billForId ? schedule.find((a) => a.id === billForId) ?? null : null;
 
   const slotMinutes = Math.max(5, timeSlotConfig.stepMinutes || 10);
@@ -399,6 +414,20 @@ function DoctorDayCalendarForSelection({
     }
   };
 
+  const isFolded = (calendar: AppointmentCalendar) =>
+    foldedCalendars.includes(calendar) && !opened.includes(calendar) && move?.refused?.calendar !== calendar;
+  const openCalendars = CALENDAR_ORDER.filter((calendar) => !isFolded(calendar));
+
+  const showCalendar = (calendar: AppointmentCalendar) => {
+    setFocusFold(calendar);
+    setOpened([...opened, calendar]);
+  };
+
+  const hideCalendar = (calendar: AppointmentCalendar) => {
+    setFocusFold(calendar);
+    setOpened(opened.filter((c) => c !== calendar));
+  };
+
   const slotActionFor = (calendar: AppointmentCalendar): SlotAction => {
     if (!move) return { kind: 'book', patientMissing: disableSlotBooking };
     if (move.refused && move.refused.calendar !== calendar) return { kind: 'none' };
@@ -459,7 +488,7 @@ function DoctorDayCalendarForSelection({
                       : `Rescheduling ${formatPatientName(move.appointment.patient)}`}
                   </div>
                   <div className="text-warning-text">
-                    {moveHint(move, date)}
+                    {moveHint(move, date, openCalendars)}
                   </div>
                 </div>
                 <Button size="sm" variant="ghost" className="shrink-0" onClick={() => setMove(null)} disabled={placing}>
@@ -473,7 +502,10 @@ function DoctorDayCalendarForSelection({
                 <span className="mt-2 text-sm font-medium text-info-text">Refreshing schedule…</span>
               </div>
             )}
-            <div className="grid grid-cols-[2.25rem_minmax(0,1fr)_minmax(0,1fr)] grid-rows-[auto_auto] gap-x-1.5 gap-y-1 sm:grid-cols-[3rem_minmax(0,1fr)_minmax(0,1fr)] sm:gap-x-3">
+            <div
+              className="grid grid-rows-[auto_auto] gap-x-1.5 gap-y-1 [--gutter:2.25rem] sm:[--gutter:3rem] [--folded:6rem] sm:[--folded:7.5rem] sm:gap-x-3"
+              style={{ gridTemplateColumns: ['var(--gutter)', ...CALENDAR_ORDER.map((c) => (isFolded(c) ? 'var(--folded)' : 'minmax(0,1fr)'))].join(' ') }}
+            >
               <div data-time-gutter aria-hidden="true" className="col-start-1 row-start-2" style={{ paddingTop: timeline.topPadding, paddingBottom: timeline.bottomPadding }}>
                 {baseGridSlots.map((slot) => {
                   const slotStart = slot.split('-')[0];
@@ -487,6 +519,19 @@ function DoctorDayCalendarForSelection({
                 })}
               </div>
               {columns.map(({ calendar, appointments }, index) => (
+                isFolded(calendar) ? (
+                <FoldedCalendar
+                  key={calendar}
+                  calendar={calendar}
+                  column={index + 2}
+                  appointments={appointments}
+                  slots={baseGridSlots}
+                  tileHeight={tileHeightCss}
+                  timeline={timeline}
+                  onShow={() => showCalendar(calendar)}
+                  autoFocus={focusFold === calendar}
+                />
+                ) : (
                 <CalendarColumn
                   key={calendar}
                   calendar={calendar}
@@ -509,7 +554,10 @@ function DoctorDayCalendarForSelection({
                   onOpenBill={billAccess.read ? (appointment) => setBillForId(appointment.id) : undefined}
                   onBook={(slot) => onSelectSlot?.(slot, calendar)}
                   onMove={(slot) => void moveInto({ slot, calendar })}
+                  onFold={foldedCalendars.includes(calendar) && move?.refused?.calendar !== calendar ? () => hideCalendar(calendar) : undefined}
+                  autoFocusFold={focusFold === calendar}
                 />
+                )
               ))}
             </div>
           </div>

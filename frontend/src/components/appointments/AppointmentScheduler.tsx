@@ -41,6 +41,7 @@ interface AppointmentSchedulerProps {
   controlledDoctorId?: string;
   controlledDate?: string;
   hideHeaderControls?: boolean;
+  foldedCalendars?: readonly AppointmentCalendar[];
 }
 
 /**
@@ -53,6 +54,7 @@ export default function AppointmentScheduler({
   controlledDoctorId,
   controlledDate,
   hideHeaderControls,
+  foldedCalendars,
 }: AppointmentSchedulerProps) {
   const { toast } = useToast();
   const { sendWithOverbookConfirm, overbookDialog } = useOverbookConfirm();
@@ -800,6 +802,7 @@ export default function AppointmentScheduler({
         disableSlotBooking={(!selectedPatientId || !selectedPatient || selectedPatient.id !== selectedPatientId) && !rescheduleContext}
         optimisticAppointment={optimisticAppointment?.doctorId === doctorId && optimisticAppointment.date === date ? optimisticAppointment : undefined}
         maxBookingsPerSlot={doctorDay?.maxBookingsPerSlot ?? 1}
+        foldedCalendars={foldedCalendars}
       />
 
       {overbookDialog}

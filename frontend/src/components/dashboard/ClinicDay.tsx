@@ -2,15 +2,17 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { AlertTriangle, ArrowRight } from 'lucide-react';
+import { AlertTriangle, ArrowRight, ChevronRight } from 'lucide-react';
 import type { ApiError } from '@/lib/api';
-import type { Appointment } from '@/lib/types';
+import { UserRole } from '@cms/shared-types';
+import type { Appointment, AppointmentCalendar } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingSkeleton } from '@/components/ui/skeleton';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { formatPatientName, getISTDateString } from '@/lib/utils';
 import { appointmentsHref } from '@/lib/appointments-link';
+import { foldedCalendarsFor } from '@/components/appointments/appointment-calendars';
 
 type LoadFailure = 'forbidden' | 'unavailable';
 type Loadable<T> = { status: 'loading' } | { status: 'failed'; failure: LoadFailure } | { status: 'ready'; value: T };
@@ -20,6 +22,8 @@ export type AttentionRow = { label: string; count: number | string; href: string
 export type DayAppointment = Pick<Appointment, 'id' | 'slot' | 'status' | 'doctorId' | 'doctor' | 'visit'> & {
   patient?: { id: string; name?: string; firstName?: string; lastName?: string };
 };
+
+export type DoctorQueueAppointment = DayAppointment & { calendar: AppointmentCalendar };
 
 export function useLoad<T>(load: () => Promise<T>) {
   const [state, setState] = useState<Loadable<T>>({ status: 'loading' });
@@ -96,7 +100,7 @@ function AppointmentRow({ appointment, href, action }: { appointment: DayAppoint
         <span className="truncate font-medium text-foreground">{formatPatientName(appointment.patient)}</span>
         <span className="flex items-center gap-3">
           <StatusBadge domain="appointment" status={appointment.status} />
-          {action && <span className="flex w-24 items-center justify-end gap-1 text-sm font-medium text-foreground">{action}<ArrowRight className="h-4 w-4" aria-hidden="true" /></span>}
+          {action && <span className="flex w-28 items-center justify-end gap-1 whitespace-nowrap text-sm font-medium text-foreground">{action}<ArrowRight className="h-4 w-4" aria-hidden="true" /></span>}
         </span>
       </Link>
     </li>
@@ -110,13 +114,39 @@ function visitHref(appointment: DayAppointment): string {
   return `/dashboard/visits?${params}`;
 }
 
-export function DoctorQueue({ appointments }: { appointments: DayAppointment[] }) {
-  const queue = appointments.filter((a) => a.status !== 'CANCELLED').sort((a, b) => a.slot.localeCompare(b.slot));
-  if (queue.length === 0) return <p className="py-4 text-muted-foreground">No appointments booked with you today.</p>;
+const visitAction = (a: DayAppointment) => (a.visit?.id ? 'Open visit' : 'Start visit');
+
+export function DoctorQueue({ appointments }: { appointments: DoctorQueueAppointment[] }) {
+  const folded = foldedCalendarsFor(UserRole.DOCTOR);
+  const day = appointments.filter((a) => a.status !== 'CANCELLED').sort((a, b) => a.slot.localeCompare(b.slot));
+  const queue = day.filter((a) => !folded.includes(a.calendar));
+  const unconfirmed = day.filter((a) => folded.includes(a.calendar));
   return (
-    <ul className="divide-y border-y" aria-label="Your appointments today">
-      {queue.map((a) => <AppointmentRow key={a.id} appointment={a} href={visitHref(a)} action={a.visit?.id ? 'Open visit' : 'Start visit'} />)}
-    </ul>
+    <div>
+      {queue.length > 0 ? (
+        <ul className="divide-y border-y" aria-label="Your appointments today">
+          {queue.map((a) => <AppointmentRow key={a.id} appointment={a} href={visitHref(a)} action={visitAction(a)} />)}
+        </ul>
+      ) : (
+        <p className="py-4 text-muted-foreground">
+          {unconfirmed.length > 0 ? 'No confirmed patients yet.' : 'No appointments booked with you today.'}
+        </p>
+      )}
+      {unconfirmed.length > 0 && (
+        <details className="group">
+          <summary className="flex cursor-pointer list-none items-center gap-2 px-1 py-2.5 hover:bg-muted/50 focus-visible:outline focus-visible:outline-2 [&::-webkit-details-marker]:hidden">
+            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-90" aria-hidden="true" />
+            <span className="font-medium text-foreground">{unconfirmed.length} {unconfirmed.length === 1 ? 'patient' : 'patients'} not yet confirmed</span>
+            <span className="hidden text-sm text-muted-foreground sm:inline">They join your queue when reception confirms them.</span>
+            <span className="ml-auto text-sm text-muted-foreground group-open:hidden">Show</span>
+            <span className="ml-auto hidden text-sm text-muted-foreground group-open:inline">Hide</span>
+          </summary>
+          <ul className="divide-y border-y" aria-label="Not yet confirmed">
+            {unconfirmed.map((a) => <AppointmentRow key={a.id} appointment={a} href={visitHref(a)} action={visitAction(a)} />)}
+          </ul>
+        </details>
+      )}
+    </div>
   );
 }
 

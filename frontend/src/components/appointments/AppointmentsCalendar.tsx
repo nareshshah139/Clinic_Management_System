@@ -30,6 +30,7 @@ interface AppointmentsCalendarProps {
   toolbarLead?: React.ReactNode;
   /** False for a viewer the server refuses rooms; the room filter then stays empty and rooms are never asked for. */
   readsRooms?: boolean;
+  foldedCalendars?: readonly AppointmentCalendar[];
 }
 
 const patientName = (patient: Pick<Patient, 'name' | 'firstName' | 'lastName'>) =>
@@ -57,6 +58,7 @@ export default function AppointmentsCalendar({
   hideHeaderControls,
   toolbarLead,
   readsRooms = true,
+  foldedCalendars,
 }: AppointmentsCalendarProps) {
   const { toast } = useToast();
   const { sendWithOverbookConfirm, overbookDialog } = useOverbookConfirm();
@@ -665,6 +667,7 @@ export default function AppointmentsCalendar({
             selectedRoomName={selectedRoom?.name}
             timeSlotConfig={{ ...slotConfig, stepMinutes: Math.max(10, gridMinutes) }}
             maxBookingsPerSlot={doctorDay?.maxBookingsPerSlot ?? 1}
+            foldedCalendars={foldedCalendars}
           />
       </div>
 

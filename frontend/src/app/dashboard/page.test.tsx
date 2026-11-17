@@ -42,9 +42,10 @@ beforeEach(() => {
   api.getSystemAlerts.mockResolvedValue({ counts: { overdueInvoices: 0, pendingPayments: 0, upcomingAppointments: 3, lowStockAlerts: 4 } });
   api.getDoctorSchedule.mockResolvedValue({
     appointments: [
-      { ...today[1], slot: '12:00-12:15', id: 'a5', patient: { id: 'p5', name: 'Sai Teja Goud' }, visit: { id: 'v5' } },
-      { ...today[1], visit: null },
-      { ...today[1], id: 'a6', slot: '11:00-11:30', status: 'CANCELLED', patient: { id: 'p6', name: 'Rahul Kumar' } },
+      { ...today[1], calendar: 'CONFIRMED', slot: '12:00-12:15', id: 'a5', patient: { id: 'p5', name: 'Sai Teja Goud' }, visit: { id: 'v5' } },
+      { ...today[1], calendar: 'CONFIRMED', visit: null },
+      { ...today[1], calendar: 'CONFIRMED', id: 'a6', slot: '11:00-11:30', status: 'CANCELLED', patient: { id: 'p6', name: 'Rahul Kumar' } },
+      { ...today[0], calendar: 'SCHEDULED', doctorId: 'd1', doctor: shravya, id: 'a7', slot: '09:00-09:15', patient: { id: 'p7', name: 'Lakshmi Devi' }, visit: null },
     ],
   });
   api.get.mockImplementation(async (url: string, params?: { status?: string }) => {
@@ -79,6 +80,12 @@ it("puts the doctor's own queue first, in time order, each row starting or reope
   expect(queue.getAllByRole('link').map((link) => [link.textContent, link.getAttribute('href')])).toEqual([
     ['10:00-10:15Mohammed Irfan SiddiquiConfirmedStart visit', '/dashboard/visits?patientId=p2&appointmentId=a2&autoStart=true'],
     ['12:00-12:15Sai Teja GoudConfirmedOpen visit', '/dashboard/visits?patientId=p5&appointmentId=a5&visitId=v5'],
+  ]);
+  expect(queue.queryByText('Lakshmi Devi')).not.toBeInTheDocument();
+  expect(screen.getByText('1 patient not yet confirmed')).toBeInTheDocument();
+  const unconfirmed = within(screen.getByRole('list', { name: 'Not yet confirmed', hidden: true }));
+  expect(unconfirmed.getAllByRole('link', { hidden: true }).map((link) => [link.textContent, link.getAttribute('href')])).toEqual([
+    ['09:00-09:15Lakshmi DeviScheduledStart visit', '/dashboard/visits?patientId=p7&appointmentId=a7&autoStart=true'],
   ]);
 });
 

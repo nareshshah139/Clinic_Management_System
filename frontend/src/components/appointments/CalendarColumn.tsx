@@ -12,10 +12,10 @@ import {
   minutesToHHMM,
   addMinutesToHHMM,
 } from '@/lib/utils';
-import { CircleAlert } from 'lucide-react';
+import { ChevronLeft, CircleAlert } from 'lucide-react';
 import type { AppointmentInSlot, AppointmentCalendar, BillType } from '@/lib/types';
 import { AppointmentStatus } from '@cms/shared-types';
-import { layoutDay } from './day-layout';
+import { placeAppointments, type Timeline } from './day-layout';
 import { enumLabel } from '@/lib/labels';
 import { CALENDARS, canMove } from './appointment-calendars';
 import { BILL_TYPE_LABEL, BILL_TYPE_SHORT, billingChip, type BillingTone, type ChipWidth } from './appointment-billing-view';
@@ -81,13 +81,6 @@ export type SlotAction =
   | { kind: 'move'; minutes: number }
   | { kind: 'none' };
 
-export interface Timeline {
-  start: number;
-  end: number;
-  topPadding: string;
-  bottomPadding: string;
-}
-
 interface CalendarColumnProps {
   calendar: AppointmentCalendar;
   column: number;
@@ -109,6 +102,8 @@ interface CalendarColumnProps {
   onOpenBill?: (appointment: AppointmentInSlot) => void;
   onBook: (slot: string) => void;
   onMove: (slot: string) => void;
+  onFold?: () => void;
+  autoFocusFold?: boolean;
 }
 
 /**
@@ -138,6 +133,8 @@ export default function CalendarColumn({
   onOpenBill,
   onBook,
   onMove,
+  onFold,
+  autoFocusFold,
 }: CalendarColumnProps) {
   const spec = CALENDARS[calendar];
   const titleId = useId();
@@ -152,24 +149,7 @@ export default function CalendarColumn({
     if (longPressTimer) clearTimeout(longPressTimer);
   }, [longPressTimer]);
 
-  const blocks = useMemo(() => {
-    const totalDayMin = Math.max(1, timeline.end - timeline.start);
-    const spans = appointments.flatMap((apt, index) => {
-      const [start, end] = (apt.slot || '').split('-');
-      if (!start || !end) return [];
-      const startMin = Math.max(timeline.start, Math.min(hhmmToMinutes(start), timeline.end));
-      const endMin = Math.max(timeline.start, Math.min(hhmmToMinutes(end), timeline.end));
-      if (endMin <= startMin) return [];
-      return [{ apt, key: apt.id || `${apt.slot}#${index}`, start, end, startMin, endMin }];
-    });
-    const lanes = layoutDay(spans.map(({ key, startMin, endMin }) => ({ id: key, startMin, endMin })));
-    return spans.map((span) => ({
-      ...span,
-      ...lanes.get(span.key)!,
-      topPct: ((span.startMin - timeline.start) * 100) / totalDayMin,
-      heightPct: ((span.endMin - span.startMin) * 100) / totalDayMin,
-    }));
-  }, [appointments, timeline.start, timeline.end]);
+  const blocks = useMemo(() => placeAppointments(appointments, timeline), [appointments, timeline]);
 
   const blockBackground = (apt: AppointmentInSlot) => {
     if (apt.status === AppointmentStatus.COMPLETED) return 'var(--calendar-completed)';
@@ -211,7 +191,24 @@ export default function CalendarColumn({
       style={{ gridColumnStart: column }}
     >
       <header className="min-w-0 border-b-2 pb-1.5" style={{ borderBottomColor: spec.accentColor }}>
-        <h2 id={titleId} className="font-semibold leading-tight text-foreground">{spec.title}</h2>
+        {onFold ? (
+          <div className="flex items-baseline gap-2">
+            <h2 id={titleId} className="font-semibold leading-tight text-foreground">{spec.title}</h2>
+            <button
+              type="button"
+              aria-expanded={true}
+              aria-label={`Hide ${spec.title} calendar`}
+              autoFocus={autoFocusFold}
+              onClick={onFold}
+              className="inline-flex shrink-0 items-center gap-0.5 rounded-sm text-xs font-medium text-info-text hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <ChevronLeft className="size-3" aria-hidden="true" />
+              Hide
+            </button>
+          </div>
+        ) : (
+          <h2 id={titleId} className="font-semibold leading-tight text-foreground">{spec.title}</h2>
+        )}
         <p className="text-xs font-medium leading-tight text-foreground">{appointments.length ? spec.count(appointments.length) : spec.empty}</p>
         <p className="text-xs leading-tight text-muted-foreground">{spec.description}</p>
       </header>
