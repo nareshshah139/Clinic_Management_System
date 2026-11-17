@@ -5,6 +5,7 @@ import * as http from 'http';
 import type { AddressInfo } from 'net';
 import * as os from 'os';
 import * as path from 'path';
+import { ffmpegBinaries } from './ffmpeg-binaries';
 import { chooseConsensusTranscript, planTranscriptionSegments, transcribeWithOpenAI } from './openai-transcribe';
 
 interface Reply {
@@ -140,7 +141,7 @@ describe('transcribeWithOpenAI against a local transcription endpoint', () => {
 
   const wav = () => {
     const file = path.join(directory, 'audio.wav');
-    execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=0.5', '-ar', '16000', '-ac', '1', file]);
+    execFileSync(ffmpegBinaries().ffmpeg.path!, ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=0.5', '-ar', '16000', '-ac', '1', file]);
     return { path: file, mimetype: 'audio/wav', filename: 'audio.wav' };
   };
 
@@ -181,7 +182,7 @@ describe('transcribeWithOpenAI against a local transcription endpoint', () => {
 
   it('converts webm to 16 kHz mono wav before uploading and removes the converted file', async () => {
     const webm = path.join(directory, 'audio.webm');
-    execFileSync('ffmpeg', ['-loglevel', 'error', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=0.5', '-c:a', 'libopus', webm]);
+    execFileSync(ffmpegBinaries().ffmpeg.path!, ['-loglevel', 'error', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=0.5', '-c:a', 'libopus', webm]);
     await transcribeWithOpenAI({ path: webm, mimetype: 'audio/webm', filename: 'audio.webm' });
     expect(received[0].file?.name).toBe('audio.wav');
     expect(received[0].file?.type).toBe('audio/wav');
@@ -224,7 +225,7 @@ describe('transcribeWithOpenAI against a local transcription endpoint', () => {
     const recording = (extension: 'wav' | 'webm') => {
       const file = path.join(directory, `consult.${extension}`);
       const tone = 'if(between(t,49,50)+between(t,114,115)+between(t,177,178),0,0.5*sin(2*PI*440*t))';
-      execFileSync('ffmpeg', ['-loglevel', 'error', '-f', 'lavfi', '-i', `aevalsrc='${tone}':s=16000:d=230`,
+      execFileSync(ffmpegBinaries().ffmpeg.path!, ['-loglevel', 'error', '-f', 'lavfi', '-i', `aevalsrc='${tone}':s=16000:d=230`,
         ...(extension === 'webm' ? ['-c:a', 'libopus'] : []), file]);
       return { path: file, mimetype: `audio/${extension}`, filename: `consult.${extension}` };
     };
@@ -292,7 +293,7 @@ describe('transcribeWithOpenAI against a local transcription endpoint', () => {
       // 200 s of tone without silences, cut at 60 and 120 s into three parts.
       const tone = () => {
         const file = path.join(directory, 'tone.wav');
-        execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=200', '-ar', '16000', '-ac', '1', file]);
+        execFileSync(ffmpegBinaries().ffmpeg.path!, ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=200', '-ar', '16000', '-ac', '1', file]);
         return { path: file, mimetype: 'audio/wav', filename: 'tone.wav' };
       };
       const TRUE: Record<string, string> = {

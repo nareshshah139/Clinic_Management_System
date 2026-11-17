@@ -34,6 +34,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.build.json"
   },
   "dependencies": {
+    "@ffmpeg-installer/ffmpeg": "^1.1.0",
+    "@ffprobe-installer/ffprobe": "^2.1.2",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^11.0.1",
@@ -133,7 +135,9 @@
       "<rootDir>/modules/visits/tests/visits.controller.spec.ts",
       "<rootDir>/modules/visits/tests/visits.e2e.spec.ts",
       "<rootDir>/modules/visits/tests/visits.integration.spec.ts",
-      "<rootDir>/shared/transcription/",
+      "<rootDir>/shared/transcription/openai-realtime.spec.ts",
+      "<rootDir>/shared/transcription/openai-transcribe.spec.ts",
+      "<rootDir>/shared/transcription/speaker-split.spec.ts",
       "<rootDir>/modules/visits/tests/transcribe-live.controller.spec.ts"
     ],
     "transform": {
