@@ -2,7 +2,7 @@ import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common'
 import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
-import { completeJsonWithCodexOAuth, isCodexOAuthReady } from '../../shared/codex/codex-oauth';
+import { CodexFailure, completeJsonWithCodexOAuth, isCodexOAuthReady, type CodexFailureKind } from '../../shared/codex/codex-oauth';
 import { isOpenAiTranscriptionConfigured, transcribeWithOpenAI } from '../../shared/transcription/openai-transcribe';
 import {
   buildVoiceFillPrompt,
@@ -30,6 +30,31 @@ const AUDIO_MIME: Record<VoiceFillAudioExtension, string> = {
   wav: 'audio/wav',
 };
 
+export type VoiceFillFailureKind = 'transcription' | CodexFailureKind | 'model-output' | 'unknown';
+
+export interface VoiceFillFailure {
+  kind: VoiceFillFailureKind;
+  exitCode: number | null;
+  signal: string | null;
+  reason: string;
+  detail: string;
+}
+
+// These transcription messages append raw ffmpeg output, which can carry container metadata from the recording.
+const FFMPEG_DETAIL = /^(Audio format conversion failed|FFmpeg [a-z ]+ failed): .*$/s;
+
+export function voiceFillFailure(error: unknown, step: 'transcribe' | 'extract'): VoiceFillFailure {
+  if (error instanceof CodexFailure) {
+    return { kind: error.kind, exitCode: error.exitCode, signal: error.signal, reason: error.message, detail: error.diagnostic };
+  }
+  // A JSON parse error message quotes the text it failed on, which is patient data.
+  const message = error instanceof SyntaxError ? 'invalid model output' : error instanceof Error ? error.message : 'unknown';
+  if (step === 'transcribe') {
+    return { kind: 'transcription', exitCode: null, signal: null, reason: message.replace(FFMPEG_DETAIL, '$1'), detail: '' };
+  }
+  return { kind: error instanceof SyntaxError ? 'model-output' : 'unknown', exitCode: null, signal: null, reason: message, detail: '' };
+}
+
 // Codex took 43 s on a 30-minute consult transcript (measured), so 60 s left too little headroom.
 function timeoutMs(): number {
   const configured = Number(process.env.VOICE_FILL_CODEX_TIMEOUT_MS);
@@ -39,9 +64,18 @@ function timeoutMs(): number {
 @Injectable()
 export class VoiceFillService {
   private readonly logger = new Logger(VoiceFillService.name);
+  private loggedStatus?: string;
 
   async isAvailable(): Promise<boolean> {
-    return isOpenAiTranscriptionConfigured() && (await isCodexOAuthReady());
+    const transcriptionKey = isOpenAiTranscriptionConfigured();
+    const codexLogin = await isCodexOAuthReady();
+    const available = transcriptionKey && codexLogin;
+    const status = `voice-fill status available=${available} transcriptionKey=${transcriptionKey} codexLogin=${codexLogin}`;
+    if (status !== this.loggedStatus) {
+      this.loggedStatus = status;
+      this.logger.log(status);
+    }
+    return available;
   }
 
   async fill(formId: string, form: VoiceFillForm, audio: VoiceFillAudio): Promise<VoiceFillResult> {
@@ -74,8 +108,10 @@ export class VoiceFillService {
   ): Promise<VoiceFillResult> {
     const started = Date.now();
     const outcome = (detail: string) => `voice-fill form=${formId} ms=${Date.now() - started} ${inputSize} ${detail}`;
+    let step: 'transcribe' | 'extract' = 'transcribe';
     try {
       const transcript = normalizeTranscript(await getText());
+      step = 'extract';
       if (!transcript) {
         this.logger.log(outcome('fields=0 transcript=empty'));
         return { transcript: '', fields: {} };
@@ -90,10 +126,12 @@ export class VoiceFillService {
       this.logger.log(outcome(`fields=${Object.keys(fields).length}`));
       return { transcript, fields };
     } catch (error) {
-      // A JSON parse error message quotes the model output, which is patient data.
-      const reason = error instanceof SyntaxError ? 'invalid model output' : error instanceof Error ? error.message : 'unknown';
-      this.logger.warn(outcome(`failed: ${reason}`));
-      throw new ServiceUnavailableException(UNAVAILABLE);
+      const { kind, exitCode, signal, reason, detail } = voiceFillFailure(error, step);
+      const oneLine = (text: string) => text.replace(/\s+/g, ' ');
+      this.logger.warn(outcome(
+        `failed step=${kind} exit=${exitCode ?? 'none'} signal=${signal ?? 'none'} reason="${oneLine(reason)}" detail="${oneLine(detail)}"`,
+      ));
+      throw new ServiceUnavailableException(`${UNAVAILABLE} (code: ${kind})`);
     }
   }
 }

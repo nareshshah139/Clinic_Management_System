@@ -1,9 +1,9 @@
-import { ExecutionContext, INestApplication, Logger, ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException, ExecutionContext, INestApplication, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import * as fs from 'fs';
 import request from 'supertest';
 import { Test } from '@nestjs/testing';
-import { completeJsonWithCodexOAuth, isCodexOAuthReady } from '../../../shared/codex/codex-oauth';
+import { codexDiagnostic, CodexFailure, completeJsonWithCodexOAuth, isCodexOAuthReady } from '../../../shared/codex/codex-oauth';
 import { JwtAuthGuard } from '../../../shared/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../shared/guards/roles.guard';
 import { diagnosticValidationPipe } from '../../../shared/logging/http-observability';
@@ -16,6 +16,7 @@ jest.mock('../../../shared/transcription/openai-transcribe', () => ({
   isOpenAiTranscriptionConfigured: jest.fn(),
 }));
 jest.mock('../../../shared/codex/codex-oauth', () => ({
+  ...jest.requireActual('../../../shared/codex/codex-oauth'),
   completeJsonWithCodexOAuth: jest.fn(),
   isCodexOAuthReady: jest.fn(),
 }));
@@ -23,6 +24,17 @@ jest.mock('../../../shared/codex/codex-oauth', () => ({
 const transcribe = jest.mocked(transcribeWithOpenAI);
 const codex = jest.mocked(completeJsonWithCodexOAuth);
 const UNAVAILABLE = 'Voice fill is unavailable right now. Please fill the form manually.';
+const REQUEST_FAILED = 'Codex request failed. Check the server OAuth login and model availability.';
+const NOT_SUPPORTED =
+  'ERROR: unexpected status 400 Bad Request: {"detail":"The \'gpt-x\' model is not supported when using Codex with a ChatGPT account."}';
+const PATIENT = 'Meera Iyer has had a dry cough for nine days and takes metformin 500 mg';
+
+const sharesRunWith = (haystack: string, secret: string) => {
+  const flat = (text: string) => text.toLowerCase().replace(/\s+/g, ' ');
+  const hay = flat(haystack);
+  const needle = flat(secret);
+  return Array.from({ length: needle.length - 15 }, (_, i) => needle.slice(i, i + 16)).some((run) => hay.includes(run));
+};
 
 describe('POST /voice-fill/:form with the real service', () => {
   let app: INestApplication;
@@ -49,6 +61,7 @@ describe('POST /voice-fill/:form with the real service', () => {
     jest.resetAllMocks();
     jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
     jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
     seenAudio = undefined;
   });
   afterEach(() => jest.restoreAllMocks());
@@ -114,20 +127,20 @@ describe('POST /voice-fill/:form with the real service', () => {
       throw new ServiceUnavailableException('Speech transcription service is temporarily unavailable. Please try again.');
     });
     const res = await upload('patient-intake', 'DOCTOR').expect(503);
-    expect(res.body.message).toBe(UNAVAILABLE);
+    expect(res.body.message).toBe(`${UNAVAILABLE} (code: transcription)`);
     expect(fs.existsSync(seenAudio!.path)).toBe(false);
   });
 
   it('503s when Codex fails or returns non-JSON, logging no model text', async () => {
     transcribesTo('Asha');
-    codex.mockRejectedValueOnce(new ServiceUnavailableException('Codex timed out. Try again.'));
-    expect((await upload('patient-intake', 'DOCTOR').expect(503)).body.message).toBe(UNAVAILABLE);
+    codex.mockRejectedValueOnce(new CodexFailure('Codex timed out. Try again.', 'codex-timeout', null, null, ''));
+    expect((await upload('patient-intake', 'DOCTOR').expect(503)).body.message).toBe(`${UNAVAILABLE} (code: codex-timeout)`);
     codex.mockResolvedValueOnce('Patient Asha Rao, I could not format this');
-    expect((await upload('patient-intake', 'DOCTOR').expect(503)).body.message).toBe(UNAVAILABLE);
+    expect((await upload('patient-intake', 'DOCTOR').expect(503)).body.message).toBe(`${UNAVAILABLE} (code: model-output)`);
     const warnings = jest.mocked(Logger.prototype.warn).mock.calls.map((call) => String(call[0]).replace(/ms=\d+/, 'ms=N'));
     expect(warnings).toEqual([
-      'voice-fill form=patient-intake ms=N audioBytes=15 failed: Codex timed out. Try again.',
-      'voice-fill form=patient-intake ms=N audioBytes=15 failed: invalid model output',
+      'voice-fill form=patient-intake ms=N audioBytes=15 failed step=codex-timeout exit=none signal=none reason="Codex timed out. Try again." detail=""',
+      'voice-fill form=patient-intake ms=N audioBytes=15 failed step=model-output exit=none signal=none reason="invalid model output" detail=""',
     ]);
   });
 
@@ -221,14 +234,16 @@ describe('POST /voice-fill/:form with the real service', () => {
     });
 
     it('503s with the same message when Codex fails or returns non-JSON, logging none of the text', async () => {
-      codex.mockRejectedValueOnce(new ServiceUnavailableException('Codex timed out. Try again.'));
-      expect((await typed('patient-intake', 'DOCTOR', { text: 'Asha Rao secret' }).expect(503)).body.message).toBe(UNAVAILABLE);
+      codex.mockRejectedValueOnce(new CodexFailure('Codex timed out. Try again.', 'codex-timeout', null, null, ''));
+      expect((await typed('patient-intake', 'DOCTOR', { text: 'Asha Rao secret' }).expect(503)).body.message)
+        .toBe(`${UNAVAILABLE} (code: codex-timeout)`);
       codex.mockResolvedValueOnce('Patient Asha Rao, I could not format this');
-      expect((await typed('patient-intake', 'DOCTOR', { text: 'Asha Rao secret' }).expect(503)).body.message).toBe(UNAVAILABLE);
+      expect((await typed('patient-intake', 'DOCTOR', { text: 'Asha Rao secret' }).expect(503)).body.message)
+        .toBe(`${UNAVAILABLE} (code: model-output)`);
       const warnings = jest.mocked(Logger.prototype.warn).mock.calls.map((call) => String(call[0]).replace(/ms=\d+/, 'ms=N'));
       expect(warnings).toEqual([
-        'voice-fill form=patient-intake ms=N textChars=15 failed: Codex timed out. Try again.',
-        'voice-fill form=patient-intake ms=N textChars=15 failed: invalid model output',
+        'voice-fill form=patient-intake ms=N textChars=15 failed step=codex-timeout exit=none signal=none reason="Codex timed out. Try again." detail=""',
+        'voice-fill form=patient-intake ms=N textChars=15 failed step=model-output exit=none signal=none reason="invalid model output" detail=""',
       ]);
     });
 
@@ -238,6 +253,105 @@ describe('POST /voice-fill/:form with the real service', () => {
       const logs = jest.mocked(Logger.prototype.log).mock.calls.map((call) => String(call[0]).replace(/ms=\d+/, 'ms=N'));
       expect(logs).toEqual(['voice-fill form=patient-intake ms=N textChars=15 fields=1']);
     });
+  });
+
+  describe('failure codes', () => {
+    const cases: Array<{ name: string; arrange: () => void; code: string; log: string }> = [
+      {
+        name: 'a transcription outage',
+        arrange: () => transcribe.mockRejectedValue(
+          new ServiceUnavailableException('Speech transcription service is temporarily unavailable. Please try again.')),
+        code: 'transcription',
+        log: 'step=transcription exit=none signal=none reason="Speech transcription service is temporarily unavailable. Please try again." detail=""',
+      },
+      {
+        name: 'a recording ffmpeg cannot convert, without its ffmpeg detail',
+        arrange: () => transcribe.mockRejectedValue(
+          new BadRequestException('Audio format conversion failed: ffmpeg exited with code 1: Invalid data found')),
+        code: 'transcription',
+        log: 'step=transcription exit=none signal=none reason="Audio format conversion failed" detail=""',
+      },
+      {
+        name: 'a missing ChatGPT login',
+        arrange: () => codex.mockRejectedValue(
+          new CodexFailure('Codex ChatGPT OAuth login is required on the server.', 'codex-login', 0, null, '')),
+        code: 'codex-login',
+        log: 'step=codex-login exit=0 signal=none reason="Codex ChatGPT OAuth login is required on the server." detail=""',
+      },
+      {
+        name: 'a codex binary that cannot start',
+        arrange: () => codex.mockRejectedValue(new CodexFailure(
+          'Codex could not start. Check PHARMACY_AGENT_CODEX_PATH.', 'codex-start', null, null, 'spawn codex ENOENT')),
+        code: 'codex-start',
+        log: 'step=codex-start exit=none signal=none reason="Codex could not start. Check PHARMACY_AGENT_CODEX_PATH." detail="spawn codex ENOENT"',
+      },
+      {
+        name: 'a codex timeout',
+        arrange: () => codex.mockRejectedValue(new CodexFailure('Codex timed out. Try again.', 'codex-timeout', null, null, '')),
+        code: 'codex-timeout',
+        log: 'step=codex-timeout exit=none signal=none reason="Codex timed out. Try again." detail=""',
+      },
+      {
+        name: 'a failed codex exec',
+        arrange: () => codex.mockRejectedValue(new CodexFailure(REQUEST_FAILED, 'codex-exec', 1, null, NOT_SUPPORTED)),
+        code: 'codex-exec',
+        log: `step=codex-exec exit=1 signal=none reason="${REQUEST_FAILED}" detail="${NOT_SUPPORTED}"`,
+      },
+      {
+        name: 'a killed codex exec',
+        arrange: () => codex.mockRejectedValue(new CodexFailure(REQUEST_FAILED, 'codex-exec', null, 'SIGTERM', '')),
+        code: 'codex-exec',
+        log: `step=codex-exec exit=none signal=SIGTERM reason="${REQUEST_FAILED}" detail=""`,
+      },
+      {
+        name: 'model output that is not JSON',
+        arrange: () => codex.mockResolvedValue('not json'),
+        code: 'model-output',
+        log: 'step=model-output exit=none signal=none reason="invalid model output" detail=""',
+      },
+      {
+        name: 'anything else',
+        arrange: () => codex.mockRejectedValue(new Error('EACCES: permission denied, mkdtemp')),
+        code: 'unknown',
+        log: 'step=unknown exit=none signal=none reason="EACCES: permission denied, mkdtemp" detail=""',
+      },
+    ];
+
+    it.each(cases)('503s with code $code and one warn line for $name', async ({ arrange, code, log }) => {
+      transcribesTo('Asha');
+      arrange();
+      const res = await upload('patient-intake', 'DOCTOR').expect(503);
+      expect(res.body).toEqual({ statusCode: 503, error: 'Service Unavailable', message: `${UNAVAILABLE} (code: ${code})` });
+      const warnings = jest.mocked(Logger.prototype.warn).mock.calls.map((call) => String(call[0]).replace(/ms=\d+/, 'ms=N'));
+      expect(warnings).toEqual([`voice-fill form=patient-intake ms=N audioBytes=15 failed ${log}`]);
+    });
+
+    it('never logs or returns the patient text, whatever fails', async () => {
+      const echoingCodex = async ({ prompt }: { prompt: string }): Promise<string> => {
+        const output = ['user', prompt, `ERROR: invalid_request: ${PATIENT}`, NOT_SUPPORTED].join('\n');
+        throw new CodexFailure(REQUEST_FAILED, 'codex-exec', 1, null, codexDiagnostic(output, [prompt]));
+      };
+      const bodies: unknown[] = [];
+      transcribesTo(PATIENT);
+      codex.mockImplementationOnce(echoingCodex);
+      bodies.push((await upload('patient-intake', 'DOCTOR').expect(503)).body);
+      codex.mockImplementationOnce(echoingCodex);
+      bodies.push((await typed('patient-intake', 'DOCTOR', { text: PATIENT }).expect(503)).body);
+      codex.mockResolvedValueOnce(`Sorry, ${PATIENT}`);
+      bodies.push((await typed('patient-intake', 'DOCTOR', { text: PATIENT }).expect(503)).body);
+      transcribe.mockRejectedValueOnce(new BadRequestException(`Audio format conversion failed: ffmpeg said ${PATIENT}`));
+      bodies.push((await upload('patient-intake', 'DOCTOR').expect(503)).body);
+
+      const logged = (['log', 'warn', 'error', 'debug', 'verbose'] as const)
+        .flatMap((level) => (jest.isMockFunction(Logger.prototype[level]) ? jest.mocked(Logger.prototype[level]).mock.calls : []))
+        .map((call) => call.map(String).join(' '));
+      expect(logged.filter((line) => sharesRunWith(line, PATIENT))).toEqual([]);
+      expect(bodies.filter((body) => sharesRunWith(JSON.stringify(body), PATIENT))).toEqual([]);
+      expect(jest.mocked(Logger.prototype.warn).mock.calls[0][0]).toContain(`detail="${NOT_SUPPORTED}"`);
+    });
+
+    const typed = (form: string, role: string, body: unknown) =>
+      request(app.getHttpServer()).post(`/voice-fill/${form}/text`).set('x-role', role).send(body as object);
   });
 
   it('reports availability only when transcription is configured and Codex OAuth is ready, to clinic staff only', async () => {
@@ -250,5 +364,28 @@ describe('POST /voice-fill/:form with the real service', () => {
     jest.mocked(isCodexOAuthReady).mockResolvedValue(false);
     expect((await status('ACCOUNTANT').expect(200)).body).toEqual({ available: false });
     await status('PATIENT').expect(403);
+  });
+});
+
+describe('GET /voice-fill/status logging', () => {
+  beforeEach(() => jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined));
+  afterEach(() => jest.restoreAllMocks());
+
+  it('logs which half is missing once per change of availability', async () => {
+    const controller = new VoiceFillController(new VoiceFillService());
+    jest.mocked(isOpenAiTranscriptionConfigured).mockReturnValue(false);
+    jest.mocked(isCodexOAuthReady).mockResolvedValue(true);
+    expect(await controller.status()).toEqual({ available: false });
+    expect(await controller.status()).toEqual({ available: false });
+    jest.mocked(isOpenAiTranscriptionConfigured).mockReturnValue(true);
+    expect(await controller.status()).toEqual({ available: true });
+    expect(await controller.status()).toEqual({ available: true });
+    jest.mocked(isCodexOAuthReady).mockResolvedValue(false);
+    expect(await controller.status()).toEqual({ available: false });
+    expect(jest.mocked(Logger.prototype.log).mock.calls.map((call) => call[0])).toEqual([
+      'voice-fill status available=false transcriptionKey=false codexLogin=true',
+      'voice-fill status available=true transcriptionKey=true codexLogin=true',
+      'voice-fill status available=false transcriptionKey=true codexLogin=false',
+    ]);
   });
 });
