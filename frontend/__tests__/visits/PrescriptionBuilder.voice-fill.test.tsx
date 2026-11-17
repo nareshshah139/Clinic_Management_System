@@ -259,9 +259,10 @@ describe('typing into the form after a voice fill', () => {
 
     const typist = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
     await typist.type(complaints, ' for two days');
+    await act(async () => { jest.advanceTimersByTime(1); });
 
     expect(complaints.value).toBe('Itchy rash for two days');
     expect(bar.queryByRole('button', { name: 'Undo' })).toBeNull();
-    expect(screen.queryByText(/Added to Visit notes/)).toBeNull();
+    expect(screen.getByRole('status')).toHaveTextContent('Added to Visit notes: Chief complaints. Nothing is saved until you save the form.');
   });
 });

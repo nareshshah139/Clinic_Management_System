@@ -44,7 +44,7 @@ function statusText(state: VoiceBarState, formLabel: string): string {
     case 'draft':
       return `${COPY.heard} “${state.heard}”. ${COPY.draftReady(state.lines.length)}`;
     case 'applied':
-      return `${COPY.filled(formLabel, state.labels)} ${state.undo ? COPY.notSavedWithUndo : COPY.notSavedDialog(formLabel)}`;
+      return `${COPY.filled(formLabel, state.labels)} ${state.opened ? COPY.notSavedDialog(formLabel) : COPY.notSavedWithUndo}`;
     case 'failed':
     case 'confirming':
       return '';
@@ -55,7 +55,7 @@ const MODIFIER_KEYS = new Set(['Shift', 'Control', 'Alt', 'Meta']);
 
 /**
  * @cc [owner:nareshshah139,label:product] voice-bar-undo-only-while-form-untouched
- * The voice bar MUST stop offering Undo as soon as the user presses, types or clicks anywhere on the page outside the bar, so Undo can never discard edits made after the fill.
+ * The voice bar MUST stop offering Undo once the user clicks, types, pastes, cuts or drops anywhere on the page outside the bar, MUST do so only after the page has handled that event, and MUST NOT change the bar's height or move page content when it does.
  */
 function useDropUndoWhenFormTouched(
   barRef: RefObject<HTMLElement | null>,
@@ -65,14 +65,18 @@ function useDropUndoWhenFormTouched(
   const undoable = state.kind === 'applied' && state.undo !== null;
   useEffect(() => {
     if (!undoable) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const touch = (event: Event) => {
       if (event.target instanceof Node && barRef.current?.contains(event.target)) return;
       if (event instanceof KeyboardEvent && (MODIFIER_KEYS.has(event.key) || (event.key === '/' && (event.ctrlKey || event.metaKey)))) return;
-      dispatch({ type: 'form-touched' });
+      // Dispatching inside the event would re-render the bar before the page's own handlers have run.
+      clearTimeout(timer);
+      timer = setTimeout(() => dispatch({ type: 'form-touched' }), 0);
     };
-    const types = ['pointerdown', 'input', 'keydown'] as const;
+    const types = ['click', 'input', 'keydown', 'drop', 'paste', 'cut'] as const;
     for (const type of types) document.addEventListener(type, touch, true);
     return () => {
+      clearTimeout(timer);
       for (const type of types) document.removeEventListener(type, touch, true);
     };
   }, [undoable, barRef, dispatch]);
@@ -95,6 +99,13 @@ export function VoiceBar() {
   const barRef = useRef<HTMLElement>(null);
   const applyingRef = useRef(false);
   const [applying, setApplying] = useState(false);
+  const focusBoxAfterApplyRef = useRef(false);
+  useEffect(() => {
+    // The text box is disabled while a fill is applied, so it can only take focus once that ends.
+    if (applying || !focusBoxAfterApplyRef.current) return;
+    focusBoxAfterApplyRef.current = false;
+    boxRef.current?.focus();
+  }, [applying]);
   const stateRef = useRef(state);
   stateRef.current = state;
   const activeRef = useRef(active);
@@ -226,6 +237,7 @@ export function VoiceBar() {
   const onBoxKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return;
     event.preventDefault();
+    if (applying) return;
     if (listening) void toggle(RECORDING_KEY);
     else sendText();
   };
@@ -263,7 +275,7 @@ export function VoiceBar() {
       flashFilledElements(filled.flatMap((entry) => (entry.elementId ? [entry.elementId] : [])));
       dispatch({ type: 'applied', registrationId: registration.id, labels: filled.map((entry) => entry.label), undo });
       // A null undo means apply opened a dialog, which owns focus.
-      if (undo) boxRef.current?.focus();
+      focusBoxAfterApplyRef.current = undo !== null;
     } catch {
       dispatch({ type: 'apply-failed', registrationId: registration.id });
     } finally {
@@ -367,7 +379,21 @@ export function VoiceBar() {
           </p>
           {state.kind === 'applied' && (
             <>
-              {state.undo && <Button type="button" variant="outline" size="sm" className={tapTarget} onClick={onUndo}>{COPY.undo}</Button>}
+              {!state.opened && (
+                // A hidden Undo keeps its space so the banner does not change height under the pointer.
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className={cn(tapTarget, !state.undo && 'invisible')}
+                  disabled={!state.undo}
+                  tabIndex={state.undo ? undefined : -1}
+                  aria-hidden={state.undo ? undefined : true}
+                  onClick={onUndo}
+                >
+                  {COPY.undo}
+                </Button>
+              )}
               <Button type="button" size="sm" className={tapTarget} onClick={dismissToBox}>{COPY.done}</Button>
             </>
           )}
@@ -378,7 +404,7 @@ export function VoiceBar() {
             <NativeSelect
               aria-label={COPY.targetLabel}
               value={toCommand ? 'command' : 'form'}
-              disabled={listening || working}
+              disabled={listening || working || applying}
               onChange={(event) => setToCommand(event.target.value === 'command')}
               className="h-11 max-w-28 shrink-0 md:h-9 md:max-w-36"
             >
@@ -392,6 +418,7 @@ export function VoiceBar() {
             value={text}
             onChange={(event) => setText(event.target.value)}
             onKeyDown={onBoxKeyDown}
+            disabled={applying}
             placeholder={target.kind === 'form' && form ? form.hint : COPY.commandHint}
             aria-label={COPY.textBoxLabel}
             maxLength={MAX_TYPED_CHARS}
@@ -409,7 +436,7 @@ export function VoiceBar() {
             // On a phone the row has room for one action: the mic while the box is empty, Send once there is text.
             className={cn('size-11 md:size-9', hasText && !listening && 'max-md:hidden')}
             aria-label={listening ? COPY.stopAndSend : COPY.speak}
-            disabled={working}
+            disabled={working || applying}
             onClick={onMic}
           >
             {listening ? <Square className="fill-current" aria-hidden="true" /> : <Mic aria-hidden="true" />}
@@ -419,7 +446,7 @@ export function VoiceBar() {
             size="icon"
             className={cn('size-11 md:size-9', (!hasText || listening) && 'max-md:hidden')}
             aria-label={COPY.send}
-            disabled={working || listening || !hasText}
+            disabled={working || listening || applying || !hasText}
             onClick={sendText}
           >
             {working ? <Spinner aria-hidden="true" /> : <ArrowUp aria-hidden="true" />}

@@ -18,7 +18,7 @@ const idle: VoiceBarState = { kind: 'idle', notice: null };
 const listening: VoiceBarState = { kind: 'listening', target: visit, startedAt: 1000 };
 const working: VoiceBarState = { kind: 'working', target: visit, attempt: 3, retry: { kind: 'text', text: 'eczema' } };
 const draft: VoiceBarState = { kind: 'draft', registrationId: 'r1', heard: 'eczema', lines, kept: ['diagnosis', 'advice', 'followUp'], error: null };
-const applied: VoiceBarState = { kind: 'applied', registrationId: 'r1', labels: ['Diagnosis'], undo };
+const applied: VoiceBarState = { kind: 'applied', registrationId: 'r1', labels: ['Diagnosis'], undo, opened: false };
 
 describe('voiceBarReducer', () => {
   it('starts listening from idle with the chosen target', () => {
@@ -103,7 +103,12 @@ describe('voiceBarReducer', () => {
 
   it('records what was applied and its undo', () => {
     expect(voiceBarReducer(draft, { type: 'applied', registrationId: 'r1', labels: ['Diagnosis', 'Advice'], undo }))
-      .toEqual({ kind: 'applied', registrationId: 'r1', labels: ['Diagnosis', 'Advice'], undo });
+      .toEqual({ kind: 'applied', registrationId: 'r1', labels: ['Diagnosis', 'Advice'], undo, opened: false });
+  });
+
+  it('records that a dialog was opened when apply has no undo', () => {
+    expect(voiceBarReducer(draft, { type: 'applied', registrationId: 'r1', labels: ['Diagnosis'], undo: null }))
+      .toEqual({ kind: 'applied', registrationId: 'r1', labels: ['Diagnosis'], undo: null, opened: true });
   });
 
   it('keeps the draft with a message when apply throws', () => {
@@ -141,18 +146,21 @@ describe('voiceBarReducer', () => {
   });
 
   describe('form-touched', () => {
-    const noUndo: VoiceBarState = { kind: 'applied', registrationId: 'r1', labels: ['Diagnosis'], undo: null };
+    const touched: VoiceBarState = { kind: 'applied', registrationId: 'r1', labels: ['Diagnosis'], undo: null, opened: false };
+    const opened: VoiceBarState = { kind: 'applied', registrationId: 'r1', labels: ['Diagnosis'], undo: null, opened: true };
     const failed: VoiceBarState = { kind: 'failed', target: visit, message: 'Offline', retry: { kind: 'text', text: 'eczema' } };
     const confirming = {
       kind: 'confirming', heard: { id: 2, transcript: 'Open Ramesh Kumar', command: { action: 'open_patient', patientName: 'Ramesh Kumar' } },
     } as unknown as VoiceBarState;
 
-    it('turns an applied state with an undo into idle with no notice', () => {
-      expect(voiceBarReducer(applied, { type: 'form-touched' })).toEqual({ kind: 'idle', notice: null });
+    it('removes the undo from an applied state and keeps it applied', () => {
+      expect(voiceBarReducer(applied, { type: 'form-touched' }))
+        .toEqual({ kind: 'applied', registrationId: 'r1', labels: ['Diagnosis'], undo: null, opened: false });
     });
 
     it.each([
-      ['applied without undo', noUndo],
+      ['applied after the form was touched', touched],
+      ['applied with a dialog open', opened],
       ['idle with a notice', { kind: 'idle', notice: 'Undone. The form is back to how it was.' } as VoiceBarState],
       ['idle', idle],
       ['listening', listening],

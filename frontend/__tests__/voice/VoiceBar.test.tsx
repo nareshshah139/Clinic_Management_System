@@ -134,6 +134,7 @@ describe('VoiceBar', () => {
 
     expect(apply.mock.calls).toEqual([[{ diagnosis: 'Eczema', followUp: '4 weeks' }]]);
     expect(screen.getByRole('status')).toHaveTextContent('Added to Visit notes: Diagnosis, Follow-up. Nothing is saved until you save the form.');
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Say or type a request' })).toHaveFocus());
 
     await userEvent.click(screen.getByRole('button', { name: 'Undo' }));
 
@@ -352,30 +353,74 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
+const settle = () => act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
+const barUndo = () => screen.queryByRole('button', { name: 'Undo' });
+
+function ControlledPage({ apply, seen }: { apply: Apply; seen: string[] }) {
+  const [value, setValue] = useState('');
+  useVoiceBarForm({
+    form: 'visit-consultation',
+    label: 'Visit notes',
+    hint: 'Say or type the visit notes',
+    scope: 'visit-1',
+    preview: (fields) => voiceDraftLines(registry, fields),
+    apply,
+  });
+  return (
+    <input
+      aria-label="Controlled field"
+      value={value}
+      onChange={(event) => {
+        seen.push(event.target.value);
+        setValue(event.target.value);
+      }}
+    />
+  );
+}
+
 describe('VoiceBar Undo only while the form is untouched', () => {
-  const expectUndoGone = () => {
-    expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
-    expect(screen.queryByText(/Added to Visit notes/)).toBeNull();
-    expect(screen.getByRole('button', { name: 'Hide voice bar' })).toBeInTheDocument();
+  const expectUndoGoneButStatusKept = async () => {
+    await waitFor(() => expect(barUndo()).toBeNull());
+    expect(screen.getByRole('status')).toHaveTextContent(APPLIED_STATUS);
+    expect(screen.getByRole('button', { name: 'Done' })).toBeEnabled();
   };
 
-  it('drops Undo and the Added status when the user types in a field outside the bar', async () => {
+  it('drops Undo but keeps the Added status and Done when the user types in a field outside the bar', async () => {
     await reachApplied(undoApply());
     await userEvent.type(screen.getByRole('textbox', { name: 'Chief complaint' }), 'itchy');
-    expectUndoGone();
+    await expectUndoGoneButStatusKept();
   });
 
-  it('drops Undo when the user clicks a page button outside the bar', async () => {
+  it('drops Undo but keeps the Added status and Done when the user clicks a page button outside the bar', async () => {
     await reachApplied(undoApply());
     await userEvent.click(screen.getByRole('button', { name: 'Page button' }));
-    expectUndoGone();
+    await expectUndoGoneButStatusKept();
   });
 
-  it('drops Undo on a key press on a page element outside the bar', async () => {
+  it('drops Undo but keeps the Added status and Done on a key press on a page element outside the bar', async () => {
     await reachApplied(undoApply());
     act(() => screen.getByRole('button', { name: 'Page button' }).focus());
     await userEvent.keyboard('a');
-    expectUndoGone();
+    await expectUndoGoneButStatusKept();
+  });
+
+  it('keeps the Undo button in the layout, hidden from sight and from assistive technology, once the form is touched', async () => {
+    await reachApplied(undoApply());
+    await userEvent.click(screen.getByRole('button', { name: 'Page button' }));
+    await waitFor(() => expect(barUndo()).toBeNull());
+
+    const hidden = screen.getByText('Undo').closest('button')!;
+    expect(hidden).toBeDisabled();
+    expect(hidden).toHaveClass('invisible');
+    expect(hidden).toHaveAttribute('aria-hidden', 'true');
+    expect(hidden).toHaveAttribute('tabindex', '-1');
+  });
+
+  it('keeps Undo for a pointerdown that never completes outside the bar', async () => {
+    await reachApplied(undoApply());
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Page button' }));
+    await settle();
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeEnabled();
   });
 
   it('keeps Undo while the user types in the bar or presses its controls', async () => {
@@ -383,6 +428,7 @@ describe('VoiceBar Undo only while the form is untouched', () => {
     await userEvent.type(screen.getByRole('textbox', { name: 'Say or type a request' }), 'next');
     await userEvent.click(screen.getByRole('combobox', { name: 'Send to' }));
     await userEvent.click(screen.getByRole('region', { name: 'Voice bar' }));
+    await settle();
 
     expect(screen.getByRole('button', { name: 'Undo' })).toBeEnabled();
     expect(screen.getByRole('status')).toHaveTextContent(APPLIED_STATUS);
@@ -393,22 +439,63 @@ describe('VoiceBar Undo only while the form is untouched', () => {
     act(() => screen.getByRole('textbox', { name: 'Chief complaint' }).focus());
 
     await userEvent.keyboard('{Shift}{Control}{Alt}{Meta}');
+    await settle();
     expect(screen.getByRole('button', { name: 'Undo' })).toBeEnabled();
 
     await userEvent.keyboard('{Control>}/{/Control}');
+    await settle();
     expect(screen.getByRole('button', { name: 'Undo' })).toBeEnabled();
     expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Say or type a request' }));
   });
 
-  it('keeps the open-dialog status when the page is touched and there is no Undo', async () => {
+  it('dismisses the banner with Done after the form was touched', async () => {
+    await reachApplied(undoApply());
+    await userEvent.click(screen.getByRole('button', { name: 'Page button' }));
+    await waitFor(() => expect(barUndo()).toBeNull());
+
+    await userEvent.click(screen.getByRole('button', { name: 'Done' }));
+
+    expect(screen.queryByText(/Added to Visit notes/)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Hide voice bar' })).toBeInTheDocument();
+  });
+
+  it('dismisses the banner with Escape in the bar after the form was touched', async () => {
+    await reachApplied(undoApply());
+    await userEvent.click(screen.getByRole('button', { name: 'Page button' }));
+    await waitFor(() => expect(barUndo()).toBeNull());
+
+    await userEvent.type(screen.getByRole('textbox', { name: 'Say or type a request' }), '{Escape}');
+
+    expect(screen.queryByText(/Added to Visit notes/)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Hide voice bar' })).toBeInTheDocument();
+  });
+
+  it('lets the page take everything typed into a controlled field and drops Undo only afterwards', async () => {
+    const seen: string[] = [];
+    render(<Shell><ControlledPage apply={undoApply()} seen={seen} /></Shell>);
+    await typeAndSend('eczema');
+    await userEvent.click(await screen.findByRole('button', { name: 'Add to form' }));
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeEnabled();
+
+    const field = screen.getByRole('textbox', { name: 'Controlled field' });
+    await userEvent.type(field, 'itchy');
+
+    expect(field).toHaveValue('itchy');
+    expect(seen).toEqual(['i', 'it', 'itc', 'itch', 'itchy']);
+    await waitFor(() => expect(barUndo()).toBeNull());
+  });
+
+  it('keeps the dialog status and renders no Undo at all when the page is touched after apply opened a dialog', async () => {
     render(<Shell><VisitPage apply={() => ({ filled: [{ label: 'Diagnosis' }], undo: null })} /></Shell>);
     await typeAndSend('eczema');
     await userEvent.click(await screen.findByRole('button', { name: 'Add to form' }));
 
     await userEvent.click(screen.getByRole('button', { name: 'Page button' }));
     await userEvent.type(screen.getByRole('textbox', { name: 'Chief complaint' }), 'x');
+    await settle();
 
     expect(screen.getByRole('status')).toHaveTextContent(DIALOG_STATUS);
+    expect(screen.queryByText('Undo')).toBeNull();
     expect(screen.getByRole('button', { name: 'Done' })).toBeEnabled();
   });
 });
@@ -469,6 +556,31 @@ describe('VoiceBar while Add to form is applying', () => {
 
     expect(screen.getByRole('status')).toHaveTextContent(APPLIED_STATUS);
     expect(screen.getByRole('button', { name: 'Undo' })).toBeEnabled();
+  });
+});
+
+describe('VoiceBar while apply is pending', () => {
+  it('disables the text box, Send, the mic and the target select and starts no second request on Enter', async () => {
+    const applying = deferred<VoiceBarApplyResult>();
+    render(<Shell><VisitPage apply={() => applying.promise} /></Shell>);
+    await typeAndSend('eczema');
+    await userEvent.type(await textBox(), 'more');
+    await userEvent.click(await screen.findByRole('button', { name: 'Add to form' }));
+    const requests = fetchMock.mock.calls.length;
+
+    expect(await textBox()).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Speak' })).toBeDisabled();
+    expect(screen.getByRole('combobox', { name: 'Send to' })).toBeDisabled();
+
+    fireEvent.keyDown(await textBox(), { key: 'Enter' });
+    await settle();
+    expect(fetchMock.mock.calls).toHaveLength(requests);
+
+    await act(async () => { applying.resolve({ filled: [{ label: 'Diagnosis' }], undo: jest.fn() }); });
+
+    expect(screen.getByRole('status')).toHaveTextContent(APPLIED_STATUS);
+    expect(await textBox()).toBeEnabled();
   });
 });
 

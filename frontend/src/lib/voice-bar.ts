@@ -49,7 +49,7 @@ export type VoiceBarState =
   | { kind: 'listening'; target: VoiceBarTarget; startedAt: number }
   | { kind: 'working'; target: VoiceBarTarget; attempt: number; retry: VoiceBarRetry }
   | { kind: 'draft'; registrationId: string; heard: string; lines: VoiceDraftLine[]; kept: string[]; error: string | null }
-  | { kind: 'applied'; registrationId: string; labels: string[]; undo: (() => void) | null }
+  | { kind: 'applied'; registrationId: string; labels: string[]; undo: (() => void) | null; opened: boolean }
   | { kind: 'failed'; target: VoiceBarTarget; message: string; retry: VoiceBarRetry | null }
   | { kind: 'confirming'; heard: HeardCommand };
 
@@ -147,14 +147,14 @@ export function voiceBarReducer(state: VoiceBarState, event: VoiceBarEvent): Voi
     }
     case 'applied':
       return state.kind === 'draft' && state.registrationId === event.registrationId
-        ? { kind: 'applied', registrationId: event.registrationId, labels: event.labels, undo: event.undo }
+        ? { kind: 'applied', registrationId: event.registrationId, labels: event.labels, undo: event.undo, opened: event.undo === null }
         : state;
     case 'apply-failed':
       return state.kind === 'draft' && state.registrationId === event.registrationId
         ? { ...state, error: VOICE_BAR_COPY.applyFailed }
         : state;
     case 'form-touched':
-      return state.kind === 'applied' && state.undo ? idle() : state;
+      return state.kind === 'applied' && state.undo ? { ...state, undo: null } : state;
     case 'dismiss':
       return idle(event.notice ?? null);
   }
