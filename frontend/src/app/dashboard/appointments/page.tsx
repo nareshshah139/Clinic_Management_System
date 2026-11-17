@@ -20,6 +20,7 @@ import { useDashboardUser } from '@/components/layout/dashboard-user-context';
 import { ROOM_READ_ROLES } from '@/lib/appointment-access';
 import { resolveDefaultDoctorId } from '@/lib/default-visit-doctor';
 import { readAppointmentsLink } from '@/lib/appointments-link';
+import { foldedCalendarsFor } from '@/components/appointments/appointment-calendars';
 
 function AppointmentsPageInner() {
   const search = useSearchParams();
@@ -41,6 +42,7 @@ function AppointmentsPageInner() {
     }
   });
   const [guideDialogOpen, setGuideDialogOpen] = useState<boolean>(false);
+  const foldedCalendars = foldedCalendarsFor(user?.role);
 
   const loadDoctors = useCallback(async () => {
     try {
@@ -130,6 +132,9 @@ function AppointmentsPageInner() {
           </DialogHeader>
           <div className="space-y-3">
             <ul className="text-sm text-foreground space-y-2">
+              {foldedCalendars.length > 0 && (
+                <li>• Your day opens on <strong>Confirmed</strong>. <strong>Scheduled</strong> is folded to a count on the left. Press <strong>Show</strong> to see who is still to be confirmed.</li>
+              )}
               <li>• <strong>Scheduled</strong> (left) holds patients booked ahead who still need a confirmation call. <strong>Confirmed</strong> (right) is the doctor&apos;s real day, with walk-ins.</li>
               <li>• When a patient confirms on the call, click them and press <strong>Confirm</strong>. They move to Confirmed at the same time.</li>
               <li>• <strong>Search patient</strong> by name or phone, then <strong>click a free time</strong> in either column to book into that calendar</li>
@@ -150,6 +155,7 @@ function AppointmentsPageInner() {
           hideHeaderControls
           toolbarLead={doctorAndDate}
           readsRooms={ROOM_READ_ROLES.includes(user?.role ?? '')}
+          foldedCalendars={foldedCalendars}
         />
       </TabsContent>
       <TabsContent value="slots" className="space-y-3">
@@ -159,6 +165,7 @@ function AppointmentsPageInner() {
           controlledDoctorId={doctorId}
           controlledDate={date}
           hideHeaderControls
+          foldedCalendars={foldedCalendars}
         />
       </TabsContent>
     </Tabs>
