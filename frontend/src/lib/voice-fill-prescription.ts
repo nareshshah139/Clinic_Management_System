@@ -1,6 +1,6 @@
 import { editRegimenRow, type RegimenRow } from '@/lib/medicine-regimen-defaults';
 import { MEDICINE_FORMS, normalizeStrength } from '@/lib/medicine-names';
-import { flashFilledElements, type VoiceFillApplyResult, type VoiceFillRow, type VoiceFillValue } from '@/lib/voice-fill';
+import { flashFilledElements, type VoiceDraftLine, type VoiceFillApplyResult, type VoiceFillRow, type VoiceFillValue } from '@/lib/voice-fill';
 
 /** A stocked item answers to its standard name and the names it was recorded under before. */
 export const inventoryNamesOf = (drug: any): string[] =>
@@ -156,6 +156,30 @@ function spokenRows(value: VoiceFillValue | undefined): SpokenRow[] {
   if (!Array.isArray(value)) return [];
   return (value as unknown[]).filter((row): row is SpokenRow =>
     typeof row === 'object' && row !== null && typeof (row as VoiceFillRow).drugName === 'string' && String((row as VoiceFillRow).drugName).trim() !== '');
+}
+
+const spokenAmount = (amount: unknown, unit: unknown) =>
+  typeof amount === 'number' && amount > 0 ? `${amount} ${typeof unit === 'string' ? unit.toLowerCase() : ''}`.trim() : '';
+
+function spokenRowSummary(row: SpokenRow): string {
+  const pattern = row.dosePattern || row.frequency;
+  return [row.drugName.trim(), spokenAmount(row.dosage, row.dosageUnit), typeof pattern === 'string' ? pattern.replace(/_/g, ' ').toLowerCase() : '', spokenAmount(row.duration, row.durationUnit)]
+    .filter(Boolean)
+    .join(', ');
+}
+
+/**
+ * @cc [owner:nareshshah139,label:product] spoken-medicine-draft-lines-match-apply
+ * Draft lines MUST be one per row that `applySpokenPrescriptionItems` would write, in the same order, and a row with no
+ * drug name MUST get no line.
+ */
+export function spokenPrescriptionDraftLines(value: VoiceFillValue | undefined): VoiceDraftLine[] {
+  return spokenRows(value).map((row, index) => ({
+    id: `prescriptionItems:${index}`,
+    label: `Medicine ${index + 1}`,
+    value: spokenRowSummary(row),
+    fields: { prescriptionItems: [row] },
+  }));
 }
 
 export function spokenRowPatch(row: VoiceFillRow, inferFrequency: (pattern: string) => string | null): Record<string, string | number> {

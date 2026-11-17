@@ -12,7 +12,8 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Sidebar } from "./sidebar";
 import { Header } from "./header";
-import { VoiceCommandButton } from "@/components/voice/VoiceCommandButton";
+import { VoiceBar } from "@/components/voice/VoiceBar";
+import { VoiceBarProvider } from "@/components/voice/VoiceBarProvider";
 import { apiClient } from "@/lib/api";
 import type { ApiError } from "@/lib/api";
 import type { User } from "@/lib/types";
@@ -117,55 +118,57 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   return (
     <DashboardUserProvider value={contextValue}>
       <AnalyticsMount user={user} />
-      <div className="h-screen flex bg-background">
-        {/* Sidebar */}
-        <div className="hidden shrink-0 md:block">
-          <Suspense
-            fallback={
-              <div className="h-full w-64 shrink-0 border-r border-[var(--border)] bg-sidebar" />
-            }
-          >
-            <Sidebar />
-          </Suspense>
-        </div>
-
-        {/* Main content */}
-        <div className="min-w-0 flex-1 flex flex-col overflow-hidden">
-          {/* Header */}
-          <div className="hidden md:block">
-            <Header />
+      <VoiceBarProvider>
+        <div className="h-screen supports-[height:100dvh]:h-dvh flex bg-background">
+          {/* Sidebar */}
+          <div className="hidden shrink-0 md:block">
+            <Suspense
+              fallback={
+                <div className="h-full w-64 shrink-0 border-r border-[var(--border)] bg-sidebar" />
+              }
+            >
+              <Sidebar />
+            </Suspense>
           </div>
-          <div className="flex h-14 shrink-0 items-center gap-3 border-b bg-white px-4 md:hidden">
-            <Sheet open={navigationOpen} onOpenChange={setNavigationOpen}>
-              <SheetTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Open clinic navigation"
+
+          {/* Main content */}
+          <div className="min-w-0 flex-1 flex flex-col overflow-hidden">
+            {/* Header */}
+            <div className="hidden md:block">
+              <Header />
+            </div>
+            <div className="flex h-14 shrink-0 items-center gap-3 border-b bg-white px-4 md:hidden">
+              <Sheet open={navigationOpen} onOpenChange={setNavigationOpen}>
+                <SheetTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Open clinic navigation"
+                  >
+                    <Menu className="h-5 w-5" />
+                  </Button>
+                </SheetTrigger>
+                <SheetContent
+                  aria-describedby={undefined}
+                  className="left-0 top-0 block h-dvh w-72 max-w-72 translate-x-0 translate-y-0 overflow-y-auto rounded-none p-0"
                 >
-                  <Menu className="h-5 w-5" />
-                </Button>
-              </SheetTrigger>
-              <SheetContent
-                aria-describedby={undefined}
-                className="left-0 top-0 block h-dvh w-72 max-w-72 translate-x-0 translate-y-0 overflow-y-auto rounded-none p-0"
-              >
-                <SheetTitle className="sr-only">Clinic navigation</SheetTitle>
-                <Suspense>
-                  <Sidebar onNavigate={() => setNavigationOpen(false)} />
-                </Suspense>
-              </SheetContent>
-            </Sheet>
-            <Image src="/linae-name.png" alt="Linaé" width={304} height={112} className="h-6 w-auto" />
-            <VoiceCommandButton className="ml-auto" />
-          </div>
+                  <SheetTitle className="sr-only">Clinic navigation</SheetTitle>
+                  <Suspense>
+                    <Sidebar onNavigate={() => setNavigationOpen(false)} />
+                  </Suspense>
+                </SheetContent>
+              </Sheet>
+              <Image src="/linae-name.png" alt="Linaé" width={304} height={112} className="h-6 w-auto" />
+            </div>
 
-          {/* Page content */}
-          <main className="min-w-0 flex-1 overflow-auto p-4 md:p-6">
-            {children}
-          </main>
+            {/* Page content */}
+            <main className="min-w-0 flex-1 overflow-auto p-4 md:p-6">
+              {children}
+            </main>
+            <VoiceBar />
+          </div>
         </div>
-      </div>
+      </VoiceBarProvider>
     </DashboardUserProvider>
   );
 }

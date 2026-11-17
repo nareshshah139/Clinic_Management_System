@@ -3,7 +3,7 @@
 import { Spinner } from "@/components/ui/spinner";
 import { InventoryRegimenFields } from './InventoryRegimenFields';
 import "./inventory-readability.css";
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,10 +25,62 @@ interface AddInventoryItemDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
+  voiceFields?: VoiceFillFields | null;
 }
 
+const EMPTY_FORM = {
+  // Basic Information
+  defaultDuration: '', defaultDurationUnit: 'DAYS', defaultFrequency: '', defaultTiming: '', defaultInstructions: '',
+  name: '',
+  description: '',
+  genericName: '',
+  brandName: '',
+  form: '',
+  strength: '',
+  isCombination: false,
+  itemCode: '',
+  type: 'MEDICINE',
+  category: '',
+  subCategory: '',
+  manufacturer: '',
+  supplier: '',
 
-export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInventoryItemDialogProps) {
+  // Identification
+  barcode: '',
+  sku: '',
+
+  // Pricing
+  costPrice: '',
+  sellingPrice: '',
+  mrp: '',
+
+  // Unit & Packaging
+  unit: 'PIECES',
+  packSize: '',
+  packUnit: '',
+
+  // Stock Levels
+  minStockLevel: '',
+  maxStockLevel: '',
+  reorderLevel: '',
+  reorderQuantity: '',
+
+  // Additional Details
+  expiryDate: '',
+  batchNumber: '',
+  hsnCode: '',
+  gstRate: '',
+  storageLocation: '',
+  storageConditions: '',
+
+  // Flags
+  requiresPrescription: false,
+  isControlled: false,
+  status: 'ACTIVE',
+};
+
+
+export function AddInventoryItemDialog({ open, onOpenChange, onSuccess, voiceFields = null }: AddInventoryItemDialogProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sentForApproval, setSentForApproval] = useState(false);
@@ -36,56 +88,7 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
   const [nameErrors, setNameErrors] = useState<Partial<Record<'form' | 'name' | 'strength', string>>>({});
 
   // Form state
-  const [formData, setFormData] = useState({
-    // Basic Information
-    defaultDuration: '', defaultDurationUnit: 'DAYS', defaultFrequency: '', defaultTiming: '', defaultInstructions: '',
-    name: '',
-    description: '',
-    genericName: '',
-    brandName: '',
-    form: '',
-    strength: '',
-    isCombination: false,
-    itemCode: '',
-    type: 'MEDICINE',
-    category: '',
-    subCategory: '',
-    manufacturer: '',
-    supplier: '',
-
-    // Identification
-    barcode: '',
-    sku: '',
-
-    // Pricing
-    costPrice: '',
-    sellingPrice: '',
-    mrp: '',
-
-    // Unit & Packaging
-    unit: 'PIECES',
-    packSize: '',
-    packUnit: '',
-
-    // Stock Levels
-    minStockLevel: '',
-    maxStockLevel: '',
-    reorderLevel: '',
-    reorderQuantity: '',
-
-    // Additional Details
-    expiryDate: '',
-    batchNumber: '',
-    hsnCode: '',
-    gstRate: '',
-    storageLocation: '',
-    storageConditions: '',
-
-    // Flags
-    requiresPrescription: false,
-    isControlled: false,
-    status: 'ACTIVE',
-  });
+  const [formData, setFormData] = useState(EMPTY_FORM);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -161,43 +164,7 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
       const result = await apiClient.createInventoryItem(payload);
 
       // Reset form
-      setFormData({
-        defaultDuration: '', defaultDurationUnit: 'DAYS', defaultFrequency: '', defaultTiming: '', defaultInstructions: '',
-    name: '',
-        description: '',
-        genericName: '',
-        brandName: '',
-        form: '',
-        strength: '',
-        isCombination: false,
-        itemCode: '',
-        type: 'MEDICINE',
-        category: '',
-        subCategory: '',
-        manufacturer: '',
-        supplier: '',
-        barcode: '',
-        sku: '',
-        costPrice: '',
-        sellingPrice: '',
-        mrp: '',
-        unit: 'PIECES',
-        packSize: '',
-        packUnit: '',
-        minStockLevel: '',
-        maxStockLevel: '',
-        reorderLevel: '',
-        reorderQuantity: '',
-        expiryDate: '',
-        batchNumber: '',
-        hsnCode: '',
-        gstRate: '',
-        storageLocation: '',
-        storageConditions: '',
-        requiresPrescription: false,
-        isControlled: false,
-        status: 'ACTIVE',
-      });
+      setFormData(EMPTY_FORM);
 
       if (isPendingApproval(result)) {
         setDuplicates(result.request.possibleDuplicates ?? null);
@@ -214,6 +181,24 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
       setLoading(false);
     }
   };
+
+  const appliedVoiceFields = useRef<VoiceFillFields | null>(null);
+  const [filledByVoice, setFilledByVoice] = useState(false);
+  useEffect(() => {
+    if (!open) {
+      if (appliedVoiceFields.current) {
+        appliedVoiceFields.current = null;
+        setFormData(EMPTY_FORM);
+      }
+      setFilledByVoice(false);
+      return;
+    }
+    if (!voiceFields || appliedVoiceFields.current === voiceFields) return;
+    appliedVoiceFields.current = voiceFields;
+    setFormData(EMPTY_FORM);
+    applyInventoryVoiceFill(voiceFields, EMPTY_FORM, (patch) => setFormData((prev) => ({ ...prev, ...patch })));
+    setFilledByVoice(true);
+  }, [open, voiceFields]);
 
   const applyVoiceFill = (fields: VoiceFillFields) =>
     applyInventoryVoiceFill(fields, formData, (patch) => setFormData((prev) => ({ ...prev, ...patch })));
@@ -242,6 +227,12 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
             Add a new item to your inventory. Fields marked with * are required.
           </DialogDescription>
         </DialogHeader>
+
+        {filledByVoice && (
+          <div role="note" className="rounded-md border border-info-border bg-info-soft p-3 text-sm text-info-text">
+            Filled by voice. Check every field before you save.
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Basic Information */}

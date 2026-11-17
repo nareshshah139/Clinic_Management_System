@@ -45,19 +45,37 @@ export class VoiceFillService {
   }
 
   async fill(formId: string, form: VoiceFillForm, audio: VoiceFillAudio): Promise<VoiceFillResult> {
-    const started = Date.now();
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'voice-fill-'));
-    const outcome = (detail: string) =>
-      `voice-fill form=${formId} ms=${Date.now() - started} audioBytes=${audio.bytes.length} ${detail}`;
     try {
-      const audioPath = path.join(directory, `audio.${audio.extension}`);
-      await fs.writeFile(audioPath, audio.bytes, { mode: 0o600 });
-      const { text } = await transcribeWithOpenAI({
-        path: audioPath,
-        mimetype: AUDIO_MIME[audio.extension],
-        filename: path.basename(audioPath),
+      return await this.extract(formId, form, `audioBytes=${audio.bytes.length}`, async () => {
+        const audioPath = path.join(directory, `audio.${audio.extension}`);
+        await fs.writeFile(audioPath, audio.bytes, { mode: 0o600 });
+        const { text } = await transcribeWithOpenAI({
+          path: audioPath,
+          mimetype: AUDIO_MIME[audio.extension],
+          filename: path.basename(audioPath),
+        });
+        return text;
       });
-      const transcript = normalizeTranscript(text);
+    } finally {
+      await fs.rm(directory, { recursive: true, force: true });
+    }
+  }
+
+  fillText(formId: string, form: VoiceFillForm, text: string): Promise<VoiceFillResult> {
+    return this.extract(formId, form, `textChars=${text.length}`, async () => text);
+  }
+
+  private async extract(
+    formId: string,
+    form: VoiceFillForm,
+    inputSize: string,
+    getText: () => Promise<string>,
+  ): Promise<VoiceFillResult> {
+    const started = Date.now();
+    const outcome = (detail: string) => `voice-fill form=${formId} ms=${Date.now() - started} ${inputSize} ${detail}`;
+    try {
+      const transcript = normalizeTranscript(await getText());
       if (!transcript) {
         this.logger.log(outcome('fields=0 transcript=empty'));
         return { transcript: '', fields: {} };
@@ -76,8 +94,6 @@ export class VoiceFillService {
       const reason = error instanceof SyntaxError ? 'invalid model output' : error instanceof Error ? error.message : 'unknown';
       this.logger.warn(outcome(`failed: ${reason}`));
       throw new ServiceUnavailableException(UNAVAILABLE);
-    } finally {
-      await fs.rm(directory, { recursive: true, force: true });
     }
   }
 }

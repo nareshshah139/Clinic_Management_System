@@ -1,4 +1,4 @@
-import { applyVoiceFillRegistry, stateRegistry, type StateFieldSpec, type VoiceFillFields } from '@/lib/voice-fill';
+import { applyVoiceFillRegistry, stateRegistry, voiceDraftLines, type StateFieldSpec, type VoiceDraftLine, type VoiceFillFields } from '@/lib/voice-fill';
 
 export interface InventoryVoiceState {
   type: string;
@@ -74,17 +74,26 @@ const MEDICINE_ONLY = new Set<InventoryVoiceKey>([
   'form', 'strength', 'defaultFrequency', 'defaultDuration', 'defaultDurationUnit', 'defaultInstructions',
 ]);
 
+function inventorySpec(fields: VoiceFillFields, currentType: string): Record<string, StateFieldSpec> {
+  const nextType = typeof fields.type === 'string' ? fields.type : currentType;
+  const isMedicine = nextType === 'MEDICINE';
+  return Object.fromEntries(
+    (Object.keys(INVENTORY_FIELDS) as InventoryVoiceKey[])
+      .filter((key) => isMedicine || !MEDICINE_ONLY.has(key))
+      .map((key) => [key, key === 'name' ? { ...INVENTORY_FIELDS.name, elementId: isMedicine ? 'medicine-name' : 'name' } : INVENTORY_FIELDS[key]]),
+  );
+}
+
 export function applyInventoryVoiceFill(
   fields: VoiceFillFields,
   current: InventoryVoiceState,
   update: (patch: Partial<InventoryVoiceState>) => void,
 ) {
-  const nextType = typeof fields.type === 'string' ? fields.type : current.type;
-  const isMedicine = nextType === 'MEDICINE';
-  const spec = Object.fromEntries(
-    (Object.keys(INVENTORY_FIELDS) as InventoryVoiceKey[])
-      .filter((key) => isMedicine || !MEDICINE_ONLY.has(key))
-      .map((key) => [key, key === 'name' ? { ...INVENTORY_FIELDS.name, elementId: isMedicine ? 'medicine-name' : 'name' } : INVENTORY_FIELDS[key]]),
-  );
-  return applyVoiceFillRegistry(stateRegistry(spec, current, update), fields);
+  return applyVoiceFillRegistry(stateRegistry(inventorySpec(fields, current.type), current, update), fields);
+}
+
+/** Draft lines for exactly the fields `applyInventoryVoiceFill` fills into a new item (type MEDICINE until said otherwise). */
+export function inventoryVoiceDraftLines(fields: VoiceFillFields): VoiceDraftLine[] {
+  const registry = stateRegistry(inventorySpec(fields, 'MEDICINE'), {}, () => {});
+  return voiceDraftLines(registry, fields).filter((line) => applyVoiceFillRegistry(registry, line.fields).filled.length > 0);
 }

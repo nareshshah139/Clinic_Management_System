@@ -169,6 +169,77 @@ describe('POST /voice-fill/:form with the real service', () => {
     await upload('patient-intake', 'LAB_TECH').expect(403);
   });
 
+  describe('POST /voice-fill/:form/text', () => {
+    const typed = (form: string, role: string, body: unknown) =>
+      request(app.getHttpServer()).post(`/voice-fill/${form}/text`).set('x-role', role).send(body as object);
+
+    it('extracts from typed text without transcribing, returning the trimmed transcript with 200', async () => {
+      codex.mockResolvedValue(JSON.stringify({ bpSystolic: 120, bpDiastolic: 80 }));
+      const res = await typed('visit-consultation', 'DOCTOR', { text: '  BP 120 by 80.  \n' }).expect(200);
+      expect(res.body).toEqual({ transcript: 'BP 120 by 80.', fields: { bpSystolic: 120, bpDiastolic: 80 } });
+      expect(transcribe).not.toHaveBeenCalled();
+      expect(codex).toHaveBeenCalledTimes(1);
+      expect(codex.mock.calls[0][0].prompt).toContain('<transcript>\nBP 120 by 80.\n</transcript>');
+    });
+
+    it('accepts text of exactly 60000 characters', async () => {
+      codex.mockResolvedValue('{"firstName":"Asha"}');
+      const res = await typed('patient-intake', 'DOCTOR', { text: 'a'.repeat(60000) }).expect(200);
+      expect(res.body.transcript).toHaveLength(60000);
+    });
+
+    it('400s missing, non-string, empty and whitespace-only text without calling Codex', async () => {
+      await typed('patient-intake', 'DOCTOR', {}).expect(400);
+      await typed('patient-intake', 'DOCTOR', { text: 42 }).expect(400);
+      await typed('patient-intake', 'DOCTOR', { text: '' }).expect(400);
+      await typed('patient-intake', 'DOCTOR', { text: ' \n\t ' }).expect(400);
+      expect(codex).not.toHaveBeenCalled();
+    });
+
+    it('400s text over 60000 characters', async () => {
+      await typed('patient-intake', 'DOCTOR', { text: 'a'.repeat(60001) }).expect(400);
+      expect(codex).not.toHaveBeenCalled();
+    });
+
+    it('404s for an unknown form, including inherited object keys', async () => {
+      await typed('billing', 'DOCTOR', { text: 'hello' }).expect(404);
+      await typed('constructor', 'DOCTOR', { text: 'hello' }).expect(404);
+      expect(codex).not.toHaveBeenCalled();
+    });
+
+    it('403s a role missing from the form list, and patients and lab technicians at the route', async () => {
+      await typed('visit-consultation', 'NURSE', { text: 'hello' }).expect(403);
+      await typed('patient-intake', 'PATIENT', { text: 'hello' }).expect(403);
+      await typed('patient-intake', 'LAB_TECH', { text: 'hello' }).expect(403);
+      expect(codex).not.toHaveBeenCalled();
+    });
+
+    it('lets managers speak a command by text', async () => {
+      codex.mockResolvedValue('{"action":"open_patient","patientName":"Ramesh Kumar"}');
+      const res = await typed('voice-command', 'MANAGER', { text: 'Open Ramesh Kumar' }).expect(200);
+      expect(res.body.fields).toEqual({ action: 'open_patient', patientName: 'Ramesh Kumar' });
+    });
+
+    it('503s with the same message when Codex fails or returns non-JSON, logging none of the text', async () => {
+      codex.mockRejectedValueOnce(new ServiceUnavailableException('Codex timed out. Try again.'));
+      expect((await typed('patient-intake', 'DOCTOR', { text: 'Asha Rao secret' }).expect(503)).body.message).toBe(UNAVAILABLE);
+      codex.mockResolvedValueOnce('Patient Asha Rao, I could not format this');
+      expect((await typed('patient-intake', 'DOCTOR', { text: 'Asha Rao secret' }).expect(503)).body.message).toBe(UNAVAILABLE);
+      const warnings = jest.mocked(Logger.prototype.warn).mock.calls.map((call) => String(call[0]).replace(/ms=\d+/, 'ms=N'));
+      expect(warnings).toEqual([
+        'voice-fill form=patient-intake ms=N textChars=15 failed: Codex timed out. Try again.',
+        'voice-fill form=patient-intake ms=N textChars=15 failed: invalid model output',
+      ]);
+    });
+
+    it('logs the outcome of a success without the text', async () => {
+      codex.mockResolvedValue('{"firstName":"Asha"}');
+      await typed('patient-intake', 'DOCTOR', { text: 'Asha Rao secret' }).expect(200);
+      const logs = jest.mocked(Logger.prototype.log).mock.calls.map((call) => String(call[0]).replace(/ms=\d+/, 'ms=N'));
+      expect(logs).toEqual(['voice-fill form=patient-intake ms=N textChars=15 fields=1']);
+    });
+  });
+
   it('reports availability only when transcription is configured and Codex OAuth is ready, to clinic staff only', async () => {
     const status = (role: string) => request(app.getHttpServer()).get('/voice-fill/status').set('x-role', role);
     jest.mocked(isCodexOAuthReady).mockResolvedValue(true);
