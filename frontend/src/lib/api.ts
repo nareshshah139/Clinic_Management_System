@@ -902,6 +902,14 @@ export class ApiClient {
     return this.delete('/users/me/signature');
   }
 
+  async getIssueReportStatus() {
+    return this.get<{ enabled: boolean }>('/issue-reports/status');
+  }
+
+  async submitIssueReport(formData: FormData) {
+    return this.request<{ number: number; url: string }>('/issue-reports', { method: 'POST', body: formData }, { timeoutMs: 60_000 });
+  }
+
   async getDoctorLetterhead(doctorId: string) {
     return this.get<{ letterhead: DoctorLetterhead | null }>(`/users/${encodeURIComponent(doctorId)}/letterhead`);
   }
