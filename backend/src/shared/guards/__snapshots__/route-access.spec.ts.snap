@@ -455,6 +455,7 @@ POST /visits/transcribe/live | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION
 POST /visits/transcribe/speakers | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 POST /visits/translate | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 POST /voice-fill/:form | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST | permissions: -
+POST /voice-fill/:form/text | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST | permissions: -
 POST /whatsapp/templates | roles: ADMIN,DOCTOR | permissions: -
 POST /whatsapp/templates/:id/test | roles: ADMIN,DOCTOR | permissions: -
 POST /whatsapp/templates/generate | roles: ADMIN,DOCTOR | permissions: -
