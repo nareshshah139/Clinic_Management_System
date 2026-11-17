@@ -56,6 +56,12 @@ export function validateEnv(config: Record<string, unknown>) {
     );
   }
 
+  if (!config['GITHUB_ISSUES_TOKEN']) {
+    logger.warn(
+      'GitHub issue reporting is not configured. Set GITHUB_ISSUES_TOKEN (Issues and Contents write access) to enable "Report a problem"; GITHUB_ISSUES_REPO and GITHUB_ISSUES_ATTACHMENTS_BRANCH are optional.',
+    );
+  }
+
   return config;
 }
 
