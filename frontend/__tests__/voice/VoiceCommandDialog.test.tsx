@@ -102,6 +102,36 @@ describe('VoiceCommandDialog', () => {
     expect(book()).toBeDisabled();
   });
 
+  it('stays open when the page outside the card is pressed, and still closes on Escape', async () => {
+    const onClose = jest.fn();
+    render(
+      <VoiceCommandDialog heard={heard} role="RECEPTION" now={now} onClose={onClose} />,
+    );
+    await chooseFirstRamesh();
+
+    await userEvent.pointer({ keys: '[MouseLeft]', target: document.querySelector('[data-slot="dialog-overlay"]') as Element });
+
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog', { name: 'Book appointment' })).toBeInTheDocument();
+    expect(book()).toBeEnabled();
+
+    await userEvent.keyboard('{Escape}');
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes on an outside press once the booking is done', async () => {
+    api.createAppointment.mockResolvedValue({ id: 'a1' } as never);
+    const onClose = jest.fn();
+    render(<VoiceCommandDialog heard={heard} role="RECEPTION" now={now} onClose={onClose} />);
+    await chooseFirstRamesh();
+    await userEvent.click(book());
+    await screen.findByRole('dialog', { name: 'Appointment booked' });
+
+    await userEvent.pointer({ keys: '[MouseLeft]', target: document.querySelector('[data-slot="dialog-overlay"]') as Element });
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it('explains instead of offering Book when the role cannot do the action', async () => {
     render(
       <VoiceCommandDialog

@@ -289,7 +289,12 @@ export function VoiceCommandDialog({ heard, role, onClose, now: fixedNow }: Voic
   return (
     <>
       <Dialog open onOpenChange={(open: boolean) => { if (!open) onClose(); }}>
-        <DialogContent showCloseButton={false} className="top-20 translate-y-0 gap-3 p-5 sm:max-w-md">
+        <DialogContent
+          showCloseButton={false}
+          className="top-20 translate-y-0 gap-3 p-5 sm:max-w-md"
+          // A stray press outside would throw away a heard command that cannot be recovered without speaking again.
+          onInteractOutside={(event: Event) => { if (!done) event.preventDefault(); }}
+        >
           <DialogHeader className="text-left">
             <DialogTitle className="flex items-center gap-2 text-base">
               {done && <Check className="size-4 text-success-text" aria-hidden="true" />}
