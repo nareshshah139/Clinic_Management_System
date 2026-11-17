@@ -3,7 +3,6 @@ import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
 import { CodexFailure, completeJsonWithCodexOAuth, isCodexOAuthReady, type CodexFailureKind } from '../../shared/codex/codex-oauth';
-import { isFfmpegAvailable } from '../../shared/transcription/ffmpeg-binaries';
 import { isOpenAiTranscriptionConfigured, transcribeWithOpenAI } from '../../shared/transcription/openai-transcribe';
 import {
   buildVoiceFillPrompt,
@@ -71,7 +70,7 @@ export class VoiceFillService {
     const transcriptionKey = isOpenAiTranscriptionConfigured();
     const codexLogin = await isCodexOAuthReady();
     const available = transcriptionKey && codexLogin;
-    const status = `voice-fill status available=${available} transcriptionKey=${transcriptionKey} codexLogin=${codexLogin} ffmpeg=${isFfmpegAvailable()}`;
+    const status = `voice-fill status available=${available} transcriptionKey=${transcriptionKey} codexLogin=${codexLogin}`;
     if (status !== this.loggedStatus) {
       this.loggedStatus = status;
       this.logger.log(status);

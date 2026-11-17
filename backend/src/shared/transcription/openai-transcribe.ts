@@ -1,9 +1,6 @@
 import { BadRequestException, Logger, ServiceUnavailableException } from '@nestjs/common';
 import ffmpeg from 'fluent-ffmpeg';
 import * as fs from 'fs/promises';
-import { ffmpegBinaries } from './ffmpeg-binaries';
-
-ffmpegBinaries();
 
 export interface TranscriptionAudio {
   path: string;

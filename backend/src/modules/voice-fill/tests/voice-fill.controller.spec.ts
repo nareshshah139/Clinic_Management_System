@@ -7,7 +7,6 @@ import { codexDiagnostic, CodexFailure, completeJsonWithCodexOAuth, isCodexOAuth
 import { JwtAuthGuard } from '../../../shared/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../shared/guards/roles.guard';
 import { diagnosticValidationPipe } from '../../../shared/logging/http-observability';
-import { isFfmpegAvailable } from '../../../shared/transcription/ffmpeg-binaries';
 import { isOpenAiTranscriptionConfigured, transcribeWithOpenAI, type TranscriptionAudio } from '../../../shared/transcription/openai-transcribe';
 import { VoiceFillController } from '../voice-fill.controller';
 import { VoiceFillService } from '../voice-fill.service';
@@ -15,9 +14,6 @@ import { VoiceFillService } from '../voice-fill.service';
 jest.mock('../../../shared/transcription/openai-transcribe', () => ({
   transcribeWithOpenAI: jest.fn(),
   isOpenAiTranscriptionConfigured: jest.fn(),
-}));
-jest.mock('../../../shared/transcription/ffmpeg-binaries', () => ({
-  isFfmpegAvailable: jest.fn(() => true),
 }));
 jest.mock('../../../shared/codex/codex-oauth', () => ({
   ...jest.requireActual('../../../shared/codex/codex-oauth'),
@@ -372,10 +368,7 @@ describe('POST /voice-fill/:form with the real service', () => {
 });
 
 describe('GET /voice-fill/status logging', () => {
-  beforeEach(() => {
-    jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
-    jest.mocked(isFfmpegAvailable).mockReturnValue(true);
-  });
+  beforeEach(() => jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined));
   afterEach(() => jest.restoreAllMocks());
 
   it('logs which half is missing once per change of availability', async () => {
@@ -389,13 +382,10 @@ describe('GET /voice-fill/status logging', () => {
     expect(await controller.status()).toEqual({ available: true });
     jest.mocked(isCodexOAuthReady).mockResolvedValue(false);
     expect(await controller.status()).toEqual({ available: false });
-    jest.mocked(isFfmpegAvailable).mockReturnValue(false);
-    expect(await controller.status()).toEqual({ available: false });
     expect(jest.mocked(Logger.prototype.log).mock.calls.map((call) => call[0])).toEqual([
-      'voice-fill status available=false transcriptionKey=false codexLogin=true ffmpeg=true',
-      'voice-fill status available=true transcriptionKey=true codexLogin=true ffmpeg=true',
-      'voice-fill status available=false transcriptionKey=true codexLogin=false ffmpeg=true',
-      'voice-fill status available=false transcriptionKey=true codexLogin=false ffmpeg=false',
+      'voice-fill status available=false transcriptionKey=false codexLogin=true',
+      'voice-fill status available=true transcriptionKey=true codexLogin=true',
+      'voice-fill status available=false transcriptionKey=true codexLogin=false',
     ]);
   });
 });
