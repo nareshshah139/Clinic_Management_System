@@ -14,7 +14,7 @@ const stock = (quantity: number) => ({ items: [{
   totalNonExpiredStock: quantity, batches: [], lowStock: false, nearExpiry: false,
 }] });
 let quantity: number;
-const props = { onOpenBilling: jest.fn(), onOpenPartnerSync: jest.fn(), onOpenInventoryControl: jest.fn() };
+const props = { onOpenBilling: jest.fn() };
 beforeEach(() => {
   jest.clearAllMocks(); quantity = 10;
   get.mockImplementation(async url => url.endsWith('/stock-check') ? stock(quantity) : { data: [entry()], pagination: { total: 1 } });
@@ -79,10 +79,10 @@ it('creates a task before saving review on the automatically selected prescripti
   fireEvent.click(screen.getByRole('button', { name: 'Accept', exact: true }));
   await waitFor(() => expect(apiClient.post).toHaveBeenCalledWith('/pharmacy/prescription-queue/rx-1/pull', {}));
   expect(apiClient.patch).not.toHaveBeenCalled();
-  expect(screen.getByRole('button', { name: 'Ready', exact: true })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Ready to bill' })).toBeDisabled();
   await act(async () => finishPull({ data: preparedEntry() }));
   await screen.findByText('1/1 lines reviewed');
-  expect(screen.getByRole('button', { name: 'Ready', exact: true })).toBeEnabled();
+  expect(within(screen.getByRole('region', { name: 'Patient rx-1' })).getByRole('button', { name: 'Bill' })).toBeEnabled();
   expect(apiClient.patch).toHaveBeenCalledWith('/pharmacy/dispense-tasks/task-1/lines/line-1', { action: 'ACCEPTED', reasonType: undefined, reasonNote: undefined });
 });
 
@@ -94,7 +94,7 @@ it('keeps an unsuccessful review pending and exposes a retryable save error', as
   fireEvent.click(screen.getByRole('button', { name: 'Accept', exact: true }));
   expect(await screen.findByRole('alert')).toHaveTextContent('Unable to save medicine review');
   expect(screen.getByText('0/1 lines reviewed')).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Ready', exact: true })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Ready to bill' })).toBeDisabled();
 });
 
 it('creates a task before applying an explicit status action', async () => {
@@ -102,7 +102,8 @@ it('creates a task before applying an explicit status action', async () => {
   (apiClient.patch as jest.Mock).mockResolvedValue({ ...preparedEntry(), dispenseStatus: 'PAUSED', status: 'expired' });
   render(<PharmacyCounterCockpit {...props} />);
   await screen.findByText('10 available');
-  fireEvent.click(screen.getByRole('button', { name: 'Pause', exact: true }));
+  fireEvent.keyDown(screen.getByRole('button', { name: 'More status actions' }), { key: 'Enter' });
+  fireEvent.click(await screen.findByRole('menuitem', { name: 'Pause' }));
   await waitFor(() => expect(apiClient.patch).toHaveBeenCalledWith('/pharmacy/dispense-tasks/task-1/status', expect.objectContaining({ status: 'PAUSED' })));
   expect(screen.getByRole('button', { name: /Patient rx-1/ })).toHaveTextContent('Paused');
 });
@@ -143,12 +144,12 @@ it('does not carry a reviewed medicine into a different virtual prescription', a
   get.mockImplementation(async url => url.endsWith('/stock-check') ? stock(10) : { data: [accepted, entry('rx-2')], pagination: { total: 2 } });
   const view = render(<PharmacyCounterCockpit {...props} prefill={{ prescriptionId: 'rx-1' }} />);
   await screen.findByText('1/1 lines reviewed');
-  expect(screen.getByRole('button', { name: 'Ready', exact: true })).toBeEnabled();
+  expect(within(screen.getByRole('region', { name: 'Patient rx-1' })).getByRole('button', { name: 'Bill' })).toBeEnabled();
 
   view.rerender(<PharmacyCounterCockpit {...props} prefill={{ prescriptionId: 'rx-2' }} />);
   await waitFor(() => expect(get).toHaveBeenCalledWith('/pharmacy/prescription-queue/rx-2/stock-check'));
   expect(screen.getByText('0/1 lines reviewed')).toBeInTheDocument();
-  const ready = screen.getByRole('button', { name: 'Ready', exact: true });
+  const ready = screen.getByRole('button', { name: 'Ready to bill' });
   expect(ready).toBeDisabled();
   fireEvent.click(ready);
   expect(apiClient.post).not.toHaveBeenCalled();
@@ -162,10 +163,10 @@ it('rechecks saved reviews after creating a task before marking it Ready', async
   (apiClient.patch as jest.Mock).mockResolvedValue({ ...preparedEntry(), dispenseStatus: 'READY_TO_BILL' });
   render(<PharmacyCounterCockpit {...props} />);
   await screen.findByText('1/1 lines reviewed');
-  fireEvent.click(screen.getByRole('button', { name: 'Ready', exact: true }));
+  fireEvent.click(screen.getByRole('button', { name: 'Ready to bill' }));
   expect(await screen.findByRole('alert')).toHaveTextContent('Review every available medicine before marking ready for billing');
   expect(screen.getByText('0/1 lines reviewed')).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Ready', exact: true })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Ready to bill' })).toBeDisabled();
   expect(apiClient.patch).not.toHaveBeenCalled();
 });
 
@@ -179,8 +180,8 @@ it('keeps same-name prescription lines independently reviewed', async () => {
   render(<PharmacyCounterCockpit {...props} />);
   await screen.findAllByText(/10 available/);
   expect(screen.getByText('1/2 lines reviewed')).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Ready', exact: true })).toBeDisabled();
-  fireEvent.click(screen.getAllByRole('button', { name: 'Accept', exact: true })[1]);
+  expect(screen.getByRole('button', { name: 'Ready to bill' })).toBeDisabled();
+  fireEvent.click(within(screen.getAllByRole('group', { name: 'Medicine A' })[1]).getByRole('button', { name: 'Accept' }));
   await screen.findByText('2/2 lines reviewed');
   expect(apiClient.patch).toHaveBeenCalledWith('/pharmacy/dispense-tasks/task-1/lines/line-2', expect.objectContaining({ action: 'ACCEPTED' }));
 });
@@ -191,7 +192,7 @@ it('keeps unavailable lines reviewed but blocks Ready until they are resolved', 
   get.mockImplementation(async url => url.endsWith('/stock-check') ? stock(10) : { data: [partial], pagination: { total: 1 } });
   render(<PharmacyCounterCockpit {...props} />);
   await screen.findByText('1/1 lines reviewed');
-  expect(screen.getByRole('button', { name: 'Ready', exact: true })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Ready to bill' })).toBeDisabled();
 });
 
 
@@ -228,11 +229,11 @@ it('shows every checked line with its stock status and available quantity in its
   ['Isotretinoin 10 mg Capsules (Strip of 10)', '3 strips available', 'Low stock'].forEach(shows('Isotretinoin 10 mg'));
   ['Benzoyl Peroxide Wash 100ml', '0 bottles available', 'Out of stock'].forEach(shows('Benzoyl wash'));
   line('Clindamycin cream').getByText('—');
-  expect(line('Clindamycin cream').getAllByText('Not linked')).toHaveLength(2);
+  line('Clindamycin cream').getByText('Not linked');
   expect(line('Clindamycin cream').queryByText(/available/)).not.toBeInTheDocument();
   expect(screen.queryByText('No inventory match')).not.toBeInTheDocument();
-  expect(screen.getByText('Pick 1 · 60 tubes available')).toBeInTheDocument();
-  expect(screen.getByText('Pick 1 · —')).toBeInTheDocument();
+  expect(screen.getByRole('group', { name: 'Adapalene gel' })).toHaveTextContent('Pick 1 · 60 tubes available');
+  expect(screen.getByRole('group', { name: 'Clindamycin cream' })).toHaveTextContent('Pick 1 · —');
 });
 
 describe('inventory linking follows Bill', () => {
@@ -275,4 +276,60 @@ it('reads each medicine regimen in words and counts medicines with the right nou
   expect(line.textContent).not.toMatch(/TWICE_DAILY|CAPSULE|DAYS/);
   expect(screen.getByRole('button', { name: /Patient rx-1/ })).toHaveTextContent('1 medicine');
   expect(screen.getByRole('button', { name: /Patient rx-1/ })).not.toHaveTextContent('1 medicines');
+});
+
+describe('exception reasons', () => {
+  const patch = apiClient.patch as jest.Mock;
+  const task = (id: string) => ({ ...entry(id), dispenseTaskId: `task-${id}`, dispenseStatus: 'IN_REVIEW', medications: [{ ...entry(id).medications[0], lineId: `line-${id}` }] });
+  const chooseReview = async (option: string) => {
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Other review options for Medicine A' }), { key: 'Enter' });
+    fireEvent.click(await screen.findByRole('menuitemradio', { name: option }));
+  };
+
+  it('saves the reason that matches an exception action and none for Accept', async () => {
+    get.mockImplementation(async url => url.endsWith('/stock-check') ? stock(10) : { data: [task('rx-1')], pagination: { total: 1 } });
+    patch.mockResolvedValue(task('rx-1'));
+    render(<PharmacyCounterCockpit {...props} />);
+    await screen.findByText('10 available');
+
+    await chooseReview('Unavailable');
+    await waitFor(() => expect(patch).toHaveBeenCalledWith(
+      '/pharmacy/dispense-tasks/task-rx-1/lines/line-rx-1',
+      { action: 'UNAVAILABLE', reasonType: 'Medicine unavailable', reasonNote: '' },
+    ));
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Accept' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+    await waitFor(() => expect(patch).toHaveBeenLastCalledWith(
+      '/pharmacy/dispense-tasks/task-rx-1/lines/line-rx-1',
+      { action: 'ACCEPTED', reasonType: undefined, reasonNote: undefined },
+    ));
+  });
+
+  it('keeps a chosen reason and note to their prescription, and Pause defaults to its own reason', async () => {
+    get.mockImplementation(async url => url.endsWith('/stock-check') ? stock(10) : { data: [task('rx-1'), task('rx-2')], pagination: { total: 2 } });
+    patch.mockImplementation(async url => task(url.includes('task-rx-2') ? 'rx-2' : 'rx-1'));
+    render(<PharmacyCounterCockpit {...props} />);
+    await screen.findByText('10 available');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add note' }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Reason' }), { target: { value: 'Stock correction needed' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Pharmacist note' }), { target: { value: 'Shelf count off' } });
+    await chooseReview('Substitute');
+    await waitFor(() => expect(patch).toHaveBeenCalledWith(
+      '/pharmacy/dispense-tasks/task-rx-1/lines/line-rx-1',
+      { action: 'SUBSTITUTE', reasonType: 'Stock correction needed', reasonNote: 'Shelf count off' },
+    ));
+
+    fireEvent.click(screen.getByRole('button', { name: /Patient rx-2/ }));
+    await screen.findByRole('heading', { name: 'Patient rx-2' });
+    expect(screen.getByRole('button', { name: 'Add note' })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'More status actions' })).toBeEnabled());
+    fireEvent.keyDown(screen.getByRole('button', { name: 'More status actions' }), { key: 'Enter' });
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Pause' }));
+    await waitFor(() => expect(patch).toHaveBeenLastCalledWith(
+      '/pharmacy/dispense-tasks/task-rx-2/status',
+      { status: 'PAUSED', reasonType: 'Paused for doctor clarification', reasonNote: '' },
+    ));
+  });
 });
