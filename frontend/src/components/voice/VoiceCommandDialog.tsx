@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { AppointmentStatus } from '@cms/shared-types';
-import { ArrowRight, Check } from 'lucide-react';
+import { ArrowRight, Check, X } from 'lucide-react';
 import { useOverbookConfirm } from '@/components/appointments/useOverbookConfirm';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -291,11 +291,22 @@ export function VoiceCommandDialog({ heard, role, onClose, now: fixedNow }: Voic
       <Dialog open onOpenChange={(open: boolean) => { if (!open) onClose(); }}>
         <DialogContent
           showCloseButton={false}
-          className="top-20 translate-y-0 gap-3 p-5 sm:max-w-md"
+          // The card must fit a short screen: a footer below the fold would leave a phone user no way out.
+          className="top-20 max-h-[calc(100dvh-6rem)] translate-y-0 gap-3 overflow-y-auto p-5 sm:max-w-md"
           // A stray press outside would throw away a heard command that cannot be recovered without speaking again.
           onInteractOutside={(event: Event) => { if (!done) event.preventDefault(); }}
         >
-          <DialogHeader className="text-left">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="absolute top-2 right-2 size-11 md:size-9"
+            aria-label="Close card"
+            onClick={onClose}
+          >
+            <X aria-hidden="true" />
+          </Button>
+          <DialogHeader className="pr-10 text-left">
             <DialogTitle className="flex items-center gap-2 text-base">
               {done && <Check className="size-4 text-success-text" aria-hidden="true" />}
               {title}

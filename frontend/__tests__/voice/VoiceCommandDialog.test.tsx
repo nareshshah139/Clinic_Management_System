@@ -119,6 +119,31 @@ describe('VoiceCommandDialog', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it('has a close button in its top corner that closes it at any time', async () => {
+    const onClose = jest.fn();
+    render(<VoiceCommandDialog heard={heard} role="RECEPTION" now={now} onClose={onClose} />);
+
+    const corner = await screen.findByRole('button', { name: 'Close card' });
+    expect(onClose).not.toHaveBeenCalled();
+    await userEvent.click(corner);
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the corner close button once the booking is done, beside the footer Close', async () => {
+    api.createAppointment.mockResolvedValue({ id: 'a1' } as never);
+    const onClose = jest.fn();
+    render(<VoiceCommandDialog heard={heard} role="RECEPTION" now={now} onClose={onClose} />);
+    await chooseFirstRamesh();
+    await userEvent.click(book());
+    await screen.findByRole('dialog', { name: 'Appointment booked' });
+
+    expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Close card' }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it('closes on an outside press once the booking is done', async () => {
     api.createAppointment.mockResolvedValue({ id: 'a1' } as never);
     const onClose = jest.fn();
