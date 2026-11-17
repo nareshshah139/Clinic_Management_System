@@ -1,10 +1,9 @@
 import { UserRole } from '@cms/shared-types';
 import type { ReactNode } from 'react';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { DashboardUserProvider } from '@/components/layout/dashboard-user-context';
 import { VoiceBar } from '@/components/voice/VoiceBar';
-import { VoiceBarOpener } from '@/components/voice/VoiceBarOpener';
 import { VoiceBarProvider, useVoiceBarForm } from '@/components/voice/VoiceBarProvider';
 import { apiClient } from '@/lib/api';
 import type { User } from '@/lib/types';
@@ -67,7 +66,6 @@ function Shell({ children }: { children?: ReactNode }) {
     <DashboardUserProvider value={{ user, loading: false, refresh: async () => {}, logout: async () => {} }}>
       <VoiceBarProvider>
         {children}
-        <VoiceBarOpener />
         <VoiceBar />
       </VoiceBarProvider>
     </DashboardUserProvider>
@@ -324,7 +322,9 @@ describe('VoiceBar collapse', () => {
   const STORE = 'cms-voice-bar-collapsed';
   const hideButton = () => screen.queryByRole('button', { name: 'Hide voice bar' });
 
-  it('hides the bar, remembers it, and moves focus to the Show voice bar button', async () => {
+  const stripButton = () => within(screen.getByRole('region', { name: 'Voice bar' })).getByRole('button', { name: 'Show voice bar' });
+
+  it('hides the bar, remembers it, and moves focus to the strip button', async () => {
     render(<Shell />);
     const hide = await screen.findByRole('button', { name: 'Hide voice bar' });
     expect(hide).toHaveAttribute('aria-expanded', 'true');
@@ -333,18 +333,21 @@ describe('VoiceBar collapse', () => {
     await userEvent.click(hide);
 
     expect(screen.queryByRole('textbox', { name: 'Say or type a request' })).toBeNull();
-    const opener = screen.getByRole('button', { name: 'Show voice bar' });
-    expect(opener).toHaveAttribute('aria-expanded', 'false');
-    expect(opener).toHaveAttribute('title', 'Show voice bar (Ctrl+/)');
+    const strip = stripButton();
+    expect(strip).toHaveAttribute('aria-expanded', 'false');
+    expect(strip).toHaveAttribute('title', 'Show voice bar (Ctrl+/)');
+    expect(strip).toHaveAttribute('type', 'button');
+    expect(strip).toHaveClass('h-8');
+    expect(strip).toHaveTextContent('Voice bar');
     expect(localStorage.getItem(STORE)).toBe('1');
-    expect(document.activeElement).toBe(opener);
+    expect(document.activeElement).toBe(strip);
   });
 
   it('shows the bar again, focuses the text box and forgets the preference', async () => {
     render(<Shell />);
     await userEvent.click(await screen.findByRole('button', { name: 'Hide voice bar' }));
 
-    await userEvent.click(screen.getByRole('button', { name: 'Show voice bar' }));
+    await userEvent.click(stripButton());
 
     const box = await textBox();
     expect(document.activeElement).toBe(box);
@@ -352,13 +355,13 @@ describe('VoiceBar collapse', () => {
     expect(localStorage.getItem(STORE)).toBeNull();
   });
 
-  it('starts collapsed when the browser remembers it', async () => {
+  it('starts as the strip when the browser remembers it', async () => {
     localStorage.setItem(STORE, '1');
     render(<Shell />);
 
-    expect(await screen.findByRole('button', { name: 'Show voice bar' })).toBeInTheDocument();
+    await screen.findByRole('region', { name: 'Voice bar' });
+    expect(stripButton()).toHaveTextContent('Voice bar');
     expect(screen.queryByRole('textbox', { name: 'Say or type a request' })).toBeNull();
-    expect(screen.queryByRole('region', { name: 'Voice bar' })).toBeNull();
   });
 
   it('keeps typed text across hide and show', async () => {
@@ -366,7 +369,7 @@ describe('VoiceBar collapse', () => {
     await userEvent.type(await textBox(), 'abc');
 
     await userEvent.click(screen.getByRole('button', { name: 'Hide voice bar' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Show voice bar' }));
+    await userEvent.click(stripButton());
 
     expect(await textBox()).toHaveValue('abc');
   });
@@ -400,11 +403,12 @@ describe('VoiceBar collapse', () => {
     expect(hideButton()).toBeInTheDocument();
   });
 
-  it('renders no opener when voice is unavailable or the bar is expanded', async () => {
+  it('renders nothing when voice is unavailable and no strip button while expanded', async () => {
     api.get.mockResolvedValue({ available: false });
     localStorage.setItem(STORE, '1');
     render(<Shell />);
     await act(async () => {});
+    expect(screen.queryByRole('region', { name: 'Voice bar' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Show voice bar' })).toBeNull();
 
     localStorage.removeItem(STORE);

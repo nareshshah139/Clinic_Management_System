@@ -42,7 +42,7 @@ interface VoiceBarContextValue {
   collapsed: boolean;
   setCollapsed(collapsed: boolean): void;
   /** Where focus goes once the bar has re-rendered after a collapse or expand; the bar consumes it. */
-  pendingFocus: MutableRefObject<'box' | 'opener' | null>;
+  pendingFocus: MutableRefObject<'box' | 'strip' | null>;
   register(form: RefObject<VoiceBarForm>): string;
   unregister(id: string): void;
 }
@@ -58,7 +58,7 @@ export function VoiceBarProvider({ children }: { children: ReactNode }) {
   const [registrations, setRegistrations] = useState<VoiceBarRegistration[]>([]);
   const [state, dispatch] = useReducer(voiceBarReducer, VOICE_BAR_IDLE);
   const [collapsed, setCollapsedState] = useState(false);
-  const pendingFocus = useRef<'box' | 'opener' | null>(null);
+  const pendingFocus = useRef<'box' | 'strip' | null>(null);
   const nextIdRef = useRef(0);
 
   useEffect(() => {
@@ -68,7 +68,7 @@ export function VoiceBarProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setCollapsed = useCallback((next: boolean) => {
-    pendingFocus.current = next ? 'opener' : 'box';
+    pendingFocus.current = next ? 'strip' : 'box';
     setCollapsedState(next);
     try {
       if (next) localStorage.setItem(VOICE_BAR_COLLAPSED_KEY, '1');

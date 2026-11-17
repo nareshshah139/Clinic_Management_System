@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
-import { ArrowUp, ChevronDown, Mic, Square } from 'lucide-react';
+import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from 'react';
+import { ArrowUp, ChevronDown, ChevronUp, Mic, Square } from 'lucide-react';
 import { useDashboardUser } from '@/components/layout/dashboard-user-context';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -19,13 +19,12 @@ import {
 } from '@/lib/voice-bar';
 import {
   flashFilledElements,
+  fetchVoiceFillStatus,
   mergeVoiceFillFields,
   requestVoiceFill,
   requestVoiceFillFromText,
 } from '@/lib/voice-fill';
 import { useVoiceBar } from './VoiceBarProvider';
-import { useVoiceBarShown } from './useVoiceBarShown';
-import { focusVoiceBarOpener } from './VoiceBarOpener';
 import { VoiceCommandDialog } from './VoiceCommandDialog';
 import { formatElapsed, useCancelOnEscape, useElapsedSeconds } from './VoiceFillButton';
 
@@ -60,7 +59,9 @@ export function VoiceBar() {
   const { active, state, dispatch, collapsed, setCollapsed, pendingFocus } = useVoiceBar();
   const [text, setText] = useState('');
   const [toCommand, setToCommand] = useState(false);
+  const [available, setAvailable] = useState(false);
   const boxRef = useRef<HTMLTextAreaElement>(null);
+  const stripRef = useRef<HTMLButtonElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const attemptRef = useRef(0);
   const applyingRef = useRef(false);
@@ -69,14 +70,24 @@ export function VoiceBar() {
   const activeRef = useRef(active);
   activeRef.current = active;
   const idPrefix = useId();
-  const shown = useVoiceBarShown();
+  const shown = available && !!user;
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchVoiceFillStatus().then((ok) => {
+      if (!cancelled) setAvailable(ok);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const target = pendingFocus.current;
     if (!target) return;
     pendingFocus.current = null;
     if (target === 'box') boxRef.current?.focus();
-    else focusVoiceBarOpener();
+    else stripRef.current?.focus();
   }, [collapsed, pendingFocus]);
 
   const activeId = active?.id ?? null;
@@ -151,7 +162,8 @@ export function VoiceBar() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [shown, collapsed, setCollapsed]);
 
-  if (!shown || collapsed) return null;
+  if (!shown) return null;
+  if (collapsed) return <CollapsedVoiceBar buttonRef={stripRef} onShow={() => setCollapsed(false)} />;
 
   const form = active?.form.current ?? null;
   const formLabel = form?.label ?? '';
@@ -386,6 +398,32 @@ export function VoiceBar() {
       {state.kind === 'confirming' && user && (
         <VoiceCommandDialog key={state.heard.id} heard={state.heard} role={user.role} onClose={() => dispatch({ type: 'dismiss' })} />
       )}
+    </section>
+  );
+}
+
+/**
+ * @cc [owner:nareshshah139,label:product] voice-bar-collapse-only-when-idle
+ * The voice bar MUST offer Hide only while nothing is in flight, MUST shrink to a single strip no taller than 32 px (plus the safe-area inset) while hidden, and the strip and Ctrl+/ or Cmd+/ MUST each reopen it with focus in the text box.
+ */
+function CollapsedVoiceBar({ buttonRef, onShow }: { buttonRef: RefObject<HTMLButtonElement | null>; onShow: () => void }) {
+  return (
+    <section aria-label="Voice bar" className="shrink-0 border-t border-border bg-card pb-[env(safe-area-inset-bottom)]">
+      <button
+        ref={buttonRef}
+        type="button"
+        className="block h-8 w-full px-4 text-sm text-muted-foreground outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset md:px-6"
+        aria-label={COPY.showBar}
+        aria-expanded="false"
+        title={COPY.showBarTitle}
+        onClick={onShow}
+      >
+        <span className="mx-auto flex h-full w-full max-w-3xl items-center gap-2">
+          <Mic className="size-4 shrink-0" aria-hidden="true" />
+          <span>{COPY.stripLabel}</span>
+          <ChevronUp className="ml-auto size-4 shrink-0" aria-hidden="true" />
+        </span>
+      </button>
     </section>
   );
 }

@@ -14,7 +14,6 @@ import { getErrorMessage } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { useDashboardUser } from './dashboard-user-context';
-import { VoiceBarOpener } from '@/components/voice/VoiceBarOpener';
 import { GlobalSearch } from './global-search';
 import { ColourThemeSetting } from './colour-theme-setting';
 import { apiClient } from '@/lib/api';
@@ -379,8 +378,6 @@ export function Header() {
           </div>
         )}
         
-        <VoiceBarOpener />
-
         {/* Notifications */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

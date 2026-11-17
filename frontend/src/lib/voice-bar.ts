@@ -12,6 +12,7 @@ export const VOICE_BAR_COPY = {
   hideBar: 'Hide voice bar',
   showBar: 'Show voice bar',
   showBarTitle: 'Show voice bar (Ctrl+/)',
+  stripLabel: 'Voice bar',
   listening: 'Listening. Press Enter to send, or Escape to discard.',
   working: 'Working it out…',
   heard: 'Heard',

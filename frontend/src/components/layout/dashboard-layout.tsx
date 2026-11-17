@@ -12,7 +12,6 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Sidebar } from "./sidebar";
 import { Header } from "./header";
-import { VoiceBarOpener } from "@/components/voice/VoiceBarOpener";
 import { VoiceBar } from "@/components/voice/VoiceBar";
 import { VoiceBarProvider } from "@/components/voice/VoiceBarProvider";
 import { apiClient } from "@/lib/api";
@@ -160,7 +159,6 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 </SheetContent>
               </Sheet>
               <Image src="/linae-name.png" alt="Linaé" width={304} height={112} className="h-6 w-auto" />
-              <VoiceBarOpener className="ml-auto" />
             </div>
 
             {/* Page content */}
