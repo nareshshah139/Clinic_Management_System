@@ -16,6 +16,7 @@ import dynamic from 'next/dynamic';
 import { useDashboardUser } from './dashboard-user-context';
 import { GlobalSearch } from './global-search';
 import { ColourThemeSetting } from './colour-theme-setting';
+import { ReportIssueButton } from '@/components/issue-report/ReportIssueButton';
 import { apiClient } from '@/lib/api';
 import {
   DropdownMenu,
@@ -378,6 +379,8 @@ export function Header() {
           </div>
         )}
         
+        <ReportIssueButton />
+
         {/* Notifications */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
