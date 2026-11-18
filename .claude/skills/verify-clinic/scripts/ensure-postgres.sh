@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
-# Makes a loopback Postgres with database clinic_stack reachable as postgres/postgres, the
-# STACK_DATABASE_URL every verify-clinic script defaults to. Idempotent; needs root (cloud
-# container). On a machine with its own Postgres, skip this and export STACK_DATABASE_URL.
 set -euo pipefail
 URL="postgresql://postgres:postgres@127.0.0.1:5432/clinic_stack"
 if PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d clinic_stack -Atc 'select 1' >/dev/null 2>&1; then

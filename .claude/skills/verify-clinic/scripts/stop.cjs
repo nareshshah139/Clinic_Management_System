@@ -1,8 +1,4 @@
 #!/usr/bin/env node
-// Stops the instance this skill launched (by the pid in its state file, never by process name).
-// The launcher's SIGTERM handler drops the private schema and kills only its own children.
-// Evidence under output/verify-clinic/evidence/ is never touched.
-// Usage: node .claude/skills/verify-clinic/scripts/stop.cjs [--instance default]
 const fs = require("node:fs");
 const path = require("node:path");
 const { outRoot, arg, pidAlive } = require("./lib.cjs");

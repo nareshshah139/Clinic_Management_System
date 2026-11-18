@@ -1,4 +1,3 @@
-// Shared helpers for the verify-clinic drivers. Not a CLI.
 const fs = require("node:fs");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
@@ -27,8 +26,6 @@ function pidAlive(pid) {
   }
 }
 
-// Evidence lives outside output/stack/ (boot.cjs wipes that per label) and outside the
-// instance state dir (stop removes that), so it survives teardown.
 function evidenceDir(feature) {
   const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
   const dir = path.join(outRoot, "evidence", `${stamp}-${feature}`);
@@ -36,7 +33,6 @@ function evidenceDir(feature) {
   return dir;
 }
 
-// Read-only SQL against the instance's private schema. Returns rows as objects.
 function sql(state, query) {
   const url = new URL(process.env.STACK_DATABASE_URL || "postgresql://postgres:postgres@127.0.0.1:5432/clinic_stack");
   const wrapped = `SET search_path TO "${state.schema}"; SELECT coalesce(json_agg(t), '[]'::json) FROM (${query}) t;`;
@@ -47,7 +43,6 @@ function sql(state, query) {
   return JSON.parse(out.trim());
 }
 
-// Real login path: the browser posts to the Next /api proxy, which sets the auth cookie.
 async function login(page, state, who = "pharmacist") {
   const user = state.users[who];
   if (!user) throw Error(`Unknown user ${who}; known: ${Object.keys(state.users).join(", ")}`);
@@ -67,8 +62,6 @@ async function login(page, state, who = "pharmacist") {
   return user;
 }
 
-// /auth/login is throttled to 5 per minute per client, so log in once per role per driver
-// process and hand every later context the saved cookie jar.
 const sessions = new Map();
 async function openPage(browser, state, who = "pharmacist", contextOptions = {}) {
   const context = await browser.newContext({ ...contextOptions, ...(sessions.has(who) && { storageState: sessions.get(who) }) });
@@ -81,7 +74,6 @@ async function openPage(browser, state, who = "pharmacist", contextOptions = {})
   return { context, page };
 }
 
-// Records what a reviewer needs: page errors, console errors, and every non-GET API call.
 function recorder(page, state) {
   const log = { pageErrors: [], consoleErrors: [], writes: [], failures: [] };
   page.on("pageerror", (e) => log.pageErrors.push(e.message.slice(0, 400)));

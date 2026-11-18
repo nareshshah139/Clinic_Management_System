@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-// Read-only: is this instance worth driving? Exit 0 = healthy, 1 = not.
-// Usage: node .claude/skills/verify-clinic/scripts/doctor.cjs [--instance default]
 const fs = require("node:fs");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
@@ -39,8 +37,6 @@ const { root, arg, loadState, pidAlive, sql, checker } = require("./lib.cjs");
   }
   const head = execFileSync("git", ["-C", root, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
   c.ok("git HEAD unchanged since boot (else relaunch)", !state.gitHead || state.gitHead === head, { booted: state.gitHead, now: head });
-  // boot.cjs copies frontend/src into a temp dir and ts-node loads backend/src at boot:
-  // edits made after boot are NOT served. Flag them so nobody verifies stale code.
   const booted = Date.parse(state.bootedAt);
   const changed = execFileSync("git", ["-C", root, "status", "--porcelain", "--", "frontend/src", "backend/src", "backend/prisma"], { encoding: "utf8" })
     .split("\n").filter(Boolean).map((l) => l.slice(3))

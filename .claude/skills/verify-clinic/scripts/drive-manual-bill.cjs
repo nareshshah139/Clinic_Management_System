@@ -1,10 +1,4 @@
 #!/usr/bin/env node
-// Drives Inventory -> Purchases -> "Scan or enter bill" -> "Type instead" as a pharmacist,
-// end to end on the real stack, several times in a row, and proves each run with UI state,
-// network writes and database rows. Exit 0 only if every check passes.
-//
-// Usage: node .claude/skills/verify-clinic/scripts/drive-manual-bill.cjs [--instance default] [--only new,known,multi,duplicate,readback]
-// Evidence: output/verify-clinic/evidence/<stamp>-manual-bill/ (summary.md, result.json, *.png)
 const fs = require("node:fs");
 const path = require("node:path");
 const { chromium } = require("playwright");
@@ -59,7 +53,6 @@ async function fillBill(page, run, steps) {
   for (const [i, l] of run.lines.entries()) {
     if (i > 0) await act("click Add Line", () => page.getByRole("button", { name: "Add Line" }).click());
     const section = page.locator(`[aria-label="Product line ${i + 1}"]`);
-    // A finished line can fold to a one-line summary; reopen it the way a user would.
     await section.locator("details:not([open]) > summary").first().click({ timeout: 2000 }).catch(() => {});
     const f = (suffix) => section.locator(`input[id$="-${suffix}"]`).first();
     for (const [suffix, key, name] of [["product", "product", "Product"], ["pack-size", "pack", "Pack Size"], ["unit", "unit", "Stock unit"], ["batch", "batch", "Batch"], ["expiry-month", "expM", "Exp. Month"], ["expiry-year", "expY", "Exp. Year"], ["qty", "qty", "Paid Qty"], ["free-qty", "free", "Free Qty"], ["rate", "rate", "Rate"], ["mrp", "mrp", "MRP"], ["hsn", "hsn", "HSN"]])
@@ -67,9 +60,7 @@ async function fillBill(page, run, steps) {
   }
 }
 
-// Product matching runs async after typing. Resolve every "not in inventory" line by choosing a
-// product kind and "Create new item", exactly as a user would, until the checks badge says ready.
-async function resolveProducts(page, run, steps) {
+async function resolveUnmatchedProducts(page, run, steps) {
   const deadline = Date.now() + 90000;
   const ready = page.getByText("Ready for your final check");
   while (Date.now() < deadline) {
@@ -107,7 +98,7 @@ async function receive(browser, state, dir, key, run, c) {
   await shot(page, dir, `${key}-1-intake-home`);
   await fillBill(page, run, steps);
   await shot(page, dir, `${key}-2-filled`);
-  const ready = await resolveProducts(page, run, steps);
+  const ready = await resolveUnmatchedProducts(page, run, steps);
   c.ok(`[${key}] checks reach "Ready for your final check"`, ready, await page.locator("main").innerText().then((t) => t.slice(t.indexOf("Check before adding stock"), t.indexOf("Check before adding stock") + 300)));
   const primary = page.getByRole("button", { name: "Confirm reviewed values & add stock" });
   await primary.scrollIntoViewIfNeeded();
@@ -147,7 +138,6 @@ async function receive(browser, state, dir, key, run, c) {
   return { key, label: run.label, bill: run.bill, viewport: run.viewport, userSteps: steps.length, steps, loadMs, postMs, stockBefore: before, stockAfter: after, ledger: tx, writes: log.writes };
 }
 
-// Re-entering an already posted bill must be refused with a way forward, and must not add stock.
 async function duplicate(browser, state, dir, c) {
   const run = { ...RUNS.new, label: "duplicate of the first bill, phone 390px", dir, key: "duplicate" };
   const { context, page } = await openPage(browser, state, "pharmacist", { viewport: PHONE, isMobile: true, hasTouch: true });
@@ -155,12 +145,10 @@ async function duplicate(browser, state, dir, c) {
   const before = stockByName(state, [cream]);
   await page.goto(`${state.base}${INTAKE}`, { waitUntil: "domcontentloaded", timeout: 180000 });
   await fillBill(page, run, []);
-  await resolveProducts(page, run, []);
+  await resolveUnmatchedProducts(page, run, []);
   const primary = page.getByRole("button", { name: "Confirm reviewed values & add stock" });
   if (await primary.isEnabled().catch(() => false)) await primary.click();
   else await page.getByRole("button", { name: "Save draft" }).click();
-  // The outcome belongs where the user clicked: the sticky action bar, judged by state (status pill,
-  // which controls exist, what is covered), not by matching prose.
   const bar = page.getByRole("region", { name: "Invoice actions" });
   const outcome = bar.getByRole("alert");
   await outcome.waitFor({ timeout: 30000 }).catch(() => {});
@@ -193,12 +181,12 @@ async function duplicate(browser, state, dir, c) {
   c.ok("[duplicate] stock unchanged", after[cream] === before[cream], { before, after });
   const [{ n }] = sql(state, `SELECT count(*)::int AS n FROM pharmacy_purchase_invoices WHERE "invoiceNumber" = '${run.bill}'`);
   c.ok("[duplicate] still exactly one invoice row", n === 1, n);
+  c.ok("[duplicate] server refused the save with 409", log.failures.some((f) => f.status === 409 && f.path.endsWith("/purchase-invoices/drafts")), log.failures);
   c.ok("[duplicate] no page errors", !log.pageErrors.length, log.pageErrors);
   await context.close();
   return { key: "duplicate", message, failures: log.failures };
 }
 
-// What the user sees afterwards: the bills in the register and the stock in the stock list.
 async function readback(browser, state, dir, bills, c) {
   const { context, page } = await openPage(browser, state, "pharmacist", { viewport: DESKTOP });
   await page.goto(`${state.base}/dashboard/inventory?area=purchases&view=register`, { waitUntil: "domcontentloaded", timeout: 180000 });

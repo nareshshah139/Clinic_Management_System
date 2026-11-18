@@ -1,12 +1,4 @@
 #!/usr/bin/env node
-// Boots one isolated clinic stack (private Postgres schema + NestJS API + Next dev server)
-// through the repo's own scripts/stack/boot.cjs, writes its handles to a state file, and
-// stays alive until SIGINT/SIGTERM, at which point boot.cjs drops the schema and kills
-// only the children it started.
-//
-// Usage: [STACK_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/clinic_stack] \
-//          node .claude/skills/verify-clinic/scripts/launch.cjs [--name NAME]
-// Ready when the state file exists and stdout prints "READY <state-file>".
 const fs = require("node:fs");
 const { execFileSync } = require("node:child_process");
 const path = require("node:path");
@@ -16,6 +8,13 @@ const { bootStack } = require(path.join(root, "scripts/stack/boot.cjs"));
 const name = (process.argv.includes("--name") ? process.argv[process.argv.indexOf("--name") + 1] : "default").replace(/[^A-Za-z0-9_-]/g, "_");
 const stateDir = path.join(root, "output/verify-clinic/instances");
 const stateFile = path.join(stateDir, `${name}.json`);
+
+function replaceBootSignalHandlers(stop) {
+  for (const signal of ["SIGINT", "SIGTERM"]) {
+    process.removeAllListeners(signal);
+    process.on(signal, stop);
+  }
+}
 
 (async () => {
   if (fs.existsSync(stateFile)) {
@@ -44,13 +43,7 @@ const stateFile = path.join(stateDir, `${name}.json`);
     console.log("STOPPED");
     process.exit(0);
   };
-  // boot.cjs installs its own SIGINT/SIGTERM handlers that exit(130) as soon as its live set is
-  // empty, which happens synchronously inside stack.stop(), so the schema drop would never run.
-  // Take sole ownership of the signals so stop() always finishes.
-  process.removeAllListeners("SIGINT");
-  process.removeAllListeners("SIGTERM");
-  process.on("SIGINT", stop);
-  process.on("SIGTERM", stop);
+  replaceBootSignalHandlers(stop);
   console.log(`READY ${stateFile} base=${stack.base} api=${stack.api} boot=${state.bootSeconds}s`);
   setInterval(() => {}, 1 << 30);
 })().catch((e) => {
