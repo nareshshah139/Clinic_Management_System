@@ -458,7 +458,7 @@ export default function AppointmentsCalendar({
                     {doctors.map((d) => (<SelectItem key={d.id} value={d.id}>{d.firstName} {d.lastName}</SelectItem>))}
                   </SelectContent>
                 </Select>
-                <Input aria-label="Date" className="h-8 w-40" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+                <Input aria-label="Date" className="h-8 w-44" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
               </>
             )}
             <Select value={visitTypeFilter} onValueChange={setVisitTypeFilter}>

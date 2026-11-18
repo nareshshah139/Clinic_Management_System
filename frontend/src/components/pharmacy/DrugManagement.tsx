@@ -360,11 +360,12 @@ export function DrugManagement() {
         <CardContent className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
-              <Label>Search</Label>
+              <Label htmlFor="drug-search">Search</Label>
               <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
                 <Input
-                  placeholder="Search by name, composition..."
+                  id="drug-search"
+                  placeholder="Name or composition"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10"
@@ -373,12 +374,12 @@ export function DrugManagement() {
             </div>
 
             <div>
-              <Label>Category</Label>
+              <Label htmlFor="drug-category">Category</Label>
               <Select
                 value={selectedCategory}
                 onValueChange={setSelectedCategory}
               >
-                <SelectTrigger>
+                <SelectTrigger id="drug-category" className="w-full">
                   <SelectValue placeholder="All categories" />
                 </SelectTrigger>
                 <SelectContent>
@@ -393,12 +394,12 @@ export function DrugManagement() {
             </div>
 
             <div>
-              <Label>Manufacturer</Label>
+              <Label htmlFor="drug-manufacturer">Manufacturer</Label>
               <Select
                 value={selectedManufacturer}
                 onValueChange={setSelectedManufacturer}
               >
-                <SelectTrigger>
+                <SelectTrigger id="drug-manufacturer" className="w-full">
                   <SelectValue placeholder="All manufacturers" />
                 </SelectTrigger>
                 <SelectContent>

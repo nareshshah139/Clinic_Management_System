@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
+import { Spinner } from '@/components/ui/spinner';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
@@ -498,7 +499,7 @@ function DoctorDayCalendarForSelection({
             )}
             {showLoadingOverlay && (
               <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-white/70 backdrop-blur-sm transition-opacity duration-200">
-                <div className="animate-spin h-8 w-8 border-2 border-info border-t-transparent rounded-full" />
+                <Spinner className="size-8 text-info-text" aria-hidden="true" role={undefined} />
                 <span className="mt-2 text-sm font-medium text-info-text">Refreshing schedule…</span>
               </div>
             )}

@@ -95,7 +95,7 @@ function AppointmentsPageInner() {
         <Button variant="outline" size="icon" className="size-8" aria-label="Previous day" onClick={() => shiftDate(-1)}>
           <ChevronLeft className="h-4 w-4" />
         </Button>
-        <Input aria-label="Date" className="h-8 w-40" type="date" value={date} onChange={(e) => e.target.value && setDate(e.target.value)} />
+        <Input aria-label="Date" className="h-8 w-44" type="date" value={date} onChange={(e) => e.target.value && setDate(e.target.value)} />
         <Button variant="outline" size="sm" disabled={date === getISTDateString()} onClick={() => setDate(getISTDateString())}>Today</Button>
         <Button variant="outline" size="icon" className="size-8" aria-label="Next day" onClick={() => shiftDate(1)}>
           <ChevronRight className="h-4 w-4" />

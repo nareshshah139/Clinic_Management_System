@@ -289,12 +289,12 @@ export function InventoryWorkspace() {
         </InventoryAction></>} />
       <nav
         aria-label="Inventory areas"
-        className="flex flex-wrap gap-1 border-b pb-2 print:hidden"
+        className="-mx-4 flex gap-1 overflow-x-auto border-b px-4 pb-2 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 print:hidden"
       >
         {areas.map(([id, label]) => (
           <Button
             key={id}
-            className="min-w-24 flex-1 px-2 text-xs sm:flex-none sm:text-sm"
+            className="shrink-0 px-3 text-sm sm:min-w-24 sm:px-2"
             aria-current={area === id ? "page" : undefined}
             variant={area === id ? "default" : "ghost"}
             onClick={() => switchArea(id)}
