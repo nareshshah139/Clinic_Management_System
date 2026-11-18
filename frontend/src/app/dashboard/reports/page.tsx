@@ -224,13 +224,13 @@ function SystemAlertsBand({ counts }: { counts: AlertCounts }) {
   const band = tones.reduce((worst, tone) => (TONE_RANK.indexOf(tone) > TONE_RANK.indexOf(worst) ? tone : worst), 'neutral' as StatusVariant);
   return (
     <Card className={`flex-row flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 ${BAND_CLASS[band]}`}>
-      <h2 className={`flex items-center text-sm font-semibold ${LABEL_CLASS[band] || 'text-foreground'}`}>
+      <h2 className={`flex w-full items-center text-sm font-semibold sm:w-auto ${LABEL_CLASS[band] || 'text-foreground'}`}>
         <AlertCircle className="h-4 w-4 mr-2" aria-hidden="true" />
         System Alerts
       </h2>
       <dl className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-6 gap-y-1 text-sm">
         {ALERT_ITEMS.map((item, index) => (
-          <div key={item.key} className="flex items-baseline gap-1.5">
+          <div key={item.key} className="flex flex-wrap items-baseline gap-x-1.5">
             <dt className={LABEL_CLASS[tones[index]]}>{item.label}</dt>
             <dd className="font-semibold tabular-nums">{counts[item.key]}</dd>
             {item.note && counts[item.key] > 0 && <dd className="text-xs text-muted-foreground">{item.note}</dd>}
@@ -413,11 +413,11 @@ export default function ReportsPage() {
     return (
       <div className="space-y-6">
         {/* Main Revenue Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card className="gap-0 py-0">
             <CardContent className="p-4">
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
+              <div>
+                <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Total Revenue</p>
                 </div>
                 <p className="text-2xl font-bold text-success-text">
@@ -428,8 +428,8 @@ export default function ReportsPage() {
           </Card>
           <Card className="gap-0 py-0">
             <CardContent className="p-4">
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
+              <div>
+                <div className="mb-1">
                   <p className="text-sm text-muted-foreground">GST Amount</p>
                 </div>
                 <p className="text-2xl font-bold text-info-text">
@@ -440,8 +440,8 @@ export default function ReportsPage() {
           </Card>
           <Card className="gap-0 py-0">
             <CardContent className="p-4">
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
+              <div>
+                <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Net Revenue</p>
                 </div>
                 <p className="text-2xl font-bold text-highlight-text">
@@ -452,8 +452,8 @@ export default function ReportsPage() {
           </Card>
           <Card className="gap-0 py-0">
             <CardContent className="p-4">
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
+              <div>
+                <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Total Invoices</p>
                 </div>
                 <p className="text-2xl font-bold text-warning-text">
@@ -474,7 +474,7 @@ export default function ReportsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 {data.paymentBreakdown.map((payment: PaymentBreakdown, index: number) => (
                   <div key={index} className="p-3 bg-muted rounded-lg">
                     <div className="flex justify-between items-center">
@@ -530,11 +530,11 @@ export default function ReportsPage() {
     return (
       <div className="space-y-6">
         {/* Main Patient Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card className="gap-0 py-0">
             <CardContent className="p-4">
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
+              <div>
+                <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Total Patients</p>
                 </div>
                 <p className="text-2xl font-bold text-info-text">
@@ -545,8 +545,8 @@ export default function ReportsPage() {
           </Card>
           <Card className="gap-0 py-0">
             <CardContent className="p-4">
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
+              <div>
+                <div className="mb-1">
                   <p className="text-sm text-muted-foreground">New Patients</p>
                 </div>
                 <p className="text-2xl font-bold text-success-text">
@@ -557,8 +557,8 @@ export default function ReportsPage() {
           </Card>
           <Card className="gap-0 py-0">
             <CardContent className="p-4">
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
+              <div>
+                <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Returning Patients</p>
                 </div>
                 <p className="text-2xl font-bold text-warning-text">
@@ -569,8 +569,8 @@ export default function ReportsPage() {
           </Card>
           <Card className="gap-0 py-0">
             <CardContent className="p-4">
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
+              <div>
+                <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Avg Age</p>
                 </div>
                 <p className="text-2xl font-bold text-highlight-text">
@@ -593,7 +593,7 @@ export default function ReportsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 {data.genderBreakdown.map((gender: GenderBreakdown, index: number) => (
                   <div key={index} className="p-3 bg-muted rounded-lg text-center">
                     <p className="font-medium">{enumLabel('gender', gender.gender)}</p>
@@ -644,11 +644,11 @@ export default function ReportsPage() {
     return (
       <div className="space-y-6">
         {/* Main Doctor Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           <Card className="gap-0 py-0">
             <CardContent className="p-4">
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
+              <div>
+                <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Total Doctors</p>
                 </div>
                 <p className="text-2xl font-bold text-info-text">
@@ -659,8 +659,8 @@ export default function ReportsPage() {
           </Card>
           <Card className="gap-0 py-0">
             <CardContent className="p-4">
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
+              <div>
+                <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Active Doctors</p>
                 </div>
                 <p className="text-2xl font-bold text-success-text">
@@ -671,8 +671,8 @@ export default function ReportsPage() {
           </Card>
           <Card className="gap-0 py-0">
             <CardContent className="p-4">
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
+              <div>
+                <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Departments</p>
                 </div>
                 <p className="text-2xl font-bold text-highlight-text">
@@ -738,11 +738,11 @@ export default function ReportsPage() {
     return (
       <div className="space-y-6">
         {/* Main Appointment Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card className="gap-0 py-0">
             <CardContent className="p-4">
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
+              <div>
+                <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Total Appointments</p>
                 </div>
                 <p className="text-2xl font-bold text-info-text">
@@ -753,8 +753,8 @@ export default function ReportsPage() {
           </Card>
           <Card className="gap-0 py-0">
             <CardContent className="p-4">
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
+              <div>
+                <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Completed</p>
                 </div>
                 <p className="text-2xl font-bold text-success-text">
@@ -768,8 +768,8 @@ export default function ReportsPage() {
           </Card>
           <Card className="gap-0 py-0">
             <CardContent className="p-4">
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
+              <div>
+                <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Cancelled</p>
                 </div>
                 <p className="text-2xl font-bold text-destructive-text">
@@ -783,8 +783,8 @@ export default function ReportsPage() {
           </Card>
           <Card className="gap-0 py-0">
             <CardContent className="p-4">
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
+              <div>
+                <div className="mb-1">
                   <p className="text-sm text-muted-foreground">No Show</p>
                 </div>
                 <p className="text-2xl font-bold text-warning-text">
@@ -859,11 +859,11 @@ export default function ReportsPage() {
     return (
       <div className="space-y-6">
         {/* Main Inventory Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card className="gap-0 py-0">
             <CardContent className="p-4">
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
+              <div>
+                <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Total Items</p>
                 </div>
                 <p className="text-2xl font-bold text-info-text">
@@ -874,8 +874,8 @@ export default function ReportsPage() {
           </Card>
           <Card className="gap-0 py-0">
             <CardContent className="p-4">
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
+              <div>
+                <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Total Value</p>
                 </div>
                 <p className="text-2xl font-bold text-success-text">
@@ -886,8 +886,8 @@ export default function ReportsPage() {
           </Card>
           <Card className="gap-0 py-0">
             <CardContent className="p-4">
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
+              <div>
+                <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Low Stock</p>
                 </div>
                 <p className="text-2xl font-bold text-destructive-text">
@@ -899,8 +899,8 @@ export default function ReportsPage() {
           </Card>
           <Card className="gap-0 py-0">
             <CardContent className="p-4">
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
+              <div>
+                <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Out of Stock</p>
                 </div>
                 <p className="text-2xl font-bold text-warning-text">
@@ -977,11 +977,11 @@ export default function ReportsPage() {
     return (
       <div className="space-y-6">
         {/* Main Payment Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card className="gap-0 py-0">
             <CardContent className="p-4">
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
+              <div>
+                <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Total Payments</p>
                 </div>
                 <p className="text-2xl font-bold text-info-text">
@@ -992,8 +992,8 @@ export default function ReportsPage() {
           </Card>
           <Card className="gap-0 py-0">
             <CardContent className="p-4">
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
+              <div>
+                <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Total Amount</p>
                 </div>
                 <p className="text-2xl font-bold text-success-text">
@@ -1004,8 +1004,8 @@ export default function ReportsPage() {
           </Card>
           <Card className="gap-0 py-0">
             <CardContent className="p-4">
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
+              <div>
+                <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Successful</p>
                 </div>
                 <p className="text-2xl font-bold text-success-text">
@@ -1019,8 +1019,8 @@ export default function ReportsPage() {
           </Card>
           <Card className="gap-0 py-0">
             <CardContent className="p-4">
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
+              <div>
+                <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Failed</p>
                 </div>
                 <p className="text-2xl font-bold text-destructive-text">
@@ -1041,7 +1041,7 @@ export default function ReportsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 {data.paymentModeBreakdown.map((mode: PaymentModeBreakdown, index: number) => (
                   <div key={index} className="p-3 bg-muted rounded-lg">
                     <div className="flex justify-between items-center mb-2">
@@ -1070,7 +1070,7 @@ export default function ReportsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="p-3 bg-muted rounded-lg text-center">
                   <p className="text-sm text-muted-foreground">Total Transactions</p>
                   <p className="text-xl font-bold">{data.reconciliationSummary.totalTransactions}</p>
