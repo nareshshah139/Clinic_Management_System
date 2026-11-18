@@ -180,7 +180,14 @@ async function duplicate(browser, state, dir, c) {
   await open.click().catch(() => {});
   const compare = page.getByRole("region", { name: "Compare with saved invoice" }).or(page.locator('[aria-label="Compare with saved invoice"]'));
   await compare.first().waitFor({ timeout: 30000 }).catch(() => {});
-  c.ok('[duplicate] "Open existing invoice" opens the comparison', await compare.first().isVisible().catch(() => false));
+  let settled = null;
+  for (let i = 0, last = NaN; i < 20; i++, await page.waitForTimeout(150)) {
+    const y = await compare.first().evaluate((el) => Math.round(el.getBoundingClientRect().top)).catch(() => null);
+    if (y === last) { settled = y; break; }
+    last = y;
+  }
+  c.ok('[duplicate] "Open existing invoice" brings the comparison on screen', settled !== null && settled >= 0 && settled < PHONE.height, { settledTop: settled });
+  c.ok("[duplicate] posting stays withheld while comparing", (await bar.getByRole("button", { name: "Confirm reviewed values & add stock" }).count()) === 0 && (await outcome.count()) === 1);
   await shot(page, dir, "duplicate-open-existing");
   const after = stockByName(state, [cream]);
   c.ok("[duplicate] stock unchanged", after[cream] === before[cream], { before, after });

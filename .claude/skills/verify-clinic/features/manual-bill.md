@@ -8,7 +8,7 @@ A pharmacist types a distributor's bill: supplier, bill number and one or more p
 - `bill-known-product`: a line that exactly matches a saved product and pack needs no product step; a new batch adds stock to that product.
 - `bill-multi-line`: "Add Line" adds lines; each line posts its own `PURCHASE` ledger row.
 - `bill-post-once`: the final action saves, reviews and commits exactly once, even when double-clicked.
-- `bill-duplicate`: re-posting the same GSTIN and bill number is refused with "Open existing invoice"; stock is unchanged.
+- `bill-duplicate`: re-posting the same GSTIN and bill number is refused in the sticky action bar with a red "Nothing added" status, "Already on <bill> · <status>" and "Open existing invoice". The posting and Save draft buttons are withdrawn until the user edits the bill. Stock is unchanged, and opening the existing invoice scrolls its comparison into view.
 - `bill-phone`: the whole flow works at 390px, with no horizontal scroll and the final action fully on screen.
 - `bill-readback`: posted bills appear under Purchase bills and their products under Stock list.
 - `bill-save-draft`: "Save draft" saves without changing stock ("Not saved · stock not added" becomes a saved status). Not scripted yet.
@@ -33,11 +33,13 @@ Preconditions:
 - **Resolve products.** After typing, the app POSTs `/master-matches`. For an unknown product, a `select[id="product-<i>-new-kind"]` appears. Choose `Medicine`, `Cosmetic / skin care` or `Other consumable`, then click `Create new item`, which POSTs `/master-confirmations`. Repeat until the text "Ready for your final check" is visible.
 - **Post.** Click `getByRole('button', { name: 'Confirm reviewed values & add stock' })`. Within about 1s, `[aria-label="Stock status"]` reads "Stock added" with `Reference: PINV-<bill>-<suffix>`, the fields lock with "Verified" chips, and "Back to list" and "New invoice" appear.
 - **Prove side effects.** `L.sql(state, ...)`: `pharmacy_purchase_invoices.status = 'STOCK_COMMITTED'`; `inventory_items.currentStock` per product name rose by paid + free; `stock_transactions` has one `PURCHASE` row per line with `reference LIKE 'PINV-<bill>-%'`.
-- **Proof artifacts.** In `output/verify-clinic/evidence/<stamp>-manual-bill/`: `summary.md`, `result.json`, `<run>-1..4-*.png`, `duplicate-refused-as-seen.png`, `duplicate-refused-message.png` and `readback-*.png`.
+- **Duplicate.** After a refused post, read the outcome from `getByRole('region', { name: 'Invoice actions' }).getByRole('alert')`. It contains one `[data-review-state="error"]` pill, and the bar has no `Confirm reviewed values & add stock` or `Save draft` button. `Open existing invoice` in the bar opens `[aria-label="Compare with saved invoice"]`.
+- **Proof artifacts.** In `output/verify-clinic/evidence/<stamp>-manual-bill/`: `summary.md`, `result.json`, `<run>-1..4-*.png`, `duplicate-refused-as-seen.png`, `duplicate-open-existing.png` and `readback-*.png`.
 
 ## Gotchas
 
-- **Known open UX failure (2026-11-18):** the check `[duplicate] refusal is on screen where the user clicked` fails. After a duplicate post, the "Finish this purchase … already saved … Open existing invoice" panel renders about 1,800px above the sticky action bar. At the click site the button stays enabled and the footer still says "Not saved · stock not added". The panel's copy also says to choose "Confirm reviewed values & add stock" again, which would hit the same refusal. Expect `36/37` until this is fixed. Don't weaken the check.
+- The workbench smooth-scrolls its feedback block into view after most outcomes. Measure anything above the action bar only after its position stops changing. A reading taken at the moment text appears can be about 2,500px off and is wrong (this skill once reported a false "off-screen refusal" that way). The sticky action bar needs no wait.
+
 - Product matching is asynchronous and re-renders the matching panel. Hold element ids, not live locators, across a confirmation, or `getAttribute` waits 60s on a node that is gone.
 - Once a product exists, the matching panel also renders an "Edit saved product details" `Product kind` select. `getByLabel('Product kind')` then matches two elements, so use the `-new-kind` id.
 - A product created with "Create new item" persists even if the bill is never posted. A rerun with the same name takes the known-product path, so use per-run names.
