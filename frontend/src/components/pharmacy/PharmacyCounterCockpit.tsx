@@ -6,32 +6,36 @@ import { Spinner } from '@/components/ui/spinner';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
-  AlertTriangle,
-  Barcode,
-  CheckCircle2,
+  Check,
   ClipboardCheck,
-  FileText,
-  MapPin,
-  PackageCheck,
-  Pill,
-  Printer,
-  Receipt,
+  MessageSquarePlus,
+  MoreHorizontal,
   Plus,
+  Receipt,
   RefreshCw,
-  ShieldCheck,
-  ShoppingCart,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Input } from '@/components/ui/input';
+import { NativeSelect } from '@/components/ui/native-select';
 import { PageHeader } from '@/components/ui/page-header';
 import { StatusBadge } from '@/components/ui/status-badge';
-import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
 import { apiClient } from '@/lib/api';
 import { stockCheckLineName } from '@/lib/bill-line-name';
 import { plural } from '@/lib/labels';
 import { prescriptionAmount, prescriptionLabel } from '@/lib/prescription-labels';
+import { cn } from '@/lib/utils';
 import { PrescriptionInventoryLink, type InventorySuggestion } from './PrescriptionInventoryLink';
-import { NativeSelect } from '@/components/ui/native-select';
+import { PurchaseHelp } from './PurchaseHelp';
 
 type QueueStatus = 'pending' | 'partial' | 'dispensed' | 'expired';
 type CancelledDispenseTaskStatus = `CANCEL${'LED'}`;
@@ -175,6 +179,16 @@ const reasonOptions = [
 
 const DISPENSE_TASK_CANCELLED = `CANCEL${'LED'}` as DispenseTaskStatus;
 
+const defaultReasons: Partial<Record<LineAction | DispenseTaskStatus, string>> = {
+  substitute: 'Substitution requested',
+  edit: 'Quantity changed',
+  unavailable: 'Medicine unavailable',
+  PAUSED: 'Paused for doctor clarification',
+  [DISPENSE_TASK_CANCELLED]: 'Cancelled at counter',
+};
+
+type ReasonDraft = { prescriptionId: string | null; type: string | null; note: string };
+
 const QUEUE_PAGE_SIZE = 25;
 const QUEUE_ENDPOINT = '/pharmacy/prescription-queue';
 
@@ -204,6 +218,12 @@ const billingPrefill = (entry: QueueEntry): PharmacyBillingPrefill => ({
   visitId: entry.visitId || undefined,
 });
 
+/**
+ * @cc [owner:nareshshah139,label:product] counter-exception-reason-default
+ * Substitute, Edit, Unavailable and Pause MUST save the reason that matches the action unless
+ * the pharmacist picks another. Accept MUST save no reason. Selecting another prescription
+ * MUST clear the chosen reason and note so neither carries over to a different patient.
+ */
 /**
  * @cc [owner:nareshshah139,label:product] counter-current-stock-refresh
  * Refresh and pharmacy stock-change events MUST recheck the active prescription's stock.
@@ -238,13 +258,9 @@ const billingPrefill = (entry: QueueEntry): PharmacyBillingPrefill => ({
 export function PharmacyCounterCockpit({
   prefill,
   onOpenBilling,
-  onOpenPartnerSync,
-  onOpenInventoryControl,
 }: {
   prefill?: PharmacyBillingPrefill | null;
   onOpenBilling?: (prefill?: PharmacyBillingPrefill) => void;
-  onOpenPartnerSync: () => void;
-  onOpenInventoryControl: () => void;
 }) {
   const [queue, setQueue] = useState<QueueEntry[]>([]);
   const [queueTotal, setQueueTotal] = useState(0);
@@ -258,9 +274,8 @@ export function PharmacyCounterCockpit({
   const [stockItems, setStockItems] = useState<StockCheckItem[]>([]);
   const [stockReloadKey, setStockReloadKey] = useState(0);
   const [stockError, setStockError] = useState<string | null>(null);
-  const [reasonType, setReasonType] = useState(reasonOptions[0]);
-  const [reasonNote, setReasonNote] = useState('');
-  const [loadingQueue, setLoadingQueue] = useState(false);
+  const [reasonDraft, setReasonDraft] = useState<ReasonDraft>({ prescriptionId: null, type: null, note: '' });
+  const [loadingQueue, setLoadingQueue] = useState(true);
   const [loadingStock, setLoadingStock] = useState(false);
   const [savingTask, setSavingTask] = useState(false);
   const taskCommandInFlight = useRef(false);
@@ -269,6 +284,24 @@ export function PharmacyCounterCockpit({
   const activeEntry = useMemo(
     () => queue.find((entry) => entry.prescriptionId === activeId) || null,
     [activeId, queue],
+  );
+
+  const reason = useMemo<ReasonDraft>(
+    () => (reasonDraft.prescriptionId === activeId ? reasonDraft : { prescriptionId: activeId, type: null, note: '' }),
+    [activeId, reasonDraft],
+  );
+  const updateReason = useCallback(
+    (change: Partial<Pick<ReasonDraft, 'type' | 'note'>>) => setReasonDraft({ ...reason, ...change }),
+    [reason],
+  );
+  const reasonFields = useCallback(
+    (key: LineAction | DispenseTaskStatus) => {
+      const fallback = defaultReasons[key];
+      return fallback
+        ? { reasonType: reason.type ?? fallback, reasonNote: reason.note }
+        : { reasonType: undefined, reasonNote: undefined };
+    },
+    [reason],
   );
 
   const replaceQueueEntry = useCallback((updatedEntry: QueueEntry) => {
@@ -399,18 +432,6 @@ export function PharmacyCounterCockpit({
     return Object.fromEntries(stockItems.map((item, index) => [item.sourceLineKey ?? String(index), item]));
   }, [stockItems]);
 
-  const exceptionCount = useMemo(() => {
-    return stockItems.filter(
-      (item, index) =>
-        item.stockStatus !== 'IN_STOCK' ||
-        item.nearExpiry ||
-        item.lowStock ||
-        activeEntry?.medications.find((line, lineIndex) =>
-          item.sourceLineKey ? line.sourceLineKey === item.sourceLineKey : lineIndex === index,
-        )?.action === 'unavailable',
-    ).length;
-  }, [activeEntry, stockItems]);
-
   const reviewedLineCount = useMemo(() => {
     if (!activeEntry) return 0;
     return activeEntry.medications.filter(
@@ -418,38 +439,9 @@ export function PharmacyCounterCockpit({
     ).length;
   }, [activeEntry]);
 
-  const allLinesReviewed =
-    Boolean(activeEntry?.medications.length) &&
-    reviewedLineCount === activeEntry?.medications.length;
   const readyForBilling = Boolean(activeEntry && hasBillableReview(activeEntry));
 
-  const pickLines = useMemo(() => {
-    if (!activeEntry) return [];
-    return activeEntry.medications.map((medication, index) => {
-      const stock = stockByLine[medication.sourceLineKey ?? String(index)];
-      const batches = stock?.batches || [];
-      const recommendedBatch = batches[0] || null;
-      const requiredQuantity = Math.max(
-        1,
-        Math.ceil(
-          medication.prescribedQuantity === null
-            ? 1
-            : Math.max(0, medication.prescribedQuantity - medication.dispensedQuantity),
-        ),
-      );
-      return {
-        medication,
-        stock,
-        recommendedBatch,
-        requiredQuantity,
-        alternateCount: Math.max(0, batches.length - 1),
-      };
-    });
-  }, [activeEntry, stockByLine]);
-
-  const activeLifecycle = activeEntry
-    ? deriveLifecycle(activeEntry, activeEntry.prescriptionId === activeId, readyForBilling)
-    : 'Queued';
+  const activeLifecycle = activeEntry ? deriveLifecycle(activeEntry, readyForBilling) : 'Queued';
   const openActiveBilling = useCallback(() => {
     if (activeEntry && isBillable(activeEntry)) onOpenBilling?.(billingPrefill(activeEntry));
   }, [activeEntry, onOpenBilling]);
@@ -484,17 +476,7 @@ export function PharmacyCounterCockpit({
         }
         const updated = await apiClient.patch<QueueEntry>(
           `/pharmacy/dispense-tasks/${task.dispenseTaskId}/status`,
-          {
-            status,
-            reasonType:
-              status === 'PAUSED' || status === DISPENSE_TASK_CANCELLED
-                ? reasonType
-                : undefined,
-            reasonNote:
-              status === 'PAUSED' || status === DISPENSE_TASK_CANCELLED
-                ? reasonNote
-                : undefined,
-          },
+          { status, ...reasonFields(status) },
         );
         replaceQueueEntry(updated);
       } catch (err) {
@@ -505,7 +487,7 @@ export function PharmacyCounterCockpit({
         setSavingTask(false);
       }
     },
-    [activeEntry, ensureDispenseTask, reasonNote, reasonType, replaceQueueEntry],
+    [activeEntry, ensureDispenseTask, reasonFields, replaceQueueEntry],
   );
 
   const selectQueueEntry = useCallback(
@@ -554,13 +536,7 @@ export function PharmacyCounterCockpit({
         }
         const updated = await apiClient.patch<QueueEntry>(
           `/pharmacy/dispense-tasks/${task.dispenseTaskId}/lines/${line.lineId}`,
-          {
-            action: backendActionFromLineAction(action),
-            reasonType:
-              action === 'accepted' || action === 'pending' ? undefined : reasonType,
-            reasonNote:
-              action === 'accepted' || action === 'pending' ? undefined : reasonNote,
-          },
+          { action: backendActionFromLineAction(action), ...reasonFields(action) },
         );
         replaceQueueEntry(updated);
       } catch (err) {
@@ -571,87 +547,87 @@ export function PharmacyCounterCockpit({
         setSavingTask(false);
       }
     },
-    [activeEntry, ensureDispenseTask, reasonNote, reasonType, replaceQueueEntry],
+    [activeEntry, ensureDispenseTask, reasonFields, replaceQueueEntry],
   );
+
+  const queueEmpty = !loadingQueue && queue.length === 0 && (Boolean(error) || !filter.status);
 
   return (
     <div className="space-y-3">
       <PageHeader
         title="Pharmacy Counter"
-        description="Queue to pick to bill in one workstation."
         actions={
-          <>
-            <Button size="sm" variant="outline" onClick={loadQueue} disabled={loadingQueue || savingTask}>
-              {loadingQueue ? <Spinner className="h-4 w-4" /> : <RefreshCw className="h-4 w-4" />}
-              Refresh
+          onOpenBilling ? (
+            <Button size="sm" onClick={() => onOpenBilling()}>
+              <Plus />
+              New bill
             </Button>
-            {onOpenBilling ? (
-              <Button size="sm" onClick={() => onOpenBilling()}>
-                <Plus className="h-4 w-4" />
-                New bill
-              </Button>
-            ) : null}
-          </>
+          ) : null
         }
       />
-      <section className="flex min-h-[620px] flex-col overflow-hidden rounded-lg border bg-card shadow-sm xl:min-h-[calc(100vh-196px)]">
+      <section className="flex min-h-[620px] flex-col overflow-hidden rounded-lg border border-border bg-card shadow-sm xl:min-h-[calc(100vh-196px)]">
         {error || stockError ? (
-          <div role="alert" className="border-b border-destructive-border bg-destructive-soft px-5 py-3 text-sm font-medium text-destructive-text">
+          <div role="alert" className="shrink-0 border-b border-destructive-border bg-destructive-soft px-4 py-2.5 text-sm font-medium text-destructive-text">
             {error || stockError}
           </div>
         ) : null}
 
-        <div className="grid min-h-0 flex-1 gap-2 bg-muted/70 p-2 xl:grid-cols-[280px_minmax(0,1fr)_290px] 2xl:grid-cols-[300px_minmax(0,1fr)_330px]">
-          <QueueColumn
-            queue={queue}
-            queueTotal={queueTotal}
-            filter={filter}
-            statusCounts={statusCounts}
-            onFilter={(option) => {
-              setFilter(option);
-              setQueuePages(1);
-            }}
-            activeId={activeId}
-            loading={loadingQueue}
-            onSelect={selectQueueEntry}
-            onBill={onOpenBilling ? (entry) => onOpenBilling(billingPrefill(entry)) : undefined}
-            onShowMore={queuePages * QUEUE_PAGE_SIZE < queueTotal ? () => setQueuePages((pages) => pages + 1) : undefined}
+        {queueEmpty ? (
+          <EmptyState
+            className="flex-1 justify-center"
+            icon={ClipboardCheck}
+            title={error ? 'Queue unavailable' : 'No prescriptions waiting'}
+            description={error ? undefined : 'Prescriptions saved in a visit appear here.'}
+            action={
+              <Button size="sm" variant="outline" onClick={loadQueue} disabled={savingTask}>
+                <RefreshCw />
+                Refresh
+              </Button>
+            }
           />
-
-          <ActiveDispenseColumn
-            activeEntry={activeEntry}
-            stockByLine={stockByLine}
-            loadingStock={loadingStock}
-            setLineAction={updateLineAction}
-            onInventoryLinked={onOpenBilling ? async () => setStockReloadKey((key) => key + 1) : undefined}
-            activeLifecycle={activeLifecycle}
-            reviewedLineCount={reviewedLineCount}
-            readyForBilling={readyForBilling}
-            reasonType={reasonType}
-            setReasonType={setReasonType}
-            reasonNote={reasonNote}
-            setReasonNote={setReasonNote}
-            onOpenBilling={onOpenBilling ? openActiveBilling : undefined}
-            onUpdateStatus={updateTaskStatus}
-            savingTask={savingTask}
-          />
-
-          <FulfillmentColumn
-            activeEntry={activeEntry}
-            pickLines={pickLines}
-            activeLifecycle={activeLifecycle}
-            exceptionCount={exceptionCount}
-            allLinesReviewed={allLinesReviewed}
-            onOpenPartnerSync={onOpenPartnerSync}
-            onOpenInventoryControl={onOpenInventoryControl}
-          />
-        </div>
+        ) : (
+          <div className="grid min-h-0 flex-1 divide-y divide-border xl:grid-cols-[300px_minmax(0,1fr)] xl:divide-x xl:divide-y-0">
+            <QueueList
+              queue={queue}
+              queueTotal={queueTotal}
+              filter={filter}
+              statusCounts={statusCounts}
+              onFilter={(option) => {
+                setFilter(option);
+                setQueuePages(1);
+              }}
+              activeId={activeId}
+              loading={loadingQueue}
+              refreshDisabled={loadingQueue || savingTask}
+              onRefresh={loadQueue}
+              onSelect={selectQueueEntry}
+              onBill={onOpenBilling ? (entry) => onOpenBilling(billingPrefill(entry)) : undefined}
+              onShowMore={queuePages * QUEUE_PAGE_SIZE < queueTotal ? () => setQueuePages((pages) => pages + 1) : undefined}
+            />
+            <DispenseReview
+              key={activeEntry?.prescriptionId ?? 'none'}
+              activeEntry={activeEntry}
+              stockByLine={stockByLine}
+              loadingStock={loadingStock}
+              setLineAction={updateLineAction}
+              onInventoryLinked={onOpenBilling ? async () => setStockReloadKey((key) => key + 1) : undefined}
+              activeLifecycle={activeLifecycle}
+              reviewedLineCount={reviewedLineCount}
+              readyForBilling={readyForBilling}
+              reason={reason}
+              updateReason={updateReason}
+              onOpenBilling={onOpenBilling ? openActiveBilling : undefined}
+              onUpdateStatus={updateTaskStatus}
+              savingTask={savingTask}
+            />
+          </div>
+        )}
       </section>
     </div>
   );
 }
 
-function QueueColumn({
+function QueueList({
   queue,
   queueTotal,
   filter,
@@ -659,6 +635,8 @@ function QueueColumn({
   onFilter,
   activeId,
   loading,
+  refreshDisabled,
+  onRefresh,
   onSelect,
   onBill,
   onShowMore,
@@ -670,76 +648,108 @@ function QueueColumn({
   onFilter: (filter: QueueFilter) => void;
   activeId: string | null;
   loading: boolean;
+  refreshDisabled: boolean;
+  onRefresh: () => void;
   onSelect: (entry: QueueEntry) => void;
   onBill?: (entry: QueueEntry) => void;
   onShowMore?: () => void;
 }) {
+  const countFor = (option: QueueFilter) =>
+    statusCounts
+      ? option.status
+        ? statusCounts[option.status]
+        : Object.values(statusCounts).reduce((sum, count) => sum + count, 0)
+      : null;
+  const allCount = countFor(QUEUE_FILTERS[0]);
+  const filters = QUEUE_FILTERS.filter(
+    (option) => !option.status || option.id === filter.id || countFor(option) !== 0,
+  );
+  const filtersNarrowTheList =
+    allCount === null ||
+    Boolean(filter.status) ||
+    filters.some((option) => option.status && (countFor(option) ?? 0) < allCount);
+
   return (
-    <div className="flex min-h-0 flex-col rounded-lg border border-border bg-white p-2.5 shadow-sm">
-      <PanelHeader
-        icon={<ClipboardCheck className="h-4 w-4" />}
-        title="Prescription queue"
-        detail={queueTotal > queue.length ? `Newest ${queue.length} of ${queueTotal}` : 'Newest first'}
-      />
-      <div className="mt-2 flex shrink-0 flex-wrap gap-1">
-        {QUEUE_FILTERS.map((option) => (
-          <button
-            key={option.id}
-            type="button"
-            aria-pressed={filter.id === option.id}
-            onClick={() => onFilter(option)}
-            className={`rounded-full border px-2 py-1 text-xs font-semibold transition ${
-              filter.id === option.id
-                ? 'border-primary bg-primary text-primary-foreground'
-                : 'border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground'
-            }`}
-          >
-            {option.label}
-            {statusCounts ? (
-              <>
-                {' '}
-                <span className="tabular-nums">
-                  {option.status ? statusCounts[option.status] : Object.values(statusCounts).reduce((sum, count) => sum + count, 0)}
-                </span>
-              </>
-            ) : null}
-          </button>
-        ))}
+    <div className="flex min-h-0 flex-col">
+      <div className="flex shrink-0 items-center justify-between gap-2 px-4 pt-3">
+        <h2 className="text-sm font-semibold text-foreground">
+          Queue
+          <span className="ml-1.5 font-normal tabular-nums text-muted-foreground">{queueTotal}</span>
+        </h2>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-8"
+          onClick={onRefresh}
+          disabled={refreshDisabled}
+          aria-label="Refresh"
+        >
+          {loading ? <Spinner className="h-4 w-4" /> : <RefreshCw />}
+        </Button>
       </div>
+
+      {filtersNarrowTheList ? (
+        <div className="flex shrink-0 flex-wrap gap-1 px-4 pt-2">
+          {filters.map((option) => {
+            const count = countFor(option);
+            return (
+              <button
+                key={option.id}
+                type="button"
+                aria-pressed={filter.id === option.id}
+                onClick={() => onFilter(option)}
+                className={cn(
+                  'rounded-full border border-border px-2 py-1 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+                  filter.id === option.id
+                    ? 'bg-muted text-foreground'
+                    : 'bg-card text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {option.label}
+                {count === null ? null : (
+                  <>
+                    {' '}
+                    <span className="tabular-nums">{count}</span>
+                  </>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+
       <div className="relative mt-2 min-h-40 flex-1">
-      <div className="overflow-y-auto pr-1 xl:absolute xl:inset-0">
-        {loading && queue.length === 0 ? (
-          <LoadingSkeleton label="Loading prescription queue…" />
-        ) : queue.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-border bg-muted p-3 text-sm text-muted-foreground">
-            {filter.status ? (
-              'No items match this filter.'
-            ) : (
-              <>
-                <p className="font-semibold text-foreground">No prescriptions waiting</p>
-                <p className="mt-1">Prescriptions saved in a visit appear here.</p>
-              </>
-            )}
-          </div>
-        ) : (
-          <ul aria-label="Prescription queue" className="space-y-1.5">
-            {queue.map((entry) => (
-              <QueueRow
-                key={entry.prescriptionId}
-                entry={entry}
-                active={activeId === entry.prescriptionId}
-                onSelect={() => onSelect(entry)}
-                onBill={onBill && isBillable(entry) ? () => onBill(entry) : undefined}
-              />
-            ))}
-          </ul>
-        )}
-        {onShowMore ? (
-          <Button size="sm" variant="outline" className="mt-2 w-full" onClick={onShowMore} disabled={loading}>
-            Show more
-          </Button>
-        ) : null}
-      </div>
+        <div className="max-h-72 overflow-y-auto px-2 pb-2 xl:absolute xl:inset-0 xl:max-h-none">
+          {loading && queue.length === 0 ? (
+            <LoadingSkeleton label="Loading prescription queue…" className="px-2" />
+          ) : queue.length === 0 ? (
+            <p className="px-2.5 py-2 text-sm text-muted-foreground">No items match this filter.</p>
+          ) : (
+            <ul aria-label="Prescription queue" className="space-y-0.5">
+              {queue.map((entry) => (
+                <QueueRow
+                  key={entry.prescriptionId}
+                  entry={entry}
+                  active={activeId === entry.prescriptionId}
+                  onSelect={() => onSelect(entry)}
+                  onBill={onBill && isBillable(entry) ? () => onBill(entry) : undefined}
+                />
+              ))}
+            </ul>
+          )}
+          {queueTotal > queue.length && queue.length > 0 ? (
+            <div className="flex items-center justify-between gap-2 px-2.5 pt-2">
+              <p className="text-xs text-muted-foreground">
+                Showing {queue.length} of {queueTotal}
+              </p>
+              {onShowMore ? (
+                <Button size="sm" variant="ghost" onClick={onShowMore} disabled={loading}>
+                  Show more
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
       </div>
     </div>
   );
@@ -757,29 +767,38 @@ function QueueRow({
   onBill?: () => void;
 }) {
   const nameId = `queue-patient-${entry.prescriptionId}`;
+  const isLate = entry.isOverTwoHours && entry.status !== 'dispensed';
+  const summary = [entry.patient.patientCode, plural(entry.medications.length, 'medicine')]
+    .filter(Boolean)
+    .join(' · ');
   return (
-    <li
-      className={`relative rounded-lg border transition ${
-        active ? 'border-primary bg-accent shadow-sm' : 'border-border bg-card hover:bg-accent'
-      }`}
-    >
-      <button type="button" onClick={onSelect} className="w-full px-2.5 py-2 text-left">
-        <p id={nameId} className="truncate text-sm font-semibold" title={entry.patient.name}>{entry.patient.name}</p>
-        <div className="mt-1 flex items-center justify-between gap-2">
-          <span className="min-w-0 truncate text-xs text-muted-foreground">{entry.patient.patientCode}</span>
+    <li className={cn('flex items-center gap-1 rounded-md transition-colors hover:bg-muted/60', active && 'bg-muted hover:bg-muted')}>
+      <button
+        type="button"
+        onClick={onSelect}
+        aria-current={active ? 'true' : undefined}
+        className="min-w-0 flex-1 rounded-md px-2.5 py-2 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      >
+        <span className="flex items-center justify-between gap-2">
+          <span id={nameId} className="truncate text-sm font-medium text-foreground" title={entry.patient.name}>
+            {entry.patient.name}
+          </span>
           <StatusBadge className="shrink-0" domain="dispense" status={entry.dispenseStatus ?? QUEUE_STATUS_AS_DISPENSE[entry.status]} />
-        </div>
-        <div className={`mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground ${onBill ? 'pr-20' : ''}`}>
-          <span>{plural(entry.medications.length, 'medicine')}</span>
-          <span>{formatAge(entry.pendingHours)}</span>
-          {entry.isOverTwoHours && entry.status !== 'dispensed' ? (
-            <span className="font-medium text-warning-text">over 2h</span>
+        </span>
+        <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+          {summary}
+          {entry.status !== 'dispensed' ? (
+            <>
+              {' · '}
+              <span className={isLate ? 'font-medium text-warning-text' : undefined}>
+                {formatAge(entry.pendingHours)}
+              </span>
+            </>
           ) : null}
-        </div>
+        </span>
       </button>
       {onBill ? (
-        <Button size="sm" variant="outline" className="absolute bottom-1.5 right-2" aria-describedby={nameId} onClick={onBill}>
-          <Receipt className="h-4 w-4" />
+        <Button size="sm" variant="ghost" className="mr-1 shrink-0" aria-describedby={nameId} onClick={onBill}>
           Bill
         </Button>
       ) : null}
@@ -787,7 +806,7 @@ function QueueRow({
   );
 }
 
-function ActiveDispenseColumn({
+function DispenseReview({
   activeEntry,
   stockByLine,
   loadingStock,
@@ -796,10 +815,8 @@ function ActiveDispenseColumn({
   activeLifecycle,
   reviewedLineCount,
   readyForBilling,
-  reasonType,
-  setReasonType,
-  reasonNote,
-  setReasonNote,
+  reason,
+  updateReason,
   onOpenBilling,
   onUpdateStatus,
   savingTask,
@@ -812,183 +829,180 @@ function ActiveDispenseColumn({
   activeLifecycle: DispenseLifecycle;
   reviewedLineCount: number;
   readyForBilling: boolean;
-  reasonType: string;
-  setReasonType: (value: string) => void;
-  reasonNote: string;
-  setReasonNote: (value: string) => void;
+  reason: ReasonDraft;
+  updateReason: (change: Partial<Pick<ReasonDraft, 'type' | 'note'>>) => void;
   onOpenBilling?: () => void;
   onUpdateStatus: (status: DispenseTaskStatus) => void;
   savingTask: boolean;
 }) {
-  return (
-    <div className="@container flex min-h-0 flex-col rounded-lg border border-border bg-white p-2.5 shadow-sm">
-      <PanelHeader
-        icon={<Pill className="h-4 w-4" />}
-        title="Active Dispense"
-        detail={
-          activeEntry
-            ? `${reviewedLineCount}/${activeEntry.medications.length} lines reviewed`
-            : 'Select a prescription'
-        }
-      />
+  const [noteOpen, setNoteOpen] = useState(false);
 
-      {activeEntry ? (
-        <div className="mt-2 flex flex-1 flex-col">
-          <div className="shrink-0 overflow-hidden rounded-lg border border-border bg-white">
-            <div className="bg-muted px-3 py-2">
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="min-w-0 truncate text-base font-semibold">
-                    {activeEntry.patient.name}
-                  </p>
-                  <StatusBadge domain="dispense" status={activeLifecycle} />
-                  {activeEntry.linkedInvoiceIds.length > 0 ? <Badge variant="info">Invoice</Badge> : null}
-                </div>
-                <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                  Dr. {activeEntry.doctor.name} · {displayClinicDateTime(activeEntry.createdAt)}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {loadingStock ? (
-            <div className="mt-2 flex h-32 shrink-0 items-center justify-center rounded-lg border border-dashed border-border bg-muted text-sm text-muted-foreground">
-              <Spinner className="mr-2 h-4 w-4 " />
-              Checking stock and batch expiry
-            </div>
-          ) : (
-            <fieldset disabled={savingTask || activeEntry?.dispensingEligible === false} className="contents">
-              <MedicationReviewTable
-                activeEntry={activeEntry}
-                stockByLine={stockByLine}
-                setLineAction={setLineAction}
-                onInventoryLinked={onInventoryLinked}
-              />
-            </fieldset>
-          )}
-
-          <div className="mt-2 shrink-0 rounded-lg border border-border bg-muted/80 p-2">
-            <div className="grid gap-2 @md:grid-cols-[max-content_minmax(0,1fr)]">
-              <NativeSelect
-                aria-label="Reason"
-                value={reasonType}
-                onChange={(event) => setReasonType(event.target.value)}
-              >
-                {reasonOptions.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </NativeSelect>
-              <Textarea
-                value={reasonNote}
-                onChange={(event) => setReasonNote(event.target.value)}
-                placeholder="Reason or pharmacist note"
-                aria-label="Pharmacist note"
-                className="min-h-9 resize-none rounded-md py-2"
-              />
-            </div>
-          </div>
-
-          <div className="mt-2 shrink-0 flex flex-col gap-2 rounded-lg border border-border bg-white p-2 shadow-sm @md:flex-row @md:items-center @md:justify-between">
-            <div className="text-sm">
-              <p className="font-semibold text-foreground">
-                {readyForBilling ? 'Ready for billing review' : 'Review every medicine before billing'}
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => onUpdateStatus('PAUSED')}
-                disabled={savingTask || activeEntry?.dispensingEligible === false}
-              >
-                Pause
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => onUpdateStatus('READY_TO_BILL')}
-                disabled={!readyForBilling || savingTask || activeEntry?.dispensingEligible === false}
-              >
-                Ready
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => onUpdateStatus('PAID')}
-                disabled={savingTask || activeEntry?.dispensingEligible === false}
-              >
-                Paid
-              </Button>
-              {onOpenBilling ? (
-                <Button size="sm" onClick={onOpenBilling} disabled={savingTask || !isBillable(activeEntry)}>
-                  <Receipt className="mr-2 h-4 w-4" />
-                  Bill
-                </Button>
-              ) : null}
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div className="mt-2 rounded-lg border border-dashed border-border bg-muted p-4 text-center">
-          <Pill className="mx-auto h-8 w-8 text-muted-foreground" />
-          <p className="mt-3 font-semibold text-foreground">No active prescription</p>
-          <p className="mt-1 text-sm text-muted-foreground">Select a prescription in the queue to review its medicines.</p>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function MedicationReviewTable({
-  activeEntry,
-  stockByLine,
-  setLineAction,
-  onInventoryLinked,
-}: {
-  activeEntry: QueueEntry;
-  stockByLine: Record<string, StockCheckItem>;
-  setLineAction: (medication: QueueMedication, action: LineAction) => void;
-  onInventoryLinked?: () => Promise<void>;
-}) {
-  return (
-    <div className="mt-2 shrink-0 overflow-hidden rounded-lg border border-border">
-      <div className="hidden grid-cols-[minmax(180px,1.25fr)_minmax(160px,1fr)_86px_136px_210px] gap-2 border-b border-border bg-muted px-2.5 py-2 text-xs font-semibold uppercase tracking-normal text-muted-foreground @3xl:grid">
-        <span>Prescription</span>
-        <span>Inventory Match</span>
-        <span>Stock</span>
-        <span>Shelf and batch</span>
-        <span>Action</span>
+  if (!activeEntry) {
+    return (
+      <div className="flex min-h-40 items-center justify-center p-6 text-sm text-muted-foreground">
+        Select a prescription
       </div>
-      <div className="divide-y divide-border">
-        {activeEntry.medications.map((medication, index) => {
-          const stock = stockByLine[medication.sourceLineKey ?? String(index)];
-          return (
-            <MedicationReviewRow
-              key={`${activeEntry.prescriptionId}-${medication.sourceLineKey || medication.lineId || index}`}
-              medication={medication}
-              stock={stock}
-              action={medication.action || 'pending'}
-              setAction={(action) => setLineAction(medication, action)}
-              inventoryLink={
-                onInventoryLinked && activeEntry.dispensingEligible !== false && stock ? (
-                  <PrescriptionInventoryLink
-                    prescriptionId={activeEntry.prescriptionId}
-                    lineIndex={index}
-                    linked={Boolean(stock.inventoryItemId)}
-                    prescriptionVersion={stock.prescriptionVersion}
-                    name={medication.drugName}
-                    suggestions={stock.suggestions}
-                    onLinked={onInventoryLinked}
-                  />
-                ) : null
-              }
+    );
+  }
+
+  const eligible = activeEntry.dispensingEligible !== false;
+  const nextStep = NEXT_STEPS[entryLifecycle(activeEntry)];
+  const statusMenu = eligible
+    ? STATUS_MENU.filter(
+        (item) =>
+          item.status !== activeEntry.dispenseStatus &&
+          (typeof nextStep !== 'object' || nextStep === null || item.status !== nextStep.status),
+      )
+    : [];
+  const hasNote = Boolean(reason.type || reason.note.trim());
+
+  return (
+    <section aria-labelledby="counter-review-patient" className="@container flex min-h-0 flex-col">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 pt-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 id="counter-review-patient" className="truncate text-base font-semibold text-foreground">{activeEntry.patient.name}</h2>
+            <StatusBadge domain="dispense" status={activeLifecycle} />
+            {activeEntry.linkedInvoiceIds.length > 0 ? <Badge variant="success">Invoiced</Badge> : null}
+          </div>
+          <div className="flex items-center gap-1">
+            <p className="truncate text-xs text-muted-foreground">
+              Dr. {activeEntry.doctor.name} · {displayClinicDateTime(activeEntry.createdAt)}
+            </p>
+            <PurchaseHelp label="Prescription details">
+              Prescription {activeEntry.prescriptionId}
+            </PurchaseHelp>
+          </div>
+        </div>
+        <p className="text-xs tabular-nums text-muted-foreground">
+          {reviewedLineCount}/{activeEntry.medications.length} lines reviewed
+        </p>
+      </div>
+
+      <div className="mt-1 flex-1">
+        <div className={cn('hidden gap-3 border-b border-border px-4 py-2 text-xs font-medium text-muted-foreground @2xl:grid', REVIEW_GRID)}>
+          <span>Medicine</span>
+          <span>Stock</span>
+          <span>Shelf</span>
+          <span>Review</span>
+        </div>
+        <fieldset disabled={savingTask || loadingStock || !eligible} className="contents">
+          <div className="divide-y divide-border">
+            {activeEntry.medications.map((medication, index) => {
+              const stock = stockByLine[medication.sourceLineKey ?? String(index)];
+              return (
+                <MedicationRow
+                  key={`${activeEntry.prescriptionId}-${medication.sourceLineKey || medication.lineId || index}`}
+                  medication={medication}
+                  stock={stock}
+                  loadingStock={loadingStock}
+                  action={medication.action || 'pending'}
+                  setAction={(action) => setLineAction(medication, action)}
+                  inventoryLink={
+                    onInventoryLinked && eligible && stock ? (
+                      <PrescriptionInventoryLink
+                        prescriptionId={activeEntry.prescriptionId}
+                        lineIndex={index}
+                        linked={Boolean(stock.inventoryItemId)}
+                        prescriptionVersion={stock.prescriptionVersion}
+                        name={medication.drugName}
+                        suggestions={stock.suggestions}
+                        onLinked={onInventoryLinked}
+                      />
+                    ) : null
+                  }
+                />
+              );
+            })}
+          </div>
+        </fieldset>
+      </div>
+
+      <div className="shrink-0 border-t border-border">
+        {noteOpen ? (
+          <div id="counter-reason" className="grid gap-2 px-4 pt-3 @md:grid-cols-[230px_minmax(0,1fr)]">
+            <NativeSelect
+              aria-label="Reason"
+              className="h-8 w-full"
+              value={reason.type ?? ''}
+              onChange={(event) => updateReason({ type: event.target.value || null })}
+            >
+              <option value="">Reason from action</option>
+              {reasonOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </NativeSelect>
+            <Input
+              value={reason.note}
+              onChange={(event) => updateReason({ note: event.target.value })}
+              placeholder="Note for a substitution, edit or pause"
+              aria-label="Pharmacist note"
+              className="h-8"
             />
-          );
-        })}
+          </div>
+        ) : null}
+        <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-muted-foreground"
+            aria-expanded={noteOpen}
+            aria-controls="counter-reason"
+            onClick={() => setNoteOpen((open) => !open)}
+          >
+            <MessageSquarePlus />
+            {hasNote ? 'Note added' : 'Add note'}
+          </Button>
+          <div className="flex items-center gap-1.5">
+            {statusMenu.length > 0 ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="size-8" aria-label="More status actions" disabled={savingTask}>
+                    <MoreHorizontal />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {statusMenu.map((item) => (
+                    <DropdownMenuItem key={item.status} onSelect={() => onUpdateStatus(item.status)}>
+                      {item.label}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : null}
+            {activeEntry.linkedInvoiceIds.length > 0 ? (
+              <Button asChild size="sm" variant="outline">
+                <Link href={`/dashboard/pharmacy/invoices?search=${encodeURIComponent(activeEntry.patient.name)}`}>
+                  Collect payment
+                </Link>
+              </Button>
+            ) : null}
+            {onOpenBilling ? (
+              <Button
+                size="sm"
+                variant={nextStep === 'bill' ? 'default' : 'outline'}
+                onClick={onOpenBilling}
+                disabled={savingTask || !isBillable(activeEntry)}
+              >
+                <Receipt />
+                Bill
+              </Button>
+            ) : null}
+            {typeof nextStep === 'object' && nextStep !== null ? (
+              <Button
+                size="sm"
+                onClick={() => onUpdateStatus(nextStep.status)}
+                disabled={savingTask || !eligible || (nextStep.status === 'READY_TO_BILL' && !readyForBilling)}
+              >
+                {nextStep.label}
+              </Button>
+            ) : null}
+          </div>
+        </div>
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -997,364 +1011,176 @@ function MedicationReviewTable({
  * Every checked prescription line MUST show its stock status and available quantity with unit.
  * Unlinked quantities MUST be unknown, not zero; no prescribed line may be hidden.
  */
-function MedicationReviewRow({
+function MedicationRow({
   medication,
   stock,
+  loadingStock,
   action,
   setAction,
   inventoryLink,
 }: {
   medication: QueueMedication;
   stock?: StockCheckItem;
+  loadingStock: boolean;
   action: LineAction;
   setAction: (action: LineAction) => void;
   inventoryLink: ReactNode;
 }) {
-  const recommendedBatch = stock?.batches?.[0] || null;
-  const requiredQuantity =
+  const batch = stock?.batches?.[0] || null;
+  const alternateBatches = Math.max(0, (stock?.batches?.length ?? 0) - 1);
+  const regimen = [
+    prescriptionAmount('dosageUnit', medication.dosage, medication.dosageUnit),
+    prescriptionLabel('frequency', medication.frequency),
+    prescriptionAmount('durationUnit', medication.duration, medication.durationUnit),
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  const stockName = stock && isLinked(stock) ? stockCheckLineName(stock) : null;
+  const showStockName = stockName !== null && stockName.toLowerCase() !== medication.drugName.toLowerCase();
+  const pick =
     medication.prescribedQuantity === null
       ? 'Review qty'
-      : Math.max(0, medication.prescribedQuantity - medication.dispensedQuantity);
+      : `Pick ${Math.max(0, medication.prescribedQuantity - medication.dispensedQuantity)}`;
   const warnings = stock ? stockWarnings(stock) : [];
+  const batchLine = batch
+    ? [
+        batch.batchNumber,
+        batch.expiryDate ? `exp ${displayUtcDate(batch.expiryDate)}` : null,
+        alternateBatches > 0 ? `+${alternateBatches} more` : null,
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : '';
+  const exception = EXCEPTION_ACTIONS.find((option) => option.value === action);
 
   return (
-    <div role="group" aria-label={medication.drugName} className="grid gap-2 bg-white px-2.5 py-2 transition hover:bg-accent @3xl:grid-cols-[minmax(180px,1.25fr)_minmax(160px,1fr)_86px_136px_210px] @3xl:items-center">
+    <div role="group" aria-label={medication.drugName} className={cn('grid gap-x-3 gap-y-2 px-4 py-2.5 @2xl:items-center', REVIEW_GRID)}>
       <div className="min-w-0">
-        <p className="truncate text-sm font-semibold text-foreground">{medication.drugName}</p>
-        <p className="truncate text-xs text-muted-foreground">
-          {[prescriptionAmount('dosageUnit', medication.dosage, medication.dosageUnit), prescriptionLabel('frequency', medication.frequency)]
-            .filter(Boolean)
-            .join(' · ') || 'Dose not specified'}
-        </p>
-        <p className="truncate text-xs text-muted-foreground">
-          {prescriptionAmount('durationUnit', medication.duration, medication.durationUnit) || 'Duration not set'}
-        </p>
-      </div>
-
-      <div className="min-w-0">
-        <p className="truncate text-sm font-semibold text-foreground">
-          {stock ? (isLinked(stock) ? stockCheckLineName(stock) : 'Not linked') : 'Checking stock'}
-        </p>
-        <p className="truncate text-xs text-muted-foreground">{availableText(stock)}</p>
-        {warnings.length > 0 ? (
-          <div className="mt-1 flex flex-wrap gap-1">
-            {warnings.slice(0, 2).map((warning) => (
-              <Badge key={warning} variant="warning" className="h-5 px-1.5">
-                <AlertTriangle className="h-3 w-3" />
-                {warning}
-              </Badge>
-            ))}
-          </div>
-        ) : null}
-        {inventoryLink}
-      </div>
-
-      <div className="flex flex-wrap gap-1 @3xl:block">
-        <StockBadge stock={stock} />
-        <Badge variant="neutral" className="mt-0 @3xl:mt-1">
-          Qty {requiredQuantity}
-        </Badge>
-      </div>
-
-      <div className="grid grid-cols-3 gap-1 rounded-md border border-border bg-muted p-1.5 @3xl:grid-cols-1">
-        <CompactFact value={recommendedBatch?.storageLocation || 'Unmapped'} />
-        <CompactFact value={recommendedBatch?.batchNumber || 'No batch'} />
-        <CompactFact value={recommendedBatch?.expiryDate ? displayUtcDate(recommendedBatch.expiryDate) : 'No expiry'} />
-      </div>
-
-      <div className="flex flex-wrap gap-1.5">
-        <ReviewButton active={action === 'accepted'} onClick={() => setAction('accepted')}>Accept</ReviewButton>
-        <ReviewButton active={action === 'substitute'} onClick={() => setAction('substitute')}>Sub</ReviewButton>
-        <ReviewButton active={action === 'edit'} onClick={() => setAction('edit')}>Edit</ReviewButton>
-        <ReviewButton active={action === 'unavailable'} onClick={() => setAction('unavailable')}>NA</ReviewButton>
-      </div>
-    </div>
-  );
-}
-
-function FulfillmentColumn({
-  activeEntry,
-  pickLines,
-  activeLifecycle,
-  exceptionCount,
-  allLinesReviewed,
-  onOpenPartnerSync,
-  onOpenInventoryControl,
-}: {
-  activeEntry: QueueEntry | null;
-  pickLines: Array<{
-    medication: QueueMedication;
-    stock?: StockCheckItem;
-    recommendedBatch: StockBatch | null;
-    requiredQuantity: number;
-    alternateCount: number;
-  }>;
-  activeLifecycle: DispenseLifecycle;
-  exceptionCount: number;
-  allLinesReviewed: boolean;
-  onOpenPartnerSync: () => void;
-  onOpenInventoryControl: () => void;
-}) {
-  const nextPick = pickLines.find((line) => line.recommendedBatch) || pickLines[0] || null;
-  return (
-    <div className="flex min-h-0 flex-col rounded-lg border border-border bg-white p-2.5 shadow-sm">
-      <PanelHeader
-        icon={<PackageCheck className="h-4 w-4" />}
-        title="Pick + Pay"
-        detail={activeEntry ? `${exceptionCount} exceptions` : 'No active pick'}
-      />
-
-      <div className="mt-2 shrink-0 overflow-hidden rounded-lg border bg-muted">
-        <div className="border-b px-3 py-2">
-          <p className="text-xs font-semibold text-muted-foreground">
-            Scan next
+        <p className="truncate text-sm font-medium text-foreground">{medication.drugName}</p>
+        <p className="truncate text-xs text-muted-foreground">{regimen || 'Dose not specified'}</p>
+        {showStockName ? (
+          <p className="truncate text-xs text-muted-foreground" title={stockName ?? undefined}>
+            Stock item <span>{stockName}</span>
           </p>
-          {nextPick ? (
+        ) : null}
+      </div>
+
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-y-1 text-xs text-muted-foreground">
+          {stock ? (
+            <StatusBadge domain="stock" status={stock.stockStatus} />
+          ) : (
+            <Badge variant="neutral">{loadingStock ? 'Checking' : 'Not checked'}</Badge>
+          )}
+          {inventoryLink}
+        </div>
+        <p className="mt-1 text-xs tabular-nums text-muted-foreground">
+          {pick}
+          {stock ? (
             <>
-              <p className="mt-1 truncate text-sm font-semibold">
-                {nextPick.medication.drugName}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Pick {nextPick.requiredQuantity} · {nextPick.recommendedBatch?.storageLocation || 'Unmapped shelf'}
-              </p>
+              {' · '}
+              <span>{availableText(stock)}</span>
             </>
-          ) : (
-            <p className="mt-1 text-sm font-semibold">No active item</p>
-          )}
-        </div>
-        <div className="grid grid-cols-3 divide-x text-center">
-          <ScanFact label="Batch" value={nextPick?.recommendedBatch?.batchNumber || '--'} />
-          <ScanFact label="Expiry" value={nextPick?.recommendedBatch?.expiryDate ? displayUtcDate(nextPick.recommendedBatch.expiryDate) : '--'} />
-          <ScanFact label="Stock" value={nextPick?.stock ? stockQuantity(nextPick.stock) : '--'} />
-        </div>
-      </div>
-
-      <div className="mt-2 grid shrink-0 gap-1.5 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
-        <ChecklistItem
-          icon={<ShieldCheck className="h-4 w-4" />}
-          title="Validate"
-          detail="Allergy and dose"
-          done={Boolean(activeEntry)}
-        />
-        <ChecklistItem
-          icon={<MapPin className="h-4 w-4" />}
-          title="Pick earliest-expiry batch"
-          detail="Use an unexpired batch with the nearest expiry date"
-          done={pickLines.some((line) => Boolean(line.recommendedBatch))}
-        />
-        <ChecklistItem
-          icon={<Barcode className="h-4 w-4" />}
-          title="Barcode"
-          detail="Confirm batch"
-          done={allLinesReviewed}
-        />
-        <ChecklistItem
-          icon={<Receipt className="h-4 w-4" />}
-          title="GST bill"
-          detail="Invoice ready"
-          done={activeLifecycle === 'Ready to Bill' || activeLifecycle === 'Paid' || activeLifecycle === 'Dispensed'}
-        />
-        <ChecklistItem
-          icon={<ShoppingCart className="h-4 w-4" />}
-          title="Payment"
-          detail="Capture"
-          done={activeLifecycle === 'Paid' || activeLifecycle === 'Dispensed'}
-        />
-        <ChecklistItem
-          icon={<Printer className="h-4 w-4" />}
-          title="Dispense"
-          detail="Commit"
-          done={activeLifecycle === 'Dispensed'}
-        />
-      </div>
-
-      <div className="mt-2 shrink-0 overflow-hidden rounded-lg border border-border shadow-sm">
-        <div className="border-b border-border bg-muted px-2.5 py-2">
-          <p className="text-sm font-semibold text-foreground">Pick Assist</p>
-          <p className="text-xs text-muted-foreground">
-            Shelf, batch, and split-stock view.
-          </p>
-        </div>
-        <div className="divide-y divide-border">
-          {pickLines.length === 0 ? (
-            <div className="p-3 text-sm text-muted-foreground">
-              Select a prescription to show pick instructions.
-            </div>
-          ) : (
-            pickLines.map((line) => (
-              <div key={line.medication.drugName} className="px-2.5 py-2 transition hover:bg-accent">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-foreground">
-                      {line.medication.drugName}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Pick {line.requiredQuantity} · {availableText(line.stock)}
-                    </p>
-                  </div>
-                  <Badge variant="neutral" className="shrink-0">
-                    {line.recommendedBatch?.batchNumber || 'No batch'}
-                  </Badge>
-                </div>
-                <div className="mt-2 grid grid-cols-2 gap-1.5 text-xs">
-                  <MiniFact
-                    label="Location"
-                    value={line.recommendedBatch?.storageLocation || 'Unmapped'}
-                  />
-                  <MiniFact
-                    label="Expiry"
-                    value={line.recommendedBatch?.expiryDate ? displayUtcDate(line.recommendedBatch.expiryDate) : 'No expiry'}
-                  />
-                </div>
-                {line.alternateCount > 0 ? (
-                  <p className="mt-2 text-xs font-medium text-info-text">
-                    {line.alternateCount} alternate batch{line.alternateCount === 1 ? '' : 'es'} available if shelf stock is short.
-                  </p>
-                ) : null}
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-
-      <div className="mt-auto grid shrink-0 gap-1.5 pt-2">
-        {activeEntry && activeEntry.linkedInvoiceIds.length > 0 ? (
-          <Button asChild size="sm">
-            <Link href={`/dashboard/pharmacy/invoices?search=${encodeURIComponent(activeEntry.patient.name)}`}>
-              <FileText className="mr-2 h-4 w-4" />
-              Collect payment
-            </Link>
-          </Button>
+          ) : null}
+        </p>
+        {warnings.length > 0 ? (
+          <p className="truncate text-xs font-medium text-warning-text">{warnings.join(' · ')}</p>
         ) : null}
-        <Button size="sm" variant="outline" onClick={onOpenPartnerSync}>
-          <ShoppingCart className="mr-2 h-4 w-4" />
-          Daily close
+      </div>
+
+      <div className="min-w-0">
+        {batch ? (
+          <>
+            <p className="truncate text-sm text-foreground">{batch.storageLocation || 'Unmapped shelf'}</p>
+            {batchLine ? <p className="text-xs text-muted-foreground">{batchLine}</p> : null}
+          </>
+        ) : stock ? (
+          <p className="text-xs text-muted-foreground">No batch</p>
+        ) : null}
+      </div>
+
+      <div className="flex items-center gap-1.5">
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => setAction('accepted')}
+          className={cn(
+            action === 'accepted' &&
+              'border-success-border bg-success-soft text-success-text hover:bg-success-soft hover:text-success-text',
+          )}
+        >
+          {action === 'accepted' ? <Check /> : null}
+          {action === 'accepted' ? 'Accepted' : 'Accept'}
         </Button>
-        <Button size="sm" variant="outline" onClick={onOpenInventoryControl}>
-          <MapPin className="mr-2 h-4 w-4" />
-          Shelf locations
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              size="sm"
+              variant={exception ? 'outline' : 'ghost'}
+              aria-label={
+                exception
+                  ? `${exception.label}. Change review for ${medication.drugName}`
+                  : `Other review options for ${medication.drugName}`
+              }
+              className={cn(
+                exception
+                  ? 'border-warning-border bg-warning-soft text-warning-text hover:bg-warning-soft hover:text-warning-text'
+                  : 'px-2',
+              )}
+            >
+              {exception ? exception.label : <MoreHorizontal />}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuRadioGroup value={action} onValueChange={(value: string) => setAction(value as LineAction)}>
+              {EXCEPTION_ACTIONS.map((option) => (
+                <DropdownMenuRadioItem key={option.value} value={option.value}>
+                  {option.label}
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
   );
 }
 
-function PanelHeader({
-  icon,
-  title,
-  detail,
-}: {
-  icon: ReactNode;
-  title: string;
-  detail: string;
-}) {
-  return (
-    <div className="flex items-start justify-between gap-3">
-      <div className="flex items-center gap-2">
-        <span className="flex h-7 w-7 items-center justify-center rounded-md bg-muted text-foreground ring-1 ring-border">
-          {icon}
-        </span>
-        <div>
-          <p className="text-sm font-semibold text-foreground">{title}</p>
-          <p className="text-xs text-muted-foreground">{detail}</p>
-        </div>
-      </div>
-    </div>
-  );
-}
+const REVIEW_GRID = '@2xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1.25fr)_minmax(0,1fr)_190px]';
 
-function StockBadge({ stock }: { stock?: StockCheckItem }) {
-  if (!stock) return <Badge variant="neutral">Checking</Badge>;
-  return <StatusBadge domain="stock" status={stock.stockStatus} />;
-}
+type NextStep = { label: string; status: DispenseTaskStatus } | 'bill' | null;
+
+const READY_STEP: NextStep = { label: 'Ready to bill', status: 'READY_TO_BILL' };
+
+const NEXT_STEPS: Record<DispenseLifecycle, NextStep> = {
+  Queued: READY_STEP,
+  'In Review': READY_STEP,
+  'Partially Filled': READY_STEP,
+  Paused: READY_STEP,
+  'Ready to Bill': 'bill',
+  Paid: null,
+  Dispensed: null,
+  Cancelled: null,
+};
+
+const STATUS_MENU: Array<{ label: string; status: DispenseTaskStatus }> = [
+  { label: 'Pause', status: 'PAUSED' },
+  { label: 'Mark paid', status: 'PAID' },
+];
+
+const EXCEPTION_ACTIONS: Array<{ value: LineAction; label: string }> = [
+  { value: 'substitute', label: 'Substitute' },
+  { value: 'edit', label: 'Edit' },
+  { value: 'unavailable', label: 'Unavailable' },
+];
 
 const isLinked = (stock: StockCheckItem) => stock.stockStatus !== 'UNMATCHED';
 
 const stockQuantity = (stock: StockCheckItem) =>
   isLinked(stock) ? `${stock.totalNonExpiredStock}${stock.unit ? ` ${stock.unit.toLowerCase()}` : ''}` : '—';
 
-const availableText = (stock?: StockCheckItem) =>
-  !stock ? 'Checking stock' : isLinked(stock) ? `${stockQuantity(stock)} available` : stockQuantity(stock);
-
-function MiniFact({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="min-w-0">
-      <p className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">
-        {label}
-      </p>
-      <p className="truncate text-sm font-medium text-foreground">{value}</p>
-    </div>
-  );
-}
-
-function CompactFact({ value }: { value: string | number }) {
-  return (
-    <p className="truncate text-xs font-semibold text-foreground">{value}</p>
-  );
-}
-
-function ScanFact({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="px-2 py-2">
-      <p className="text-xs font-semibold text-muted-foreground">
-        {label}
-      </p>
-      <p className="whitespace-normal text-xs font-semibold text-foreground">{value}</p>
-    </div>
-  );
-}
-
-function ReviewButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-full border px-2 py-1 text-xs font-semibold transition ${
-        active
-          ? 'border-primary bg-primary text-primary-foreground'
-          : 'border-border bg-card text-foreground hover:bg-accent'
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
-function ChecklistItem({
-  icon,
-  title,
-  detail,
-  done,
-}: {
-  icon: ReactNode;
-  title: string;
-  detail: string;
-  done: boolean;
-}) {
-  return (
-    <div className="flex gap-2 rounded-md border border-border bg-white p-1.5 shadow-sm">
-      <div
-        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${
-          done ? 'bg-success-soft text-success-text' : 'bg-muted text-muted-foreground'
-        }`}
-      >
-        {done ? <CheckCircle2 className="h-4 w-4" /> : icon}
-      </div>
-      <div>
-        <p className="text-xs font-semibold text-foreground">{title}</p>
-        <p className="text-xs leading-4 text-muted-foreground xl:hidden 2xl:block">{detail}</p>
-      </div>
-    </div>
-  );
-}
+const availableText = (stock: StockCheckItem) =>
+  isLinked(stock) ? `${stockQuantity(stock)} available` : stockQuantity(stock);
 
 function stockWarnings(stock: StockCheckItem) {
   const warnings: string[] = [];
@@ -1378,24 +1204,16 @@ function hasBillableReview(entry: QueueEntry): boolean {
   );
 }
 
-function deriveLifecycle(
-  entry: QueueEntry,
-  isSelected: boolean,
-  allLinesReviewed: boolean,
-): DispenseLifecycle {
-  const persisted = lifecycleFromTaskStatus(entry.dispenseStatus);
-  if (persisted) return persisted;
-  if (entry.status === 'dispensed') return 'Dispensed';
-  if (entry.status === 'partial') return 'Partially Filled';
-  if (entry.status === 'expired') return 'Paused';
-  if (allLinesReviewed) return 'Ready to Bill';
-  return isSelected ? 'In Review' : 'Queued';
+function entryLifecycle(entry: QueueEntry): DispenseLifecycle {
+  return lifecycleFromTaskStatus(entry.dispenseStatus ?? QUEUE_STATUS_AS_DISPENSE[entry.status]);
 }
 
-function lifecycleFromTaskStatus(
-  status?: DispenseTaskStatus,
-): DispenseLifecycle | null {
-  if (!status) return null;
+function deriveLifecycle(entry: QueueEntry, readyForBilling: boolean): DispenseLifecycle {
+  if (entry.dispenseStatus || entry.status !== 'pending') return entryLifecycle(entry);
+  return readyForBilling ? 'Ready to Bill' : 'In Review';
+}
+
+function lifecycleFromTaskStatus(status: DispenseTaskStatus): DispenseLifecycle {
   const map: Record<DispenseTaskStatus, DispenseLifecycle> = {
     QUEUED: 'Queued',
     IN_REVIEW: 'In Review',
@@ -1421,6 +1239,6 @@ function backendActionFromLineAction(action: LineAction) {
 }
 
 function formatAge(hours: number) {
-  if (hours < 1) return `${Math.max(1, Math.round(hours * 60))}m pending`;
-  return `${hours.toFixed(1)}h pending`;
+  if (hours < 1) return `${Math.max(1, Math.round(hours * 60))}m`;
+  return `${hours.toFixed(1)}h`;
 }
