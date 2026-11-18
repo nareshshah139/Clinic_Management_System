@@ -341,27 +341,27 @@ export function PartnerDailySync() {
         </Alert>
       )}
 
-      <div className="grid gap-4 @2xl:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-2">
+      <div className="grid grid-cols-2 gap-3 @2xl:grid-cols-4">
+        <Card className="gap-0 py-4">
+          <CardHeader>
             <CardDescription>Partners</CardDescription>
             <CardTitle>{summary?.partnerCount ?? 0}</CardTitle>
           </CardHeader>
         </Card>
-        <Card>
-          <CardHeader className="pb-2">
+        <Card className="gap-0 py-4">
+          <CardHeader>
             <CardDescription>Submitted Today</CardDescription>
             <CardTitle>{summary?.submittedCount ?? 0}</CardTitle>
           </CardHeader>
         </Card>
-        <Card>
-          <CardHeader className="pb-2">
+        <Card className="gap-0 py-4">
+          <CardHeader>
             <CardDescription>Missing</CardDescription>
             <CardTitle>{summary?.missingCount ?? 0}</CardTitle>
           </CardHeader>
         </Card>
-        <Card>
-          <CardHeader className="pb-2">
+        <Card className="gap-0 py-4">
+          <CardHeader>
             <CardDescription>Net Sales</CardDescription>
             <CardTitle>{money(summary?.netAmount)}</CardTitle>
           </CardHeader>

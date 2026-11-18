@@ -302,7 +302,7 @@ export function PharmacyInvoiceList() {
       {confirmDialog}
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
+        <Card className="gap-0 py-0">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
@@ -313,7 +313,7 @@ export function PharmacyInvoiceList() {
           </CardContent>
         </Card>
         
-        <Card>
+        <Card className="gap-0 py-0">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
@@ -324,7 +324,7 @@ export function PharmacyInvoiceList() {
           </CardContent>
         </Card>
         
-        <Card>
+        <Card className="gap-0 py-0">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
@@ -335,7 +335,7 @@ export function PharmacyInvoiceList() {
           </CardContent>
         </Card>
         
-        <Card>
+        <Card className="gap-0 py-0">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
@@ -348,7 +348,7 @@ export function PharmacyInvoiceList() {
       </div>
 
       {/* Filters */}
-      <Card>
+      <Card className="gap-0 py-0">
         <CardContent className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
             <div>

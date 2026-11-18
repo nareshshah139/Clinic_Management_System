@@ -436,7 +436,7 @@ function DoctorDayCalendarForSelection({
 
   if (loading && schedule.length === 0) {
     return (
-      <Card>
+      <Card className="gap-0 py-0">
         <CardContent className="p-8 text-center">
           <div className="text-muted-foreground">Loading schedule...</div>
         </CardContent>
@@ -446,7 +446,7 @@ function DoctorDayCalendarForSelection({
 
   if (error && schedule.length === 0) {
     return (
-      <Card>
+      <Card className="gap-0 py-0">
         <CardContent className="p-8 text-center">
           <div className="text-destructive-text mb-4">Failed to load schedule</div>
           <Button onClick={() => void fetchSchedule()} variant="outline">

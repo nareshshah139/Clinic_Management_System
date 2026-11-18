@@ -230,7 +230,7 @@ export function PharmacyPackageCreator({ onCreated, onCancel }: PharmacyPackageC
 
       {/* Items table */}
       {items.length > 0 && (
-        <Card>
+        <Card className="gap-0 py-0">
           <CardContent className="p-3 space-y-2">
             {items.map((it, idx) => (
               <div key={idx} className="grid grid-cols-1 md:grid-cols-5 gap-2 items-center">

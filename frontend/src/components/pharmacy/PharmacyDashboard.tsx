@@ -171,7 +171,7 @@ export function PharmacyDashboard() {
 
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
+        <Card className="gap-0 py-0">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
@@ -193,7 +193,7 @@ export function PharmacyDashboard() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="gap-0 py-0">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
@@ -211,7 +211,7 @@ export function PharmacyDashboard() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="gap-0 py-0">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
@@ -229,7 +229,7 @@ export function PharmacyDashboard() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="gap-0 py-0">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>

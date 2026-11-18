@@ -200,7 +200,7 @@ export default function RoomsManagement() {
     <div className="space-y-6">
       {/* Statistics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
+        <Card className="gap-0 py-0">
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
               <MapPin className="h-5 w-5 text-info" />
@@ -212,7 +212,7 @@ export default function RoomsManagement() {
           </CardContent>
         </Card>
         
-        <Card>
+        <Card className="gap-0 py-0">
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
               <RoomTypeIcon type="Consultation" className="size-5 text-muted-foreground" />
@@ -224,7 +224,7 @@ export default function RoomsManagement() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="gap-0 py-0">
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
               <RoomTypeIcon type="Procedure" className="size-5 text-muted-foreground" />
@@ -236,7 +236,7 @@ export default function RoomsManagement() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="gap-0 py-0">
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
               <RoomTypeIcon type="Telemed" className="size-5 text-muted-foreground" />

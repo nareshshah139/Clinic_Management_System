@@ -308,7 +308,7 @@ export default function RoomCalendar() {
 
       {/* Room Statistics */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
+        <Card className="gap-0 py-0">
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
               <div>
@@ -318,7 +318,7 @@ export default function RoomCalendar() {
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="gap-0 py-0">
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
               <div>
@@ -333,7 +333,7 @@ export default function RoomCalendar() {
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="gap-0 py-0">
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
               <div>
@@ -348,7 +348,7 @@ export default function RoomCalendar() {
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="gap-0 py-0">
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
               <div>
@@ -600,7 +600,7 @@ export default function RoomCalendar() {
       )}
 
       {/* Legend */}
-      <Card>
+      <Card className="gap-0 py-0">
         <CardContent className="p-4">
           <h3 className="font-semibold mb-3">Legend</h3>
           <div className="flex flex-wrap gap-4">

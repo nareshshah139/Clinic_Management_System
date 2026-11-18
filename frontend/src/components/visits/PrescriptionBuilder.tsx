@@ -5635,7 +5635,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
             {customSections.length > 0 && (
                 <div className="mt-3 space-y-3">
                   {customSections.map((s) => (
-                    <Card key={s.id}>
+                    <Card key={s.id} className="gap-0 py-0">
                       <CardContent className="p-3 space-y-2">
                         <div className="grid grid-cols-1 md:grid-cols-6 gap-2 items-end">
                           <div className="md:col-span-2">

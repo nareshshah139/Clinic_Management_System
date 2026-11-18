@@ -218,7 +218,8 @@ function PharmacyDeskPanel({
   onOpenDrugs: () => void;
 }) {
   return (
-    <div className="space-y-3">
+    <div className="space-y-8">
+      <div className="space-y-3">
       <PageHeader
         title="Pharmacy Desk"
         description="Queue, review, pick, bill, pay, dispense."
@@ -274,6 +275,7 @@ function PharmacyDeskPanel({
       ) : (
         <AgenticPharmacyLauncher onOpen={onOpenAgent} />
       )}
+      </div>
 
       <PartnerDailySync />
       <PackagesPanel />

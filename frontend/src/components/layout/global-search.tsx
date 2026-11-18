@@ -237,7 +237,7 @@ export function GlobalSearch() {
       )}
 
       {open && results.length === 0 && query.length >= 2 && !searching && (
-        <Card className="absolute top-full left-0 right-0 mt-1 z-50 shadow-sm">
+        <Card className="gap-0 py-0 absolute top-full left-0 right-0 mt-1 z-50 shadow-sm">
           <CardContent className="p-4 text-center" role="status">
             <p className="text-sm text-muted-foreground">No results found for &quot;{query}&quot;</p>
             <p className="text-xs text-muted-foreground mt-1">Try searching for patient names, phone numbers, or doctor names</p>

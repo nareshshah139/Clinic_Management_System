@@ -300,7 +300,7 @@ export function PackageBrowser({ onSelectPackage, reloadKey }: PackageBrowserPro
                   {selectedPackage.items
                     .sort((a, b) => a.sequence - b.sequence)
                     .map((item, index) => (
-                    <Card key={item.id}>
+                    <Card key={item.id} className="gap-0 py-0">
                       <CardContent className="p-3">
                         <div className="flex justify-between items-start">
                           <div className="flex-1">

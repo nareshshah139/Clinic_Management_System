@@ -414,7 +414,7 @@ export default function ReportsPage() {
       <div className="space-y-6">
         {/* Main Revenue Metrics */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card>
+          <Card className="gap-0 py-0">
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
@@ -426,7 +426,7 @@ export default function ReportsPage() {
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="gap-0 py-0">
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
@@ -438,7 +438,7 @@ export default function ReportsPage() {
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="gap-0 py-0">
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
@@ -450,7 +450,7 @@ export default function ReportsPage() {
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="gap-0 py-0">
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
@@ -531,7 +531,7 @@ export default function ReportsPage() {
       <div className="space-y-6">
         {/* Main Patient Metrics */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card>
+          <Card className="gap-0 py-0">
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
@@ -543,7 +543,7 @@ export default function ReportsPage() {
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="gap-0 py-0">
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
@@ -555,7 +555,7 @@ export default function ReportsPage() {
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="gap-0 py-0">
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
@@ -567,7 +567,7 @@ export default function ReportsPage() {
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="gap-0 py-0">
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
@@ -645,7 +645,7 @@ export default function ReportsPage() {
       <div className="space-y-6">
         {/* Main Doctor Metrics */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card>
+          <Card className="gap-0 py-0">
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
@@ -657,7 +657,7 @@ export default function ReportsPage() {
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="gap-0 py-0">
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
@@ -669,7 +669,7 @@ export default function ReportsPage() {
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="gap-0 py-0">
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
@@ -739,7 +739,7 @@ export default function ReportsPage() {
       <div className="space-y-6">
         {/* Main Appointment Metrics */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card>
+          <Card className="gap-0 py-0">
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
@@ -751,7 +751,7 @@ export default function ReportsPage() {
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="gap-0 py-0">
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
@@ -766,7 +766,7 @@ export default function ReportsPage() {
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="gap-0 py-0">
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
@@ -781,7 +781,7 @@ export default function ReportsPage() {
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="gap-0 py-0">
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
@@ -860,7 +860,7 @@ export default function ReportsPage() {
       <div className="space-y-6">
         {/* Main Inventory Metrics */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card>
+          <Card className="gap-0 py-0">
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
@@ -872,7 +872,7 @@ export default function ReportsPage() {
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="gap-0 py-0">
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
@@ -884,7 +884,7 @@ export default function ReportsPage() {
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="gap-0 py-0">
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
@@ -897,7 +897,7 @@ export default function ReportsPage() {
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="gap-0 py-0">
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
@@ -978,7 +978,7 @@ export default function ReportsPage() {
       <div className="space-y-6">
         {/* Main Payment Metrics */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card>
+          <Card className="gap-0 py-0">
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
@@ -990,7 +990,7 @@ export default function ReportsPage() {
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="gap-0 py-0">
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
@@ -1002,7 +1002,7 @@ export default function ReportsPage() {
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="gap-0 py-0">
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
@@ -1017,7 +1017,7 @@ export default function ReportsPage() {
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="gap-0 py-0">
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
