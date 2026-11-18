@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useMemo, type MouseEvent } from 'react';
+import { Fragment, useCallback, useMemo, type MouseEvent } from 'react';
 import { MessageCircle, Percent, Plus, Printer } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { displayCalendarDate } from '@/lib/date-display';
@@ -41,7 +41,6 @@ import {
   requestParams,
   salesTabHref,
   whatsappAction,
-  type PaymentMode,
   type Register,
   type SalesQuery,
   type SalesRegisterResponse,
@@ -50,13 +49,10 @@ import {
   type SortKey,
 } from './sales-register-model';
 
-const MODE_BADGE: Partial<Record<PaymentMode, string>> = {
-  CASH: 'border-success-border bg-success-soft text-success-text',
-  UPI: 'border-highlight-border bg-highlight-soft text-highlight-text',
-  CARD: 'border-info-border bg-info-soft text-info-text',
-  CREDIT: 'border-destructive-border bg-destructive-soft text-destructive-text',
-};
-const badgeText = 'whitespace-nowrap px-1.5 py-0.5 text-xs font-semibold';
+const badgeText = 'whitespace-nowrap px-1.5 py-0 text-xs font-medium';
+const quietAction = 'text-muted-foreground group-hover:text-foreground group-focus-within:text-foreground';
+
+const compactDay = (day: string, today: string) => (day.endsWith(` ${today.slice(0, 4)}`) ? day.slice(0, -5) : day);
 
 async function printRow(row: SalesRegisterRow, clinic: ClinicIdentity | null) {
   try {
@@ -74,7 +70,7 @@ async function printRow(row: SalesRegisterRow, clinic: ClinicIdentity | null) {
 function PaymentCell({ row, register }: { row: SalesRegisterRow; register: Register }) {
   if (!row.paymentModes.length && row.due <= 0 && row.refundDue <= 0) return <span aria-label="None">—</span>;
   return (
-    <div className="flex flex-wrap items-center gap-1">
+    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
       {row.due > 0 && (
         <Badge variant="destructive" className={cn(badgeText, 'bg-destructive-text text-white')}>
           Due {formatRupees(row.due)}
@@ -90,11 +86,16 @@ function PaymentCell({ row, register }: { row: SalesRegisterRow; register: Regis
           Refunded {formatRupees(row.refunded)}
         </Badge>
       )}
-      {row.paymentModes.map((mode) => (
-        <Badge key={mode} variant="outline" className={cn(badgeText, (register === 'returns' && mode === 'CREDIT' ? undefined : MODE_BADGE[mode]) ?? 'border-border bg-muted text-foreground')}>
-          {paymentBadgeLabel(register, mode)}
-        </Badge>
-      ))}
+      {row.paymentModes.length > 0 && (
+        <span className="whitespace-nowrap">
+          {row.paymentModes.map((mode, index) => (
+            <Fragment key={mode}>
+              {index > 0 && ' · '}
+              <span>{paymentBadgeLabel(register, mode)}</span>
+            </Fragment>
+          ))}
+        </span>
+      )}
     </div>
   );
 }
@@ -149,13 +150,13 @@ export function SalesRegister({
       'whitespace-nowrap rounded-sm text-left font-semibold text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50';
     const stop = (event: MouseEvent) => event.stopPropagation();
     return (
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
         <Link href={openHref(row, returnTo)} onClick={stop} aria-label={`Open ${billName(row)}`} className={linkClass}>{label}</Link>
         {row.state === 'DRAFT' && row.reservedNo && (
-          <span className="text-xs text-muted-foreground">{row.reservedNo} not final</span>
+          <span className="order-last basis-full text-xs text-muted-foreground">{row.reservedNo} not final</span>
         )}
-        {row.source === 'COUNTER_SALE' && <Badge variant="info" className={badgeText}>Counter sale</Badge>}
-        {row.revisedAt && <Badge variant="info" className={badgeText}>Revised</Badge>}
+        {row.source === 'COUNTER_SALE' && <Badge variant="neutral" className={badgeText}>Counter sale</Badge>}
+        {row.revisedAt && <Badge variant="neutral" className={badgeText}>Revised</Badge>}
         {row.state === 'CANCELLED' && <Badge variant="danger" className={badgeText}>Cancelled</Badge>}
       </div>
     );
@@ -174,34 +175,35 @@ export function SalesRegister({
             hint="Edit discount"
             reason={'reason' in editDiscount ? editDiscount.reason : null}
             onClick={'href' in editDiscount ? () => router.push(editDiscount.href) : undefined}
+            className={quietAction}
           />
         )}
-        <RowAction icon={Printer} label={`Print ${name}`} hint="Print" reason={printBlockedReason(row)} onClick={() => void printRow(row, clinic)} />
+        <RowAction icon={Printer} label={`Print ${name}`} hint="Print" reason={printBlockedReason(row)} onClick={() => void printRow(row, clinic)} className={quietAction} />
         <RowAction
           icon={MessageCircle}
           label={`Send ${name} on WhatsApp`}
           hint="Send on WhatsApp"
           reason={'reason' in whatsapp ? whatsapp.reason : null}
           href={'href' in whatsapp ? whatsapp.href : undefined}
-          className="text-success-text"
+          className="text-muted-foreground group-hover:text-success-text group-focus-within:text-success-text"
         />
       </div>
     );
   };
 
   const columns: RegisterColumn<SalesRegisterRow, SortKey>[] = [
-    { key: 'billNo', label: 'Bill No', sort: 'billNo', pinned: true, className: 'w-[1%] whitespace-normal', cell: billCell },
+    { key: 'billNo', label: 'Bill No', sort: 'billNo', pinned: true, className: 'whitespace-normal', cell: billCell },
     ...(register === 'returns'
       ? [{ key: 'against', label: 'Against bill', className: 'w-[1%]', cell: (row: SalesRegisterRow) => (row.linkedBillNos.length ? row.linkedBillNos.map((no) => <div key={no}>{no}</div>) : '—') }]
       : []),
     { key: 'entryAt', label: 'Entry Date', sort: 'entryAt', className: 'w-[1%]', cell: (row) => <RegisterDateTime value={row.entryAt} today={today} /> },
-    { key: 'billDate', label: 'Bill Date', sort: 'billDate', className: 'w-[1%]', cell: (row) => displayCalendarDate(row.billDate) },
+    { key: 'billDate', label: 'Bill Date', sort: 'billDate', className: 'w-[1%]', cell: (row) => compactDay(displayCalendarDate(row.billDate), today) },
     { key: 'entryBy', label: 'Entry By', sort: 'entryBy', className: 'w-[1%]', cell: (row) => (row.entryBy ? <span title={row.entryBy.name}>{shortName(row.entryBy.name)}</span> : '—') },
     {
       key: 'patient',
       label: 'Patient',
       sort: 'patient',
-      className: 'min-w-[6.5rem] whitespace-normal text-base font-medium leading-snug hyphens-auto [overflow-wrap:anywhere]',
+      className: 'min-w-[6.5rem] whitespace-normal font-medium leading-snug hyphens-auto [overflow-wrap:anywhere]',
       cell: (row) => row.patientName ?? '—',
     },
     { key: 'mobile', label: 'Mobile', sort: 'mobile', className: 'w-[1%]', cell: (row) => displayMobile(row.mobile) },
@@ -213,7 +215,7 @@ export function SalesRegister({
       className: 'w-[1%]',
       cell: (row) => <span className={cn('font-semibold', row.state === 'CANCELLED' && 'line-through')}>{formatRupees(row.amount)}</span>,
     },
-    { key: 'payment', label: copy.payment, className: 'whitespace-normal', cell: (row) => <PaymentCell row={row} register={register} /> },
+    { key: 'payment', label: copy.payment, className: 'w-[1%] whitespace-normal', cell: (row) => <PaymentCell row={row} register={register} /> },
     { key: 'actions', label: 'Actions', hideLabel: true, align: 'right', interactive: true, className: 'w-[1%] py-1! pl-1!', cell: actionsCell },
   ];
 
@@ -282,6 +284,8 @@ export function SalesRegister({
         onRowClick={openRow}
         onRetry={() => void reload()}
         containerRef={tableRef}
+        compact
+        dense
         empty={
           <EmptyState
             title={`No ${copy.name} ${view.searching ? 'match your search' : 'in this period'}`}
