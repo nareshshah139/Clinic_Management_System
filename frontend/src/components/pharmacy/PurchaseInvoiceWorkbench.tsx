@@ -2780,6 +2780,7 @@ function PurchaseInvoiceEditor({
       if (!attemptCurrent(attempt) || request !== comparisonRequest.current) return;
       if (!isPurchaseReadback(saved, id)) throw new Error('The saved invoice could not be verified. Your corrections are retained.');
       setComparison({ attempt, mode, local, saved: structuredClone(saved) });
+      focusActionFeedback();
     } catch (err) {
       captureRecovery(err, attempt);
     } finally {
@@ -3046,6 +3047,7 @@ function PurchaseInvoiceEditor({
     (activeInvoice?.status === "STOCK_COMMITTED" || !!activeInvoice?.stockCommittedAt);
   const linkedReceipt = !!(activeInvoice?.workflowReceiptId || workflowReceiptId);
   const postingLabel = linkedReceipt ? "Confirm & post bill" : "Confirm reviewed values & add stock";
+  const duplicateRefusal = recovery && (recovery.kind === 'duplicate' || recovery.kind === 'receipt') && !unknownStockInvoiceId ? recovery : null;
   const stockReceivedEarlier = stockAdded && linkedReceipt;
   const committedLabel = stockReceivedEarlier
     ? "Invoice posted · stock received earlier"
@@ -3576,7 +3578,7 @@ function PurchaseInvoiceEditor({
         {unknownStockInvoiceId !== "unconfirmed-import" && access.read && <Button variant="outline" disabled={busy} onClick={() => refreshStockStatus(unknownStockInvoiceId)}>Check saved status</Button>}
       </div>}
       {recovery && (recovery.kind === 'duplicate' || recovery.kind === 'receipt') && !comparison && !unknownStockInvoiceId && (
-        recovery.existingInvoiceId && access.read ? <Button variant="outline" disabled={busy} onClick={() => compareSavedInvoice(recovery.existingInvoiceId!, 'duplicate')}>Open existing invoice</Button> : <p className="text-sm">An authorized colleague must locate the existing invoice. Your attempted entry is kept here.</p>
+        !(recovery.existingInvoiceId && access.read) && <p className="text-sm">An authorized colleague must locate the existing invoice. Your attempted entry is kept here.</p>
       )}
       {recovery?.kind === 'stale' && !comparison && !unknownStockInvoiceId && <Button variant="outline" disabled={busy || !access.read} onClick={reloadSavedInvoice}>Compare with saved version</Button>}
       {comparison && !unknownStockInvoiceId && <div className="space-y-3" aria-label="Compare with saved invoice">
@@ -3612,8 +3614,8 @@ function PurchaseInvoiceEditor({
       {!comparison && !pendingMismatch && !unknownStockInvoiceId && recoveryIssues.length > 0 && <ul className="space-y-2">{recoveryIssues.map(issue => <li key={issue.key} className="space-y-1 text-sm">{recovery && <><p>{issue.message}</p><p className="text-muted-foreground">{issue.help}</p></>}{issue.category !== 'historical' && purchaseRecoveryTarget(issue, lines.map(line => line.localId)) && access.create && !savedFormLocked && <Button size="sm" variant="outline" disabled={busy} onClick={() => focusRecoveryIssue(issue)}>Correct {issue.lineIndex === undefined ? issue.label : `line ${issue.lineIndex + 1} ${issue.label}`}</Button>}</li>)}</ul>}
       <div className="flex flex-wrap gap-2">
         {catalogueIssue && !stockAdded && !stockStatusUnknown && !savedFormLocked && access.create && <Button variant="outline" onClick={openProductRecovery} disabled={busy || draftWriteBlocked}>Fix products on this invoice</Button>}
-        {canReview && !comparison && !pendingMismatch && <Button disabled={busy} onClick={() => focusPurchaseField("purchase-review-checklist")}>Continue to final review</Button>}
-        {access.create && !savedFormLocked && !draftWriteBlocked && !comparison && <Button variant="outline" disabled={busy} onClick={() => saveDraft()}>Save corrections and check again</Button>}
+        {canReview && !comparison && !pendingMismatch && !duplicateRefusal && <Button disabled={busy} onClick={() => focusPurchaseField("purchase-review-checklist")}>Continue to final review</Button>}
+        {access.create && !savedFormLocked && !draftWriteBlocked && !comparison && !duplicateRefusal && <Button variant="outline" disabled={busy} onClick={() => saveDraft()}>Save corrections and check again</Button>}
         {(needsHandoff || (recovery && (recovery.kind === 'duplicate' || recovery.kind === 'receipt') && !recovery.existingInvoiceId)) && <Button variant="outline" onClick={copyHandoff}>Copy handoff details</Button>}
       </div>
       {activeInvoice && !['STOCK_COMMITTED', 'CANCELLED'].includes(activeInvoice.status) && !activeInvoice.stockCommittedAt && access.create && access.review && !draftWriteBlocked && <Button variant="outline" disabled={busy} onClick={rejectSavedInvoice}>Reject invoice</Button>}
@@ -3621,7 +3623,7 @@ function PurchaseInvoiceEditor({
         <Button variant="outline" disabled={busy || draftWriteBlocked} onClick={enterCompleteInvoiceManually}>Enter complete invoice manually</Button>
         {!activeInvoice && <Button variant="outline" disabled={busy || draftWriteBlocked} onClick={async () => { if (await confirm({ title: `Reject the upload ${sourceDocument.fileName}?`, description: 'No stock will be added. Its archived original will be retained.', confirmLabel: 'Reject upload', destructive: true })) { resetDraft(); setShowIntakeHome(true); setNotice('Upload rejected. No stock was added; the original remains in Saved uploads.'); } }}>Reject this upload</Button>}
       </div>}
-      {!comparison && !pendingMismatch && !unknownStockInvoiceId && recoveryIssues.length === 0 && activeInvoice?.status !== 'REVIEWED' && <p className="text-sm">Confirm the invoice against the original, then choose {postingLabel}. Use Save draft to keep corrections without posting.</p>}
+      {!comparison && !pendingMismatch && !unknownStockInvoiceId && !duplicateRefusal && recoveryIssues.length === 0 && activeInvoice?.status !== 'REVIEWED' && <p className="text-sm">Confirm the invoice against the original, then choose {postingLabel}. Use Save draft to keep corrections without posting.</p>}
     </section>
   );
 
@@ -3699,10 +3701,15 @@ function PurchaseInvoiceEditor({
   </details>;
   const invoiceActions = (
     <section aria-label="Invoice actions" className="sticky bottom-0 z-20 space-y-2 border-t bg-background py-3">
-      {!stockAdded && !stockStatusUnknown && activeInvoice?.status !== 'CANCELLED' && <p id="purchase-posting-guidance" className="text-sm">{editingChecks && postingBlocker ? <>{postingBlocker}{!checkStops.length && <> <a className="underline underline-offset-4" href="#purchase-review-checklist" onClick={event => { event.preventDefault(); focusPurchaseField('purchase-review-checklist'); }}>Review checks</a></>}</> : <>Confirm values against the original. {!access.commit ? 'Saves review; stock stays unchanged.' : linkedReceipt ? 'Posts bill; no stock added again.' : 'Adds the received quantities to stock.'}</>}</p>}
+      {duplicateRefusal ? <div role="alert" className="flex flex-wrap items-center gap-2">
+        <ReviewStatus tone="error">Nothing added</ReviewStatus>
+        <span className="text-sm">{duplicateRefusal.existingInvoice ? `Already on ${duplicateRefusal.existingInvoice.invoiceNumber} · ${purchaseInvoiceStatusLabel(duplicateRefusal.existingInvoice)}` : 'Already on a saved invoice'}</span>
+      </div> : !stockAdded && !stockStatusUnknown && activeInvoice?.status !== 'CANCELLED' && <p id="purchase-posting-guidance" className="text-sm">{editingChecks && postingBlocker ? <>{postingBlocker}{!checkStops.length && <> <a className="underline underline-offset-4" href="#purchase-review-checklist" onClick={event => { event.preventDefault(); focusPurchaseField('purchase-review-checklist'); }}>Review checks</a></>}</> : <>Confirm values against the original. {!access.commit ? 'Saves review; stock stays unchanged.' : linkedReceipt ? 'Posts bill; no stock added again.' : 'Adds the received quantities to stock.'}</>}</p>}
       <div className="flex flex-wrap items-center gap-2">
         {stockStatusUnknown ? (
           <Button variant="outline" onClick={() => unknownStockInvoiceId && refreshStockStatus(unknownStockInvoiceId)} disabled={busy}>Refresh stock status</Button>
+        ) : duplicateRefusal ? (
+          duplicateRefusal.existingInvoiceId && access.read && !comparison && <Button disabled={busy} onClick={() => compareSavedInvoice(duplicateRefusal.existingInvoiceId!, 'duplicate')}>Open existing invoice</Button>
         ) : stockAdded || activeInvoice?.status === "CANCELLED" ? null : activeInvoice?.status === "REVIEWED" ? (
           <>
             <Button onClick={() => saveAndPostInvoice()} disabled={!canCommit || busy}>
@@ -3721,7 +3728,7 @@ function PurchaseInvoiceEditor({
         ) : (
           <Button disabled={!access.create || busy} onClick={() => editSavedDraft(activeInvoice)}>Review issues</Button>
         )}
-        {!stockAdded && !savedFormLocked && (!activeInvoice || editingSelectedInvoice) && (
+        {!stockAdded && !savedFormLocked && !duplicateRefusal && (!activeInvoice || editingSelectedInvoice) && (
           <>
             <Button variant="outline" disabled={busy || draftWriteBlocked} onClick={() => {
               const errors = [...validateDraft(header, lines), ...reportedAmountErrors(originalAmounts)];
@@ -3737,7 +3744,7 @@ function PurchaseInvoiceEditor({
             </details>}
           </>
         )}
-        <span className="hidden text-sm text-muted-foreground sm:inline">{stockStatusUnknown ? "Stock status unknown" : stockAdded ? committedLabel : linkedReceipt ? "Stock received earlier · 0 added again" : activeInvoice ? "Stock not added" : "Not saved · stock not added"}</span>
+        {!duplicateRefusal && <span className="hidden text-sm text-muted-foreground sm:inline">{stockStatusUnknown ? "Stock status unknown" : stockAdded ? committedLabel : linkedReceipt ? "Stock received earlier · 0 added again" : activeInvoice ? "Stock not added" : "Not saved · stock not added"}</span>}
       </div>
       {checkStops.length > 0 && <nav aria-label="Invoice checks" className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <span className="mr-auto text-sm text-muted-foreground" aria-live="polite">{!activeCheck ? `${checkStops.length} ${checkStops.length === 1 ? 'check' : 'checks'} to review` : `Check ${activeCheckIndex + 1} of ${checkStops.length} · ${activeCheck.lineIndex === undefined ? '' : `Line ${activeCheck.lineIndex + 1} `}${activeCheck.label}`}</span>

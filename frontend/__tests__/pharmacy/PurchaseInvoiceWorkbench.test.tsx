@@ -536,8 +536,13 @@ describe('PurchaseInvoiceWorkbench', () => {
     expect(within(panel).getByText(message)).toBeInTheDocument();
     expect(within(panel).getByText(`Existing invoice: ${invoiceNumber}`)).toBeInTheDocument();
     expect(within(panel).getByText(`Status: ${label}`)).toBeInTheDocument();
+    const actions = screen.getByRole('region', { name: 'Invoice actions' });
+    expect(within(actions).getByRole('alert')).toHaveTextContent(`Nothing addedAlready on ${invoiceNumber} · ${label}`);
+    expect(within(actions).queryByRole('button', { name: 'Confirm reviewed values & add stock' })).not.toBeInTheDocument();
+    expect(within(actions).queryByRole('button', { name: 'Save draft' })).not.toBeInTheDocument();
+    expect(within(panel).queryByText(/then choose Confirm reviewed values/)).not.toBeInTheDocument();
     api.getPharmacyPurchaseInvoiceById.mockResolvedValueOnce(existing);
-    fireEvent.click(within(panel).getByRole('button', { name: 'Open existing invoice' }));
+    fireEvent.click(within(actions).getByRole('button', { name: 'Open existing invoice' }));
     await screen.findByText('Compare with saved invoice');
     expect(api.getPharmacyPurchaseInvoiceById).toHaveBeenLastCalledWith(existing.id);
     expect(screen.getByLabelText('Notes')).toHaveValue('My correction');
