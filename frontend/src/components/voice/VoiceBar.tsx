@@ -416,7 +416,7 @@ export function VoiceBar() {
       aria-label="Voice bar"
       aria-busy={working}
       onKeyDown={onBarKeyDown}
-      className="shrink-0 border-t border-border bg-card px-4 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] md:px-6"
+      className="shrink-0 border-t border-voice-bar-border bg-voice-bar px-4 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] md:px-6"
     >
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-2">
         {state.kind === 'draft' && (
@@ -520,7 +520,7 @@ export function VoiceBar() {
               disabled={listening || working || applying}
               onChange={(event) => setToCommand(event.target.value === 'command')}
               // On a phone the picker steps aside while listening, so the live words get the width.
-              className={cn('h-11 max-w-28 shrink-0 md:h-9 md:max-w-36', listening && 'max-md:hidden')}
+              className={cn('h-11 max-w-28 shrink-0 bg-card md:h-9 md:max-w-36', listening && 'max-md:hidden')}
             >
               <option value="form">{form.label}</option>
               <option value="command">{COPY.commandTarget}</option>
@@ -538,7 +538,7 @@ export function VoiceBar() {
             aria-label={COPY.textBoxLabel}
             maxLength={MAX_TYPED_CHARS}
             className={cn(
-              'max-h-28 min-h-11 resize-none md:min-h-9',
+              'max-h-28 min-h-11 resize-none bg-card md:min-h-9',
               // An empty box would grow to fit a wrapped placeholder, so it is held to one line until text is typed.
               !boxValue && 'field-sizing-fixed h-11 overflow-hidden placeholder:overflow-hidden placeholder:text-ellipsis placeholder:whitespace-nowrap md:h-9',
             )}
@@ -595,11 +595,11 @@ export function VoiceBar() {
  */
 function CollapsedVoiceBar({ buttonRef, onShow }: { buttonRef: RefObject<HTMLButtonElement | null>; onShow: () => void }) {
   return (
-    <section aria-label="Voice bar" className="shrink-0 bg-card pb-[env(safe-area-inset-bottom)]">
+    <section aria-label="Voice bar" className="shrink-0 bg-voice-bar pb-[env(safe-area-inset-bottom)]">
       <button
         ref={buttonRef}
         type="button"
-        className="box-border block h-8 w-full border-t border-border px-4 text-sm text-muted-foreground outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset md:px-6"
+        className="box-border block h-8 w-full border-t border-voice-bar-border px-4 text-sm text-muted-foreground outline-none transition-colors hover:bg-background/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset md:px-6"
         aria-label={COPY.showBar}
         aria-expanded="false"
         title={COPY.showBarTitle}

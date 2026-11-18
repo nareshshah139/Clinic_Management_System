@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/input';
 import { apiClient } from '@/lib/api';
 import type { User } from '@/lib/types';
 import { getISTDateString } from '@/lib/utils';
-import { ChevronLeft, ChevronRight, Info } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CircleHelp, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useDashboardUser } from '@/components/layout/dashboard-user-context';
@@ -95,7 +95,7 @@ function AppointmentsPageInner() {
         <Button variant="outline" size="icon" className="size-8" aria-label="Previous day" onClick={() => shiftDate(-1)}>
           <ChevronLeft className="h-4 w-4" />
         </Button>
-        <Input aria-label="Date" className="h-8 w-40" type="date" value={date} onChange={(e) => e.target.value && setDate(e.target.value)} />
+        <Input aria-label="Date" className="h-8 w-44" type="date" value={date} onChange={(e) => e.target.value && setDate(e.target.value)} />
         <Button variant="outline" size="sm" disabled={date === getISTDateString()} onClick={() => setDate(getISTDateString())}>Today</Button>
         <Button variant="outline" size="icon" className="size-8" aria-label="Next day" onClick={() => shiftDate(1)}>
           <ChevronRight className="h-4 w-4" />
@@ -115,8 +115,8 @@ function AppointmentsPageInner() {
               <TabsTrigger value="slots">Slots</TabsTrigger>
             </TabsList>
             <CalendarLegend />
-            <Button variant="outline" size="icon" aria-label="Quick Guide" title="Quick Guide" onClick={() => setGuideDialogOpen(true)}>
-              <Info className="h-4 w-4" />
+            <Button variant="outline" size="icon" aria-label="Quick guide" title="Quick guide" onClick={() => setGuideDialogOpen(true)}>
+              <CircleHelp className="h-4 w-4" />
             </Button>
           </>
         }
@@ -127,7 +127,7 @@ function AppointmentsPageInner() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Info className="h-5 w-5 text-info-text" />
-              Quick Guide
+              Quick guide
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3">

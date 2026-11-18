@@ -334,7 +334,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
               This tour will walk you through a <strong>real-world workflow</strong> - from booking 
               a new patient to handling last-minute changes.
             </p>
-            <div class="bg-info-soft border-l-4 border-info p-3 rounded-md">
+            <div class="bg-info-soft border border-info-border p-3 rounded-md">
               <p class="text-sm text-info-text">
                 <strong>What you'll learn:</strong> Doctor selection, date navigation, booking appointments, 
                 managing schedules, and handling common scenarios.
@@ -354,7 +354,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
             <p class="text-sm leading-relaxed">
               <strong>Start here every time!</strong> Choose which doctor's schedule you want to view and manage.
             </p>
-            <div class="bg-warning-soft border-l-4 border-warning p-3 rounded-md text-sm">
+            <div class="bg-warning-soft border border-warning-border p-3 rounded-md text-sm">
               <p class="font-semibold text-warning-text mb-1">Pro Tip:</p>
               <p class="text-warning-text">
                 The system remembers your last selected doctor, so you don't have to re-select 
@@ -445,7 +445,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
               </div>
             </div>
             
-            <div class="bg-highlight-soft border-l-4 border-highlight p-3 rounded-md text-xs mt-3">
+            <div class="bg-highlight-soft border border-highlight-border p-3 rounded-md text-xs mt-3">
               <strong class="text-highlight-text">When to use what:</strong>
               <p class="text-highlight-text mt-1">
                 Use <strong>Calendar</strong> when the schedule is complex or you need to see the big picture. 
@@ -516,7 +516,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
               </div>
             </div>
             
-            <div class="bg-warning-soft border-l-4 border-warning p-3 rounded-md text-sm">
+            <div class="bg-warning-soft border border-warning-border p-3 rounded-md text-sm">
               <p class="font-semibold text-warning-text">Speed Booking Shortcut:</p>
               <p class="text-warning-text text-xs mt-1">
                 Most appointments are 30 minutes. Select patient → click slot → press Enter. 
@@ -540,7 +540,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
             </p>
             
             <div class="space-y-2 mt-3">
-              <div class="flex items-center gap-3 p-3 rounded-lg" style="background-color: color-mix(in srgb, var(--info-soft) 50%, transparent); border-left: 4px solid var(--info);">
+              <div class="flex items-center gap-3 p-3 rounded-lg" style="background-color: color-mix(in srgb, var(--info-soft) 50%, transparent); border: 1px solid var(--info-border);">
                 <div class="w-12 h-12 rounded-lg shadow-sm flex items-center justify-center font-bold text-sm"
                      style="background-color: color-mix(in srgb, var(--info-soft) 95%, transparent); color: var(--info-text);">OPD</div>
                 <div class="flex-1">
@@ -549,7 +549,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
                 </div>
               </div>
               
-              <div class="flex items-center gap-3 p-3 rounded-lg" style="background-color: color-mix(in srgb, var(--highlight-soft) 50%, transparent); border-left: 4px solid var(--highlight);">
+              <div class="flex items-center gap-3 p-3 rounded-lg" style="background-color: color-mix(in srgb, var(--highlight-soft) 50%, transparent); border: 1px solid var(--highlight-border);">
                 <div class="w-12 h-12 rounded-lg shadow-sm flex items-center justify-center font-bold text-xs"
                      style="background-color: color-mix(in srgb, var(--highlight-soft) 95%, transparent); color: var(--highlight-text);">PROC</div>
                 <div class="flex-1">
@@ -558,7 +558,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
                 </div>
               </div>
               
-              <div class="flex items-center gap-3 p-3 rounded-lg" style="background-color: color-mix(in srgb, var(--muted) 80%, transparent); border-left: 4px solid var(--border);">
+              <div class="flex items-center gap-3 p-3 rounded-lg" style="background-color: color-mix(in srgb, var(--muted) 80%, transparent); border: 1px solid var(--border);">
                 <div class="w-12 h-12 rounded-lg shadow-sm flex items-center justify-center font-bold text-xs"
                      style="background-color: color-mix(in srgb, var(--muted) 95%, transparent); color: var(--foreground);">TELE</div>
                 <div class="flex-1">
@@ -567,7 +567,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
                 </div>
               </div>
               
-              <div class="flex items-center gap-3 p-3 rounded-lg" style="background-color: color-mix(in srgb, var(--muted) 50%, transparent); border-left: 4px solid var(--border);">
+              <div class="flex items-center gap-3 p-3 rounded-lg" style="background-color: color-mix(in srgb, var(--muted) 50%, transparent); border: 1px solid var(--border);">
                 <div class="flex-1">
                   <p class="font-bold text-foreground">Completed (Lighter Gray)</p>
                   <p class="text-xs text-foreground">Doctor finished consultation - ready for billing</p>
@@ -575,14 +575,14 @@ function getTourStepsForPage(pathname: string): TourStep[] {
                 </div>
               </div>
               
-              <div class="flex items-center gap-3 p-3 rounded-lg" style="background-color: color-mix(in srgb, var(--success) 15%, transparent); border-left: 4px solid var(--success);">
+              <div class="flex items-center gap-3 p-3 rounded-lg" style="background-color: color-mix(in srgb, var(--success) 15%, transparent); border: 1px solid var(--success-border);">
                 <div class="flex-1">
                   <p class="font-bold text-success-text">Newly Booked (Green Highlight)</p>
                   <p class="text-xs text-success-text">Just booked in the last few seconds - temporary visual feedback</p>
                 </div>
               </div>
               
-              <div class="flex items-center gap-3 p-3 rounded-lg" style="background-color: color-mix(in srgb, var(--warning-border) 15%, transparent); border-left: 4px solid var(--warning);">
+              <div class="flex items-center gap-3 p-3 rounded-lg" style="background-color: color-mix(in srgb, var(--warning-border) 15%, transparent); border: 1px solid var(--warning-border);">
                 <div class="flex-1">
                   <p class="font-bold text-warning-text">Booking In Progress (Yellow)</p>
                   <p class="text-xs text-warning-text">Someone is currently booking this slot - wait for it to complete</p>
@@ -636,7 +636,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
               </p>
               
               <div class="space-y-3 text-sm">
-                <div class="bg-white p-3 rounded-md border-l-4 border-warning">
+                <div class="bg-white p-3 rounded-md border border-warning-border">
                   <p class="font-bold text-foreground mb-1">
                     <span class="bg-warning-soft px-2 py-1 rounded-md text-xs mr-2">SINGLE CLICK</span>
                     Select Appointment
@@ -646,7 +646,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
                   </p>
                 </div>
                 
-                <div class="bg-white p-3 rounded-md border-l-4 border-warning">
+                <div class="bg-white p-3 rounded-md border border-warning-border">
                   <p class="font-bold text-foreground mb-1">
                     <span class="bg-warning text-warning-foreground px-2 py-1 rounded-md text-xs mr-2">DOUBLE CLICK</span>
                     Open Full Details
@@ -714,7 +714,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
             </p>
             
             <div class="space-y-3">
-              <div class="bg-gradient-to-r from-success-soft to-info-soft p-3 rounded-lg border-l-4 border-success">
+              <div class="bg-gradient-to-r from-success-soft to-info-soft p-3 rounded-lg border border-success-border">
                 <div class="flex items-start gap-2">
                   <div class="flex-1">
                     <p class="font-bold text-success-text text-sm">Drag to Select Time Range</p>
@@ -726,7 +726,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
                 </div>
               </div>
               
-              <div class="bg-gradient-to-r from-info-soft to-info-soft p-3 rounded-lg border-l-4 border-info">
+              <div class="bg-gradient-to-r from-info-soft to-info-soft p-3 rounded-lg border border-info-border">
                 <div class="flex items-start gap-2">
                   <div class="flex-1">
                     <p class="font-bold text-info-text text-sm">Auto-Save Your Preferences</p>
@@ -737,7 +737,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
                 </div>
               </div>
               
-              <div class="bg-gradient-to-r from-highlight-soft to-highlight-soft p-3 rounded-lg border-l-4 border-highlight">
+              <div class="bg-gradient-to-r from-highlight-soft to-highlight-soft p-3 rounded-lg border border-highlight-border">
                 <div class="flex items-start gap-2">
                   <div class="flex-1">
                     <p class="font-bold text-highlight-text text-sm">Smart Slot Detection</p>
@@ -748,7 +748,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
                 </div>
               </div>
               
-              <div class="bg-gradient-to-r from-warning-soft to-warning-soft p-3 rounded-lg border-l-4 border-warning">
+              <div class="bg-gradient-to-r from-warning-soft to-warning-soft p-3 rounded-lg border border-warning-border">
                 <div class="flex items-start gap-2">
                   <div class="flex-1">
                     <p class="font-bold text-warning-text text-sm">Quick Patient Search</p>
@@ -760,7 +760,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
                 </div>
               </div>
               
-              <div class="bg-gradient-to-r from-success-soft to-success-soft p-3 rounded-lg border-l-4 border-success">
+              <div class="bg-gradient-to-r from-success-soft to-success-soft p-3 rounded-lg border border-success-border">
                 <div class="flex items-start gap-2">
                   <div class="flex-1">
                     <p class="font-bold text-success-text text-sm">Batch Operations</p>
@@ -779,7 +779,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
               <p class="text-sm text-highlight-text text-center leading-relaxed">
                 Use <strong>Calendar View</strong> during peak hours to see the big picture. 
                 Switch to <strong>Slots View</strong> during quiet times for quick bookings. 
-                The "Quick Guide" button (Info icon) is always there if you need a refresher!
+                The Quick guide button (the ? icon) is always there if you need a refresher.
               </p>
             </div>
           </div>

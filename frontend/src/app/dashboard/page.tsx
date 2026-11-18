@@ -86,7 +86,6 @@ export default function DashboardPage() {
     <div className="space-y-8">
       <PageHeader
         title="Dashboard"
-        description="What needs doing at the clinic today."
         actions={<QuickGuide title="Dashboard Guide" sections={[{ title: 'Today', items: GUIDE[view] }]} />}
       />
       {view === 'doctor' && <DoctorDashboard doctorId={user.id} />}

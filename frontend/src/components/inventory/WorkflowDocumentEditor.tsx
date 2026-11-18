@@ -721,7 +721,7 @@ export function WorkflowDocumentEditor({
         </Button>
       )}
       <header>
-        <h2 className="text-2xl font-semibold">
+        <h2 className="text-xl font-semibold">
           {doc?.reference || definition.label}
         </h2>
         <p className="mt-1 max-w-3xl text-muted-foreground">

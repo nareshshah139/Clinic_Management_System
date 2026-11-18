@@ -2,6 +2,7 @@ import React from 'react';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { GlobalSearch } from './global-search';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 
 const push = jest.fn();
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push }) }));
@@ -88,5 +89,54 @@ describe('GlobalSearch keyboard', () => {
     const { user } = await typeQuery();
     await user.click(screen.getByRole('option', { name: /Praneeta Jain/ }));
     expect(push).toHaveBeenCalledWith('/dashboard/users?search=u-praneeta');
+  });
+});
+
+describe('GlobalSearch shortcut', () => {
+  it('jumps to search when / is pressed outside a text field', async () => {
+    const user = userEvent.setup();
+    render(<><button>Elsewhere</button><GlobalSearch /></>);
+    await user.click(screen.getByRole('button', { name: 'Elsewhere' }));
+    await user.keyboard('/');
+    const box = screen.getByRole('combobox', { name: 'Search patients, appointments, doctors' });
+    expect(box).toHaveFocus();
+    expect(box).toHaveValue('');
+  });
+
+  it('leaves / alone while typing in another field', async () => {
+    const user = userEvent.setup();
+    render(<><input aria-label="Dose" /><GlobalSearch /></>);
+    await user.click(screen.getByRole('textbox', { name: 'Dose' }));
+    await user.keyboard('1/2');
+    expect(screen.getByRole('textbox', { name: 'Dose' })).toHaveValue('1/2');
+    expect(screen.getByRole('combobox', { name: 'Search patients, appointments, doctors' })).not.toHaveFocus();
+  });
+});
+
+describe('GlobalSearch shortcut inside an overlay', () => {
+  it('leaves an open dialog alone', async () => {
+    const user = userEvent.setup();
+    render(
+      <>
+        <GlobalSearch />
+        <Dialog open>
+          <DialogContent aria-describedby={undefined}>
+            <DialogTitle>Quick guide</DialogTitle>
+            <p>Guide text</p>
+          </DialogContent>
+        </Dialog>
+      </>,
+    );
+    await user.click(screen.getByText('Guide text'));
+    await user.keyboard('/');
+    expect(screen.getByRole('combobox', { hidden: true, name: 'Search patients, appointments, doctors' })).not.toHaveFocus();
+  });
+
+  it('leaves a running tour alone', async () => {
+    const user = userEvent.setup();
+    render(<><GlobalSearch /><div className="introjs-overlay" /><button>Next step</button></>);
+    await user.click(screen.getByRole('button', { name: 'Next step' }));
+    await user.keyboard('/');
+    expect(screen.getByRole('button', { name: 'Next step' })).toHaveFocus();
   });
 });

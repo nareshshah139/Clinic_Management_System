@@ -275,7 +275,7 @@ export function InventoryWorkspace() {
   };
   return (
     <section className="inventory-surface min-w-0 space-y-5 pb-12">
-      <PageHeader title={<>Inventory</>} description={<>Receive, review and manage pharmacy stock.</>} actions={<><InventoryAction
+      <PageHeader title={<>Inventory</>} actions={<><InventoryAction
           label="Refresh inventory"
           onClick={() => {
             void loadPermissions();
@@ -289,12 +289,12 @@ export function InventoryWorkspace() {
         </InventoryAction></>} />
       <nav
         aria-label="Inventory areas"
-        className="flex flex-wrap gap-1 border-b pb-2 print:hidden"
+        className="-mx-4 flex gap-1 overflow-x-auto border-b px-4 pb-2 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 print:hidden"
       >
         {areas.map(([id, label]) => (
           <Button
             key={id}
-            className="min-w-24 flex-1 px-2 text-xs sm:flex-none sm:text-sm"
+            className="shrink-0 px-3 text-sm sm:min-w-24 sm:px-2"
             aria-current={area === id ? "page" : undefined}
             variant={area === id ? "default" : "ghost"}
             onClick={() => switchArea(id)}
@@ -420,7 +420,7 @@ export function InventoryWorkspace() {
           )}
           {area === "stock" && view === "opening" && (
             <>
-              <h2 className="text-2xl font-semibold">Opening stock import</h2>
+              <h2 className="text-xl font-semibold">Opening stock import</h2>
               <PharmacyInventoryStarterImport />
             </>
           )}
@@ -677,7 +677,7 @@ function WorkspaceToday({ navigate, open }: any) {
       .reduce((n: number, q: any) => n + q._count, 0) || 0;
   const rows = [
     ...(data?.pendingEdits != null ? [{
-      label: `Price/stock edits awaiting approval (${data.pendingEdits})`,
+      label: "Price/stock edits awaiting approval",
       count: data.pendingEdits,
       detail: "Review the reason and proposed changes before updating clinic stock.",
       target: { area: "stock", view: "approvals" },
@@ -742,11 +742,8 @@ function WorkspaceToday({ navigate, open }: any) {
         <Button variant="outline" onClick={() => navigate({ area: "stock", view: "list" })}>Find or correct stock <ArrowRight className="h-4 w-4" /></Button>
       </div>
       <header>
-        <h2 className="text-2xl font-semibold">What needs attention</h2>
-        <p className="text-muted-foreground">
-          Every action opens the matching records.{" "}
-          {data && `As of ${displayClinicDate(data.asOf)} · current branch`}
-        </p>
+        <h2 className="text-xl font-semibold">What needs attention</h2>
+        {data && <p className="text-sm text-muted-foreground">As of {displayClinicDate(data.asOf)}</p>}
       </header>
       {error && (
         <p role="alert">
@@ -776,11 +773,11 @@ function WorkspaceToday({ navigate, open }: any) {
             {rows.map((r) => (
               <li key={r.label}>
                 <button
-                  className="flex w-full items-center gap-4 py-4 text-left hover:bg-muted/50"
+                  className={`flex w-full items-center gap-4 py-4 text-left transition-colors hover:bg-muted/50 ${r.count ? "" : "text-muted-foreground"}`}
                   title={r.detail}
                   onClick={() => navigate(r.target)}
                 >
-                  <span className="min-w-10 text-2xl font-semibold">
+                  <span className="min-w-10 text-2xl font-semibold tabular-nums">
                     {r.count ?? "—"}
                   </span>
                   <span className="flex-1">
@@ -792,30 +789,7 @@ function WorkspaceToday({ navigate, open }: any) {
               </li>
             ))}
           </ul>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              onClick={() =>
-                navigate({ area: "stock", view: "list", stock: "LOW" })
-              }
-            >
-              Check low stock
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() =>
-                navigate({ area: "stock", view: "list", expiryMonths: "3" })
-              }
-            >
-              Check next 3 months’ expiry
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => navigate({ area: "purchases", view: "ledger" })}
-            >
-              Check overdue supplier balances
-            </Button>
-          </div>
+          {data.recent.length > 0 && <>
           <h3 className="text-lg font-semibold">Recent activity</h3>
           <ul className="divide-y">
             {data.recent.map((d: any) => (
@@ -832,6 +806,7 @@ function WorkspaceToday({ navigate, open }: any) {
               </li>
             ))}
           </ul>
+          </>}
         </>
       )}
     </section>
@@ -889,7 +864,7 @@ function WorkflowRegister({
       )}
       <header className="flex flex-wrap justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-semibold">{definition.label}</h2>
+          <h2 className="text-xl font-semibold">{definition.label}</h2>
           <p className="mt-1 max-w-3xl text-muted-foreground">
             {definition.help}
           </p>
@@ -1051,7 +1026,7 @@ function SupplierWorkspace({ canCreate, canUpdate, onAccount, onBills }: any) {
   return (
     <section className="space-y-4">
       <div className="flex justify-between">
-        <h2 className="text-2xl font-semibold">Suppliers</h2>
+        <h2 className="text-xl font-semibold">Suppliers</h2>
         {canCreate && (
           <Button
             onClick={() =>

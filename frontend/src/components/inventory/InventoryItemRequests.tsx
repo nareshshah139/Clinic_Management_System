@@ -105,7 +105,7 @@ export function InventoryItemRequests() {
 
   return <section className="space-y-4">
     <header className="flex flex-wrap items-start justify-between gap-3">
-      <div><h2 className="text-2xl font-semibold">{canReview ? 'New item requests' : 'My item requests'}</h2>
+      <div><h2 className="text-xl font-semibold">{canReview ? 'New item requests' : 'My item requests'}</h2>
         <p className="text-muted-foreground">New items enter inventory only after a doctor approves them.</p></div>
       <Button variant="outline" onClick={load} disabled={loading}>Refresh requests</Button>
     </header>

@@ -11,10 +11,10 @@ export default function FeesPage() {
   const { user, loading } = useDashboardUser();
   const editor = FEE_EDITOR_ROLES.includes(user?.role ?? '');
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="max-w-3xl space-y-6">
       <PageHeader
         title="Fee list"
-        description="Create bill on the appointments calendar starts from these fees, billed without GST. The desk can still change the amount on a bill. Changing a fee here never changes a bill already made."
+        description="Starting prices for calendar bills, without GST. Bills already made keep their amount."
       />
       {loading ? null : editor ? (
         <ClinicFeeList />

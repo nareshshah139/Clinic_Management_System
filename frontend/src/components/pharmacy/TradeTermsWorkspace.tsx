@@ -369,7 +369,7 @@ export function TradeTermsWorkspace() {
     <section className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h2 className="text-2xl font-semibold">Terms of Trade</h2>
+          <h2 className="text-xl font-semibold">Terms of Trade</h2>
           <p className="text-sm text-muted-foreground">What each distributor agreed per product, so whoever receives a delivery can check it.</p>
         </div>
         {canEdit && !wizard && <Button onClick={() => setWizard(startWizard(selected?.supplier ?? null))}>Add terms</Button>}

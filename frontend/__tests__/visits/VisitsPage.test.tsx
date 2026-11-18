@@ -58,7 +58,7 @@ describe('VisitsPage', () => {
 
     render(<VisitsPage />, { wrapper: LayoutSession });
     await waitFor(() => expect(apiClient.get).toHaveBeenCalledWith('/users', { role: 'DOCTOR', page: 2, limit: 100 }));
-    fireEvent.click(await screen.findByRole('combobox', { name: 'Select Doctor' }));
+    fireEvent.click(await screen.findByRole('combobox', { name: 'Doctor' }));
     expect(await screen.findByText('Dr. Second Doctor')).toBeInTheDocument();
     HTMLElement.prototype.scrollIntoView = scrollIntoView;
   });
@@ -79,7 +79,7 @@ describe('VisitsPage', () => {
     it('defaults to the signed-in doctor, not the first doctor in the list', async () => {
       signInAs({ id: 'doctor-2', role: 'DOCTOR' });
       render(<VisitsPage />, { wrapper: LayoutSession });
-      const picker = await screen.findByRole('combobox', { name: 'Select Doctor' });
+      const picker = await screen.findByRole('combobox', { name: 'Doctor' });
       await waitFor(() => expect(picker).toHaveTextContent('Dr. Second Doctor'));
       expect(picker).not.toHaveTextContent('Dr. First Doctor');
     });
@@ -87,7 +87,7 @@ describe('VisitsPage', () => {
     it('leaves the doctor unset for an admin and asks for a choice', async () => {
       signInAs({ id: 'admin-1', role: 'ADMIN' });
       render(<VisitsPage />, { wrapper: LayoutSession });
-      const picker = await screen.findByRole('combobox', { name: 'Select Doctor' });
+      const picker = await screen.findByRole('combobox', { name: 'Doctor' });
       await waitFor(() => expect(apiClient.get).toHaveBeenCalledWith('/auth/me'));
       expect(picker).toHaveTextContent('Choose a doctor...');
     });
@@ -171,7 +171,7 @@ describe('VisitsPage', () => {
       fireEvent.click(screen.getByRole('button', { name: /Back to Setup/ }));
       fireEvent.focus(await screen.findByPlaceholderText('Search name, phone, or email'));
       fireEvent.click(await screen.findByRole('option', { name: /Rahul Kumar/ }));
-      const setupPicker = screen.getByRole('combobox', { name: 'Select Doctor' });
+      const setupPicker = screen.getByRole('combobox', { name: 'Doctor' });
       await waitFor(() => expect(setupPicker).toHaveTextContent('Dr. Shravya Rao'));
       expect(setupPicker).toBeEnabled();
       fireEvent.click(await screen.findByRole('button', { name: 'Start Visit Documentation' }));

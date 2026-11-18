@@ -19,7 +19,7 @@ async function main() {
   try {
     const { code, expiresAt } = await new PasswordResetService(prisma as any).issueResetCodeAsOperator(email);
     console.log(`Reset code for ${email}: ${code}`);
-    console.log(`Valid once until ${expiresAt.toISOString()}. Enter it on the sign-in page under "enter your reset code" (/reset-password).`);
+    console.log(`Valid once until ${expiresAt.toISOString()}. Enter it on the sign-in page under "use a reset code" (/reset-password).`);
   } finally {
     await prisma.$disconnect();
   }

@@ -277,13 +277,13 @@ function getDoctorVisitTourSteps(): TourStep[] {
             This comprehensive tour will guide you through the complete medical visit workflow,
             from reviewing patient information to creating prescriptions and completing the visit.
           </p>
-          <div class="bg-info-soft border-l-4 border-info p-3 rounded-md">
+          <div class="bg-info-soft border border-info-border p-3 rounded-md">
             <p class="text-sm text-info-text">
               <strong>What you'll learn:</strong> Patient context, vital signs, clinical documentation,
               SOAP notes, prescription builder, photos, labs, and visit completion.
             </p>
           </div>
-          <div class="bg-success-soft border-l-4 border-success p-3 rounded-md text-sm mt-2">
+          <div class="bg-success-soft border border-success-border p-3 rounded-md text-sm mt-2">
             <p class="text-success-text">
               <strong>Estimated time:</strong> 5-7 minutes. You can exit and restart anytime!
             </p>
@@ -344,7 +344,7 @@ function getDoctorVisitTourSteps(): TourStep[] {
             </div>
           </div>
           
-          <div class="bg-warning-soft border-l-4 border-warning p-3 rounded-md text-xs mt-3">
+          <div class="bg-warning-soft border border-warning-border p-3 rounded-md text-xs mt-3">
             <p class="font-semibold text-warning-text mb-1">Pro Tip:</p>
             <p class="text-warning-text">
               The system auto-saves your work as you go, so you can safely pause and resume at any time!
@@ -366,7 +366,7 @@ function getDoctorVisitTourSteps(): TourStep[] {
           </p>
           
           <div class="space-y-2">
-            <div class="bg-info-soft p-3 rounded-md border-l-4 border-info">
+            <div class="bg-info-soft p-3 rounded-md border border-info-border">
               <p class="font-semibold text-sm text-info-text mb-1">Key Information:</p>
               <ul class="text-xs text-info-text space-y-1 ml-3">
                 <li>• Patient demographics (name, age, gender)</li>
@@ -377,7 +377,7 @@ function getDoctorVisitTourSteps(): TourStep[] {
               </ul>
             </div>
             
-            <div class="bg-success-soft p-3 rounded-md border-l-4 border-success">
+            <div class="bg-success-soft p-3 rounded-md border border-success-border">
               <p class="font-semibold text-sm text-success-text mb-1">Recent Visits:</p>
               <p class="text-xs text-success-text">
                 See the patient's last 2-3 visits with dates, diagnoses, and quick access
@@ -386,7 +386,7 @@ function getDoctorVisitTourSteps(): TourStep[] {
             </div>
           </div>
           
-          <div class="bg-destructive-soft border-l-4 border-destructive p-3 rounded-md text-sm mt-3">
+          <div class="bg-destructive-soft border border-destructive-border p-3 rounded-md text-sm mt-3">
             <p class="font-semibold text-destructive-text">Safety First:</p>
             <p class="text-xs text-destructive-text mt-1">
               <strong>Always check for allergies</strong> before prescribing any medication. 
@@ -413,42 +413,42 @@ function getDoctorVisitTourSteps(): TourStep[] {
           </p>
           
           <div class="grid gap-2">
-            <div class="flex items-center gap-3 p-2 bg-info-soft rounded-md border-l-4 border-info">
+            <div class="flex items-center gap-3 p-2 bg-info-soft rounded-md border border-info-border">
               <div class="flex-1">
                 <p class="font-semibold text-sm text-info-text">Overview</p>
                 <p class="text-xs text-info-text">Visit summary and quick access to all sections</p>
               </div>
             </div>
             
-            <div class="flex items-center gap-3 p-2 bg-success-soft rounded-md border-l-4 border-success">
+            <div class="flex items-center gap-3 p-2 bg-success-soft rounded-md border border-success-border">
               <div class="flex-1">
                 <p class="font-semibold text-sm text-success-text">Vitals</p>
                 <p class="text-xs text-success-text">BP, HR, temperature, weight (often pre-filled by nurse)</p>
               </div>
             </div>
             
-            <div class="flex items-center gap-3 p-2 bg-highlight-soft rounded-md border-l-4 border-highlight">
+            <div class="flex items-center gap-3 p-2 bg-highlight-soft rounded-md border border-highlight-border">
               <div class="flex-1">
                 <p class="font-semibold text-sm text-highlight-text">Photos</p>
                 <p class="text-xs text-highlight-text">Clinical photos for documentation and comparison</p>
               </div>
             </div>
             
-            <div class="flex items-center gap-3 p-2 bg-warning-soft rounded-md border-l-4 border-warning">
+            <div class="flex items-center gap-3 p-2 bg-warning-soft rounded-md border border-warning-border">
               <div class="flex-1">
                 <p class="font-semibold text-sm text-warning-text">Prescription</p>
                 <p class="text-xs text-warning-text">Complete clinical documentation + medications (main tab)</p>
               </div>
             </div>
             
-            <div class="flex items-center gap-3 p-2 bg-info-soft rounded-md border-l-4 border-info">
+            <div class="flex items-center gap-3 p-2 bg-info-soft rounded-md border border-info-border">
               <div class="flex-1">
                 <p class="font-semibold text-sm text-info-text">Lab Tests</p>
                 <p class="text-xs text-info-text">Order labs and review results</p>
               </div>
             </div>
             
-            <div class="flex items-center gap-3 p-2 bg-muted rounded-md border-l-4 border-muted-foreground">
+            <div class="flex items-center gap-3 p-2 bg-muted rounded-md border border-border">
               <div class="flex-1">
                 <p class="font-semibold text-sm text-foreground">History</p>
                 <p class="text-xs text-foreground">Previous visits, trends, and patient timeline</p>
@@ -456,7 +456,7 @@ function getDoctorVisitTourSteps(): TourStep[] {
             </div>
           </div>
           
-          <div class="bg-warning-soft border-l-4 border-warning p-3 rounded-md text-xs mt-3">
+          <div class="bg-warning-soft border border-warning-border p-3 rounded-md text-xs mt-3">
             <p class="font-semibold text-warning-text mb-1">Green Indicator:</p>
             <p class="text-warning-text">
               A green dot appears on tabs when that section is complete. This helps track your progress!
@@ -502,7 +502,7 @@ function getDoctorVisitTourSteps(): TourStep[] {
               </div>
             </div>
             
-            <div class="bg-success-soft p-3 rounded-md border-l-4 border-success">
+            <div class="bg-success-soft p-3 rounded-md border border-success-border">
               <p class="font-semibold text-sm text-success-text mb-1">Automatic Calculations:</p>
               <p class="text-xs text-success-text">
                 The system automatically calculates BMI from height and weight, and flags
@@ -511,7 +511,7 @@ function getDoctorVisitTourSteps(): TourStep[] {
             </div>
           </div>
           
-          <div class="bg-warning-soft border-l-4 border-warning p-3 rounded-md text-xs mt-2">
+          <div class="bg-warning-soft border border-warning-border p-3 rounded-md text-xs mt-2">
             <p class="font-semibold text-warning-text">Quick Review:</p>
             <p class="text-warning-text mt-1">
               Even if vitals are pre-filled, <strong>always review them</strong> before proceeding.
@@ -534,7 +534,7 @@ function getDoctorVisitTourSteps(): TourStep[] {
           </p>
           
           <div class="space-y-2">
-            <div class="bg-highlight-soft p-3 rounded-md border-l-4 border-highlight">
+            <div class="bg-highlight-soft p-3 rounded-md border border-highlight-border">
               <p class="font-semibold text-sm text-highlight-text mb-2">Photo Capabilities:</p>
               <ul class="text-xs text-highlight-text space-y-1 ml-3">
                 <li>• <strong>Capture photos</strong> directly from camera or upload files</li>
@@ -545,7 +545,7 @@ function getDoctorVisitTourSteps(): TourStep[] {
               </ul>
             </div>
             
-            <div class="bg-info-soft p-3 rounded-md border-l-4 border-info">
+            <div class="bg-info-soft p-3 rounded-md border border-info-border">
               <p class="font-semibold text-sm text-info-text mb-1">Best Practices:</p>
               <ul class="text-xs text-info-text space-y-1 ml-3">
                 <li>• Use consistent lighting and angles for comparison photos</li>
@@ -583,7 +583,7 @@ function getDoctorVisitTourSteps(): TourStep[] {
             <p class="font-semibold text-warning-text mb-3">The SOAP Framework:</p>
             
             <div class="space-y-2">
-              <div class="flex gap-2 items-start p-2 bg-white rounded-md border-l-4 border-info">
+              <div class="flex gap-2 items-start p-2 bg-white rounded-md border border-info-border">
                 <div class="flex-shrink-0 w-6 h-6 bg-info text-white rounded-full flex items-center justify-center font-bold text-xs">S</div>
                 <div class="flex-1">
                   <p class="font-bold text-sm text-foreground">Subjective</p>
@@ -597,7 +597,7 @@ function getDoctorVisitTourSteps(): TourStep[] {
                 </div>
               </div>
               
-              <div class="flex gap-2 items-start p-2 bg-white rounded-md border-l-4 border-success">
+              <div class="flex gap-2 items-start p-2 bg-white rounded-md border border-success-border">
                 <div class="flex-shrink-0 w-6 h-6 bg-success text-white rounded-full flex items-center justify-center font-bold text-xs">O</div>
                 <div class="flex-1">
                   <p class="font-bold text-sm text-foreground">Objective</p>
@@ -611,7 +611,7 @@ function getDoctorVisitTourSteps(): TourStep[] {
                 </div>
               </div>
               
-              <div class="flex gap-2 items-start p-2 bg-white rounded-md border-l-4 border-highlight">
+              <div class="flex gap-2 items-start p-2 bg-white rounded-md border border-highlight-border">
                 <div class="flex-shrink-0 w-6 h-6 bg-highlight text-white rounded-full flex items-center justify-center font-bold text-xs">A</div>
                 <div class="flex-1">
                   <p class="font-bold text-sm text-foreground">Assessment</p>
@@ -625,7 +625,7 @@ function getDoctorVisitTourSteps(): TourStep[] {
                 </div>
               </div>
               
-              <div class="flex gap-2 items-start p-2 bg-white rounded-md border-l-4 border-warning">
+              <div class="flex gap-2 items-start p-2 bg-white rounded-md border border-warning-border">
                 <div class="flex-shrink-0 w-6 h-6 bg-warning text-white rounded-full flex items-center justify-center font-bold text-xs">P</div>
                 <div class="flex-1">
                   <p class="font-bold text-sm text-foreground">Plan</p>
@@ -641,7 +641,7 @@ function getDoctorVisitTourSteps(): TourStep[] {
             </div>
           </div>
           
-          <div class="bg-info-soft border-l-4 border-info p-3 rounded-md text-sm">
+          <div class="bg-info-soft border border-info-border p-3 rounded-md text-sm">
             <p class="font-semibold text-info-text mb-1">Smart Features:</p>
             <ul class="text-xs text-info-text space-y-1">
               <li>• <strong>Voice transcription:</strong> Dictate notes hands-free</li>
@@ -715,12 +715,12 @@ function getDoctorVisitTourSteps(): TourStep[] {
           </div>
           
           <div class="space-y-2 mt-3">
-            <div class="bg-success-soft p-2 rounded-md text-xs border-l-4 border-success">
+            <div class="bg-success-soft p-2 rounded-md text-xs border border-success-border">
               <p class="font-semibold text-success-text">Safety Features:</p>
               <p class="text-success-text">System checks for drug interactions and alerts if patient has allergies</p>
             </div>
             
-            <div class="bg-highlight-soft p-2 rounded-md text-xs border-l-4 border-highlight">
+            <div class="bg-highlight-soft p-2 rounded-md text-xs border border-highlight-border">
               <p class="font-semibold text-highlight-text">Multi-Language:</p>
               <p class="text-highlight-text">Print prescriptions in English, Hindi, or Telugu for patient comfort</p>
             </div>
@@ -741,7 +741,7 @@ function getDoctorVisitTourSteps(): TourStep[] {
           </p>
           
           <div class="space-y-2">
-            <div class="bg-highlight-soft p-3 rounded-md border-l-4 border-highlight">
+            <div class="bg-highlight-soft p-3 rounded-md border border-highlight-border">
               <p class="font-semibold text-sm text-highlight-text mb-2">Dermatology Exam Fields:</p>
               <div class="grid grid-cols-2 gap-2 text-xs">
                 <div class="space-y-1">
@@ -757,7 +757,7 @@ function getDoctorVisitTourSteps(): TourStep[] {
               </div>
             </div>
             
-            <div class="bg-info-soft p-3 rounded-md border-l-4 border-info">
+            <div class="bg-info-soft p-3 rounded-md border border-info-border">
               <p class="font-semibold text-sm text-info-text mb-1">Procedure Documentation:</p>
               <p class="text-xs text-info-text">
                 For laser treatments, chemical peels, or other procedures, document specific
@@ -765,7 +765,7 @@ function getDoctorVisitTourSteps(): TourStep[] {
               </p>
             </div>
             
-            <div class="bg-warning-soft p-3 rounded-md border-l-4 border-warning">
+            <div class="bg-warning-soft p-3 rounded-md border border-warning-border">
               <p class="font-semibold text-sm text-warning-text mb-1">Topical Application Details:</p>
               <p class="text-xs text-warning-text">
                 For topical treatments, specify application site, day part (morning/evening),
@@ -774,7 +774,7 @@ function getDoctorVisitTourSteps(): TourStep[] {
             </div>
           </div>
           
-          <div class="bg-warning-soft border-l-4 border-warning p-3 rounded-md text-xs mt-2">
+          <div class="bg-warning-soft border border-warning-border p-3 rounded-md text-xs mt-2">
             <p class="font-semibold text-warning-text">Optional but Valuable:</p>
             <p class="text-warning-text mt-1">
               These fields are optional, but filling them creates a detailed record that helps
@@ -797,7 +797,7 @@ function getDoctorVisitTourSteps(): TourStep[] {
           </p>
           
           <div class="space-y-2">
-            <div class="bg-info-soft p-3 rounded-md border-l-4 border-info">
+            <div class="bg-info-soft p-3 rounded-md border border-info-border">
               <p class="font-semibold text-sm text-info-text mb-2">Lab Capabilities:</p>
               <ul class="text-xs text-info-text space-y-1 ml-3">
                 <li>• <strong>Order tests:</strong> Common panels (CBC, LFT, lipid panel, etc.)</li>
@@ -808,7 +808,7 @@ function getDoctorVisitTourSteps(): TourStep[] {
               </ul>
             </div>
             
-            <div class="bg-success-soft p-3 rounded-md border-l-4 border-success">
+            <div class="bg-success-soft p-3 rounded-md border border-success-border">
               <p class="font-semibold text-sm text-success-text mb-1">Common Lab Panels:</p>
               <div class="grid grid-cols-2 gap-1 text-xs text-success-text mt-2">
                 <p>• Complete Blood Count (CBC)</p>
@@ -823,7 +823,7 @@ function getDoctorVisitTourSteps(): TourStep[] {
             </div>
           </div>
           
-          <div class="bg-warning-soft border-l-4 border-warning p-3 rounded-md text-xs mt-2">
+          <div class="bg-warning-soft border border-warning-border p-3 rounded-md text-xs mt-2">
             <p class="font-semibold text-warning-text">Best Practice:</p>
             <p class="text-warning-text mt-1">
               Order labs at the end of the visit if needed for diagnosis or monitoring.
@@ -846,7 +846,7 @@ function getDoctorVisitTourSteps(): TourStep[] {
           </p>
           
           <div class="space-y-2">
-            <div class="bg-muted p-3 rounded-md border-l-4 border-muted-foreground">
+            <div class="bg-muted p-3 rounded-md border border-border">
               <p class="font-semibold text-sm text-foreground mb-2">What You'll See:</p>
               <ul class="text-xs text-foreground space-y-1 ml-3">
                 <li>• <strong>Visit timeline:</strong> All previous visits in chronological order</li>
@@ -857,7 +857,7 @@ function getDoctorVisitTourSteps(): TourStep[] {
               </ul>
             </div>
             
-            <div class="bg-info-soft p-3 rounded-md border-l-4 border-info">
+            <div class="bg-info-soft p-3 rounded-md border border-info-border">
               <p class="font-semibold text-sm text-info-text mb-1">Quick Actions:</p>
               <p class="text-xs text-info-text">
                 Click any historical visit to view full details. Use "Copy from previous visit"
@@ -866,7 +866,7 @@ function getDoctorVisitTourSteps(): TourStep[] {
             </div>
           </div>
           
-          <div class="bg-success-soft border-l-4 border-success p-3 rounded-md text-xs mt-2">
+          <div class="bg-success-soft border border-success-border p-3 rounded-md text-xs mt-2">
             <p class="font-semibold text-success-text">Time-Saver:</p>
             <p class="text-success-text mt-1">
               For follow-up visits, reference the history tab to see what was prescribed last time
@@ -889,11 +889,11 @@ function getDoctorVisitTourSteps(): TourStep[] {
           </p>
           
           <div class="space-y-2">
-            <div class="bg-success-soft p-3 rounded-md border-l-4 border-success">
+            <div class="bg-success-soft p-3 rounded-md border border-success-border">
               <p class="font-semibold text-sm text-success-text mb-2">Save Options:</p>
               
               <div class="space-y-2">
-                <div class="bg-white p-2 rounded-md border-l-2 border-success">
+                <div class="bg-white p-2 rounded-md border border-success-border">
                   <p class="font-bold text-xs text-foreground">Auto-Save (Automatic)</p>
                   <p class="text-xs text-foreground mt-1">
                     The system saves your work every 30 seconds as you type. You'll see
@@ -901,7 +901,7 @@ function getDoctorVisitTourSteps(): TourStep[] {
                   </p>
                 </div>
                 
-                <div class="bg-white p-2 rounded-md border-l-2 border-info">
+                <div class="bg-white p-2 rounded-md border border-info-border">
                   <p class="font-bold text-xs text-foreground">Manual Save (Draft)</p>
                   <p class="text-xs text-foreground mt-1">
                     Click "Save Draft" to immediately save your current work. Use this when
@@ -909,7 +909,7 @@ function getDoctorVisitTourSteps(): TourStep[] {
                   </p>
                 </div>
                 
-                <div class="bg-white p-2 rounded-md border-l-2 border-warning">
+                <div class="bg-white p-2 rounded-md border border-warning-border">
                   <p class="font-bold text-xs text-foreground">Complete Visit</p>
                   <p class="text-xs text-foreground mt-1">
                     Click "Complete Visit" when done. This marks the visit as finished,
@@ -919,7 +919,7 @@ function getDoctorVisitTourSteps(): TourStep[] {
               </div>
             </div>
             
-            <div class="bg-info-soft p-3 rounded-md border-l-4 border-info">
+            <div class="bg-info-soft p-3 rounded-md border border-info-border">
               <p class="font-semibold text-sm text-info-text mb-1">Status Indicator:</p>
               <p class="text-xs text-info-text">
                 Watch the top-right corner for save status:
@@ -932,7 +932,7 @@ function getDoctorVisitTourSteps(): TourStep[] {
             </div>
           </div>
           
-          <div class="bg-warning-soft border-l-4 border-warning p-3 rounded-md text-xs mt-2">
+          <div class="bg-warning-soft border border-warning-border p-3 rounded-md text-xs mt-2">
             <p class="font-semibold text-warning-text">Pro Tip:</p>
             <p class="text-warning-text mt-1">
               You can safely switch between tabs or even close the browser - your draft is saved!
@@ -955,7 +955,7 @@ function getDoctorVisitTourSteps(): TourStep[] {
           </p>
           
           <div class="space-y-2">
-            <div class="bg-info-soft p-3 rounded-md border-l-4 border-info">
+            <div class="bg-info-soft p-3 rounded-md border border-info-border">
               <p class="font-semibold text-sm text-info-text mb-2">Print Features:</p>
               <ul class="text-xs text-info-text space-y-1 ml-3">
                 <li>• <strong>Live preview:</strong> See exactly how it will print</li>
@@ -967,7 +967,7 @@ function getDoctorVisitTourSteps(): TourStep[] {
               </ul>
             </div>
             
-            <div class="bg-highlight-soft p-3 rounded-md border-l-4 border-highlight">
+            <div class="bg-highlight-soft p-3 rounded-md border border-highlight-border">
               <p class="font-semibold text-sm text-highlight-text mb-1">What Gets Printed:</p>
               <div class="grid grid-cols-2 gap-1 text-xs text-highlight-text mt-2">
                 <p>• Patient demographics</p>
@@ -981,7 +981,7 @@ function getDoctorVisitTourSteps(): TourStep[] {
               </div>
             </div>
             
-            <div class="bg-success-soft p-3 rounded-md border-l-4 border-success">
+            <div class="bg-success-soft p-3 rounded-md border border-success-border">
               <p class="font-semibold text-sm text-success-text mb-1">Customization Tab:</p>
               <p class="text-xs text-success-text">
                 Go to the "Customization" tab to set up your prescription template once.
@@ -990,7 +990,7 @@ function getDoctorVisitTourSteps(): TourStep[] {
             </div>
           </div>
           
-          <div class="bg-warning-soft border-l-4 border-warning p-3 rounded-md text-xs mt-2">
+          <div class="bg-warning-soft border border-warning-border p-3 rounded-md text-xs mt-2">
             <p class="font-semibold text-warning-text">Best Practice:</p>
             <p class="text-warning-text mt-1">
               Always click "Preview" before printing to catch any typos or formatting issues.
@@ -1044,7 +1044,7 @@ function getDoctorVisitTourSteps(): TourStep[] {
           </div>
           
           <div class="space-y-2 mt-3">
-            <div class="bg-info-soft p-3 rounded-md border-l-4 border-info">
+            <div class="bg-info-soft p-3 rounded-md border border-info-border">
               <p class="font-semibold text-sm text-info-text mb-1">What Happens Next:</p>
               <ol class="text-xs text-info-text space-y-1 ml-4 list-decimal">
                 <li>Visit status changes to "Completed"</li>
@@ -1055,7 +1055,7 @@ function getDoctorVisitTourSteps(): TourStep[] {
               </ol>
             </div>
             
-            <div class="bg-highlight-soft p-3 rounded-md border-l-4 border-highlight">
+            <div class="bg-highlight-soft p-3 rounded-md border border-highlight-border">
               <p class="font-semibold text-sm text-highlight-text mb-1">Need to Edit Later?</p>
               <p class="text-xs text-highlight-text">
                 Completed visits can be reopened if you need to add or correct something.
@@ -1079,7 +1079,7 @@ function getDoctorVisitTourSteps(): TourStep[] {
           </p>
           
           <div class="space-y-2">
-            <div class="bg-info-soft p-3 rounded-md border-l-4 border-info">
+            <div class="bg-info-soft p-3 rounded-md border border-info-border">
               <p class="font-semibold text-sm text-info-text mb-2">How It Works:</p>
               <ol class="text-xs text-info-text space-y-1 ml-4 list-decimal">
                 <li>Look for the microphone icon in any text field (Chief Complaints, Objective, etc.)</li>
@@ -1089,7 +1089,7 @@ function getDoctorVisitTourSteps(): TourStep[] {
               </ol>
             </div>
             
-            <div class="bg-success-soft p-3 rounded-md border-l-4 border-success">
+            <div class="bg-success-soft p-3 rounded-md border border-success-border">
               <p class="font-semibold text-sm text-success-text mb-1">Smart Features:</p>
               <ul class="text-xs text-success-text space-y-1 ml-3">
                 <li>• <strong>Medical terminology:</strong> Recognizes clinical terms accurately</li>
@@ -1100,7 +1100,7 @@ function getDoctorVisitTourSteps(): TourStep[] {
             </div>
           </div>
           
-          <div class="bg-warning-soft border-l-4 border-warning p-3 rounded-md text-xs mt-2">
+          <div class="bg-warning-soft border border-warning-border p-3 rounded-md text-xs mt-2">
             <p class="font-semibold text-warning-text">Best Use Cases:</p>
             <div class="space-y-1 mt-1 text-warning-text">
               <p>• <strong>Chief Complaints:</strong> "Patient complains of severe acne on face for past 3 months"</p>
@@ -1124,7 +1124,7 @@ function getDoctorVisitTourSteps(): TourStep[] {
           </p>
           
           <div class="space-y-2">
-            <div class="bg-muted p-3 rounded-md border-l-4 border-muted-foreground">
+            <div class="bg-muted p-3 rounded-md border border-border">
               <p class="font-semibold text-sm text-foreground mb-2">Essential Shortcuts:</p>
               <div class="grid grid-cols-2 gap-2 text-xs">
                 <div class="bg-white p-2 rounded-md border">
@@ -1146,7 +1146,7 @@ function getDoctorVisitTourSteps(): TourStep[] {
               </div>
             </div>
             
-            <div class="bg-info-soft p-3 rounded-md border-l-4 border-info">
+            <div class="bg-info-soft p-3 rounded-md border border-info-border">
               <p class="font-semibold text-sm text-info-text mb-2">Speed Tips:</p>
               <ul class="text-xs text-info-text space-y-1 ml-3">
                 <li>• Use <strong>common diagnosis shortcuts</strong> (type "acne" → selects from list)</li>
@@ -1157,7 +1157,7 @@ function getDoctorVisitTourSteps(): TourStep[] {
               </ul>
             </div>
             
-            <div class="bg-success-soft p-3 rounded-md border-l-4 border-success">
+            <div class="bg-success-soft p-3 rounded-md border border-success-border">
               <p class="font-semibold text-sm text-success-text mb-1">Workflow Optimization:</p>
               <p class="text-xs text-success-text">
                 Most doctors complete a routine follow-up visit in <strong>3-5 minutes</strong> and
@@ -1181,7 +1181,7 @@ function getDoctorVisitTourSteps(): TourStep[] {
           </p>
           
           <div class="space-y-2">
-            <div class="bg-info-soft p-3 rounded-md border-l-4 border-info">
+            <div class="bg-info-soft p-3 rounded-md border border-info-border">
               <p class="font-semibold text-sm text-info-text mb-2">Security Features:</p>
               <ul class="text-xs text-info-text space-y-1 ml-3">
                 <li>• <strong>Encrypted storage:</strong> All data encrypted at rest and in transit</li>
@@ -1192,7 +1192,7 @@ function getDoctorVisitTourSteps(): TourStep[] {
               </ul>
             </div>
             
-            <div class="bg-highlight-soft p-3 rounded-md border-l-4 border-highlight">
+            <div class="bg-highlight-soft p-3 rounded-md border border-highlight-border">
               <p class="font-semibold text-sm text-highlight-text mb-1">Legal Compliance:</p>
               <p class="text-xs text-highlight-text">
                 All prescriptions include legally required fields (doctor registration number,
@@ -1200,7 +1200,7 @@ function getDoctorVisitTourSteps(): TourStep[] {
               </p>
             </div>
             
-            <div class="bg-success-soft p-3 rounded-md border-l-4 border-success">
+            <div class="bg-success-soft p-3 rounded-md border border-success-border">
               <p class="font-semibold text-sm text-success-text mb-1">Version Control:</p>
               <p class="text-xs text-success-text">
                 If you edit a completed visit, the system keeps both versions so you can see
@@ -1265,7 +1265,7 @@ function getDoctorVisitTourSteps(): TourStep[] {
           </div>
           
           <div class="space-y-2">
-            <div class="bg-info-soft p-3 rounded-md border-l-4 border-info">
+            <div class="bg-info-soft p-3 rounded-md border border-info-border">
               <p class="font-semibold text-info-text mb-1">Remember:</p>
               <p class="text-sm text-info-text">
                 Auto-save protects your work. Take your time, be thorough, and the system

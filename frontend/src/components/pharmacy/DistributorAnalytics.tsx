@@ -536,7 +536,7 @@ function MetricCard({
   icon: ReactNode;
 }) {
   return (
-    <Card>
+    <Card className="gap-0 py-0">
       <CardContent className="p-4">
         <div className="flex items-start justify-between gap-3">
           <div>

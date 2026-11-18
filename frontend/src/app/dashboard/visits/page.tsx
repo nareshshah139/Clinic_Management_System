@@ -748,7 +748,7 @@ function VisitsPageInner() {
     return (
       <div className="space-y-6">
         {/* Header with Guide */}
-        <PageHeader title={<>Visit Documentation</>} description={<>Create and manage patient visits with role-based documentation</>} actions={<><QuickGuide
+        <PageHeader title={<>Visit Documentation</>} actions={<><QuickGuide
             title="Visit Documentation Guide"
             sections={[
               {
@@ -795,16 +795,16 @@ function VisitsPageInner() {
         {/* Visit Setup */}
         <Card>
           <CardHeader>
-            <CardTitle>Start New Visit</CardTitle>
+            <CardTitle>Start a visit</CardTitle>
             <CardDescription>
-              Select patient and doctor to begin visit documentation
+              Pick the patient and doctor to start documenting.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="relative">
                 <label htmlFor="visit-landing-patient" className="text-sm font-medium text-foreground mb-2 block">
-                  Select Patient
+                  Patient
                 </label>
                 <div className="relative">
                   <input id="visit-landing-patient"
@@ -880,7 +880,7 @@ function VisitsPageInner() {
 
               <div>
                 <label htmlFor="visit-landing-doctor" className="text-sm font-medium text-foreground mb-2 block">
-                  Select Doctor
+                  Doctor
                 </label>
                 <Select value={selectedDoctorId} onValueChange={setChosenDoctorId} disabled={doctorLocked}>
                   <SelectTrigger id="visit-landing-doctor">

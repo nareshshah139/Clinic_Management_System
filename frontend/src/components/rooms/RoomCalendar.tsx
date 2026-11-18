@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { LoadingSkeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Calendar, ChevronLeft, ChevronRight, Clock, User, Stethoscope } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, Clock } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { getISTDateString, minutesToHHMM, hhmmToMinutes, isSlotInPast } from '@/lib/utils';
 import { RoomTypeIcon } from './room-type-icon';
@@ -307,11 +307,10 @@ export default function RoomCalendar() {
       </div>
 
       {/* Room Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
+        <Card className="gap-0 py-0">
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
-              <User className="h-5 w-5 text-info-text" />
               <div>
                 <p className="text-sm text-muted-foreground">Total Rooms</p>
                 <p className="text-2xl font-bold">{filteredRooms.length}</p>
@@ -319,10 +318,9 @@ export default function RoomCalendar() {
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="gap-0 py-0">
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
-              <Clock className="h-5 w-5 text-success-text" />
               <div>
                 <p className="text-sm text-muted-foreground">Available</p>
                 <p className="text-2xl font-bold text-success-text">
@@ -335,10 +333,9 @@ export default function RoomCalendar() {
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="gap-0 py-0">
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
-              <User className="h-5 w-5 text-warning-text" />
               <div>
                 <p className="text-sm text-muted-foreground">Occupied</p>
                 <p className="text-2xl font-bold text-warning-text">
@@ -351,13 +348,12 @@ export default function RoomCalendar() {
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="gap-0 py-0">
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
-              <Stethoscope className="h-5 w-5 text-highlight-text" />
               <div>
                 <p className="text-sm text-muted-foreground">Appointments</p>
-                <p className="text-2xl font-bold text-highlight-text">
+                <p className="text-2xl font-bold">
                   {Object.values(roomSchedules).reduce((total, schedule) => 
                     total + schedule.appointments.length, 0
                   )}
@@ -604,7 +600,7 @@ export default function RoomCalendar() {
       )}
 
       {/* Legend */}
-      <Card>
+      <Card className="gap-0 py-0">
         <CardContent className="p-4">
           <h3 className="font-semibold mb-3">Legend</h3>
           <div className="flex flex-wrap gap-4">

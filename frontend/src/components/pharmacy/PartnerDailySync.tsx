@@ -1,6 +1,6 @@
 'use client';
 
-import { displayCalendarDate, displayUtcDate } from '@/lib/date-display';
+import { displayUtcDate } from '@/lib/date-display';
 import { Spinner } from '@/components/ui/spinner';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -319,8 +319,8 @@ export function PartnerDailySync() {
     <div className="@container space-y-6">
       <div className="flex flex-col gap-3 @2xl:flex-row @2xl:items-center @2xl:justify-between">
         <div>
-          <h2 className="text-2xl font-semibold tracking-normal">
-            Partner Daily Sync
+          <h2 className="text-xl font-semibold tracking-normal">
+            Partner daily sync
           </h2>
         </div>
         <Button variant="outline" onClick={loadData} disabled={loading}>
@@ -341,28 +341,28 @@ export function PartnerDailySync() {
         </Alert>
       )}
 
-      <div className="grid gap-4 @2xl:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-2">
+      <div className="grid grid-cols-2 gap-3 @2xl:grid-cols-4">
+        <Card className="gap-0 py-4">
+          <CardHeader>
             <CardDescription>Partners</CardDescription>
             <CardTitle>{summary?.partnerCount ?? 0}</CardTitle>
           </CardHeader>
         </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Submitted Today</CardDescription>
+        <Card className="gap-0 py-4">
+          <CardHeader>
+            <CardDescription>Submitted today</CardDescription>
             <CardTitle>{summary?.submittedCount ?? 0}</CardTitle>
           </CardHeader>
         </Card>
-        <Card>
-          <CardHeader className="pb-2">
+        <Card className="gap-0 py-4">
+          <CardHeader>
             <CardDescription>Missing</CardDescription>
             <CardTitle>{summary?.missingCount ?? 0}</CardTitle>
           </CardHeader>
         </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Net Sales</CardDescription>
+        <Card className="gap-0 py-4">
+          <CardHeader>
+            <CardDescription>Net sales</CardDescription>
             <CardTitle>{money(summary?.netAmount)}</CardTitle>
           </CardHeader>
         </Card>
@@ -371,8 +371,7 @@ export function PartnerDailySync() {
       <div className="grid grid-cols-1 gap-6 @7xl:grid-cols-[minmax(0,1.25fr)_minmax(360px,0.75fr)]">
         <Card>
           <CardHeader>
-            <CardTitle>Manual Daily Entry</CardTitle>
-            <CardDescription>{displayCalendarDate(date)}</CardDescription>
+            <CardTitle>Manual daily entry</CardTitle>
           </CardHeader>
           <CardContent className="@container space-y-4">
             <div className="grid gap-4 @xl:grid-cols-2 @4xl:grid-cols-4">
@@ -397,7 +396,7 @@ export function PartnerDailySync() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="partner-name">Organization Name</Label>
+                <Label htmlFor="partner-name">Organization name</Label>
                 <Input
                   id="partner-name"
                   value={partnerOrganizationName}
@@ -408,7 +407,7 @@ export function PartnerDailySync() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="partner-user">Submitted By</Label>
+                <Label htmlFor="partner-user">Submitted by</Label>
                 <Input
                   id="partner-user"
                   value={partnerUserName}
@@ -553,7 +552,7 @@ export function PartnerDailySync() {
                 onClick={() => setItems((current) => [...current, newLine()])}
               >
                 <Plus className="mr-2 h-4 w-4" />
-                Add Item
+                Add medicine
               </Button>
               <div className="flex items-center gap-3">
                 <span className="text-sm text-muted-foreground">
@@ -574,10 +573,8 @@ export function PartnerDailySync() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Missing Entries</CardTitle>
-            <CardDescription>
-              Organizations without a sale for {displayCalendarDate(date)}.
-            </CardDescription>
+            <CardTitle>Missing entries</CardTitle>
+            <CardDescription>Partners with no sale for this date.</CardDescription>
           </CardHeader>
           <CardContent>
             {missing.length === 0 ? (
@@ -616,8 +613,7 @@ export function PartnerDailySync() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Recent Submissions</CardTitle>
-          <CardDescription>{displayCalendarDate(date)}</CardDescription>
+          <CardTitle>Recent submissions</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto rounded-md border">

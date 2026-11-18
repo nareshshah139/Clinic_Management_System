@@ -20,6 +20,8 @@
   --color-info-soft: var(--info-soft);
   --color-info-text: var(--info-text);
   --color-info-border: var(--info-border);
+  --color-voice-bar: var(--voice-bar);
+  --color-voice-bar-border: var(--voice-bar-border);
   --color-destructive-soft: var(--destructive-soft);
   --color-destructive-text: var(--destructive-text);
   --color-destructive-border: var(--destructive-border);
@@ -74,6 +76,8 @@
 
 :root {
   --app-text-increase: 0rem;
+  --voice-bar: color-mix(in oklab, var(--info-soft) 70%, var(--card));
+  --voice-bar-border: var(--info-border);
   --radius: 0.75rem;
   --background: #FFFFFF;
   --foreground: #020618;
@@ -144,6 +148,8 @@
 }
 
 :root[data-palette="branded"] {
+  --voice-bar: var(--accent);
+  --voice-bar-border: var(--input);
   --background: #F7F8F6;
   --foreground: #262A27;
   --card-foreground: #262A27;
@@ -232,6 +238,17 @@
   outline: none;
 }
 
+/* Reduced motion: every transition and animation in the app (dialogs, skeletons,
+   spinners, hover nudges) settles instantly instead of moving. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* Voice fill: brief confirmation on inputs the transcript just populated. */
 @media (prefers-reduced-motion: no-preference) {
   [data-voice-filled] {
@@ -250,6 +267,8 @@
 
 /* High-contrast mode toggle (applied via document.body.classList.toggle('high-contrast')) */
 .high-contrast {
+  --voice-bar: var(--card);
+  --voice-bar-border: var(--border);
   --background: #ffffff;
   --foreground: #000000;
   --card: #ffffff;

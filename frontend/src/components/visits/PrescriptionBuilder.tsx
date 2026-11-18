@@ -5635,7 +5635,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
             {customSections.length > 0 && (
                 <div className="mt-3 space-y-3">
                   {customSections.map((s) => (
-                    <Card key={s.id}>
+                    <Card key={s.id} className="gap-0 py-0">
                       <CardContent className="p-3 space-y-2">
                         <div className="grid grid-cols-1 md:grid-cols-6 gap-2 items-end">
                           <div className="md:col-span-2">
@@ -6817,8 +6817,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                             <div 
                               key={`${d.id}-${d.name}`} 
                               className={`px-3 py-2 text-sm flex items-center justify-between hover:bg-accent ${
-                                index === 0 ? 'bg-success-soft border-l-4 border-l-success' :
-                                index < 3 ? 'bg-info-soft border-l-4 border-l-info' : ''
+                                index === 0 ? 'bg-success-soft' :
+                                index < 3 ? 'bg-info-soft' : ''
                               }`}
                               onMouseEnter={() => prefetchDrugStockById(d.id, d.inventoryItemId)}
                             >
@@ -7210,8 +7210,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 <div 
                   key={`${d.id}-${d.name}`} 
                   className={`px-3 py-2 text-sm flex items-center justify-between hover:bg-accent cursor-pointer border-b last:border-b-0 ${
-                    index === 0 ? 'bg-success-soft border-l-4 border-l-success' :
-                    index < 3 ? 'bg-info-soft border-l-4 border-l-info' : ''
+                    index === 0 ? 'bg-success-soft' :
+                    index < 3 ? 'bg-info-soft' : ''
                   }`}
                   onMouseEnter={() => prefetchDrugStockById(d.id, d.inventoryItemId)}
                   onClick={() => { addItemFromDrugToRow(activeSearchRow, d); }}

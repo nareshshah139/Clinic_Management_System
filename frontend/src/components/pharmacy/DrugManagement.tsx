@@ -32,17 +32,16 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import Link from 'next/link';
 import {
+  ArrowLeft,
   Search,
   Plus,
   Edit,
   Trash2,
   Filter,
   Pill,
-  Package,
   DollarSign,
-  Building,
-  Calendar,
   AlertTriangle,
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
@@ -290,19 +289,24 @@ export function DrugManagement() {
     <div className="space-y-6">
       {confirmDialog}
       {/* Header */}
-      <PageHeader title="Drug Database" description="Manage your pharmacy's drug inventory" actions={
-        <Button
-          onClick={() => setShowAddDialog(true)}
-          className="bg-info hover:bg-info/90"
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Add New Drug
+      <PageHeader title="Drug Database" actions={
+        <>
+        <Button variant="outline" asChild>
+          <Link href="/dashboard/pharmacy">
+            <ArrowLeft className="h-4 w-4" />
+            Pharmacy Desk
+          </Link>
         </Button>
+        <Button onClick={() => setShowAddDialog(true)}>
+          <Plus className="h-4 w-4 mr-2" />
+          Add drug
+        </Button>
+        </>
       } />
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
+        <Card className="gap-0 py-0">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
@@ -311,36 +315,33 @@ export function DrugManagement() {
                   {pagination.total.toLocaleString()}
                 </p>
               </div>
-              <Pill className="h-8 w-8 text-info-text" />
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="gap-0 py-0">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Categories</p>
                 <p className="text-2xl font-bold">{categories.length}</p>
               </div>
-              <Package className="h-8 w-8 text-success-text" />
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="gap-0 py-0">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Manufacturers</p>
                 <p className="text-2xl font-bold">{manufacturers.length}</p>
               </div>
-              <Building className="h-8 w-8 text-highlight-text" />
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="gap-0 py-0">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
@@ -349,22 +350,22 @@ export function DrugManagement() {
                   {drugs.filter((d) => d.isActive).length}
                 </p>
               </div>
-              <Calendar className="h-8 w-8 text-warning-text" />
             </div>
           </CardContent>
         </Card>
       </div>
 
       {/* Search and Filters */}
-      <Card>
+      <Card className="gap-0 py-0">
         <CardContent className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
-              <Label>Search Drugs</Label>
+              <Label htmlFor="drug-search">Search</Label>
               <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
                 <Input
-                  placeholder="Search by name, composition..."
+                  id="drug-search"
+                  placeholder="Name or composition"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10"
@@ -373,12 +374,12 @@ export function DrugManagement() {
             </div>
 
             <div>
-              <Label>Category</Label>
+              <Label htmlFor="drug-category">Category</Label>
               <Select
                 value={selectedCategory}
                 onValueChange={setSelectedCategory}
               >
-                <SelectTrigger>
+                <SelectTrigger id="drug-category" className="w-full">
                   <SelectValue placeholder="All categories" />
                 </SelectTrigger>
                 <SelectContent>
@@ -393,12 +394,12 @@ export function DrugManagement() {
             </div>
 
             <div>
-              <Label>Manufacturer</Label>
+              <Label htmlFor="drug-manufacturer">Manufacturer</Label>
               <Select
                 value={selectedManufacturer}
                 onValueChange={setSelectedManufacturer}
               >
-                <SelectTrigger>
+                <SelectTrigger id="drug-manufacturer" className="w-full">
                   <SelectValue placeholder="All manufacturers" />
                 </SelectTrigger>
                 <SelectContent>
@@ -419,7 +420,7 @@ export function DrugManagement() {
                 className="w-full"
               >
                 <Filter className="h-4 w-4 mr-2" />
-                Clear Filters
+                Clear filters
               </Button>
             </div>
           </div>
@@ -430,15 +431,17 @@ export function DrugManagement() {
       <Card>
         <CardHeader>
           <CardTitle>Drugs ({pagination.total})</CardTitle>
-          <CardDescription>
-            Showing {drugs.length} of {pagination.total} drugs
-          </CardDescription>
+          {drugs.length < pagination.total && (
+            <CardDescription>
+              Showing {drugs.length} of {pagination.total}
+            </CardDescription>
+          )}
         </CardHeader>
         <CardContent>
           {loading ? (
             <LoadingSkeleton label="Loading drugs…" variant="cards" />
           ) : drugs.length === 0 ? (
-            <EmptyState title="No drugs found" description="Adjust your search or add a drug to the database." icon={Pill} action={<Button onClick={() => setShowAddDialog(true)}><Plus className="size-4" />Add New Drug</Button>} />
+            <EmptyState title="No drugs found" description="Adjust your search or add a drug to the database." icon={Pill} action={<Button onClick={() => setShowAddDialog(true)}><Plus className="size-4" />Add drug</Button>} />
           ) : (
             <div className="space-y-4">
               {drugs.map((drug) => (
@@ -580,7 +583,7 @@ export function DrugManagement() {
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              {editingDrug ? 'Edit Drug' : 'Add New Drug'}
+              {editingDrug ? 'Edit drug' : 'Add drug'}
             </DialogTitle>
           </DialogHeader>
 

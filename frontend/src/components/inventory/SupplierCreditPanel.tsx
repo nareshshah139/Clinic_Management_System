@@ -46,7 +46,7 @@ export function SupplierCreditPanel({
   return (
     <section className="space-y-4">
       <div className="flex flex-wrap justify-between gap-3">
-        <h2 className="text-2xl font-semibold">Supplier credits & vouchers</h2>
+        <h2 className="text-xl font-semibold">Supplier credits & vouchers</h2>
         {canWrite && onNew && (
           <Button onClick={onNew}>Record credit note</Button>
         )}

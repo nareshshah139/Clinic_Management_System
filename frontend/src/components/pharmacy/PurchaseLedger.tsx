@@ -335,7 +335,7 @@ export function PurchaseLedger({
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-2xl font-bold tracking-normal">
+          <h2 className="text-xl font-semibold tracking-normal">
             Purchase Ledger
           </h2>
         </div>

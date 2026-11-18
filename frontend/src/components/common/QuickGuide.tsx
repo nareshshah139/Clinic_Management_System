@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Info, BookOpen } from 'lucide-react';
+import { BookOpen, CircleHelp } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 export interface GuideSection {
   title?: string;
@@ -13,49 +14,23 @@ export interface GuideSection {
 interface QuickGuideProps {
   title?: string;
   sections: GuideSection[];
-  triggerText?: string;
-  triggerVariant?: 'default' | 'outline' | 'ghost';
-  triggerClassName?: string;
 }
 
-/**
- * Reusable Quick Guide component for displaying help and instructions
- * 
- * @example
- * ```tsx
- * <QuickGuide
- *   title="Inventory Management Guide"
- *   sections={[
- *     {
- *       title: "Getting Started",
- *       items: [
- *         "Click 'Add Item' to create new inventory items",
- *         "Use filters to search by category or stock status"
- *       ]
- *     }
- *   ]}
- * />
- * ```
- */
-export function QuickGuide({
-  title = 'Quick Guide',
-  sections,
-  triggerText = 'Quick Guide',
-  triggerVariant = 'outline',
-  triggerClassName = ''
-}: QuickGuideProps) {
+export function QuickGuide({ title = 'Quick guide', sections }: QuickGuideProps) {
   const [open, setOpen] = useState(false);
 
   return (
     <>
-      <Button
-        variant={triggerVariant}
-        className={`flex items-center gap-2 ${triggerClassName}`}
-        onClick={() => setOpen(true)}
-      >
-        <Info className="h-4 w-4" />
-        {triggerText}
-      </Button>
+      <TooltipProvider delayDuration={300}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="outline" size="icon" aria-label="Quick guide" onClick={() => setOpen(true)}>
+              <CircleHelp className="size-4" aria-hidden="true" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Quick guide</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
@@ -84,36 +59,3 @@ export function QuickGuide({
     </>
   );
 }
-
-/**
- * Inline tooltip helper for adding hover tooltips to any element
- * Wrap your element with this component to add a tooltip
- */
-export function InfoTooltip({ 
-  children, 
-  content 
-}: { 
-  children: React.ReactNode; 
-  content: string;
-}) {
-  const [show, setShow] = useState(false);
-
-  return (
-    <div className="relative inline-block">
-      <div 
-        onMouseEnter={() => setShow(true)}
-        onMouseLeave={() => setShow(false)}
-        className="cursor-help"
-      >
-        {children}
-      </div>
-      {show && (
-        <div className="absolute z-50 px-3 py-2 text-sm text-white bg-foreground rounded-lg shadow-sm -top-12 left-1/2 transform -translate-x-1/2 whitespace-nowrap">
-          {content}
-          <div className="absolute w-2 h-2 bg-foreground transform rotate-45 left-1/2 -translate-x-1/2 -bottom-1"></div>
-        </div>
-      )}
-    </div>
-  );
-}
-

@@ -20,14 +20,11 @@ import {
   Activity,
   PieChart,
   AlertCircle,
-  Package,
   CreditCard,
   Clock,
-  UserCheck,
   Building2,
   Stethoscope,
   ShoppingCart,
-  RefreshCw,
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { paymentModeLabel } from '@/lib/clinic-payment-modes';
@@ -227,13 +224,13 @@ function SystemAlertsBand({ counts }: { counts: AlertCounts }) {
   const band = tones.reduce((worst, tone) => (TONE_RANK.indexOf(tone) > TONE_RANK.indexOf(worst) ? tone : worst), 'neutral' as StatusVariant);
   return (
     <Card className={`flex-row flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 ${BAND_CLASS[band]}`}>
-      <h2 className={`flex items-center text-sm font-semibold ${LABEL_CLASS[band] || 'text-foreground'}`}>
+      <h2 className={`flex w-full items-center text-sm font-semibold sm:w-auto ${LABEL_CLASS[band] || 'text-foreground'}`}>
         <AlertCircle className="h-4 w-4 mr-2" aria-hidden="true" />
         System Alerts
       </h2>
       <dl className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-6 gap-y-1 text-sm">
         {ALERT_ITEMS.map((item, index) => (
-          <div key={item.key} className="flex items-baseline gap-1.5">
+          <div key={item.key} className="flex flex-wrap items-baseline gap-x-1.5">
             <dt className={LABEL_CLASS[tones[index]]}>{item.label}</dt>
             <dd className="font-semibold tabular-nums">{counts[item.key]}</dd>
             {item.note && counts[item.key] > 0 && <dd className="text-xs text-muted-foreground">{item.note}</dd>}
@@ -260,42 +257,36 @@ export default function ReportsPage() {
       name: 'Revenue',
       description: 'Financial performance and revenue analysis',
       icon: DollarSign,
-      color: 'text-success-text',
     },
     {
       id: 'patients' as ReportType,
       name: 'Patients',
       description: 'Patient demographics and statistics',
       icon: Users,
-      color: 'text-info-text',
     },
     {
       id: 'doctors' as ReportType,
       name: 'Doctors',
       description: 'Doctor productivity and patient metrics',
       icon: Activity,
-      color: 'text-highlight-text',
     },
     {
       id: 'appointments' as ReportType,
       name: 'Appointments',
       description: 'Scheduling patterns and appointment data',
       icon: Calendar,
-      color: 'text-warning-text',
     },
     {
       id: 'inventory' as ReportType,
       name: 'Inventory',
       description: 'Stock levels and inventory movements',
       icon: BarChart3,
-      color: 'text-info-text',
     },
     {
       id: 'payments' as ReportType,
       name: 'Payments',
       description: 'Payment methods and transaction analysis',
       icon: TrendingUp,
-      color: 'text-success-text',
     },
   ];
 
@@ -416,54 +407,50 @@ export default function ReportsPage() {
     return (
       <div className="space-y-6">
         {/* Main Revenue Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          <Card className="gap-0 py-0">
             <CardContent className="p-4">
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
-                  <DollarSign className="h-5 w-5 text-success-text mr-2" />
+              <div>
+                <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Total Revenue</p>
                 </div>
-                <p className="text-2xl font-bold text-success-text">
+                <p className="text-2xl font-bold">
                   {formatCurrency(data.totalRevenue || 0)}
                 </p>
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="gap-0 py-0">
             <CardContent className="p-4">
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
-                  <FileText className="h-5 w-5 text-info-text mr-2" />
+              <div>
+                <div className="mb-1">
                   <p className="text-sm text-muted-foreground">GST Amount</p>
                 </div>
-                <p className="text-2xl font-bold text-info-text">
+                <p className="text-2xl font-bold">
                   {formatCurrency(data.totalGst || 0)}
                 </p>
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="gap-0 py-0">
             <CardContent className="p-4">
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
-                  <TrendingUp className="h-5 w-5 text-highlight-text mr-2" />
+              <div>
+                <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Net Revenue</p>
                 </div>
-                <p className="text-2xl font-bold text-highlight-text">
+                <p className="text-2xl font-bold">
                   {formatCurrency(data.netRevenue || 0)}
                 </p>
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="gap-0 py-0">
             <CardContent className="p-4">
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
-                  <FileText className="h-5 w-5 text-warning-text mr-2" />
+              <div>
+                <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Total Invoices</p>
                 </div>
-                <p className="text-2xl font-bold text-warning-text">
+                <p className="text-2xl font-bold">
                   {data.totalInvoices || 0}
                 </p>
               </div>
@@ -481,7 +468,7 @@ export default function ReportsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {data.paymentBreakdown.map((payment: PaymentBreakdown, index: number) => (
                   <div key={index} className="p-3 bg-muted rounded-lg">
                     <div className="flex justify-between items-center">
@@ -537,54 +524,50 @@ export default function ReportsPage() {
     return (
       <div className="space-y-6">
         {/* Main Patient Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          <Card className="gap-0 py-0">
             <CardContent className="p-4">
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
-                  <Users className="h-5 w-5 text-info-text mr-2" />
+              <div>
+                <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Total Patients</p>
                 </div>
-                <p className="text-2xl font-bold text-info-text">
+                <p className="text-2xl font-bold">
                   {data.totalPatients || 0}
                 </p>
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="gap-0 py-0">
             <CardContent className="p-4">
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
-                  <UserCheck className="h-5 w-5 text-success-text mr-2" />
+              <div>
+                <div className="mb-1">
                   <p className="text-sm text-muted-foreground">New Patients</p>
                 </div>
-                <p className="text-2xl font-bold text-success-text">
+                <p className="text-2xl font-bold">
                   {data.newPatients || 0}
                 </p>
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="gap-0 py-0">
             <CardContent className="p-4">
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
-                  <RefreshCw className="h-5 w-5 text-warning-text mr-2" />
+              <div>
+                <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Returning Patients</p>
                 </div>
-                <p className="text-2xl font-bold text-warning-text">
+                <p className="text-2xl font-bold">
                   {data.returningPatients || 0}
                 </p>
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="gap-0 py-0">
             <CardContent className="p-4">
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
-                  <Calendar className="h-5 w-5 text-highlight-text mr-2" />
+              <div>
+                <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Avg Age</p>
                 </div>
-                <p className="text-2xl font-bold text-highlight-text">
+                <p className="text-2xl font-bold">
                   {data.ageGroupBreakdown ? 
                     Math.round(data.ageGroupBreakdown.reduce((acc: number, group: AgeGroupBreakdown) => acc + (group.count * parseFloat(group.ageGroup.split('-')[0] || '0')), 0) / data.totalPatients) 
                     : 0}
@@ -604,7 +587,7 @@ export default function ReportsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {data.genderBreakdown.map((gender: GenderBreakdown, index: number) => (
                   <div key={index} className="p-3 bg-muted rounded-lg text-center">
                     <p className="font-medium">{enumLabel('gender', gender.gender)}</p>
@@ -655,41 +638,38 @@ export default function ReportsPage() {
     return (
       <div className="space-y-6">
         {/* Main Doctor Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <Card className="gap-0 py-0">
             <CardContent className="p-4">
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
-                  <Stethoscope className="h-5 w-5 text-info-text mr-2" />
+              <div>
+                <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Total Doctors</p>
                 </div>
-                <p className="text-2xl font-bold text-info-text">
+                <p className="text-2xl font-bold">
                   {data.totalDoctors || 0}
                 </p>
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="gap-0 py-0">
             <CardContent className="p-4">
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
-                  <Activity className="h-5 w-5 text-success-text mr-2" />
+              <div>
+                <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Active Doctors</p>
                 </div>
-                <p className="text-2xl font-bold text-success-text">
+                <p className="text-2xl font-bold">
                   {data.activeDoctors || 0}
                 </p>
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="gap-0 py-0">
             <CardContent className="p-4">
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
-                  <Building2 className="h-5 w-5 text-highlight-text mr-2" />
+              <div>
+                <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Departments</p>
                 </div>
-                <p className="text-2xl font-bold text-highlight-text">
+                <p className="text-2xl font-bold">
                   {data.departmentBreakdown?.length || 0}
                 </p>
               </div>
@@ -717,7 +697,7 @@ export default function ReportsPage() {
                       </div>
                       <Badge variant="secondary">{formatPercentage(doctor.completionRate)}</Badge>
                     </div>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 text-sm">
                       <div>
                         <p className="text-muted-foreground">Appointments</p>
                         <p className="font-bold">{doctor.totalAppointments}</p>
@@ -752,25 +732,23 @@ export default function ReportsPage() {
     return (
       <div className="space-y-6">
         {/* Main Appointment Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          <Card className="gap-0 py-0">
             <CardContent className="p-4">
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
-                  <Calendar className="h-5 w-5 text-info-text mr-2" />
+              <div>
+                <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Total Appointments</p>
                 </div>
-                <p className="text-2xl font-bold text-info-text">
+                <p className="text-2xl font-bold">
                   {data.totalAppointments || 0}
                 </p>
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="gap-0 py-0">
             <CardContent className="p-4">
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
-                  <UserCheck className="h-5 w-5 text-success-text mr-2" />
+              <div>
+                <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Completed</p>
                 </div>
                 <p className="text-2xl font-bold text-success-text">
@@ -782,11 +760,10 @@ export default function ReportsPage() {
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="gap-0 py-0">
             <CardContent className="p-4">
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
-                  <AlertCircle className="h-5 w-5 text-destructive-text mr-2" />
+              <div>
+                <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Cancelled</p>
                 </div>
                 <p className="text-2xl font-bold text-destructive-text">
@@ -798,11 +775,10 @@ export default function ReportsPage() {
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="gap-0 py-0">
             <CardContent className="p-4">
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
-                  <Clock className="h-5 w-5 text-warning-text mr-2" />
+              <div>
+                <div className="mb-1">
                   <p className="text-sm text-muted-foreground">No Show</p>
                 </div>
                 <p className="text-2xl font-bold text-warning-text">
@@ -826,7 +802,7 @@ export default function ReportsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
                 {data.peakHours.slice(0, 8).map((peak: PeakHour, index: number) => (
                   <div key={index} className="p-3 bg-muted rounded-lg text-center">
                     <p className="font-medium">{peak.hour}:00</p>
@@ -877,38 +853,35 @@ export default function ReportsPage() {
     return (
       <div className="space-y-6">
         {/* Main Inventory Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          <Card className="gap-0 py-0">
             <CardContent className="p-4">
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
-                  <Package className="h-5 w-5 text-info-text mr-2" />
+              <div>
+                <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Total Items</p>
                 </div>
-                <p className="text-2xl font-bold text-info-text">
+                <p className="text-2xl font-bold">
                   {data.totalItems || 0}
                 </p>
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="gap-0 py-0">
             <CardContent className="p-4">
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
-                  <DollarSign className="h-5 w-5 text-success-text mr-2" />
+              <div>
+                <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Total Value</p>
                 </div>
-                <p className="text-2xl font-bold text-success-text">
+                <p className="text-2xl font-bold">
                   {formatCurrency(data.totalValue || 0)}
                 </p>
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="gap-0 py-0">
             <CardContent className="p-4">
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
-                  <AlertCircle className="h-5 w-5 text-destructive-text mr-2" />
+              <div>
+                <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Low Stock</p>
                 </div>
                 <p className="text-2xl font-bold text-destructive-text">
@@ -918,11 +891,10 @@ export default function ReportsPage() {
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="gap-0 py-0">
             <CardContent className="p-4">
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
-                  <AlertCircle className="h-5 w-5 text-warning-text mr-2" />
+              <div>
+                <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Out of Stock</p>
                 </div>
                 <p className="text-2xl font-bold text-warning-text">
@@ -999,38 +971,35 @@ export default function ReportsPage() {
     return (
       <div className="space-y-6">
         {/* Main Payment Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          <Card className="gap-0 py-0">
             <CardContent className="p-4">
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
-                  <CreditCard className="h-5 w-5 text-info-text mr-2" />
+              <div>
+                <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Total Payments</p>
                 </div>
-                <p className="text-2xl font-bold text-info-text">
+                <p className="text-2xl font-bold">
                   {data.totalPayments || 0}
                 </p>
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="gap-0 py-0">
             <CardContent className="p-4">
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
-                  <DollarSign className="h-5 w-5 text-success-text mr-2" />
+              <div>
+                <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Total Amount</p>
                 </div>
-                <p className="text-2xl font-bold text-success-text">
+                <p className="text-2xl font-bold">
                   {formatCurrency(data.totalAmount || 0)}
                 </p>
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="gap-0 py-0">
             <CardContent className="p-4">
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
-                  <UserCheck className="h-5 w-5 text-success-text mr-2" />
+              <div>
+                <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Successful</p>
                 </div>
                 <p className="text-2xl font-bold text-success-text">
@@ -1042,11 +1011,10 @@ export default function ReportsPage() {
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="gap-0 py-0">
             <CardContent className="p-4">
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
-                  <AlertCircle className="h-5 w-5 text-destructive-text mr-2" />
+              <div>
+                <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Failed</p>
                 </div>
                 <p className="text-2xl font-bold text-destructive-text">
@@ -1067,7 +1035,7 @@ export default function ReportsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {data.paymentModeBreakdown.map((mode: PaymentModeBreakdown, index: number) => (
                   <div key={index} className="p-3 bg-muted rounded-lg">
                     <div className="flex justify-between items-center mb-2">
@@ -1096,7 +1064,7 @@ export default function ReportsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
                 <div className="p-3 bg-muted rounded-lg text-center">
                   <p className="text-sm text-muted-foreground">Total Transactions</p>
                   <p className="text-xl font-bold">{data.reconciliationSummary.totalTransactions}</p>
@@ -1169,7 +1137,7 @@ export default function ReportsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <PageHeader title={<>Reports & Analytics</>} description={<>Generate comprehensive reports and analyze your clinic&apos;s performance</>} actions={<><QuickGuide
+      <PageHeader title={<>Reports & Analytics</>} actions={<><QuickGuide
           title="Reports & Analytics Guide"
           sections={[
             {
@@ -1210,7 +1178,7 @@ export default function ReportsPage() {
         <TabsList aria-label="Report" className="justify-start">
           {reportTypes.map((report) => (
             <TabsTrigger key={report.id} value={report.id} className="flex-none px-3">
-              <report.icon className={report.color} aria-hidden="true" />
+              <report.icon aria-hidden="true" />
               {report.name}
             </TabsTrigger>
           ))}

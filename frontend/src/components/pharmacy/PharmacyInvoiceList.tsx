@@ -20,9 +20,7 @@ import {
   Eye,
   Trash2,
   Download,
-  CreditCard,
   FileText,
-  IndianRupee,
   CheckCircle,
   Pencil,
 } from 'lucide-react';
@@ -303,58 +301,54 @@ export function PharmacyInvoiceList() {
     <div className="space-y-6">
       {confirmDialog}
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4 md:gap-4">
+        <Card className="gap-0 py-0">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Total Invoices</p>
+                <p className="text-sm text-muted-foreground">Total invoices</p>
                 <p className="text-2xl font-bold">{invoices.length}</p>
               </div>
-              <FileText className="h-8 w-8 text-info-text" />
             </div>
           </CardContent>
         </Card>
         
-        <Card>
+        <Card className="gap-0 py-0">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Total Amount</p>
+                <p className="text-sm text-muted-foreground">Total amount</p>
                 <p className="text-2xl font-bold">₹{stats.totalAmount.toFixed(2)}</p>
               </div>
-              <IndianRupee className="h-8 w-8 text-success-text" />
             </div>
           </CardContent>
         </Card>
         
-        <Card>
+        <Card className="gap-0 py-0">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Completed</p>
                 <p className="text-2xl font-bold">{stats.completedInvoices}</p>
               </div>
-              <CheckCircle className="h-8 w-8 text-success-text" />
             </div>
           </CardContent>
         </Card>
         
-        <Card>
+        <Card className="gap-0 py-0">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Pending Amount</p>
+                <p className="text-sm text-muted-foreground">Pending amount</p>
                 <p className="text-2xl font-bold">₹{stats.pendingAmount.toFixed(2)}</p>
               </div>
-              <CreditCard className="h-8 w-8 text-warning-text" />
             </div>
           </CardContent>
         </Card>
       </div>
 
       {/* Filters */}
-      <Card>
+      <Card className="gap-0 py-0">
         <CardContent className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
             <div>
@@ -398,7 +392,7 @@ export function PharmacyInvoiceList() {
             </div>
             
             <div>
-              <Label htmlFor="invoice-payment-status-filter">Payment Status</Label>
+              <Label htmlFor="invoice-payment-status-filter">Payment status</Label>
               <Select
                 value={paymentStatusFilter}
                 onValueChange={(value: string) => {
@@ -421,7 +415,7 @@ export function PharmacyInvoiceList() {
             </div>
             
             <div>
-              <Label htmlFor="invoice-payment-method-filter">Payment Method</Label>
+              <Label htmlFor="invoice-payment-method-filter">Payment method</Label>
               <Select
                 value={paymentMethodFilter}
                 onValueChange={(value: string) => {
@@ -444,7 +438,7 @@ export function PharmacyInvoiceList() {
             </div>
             
             <div>
-              <Label htmlFor="invoice-date-filter">Date Range</Label>
+              <Label htmlFor="invoice-date-filter">Date range</Label>
               <Select
                 value={dateRange}
                 onValueChange={(value: string) => {
@@ -479,9 +473,11 @@ export function PharmacyInvoiceList() {
       <Card>
         <CardHeader>
           <CardTitle>Invoices ({pagination.total})</CardTitle>
-          <CardDescription>
-            Showing {invoices.length} of {pagination.total} invoices
-          </CardDescription>
+          {invoices.length < pagination.total && (
+            <CardDescription>
+              Showing {invoices.length} of {pagination.total}
+            </CardDescription>
+          )}
         </CardHeader>
         <CardContent>
           {loading ? (

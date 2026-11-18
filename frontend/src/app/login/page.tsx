@@ -107,8 +107,7 @@ function LoginPageInner() {
           {loading && <Spinner label="Signing in…" />}
           {loading ? 'Signing in…' : 'Sign in'}
         </Button>
-        <p className="text-xs text-muted-foreground text-center">Use your registered phone number or email with your password.</p>
-        <p className="text-sm text-center text-muted-foreground">Forgot password? Ask your clinic admin for a reset code, then <Link href="/reset-password" className="text-primary underline underline-offset-2">enter your reset code</Link>.</p>
+        <p className="text-sm text-center text-muted-foreground">Forgot password? Ask your clinic admin for a code, then <Link href="/reset-password" className="text-primary underline underline-offset-2">use a reset code</Link>.</p>
       </form>
     </AuthCard>
   );

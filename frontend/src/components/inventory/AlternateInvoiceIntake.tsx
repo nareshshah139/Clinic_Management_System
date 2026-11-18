@@ -110,7 +110,7 @@ export function AlternateInvoiceIntake({
   return (
     <section className="space-y-5">
       <header>
-        <h2 className="text-2xl font-semibold">
+        <h2 className="text-xl font-semibold">
           {mode === "csv"
             ? "Import purchase CSV"
             : "Invoice attachments from Gmail"}

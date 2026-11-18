@@ -385,7 +385,7 @@ export function PharmacyPackageManager() {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold flex items-center gap-2">
+          <h2 className="text-xl font-semibold flex items-center gap-2">
             <Package className="h-6 w-6" />
             Pharmacy Packages
           </h2>
@@ -698,7 +698,7 @@ export function PharmacyPackageManager() {
               
               <div className="space-y-4">
                 {formData.items.map((item, index) => (
-                  <Card key={index}>
+                  <Card key={index} className="gap-0 py-0">
                     <CardContent className="p-4">
                       <div className="flex justify-between items-start mb-4">
                         <h4 className="font-medium">Item {index + 1}</h4>
@@ -922,7 +922,7 @@ export function PharmacyPackageManager() {
                   {selectedPackage.items
                     .sort((a, b) => a.sequence - b.sequence)
                     .map((item, index) => (
-                    <Card key={item.id}>
+                    <Card key={item.id} className="gap-0 py-0">
                       <CardContent className="p-3">
                         <div className="flex justify-between items-start">
                           <div className="flex-1">

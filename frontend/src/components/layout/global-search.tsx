@@ -104,6 +104,7 @@ export function GlobalSearch() {
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const rootRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const listId = useId();
   const optionId = (index: number) => `${listId}-option-${index}`;
@@ -115,6 +116,19 @@ export function GlobalSearch() {
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    function focusOnSlash(event: KeyboardEvent) {
+      if (event.key !== '/' || event.ctrlKey || event.metaKey || event.altKey || event.defaultPrevented || event.isComposing) return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"], [role="textbox"], [role="combobox"]')) return;
+      if (document.querySelector('[role="dialog"], [role="alertdialog"], .introjs-overlay')) return;
+      event.preventDefault();
+      inputRef.current?.focus();
+    }
+    window.addEventListener('keydown', focusOnSlash);
+    return () => window.removeEventListener('keydown', focusOnSlash);
   }, []);
 
   useEffect(() => {
@@ -172,15 +186,17 @@ export function GlobalSearch() {
       <div className="relative">
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
         <Input
+          ref={inputRef}
           type="text"
           role="combobox"
+          aria-keyshortcuts="/"
           aria-label="Search patients, appointments, doctors"
           aria-autocomplete="list"
           aria-expanded={listShown}
           aria-controls={listId}
           aria-activedescendant={listShown && activeIndex >= 0 ? optionId(activeIndex) : undefined}
           placeholder="Search patients, appointments, doctors..."
-          className="pl-10 pr-4 py-2 w-full"
+          className="peer pl-10 pr-10 py-2 w-full"
           value={query}
           onChange={(e) => {
             const hasQuery = e.target.value.trim().length >= 2;
@@ -191,10 +207,12 @@ export function GlobalSearch() {
           onFocus={() => setOpen(query.trim().length >= 2)}
           onKeyDown={onKeyDown}
         />
-        {searching && (
+        {searching ? (
           <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
             <Spinner className="h-4 w-4" />
           </div>
+        ) : !query && (
+          <kbd aria-hidden="true" className="pointer-events-none absolute right-2.5 top-1/2 hidden -translate-y-1/2 rounded border bg-muted px-1.5 font-mono text-xs text-muted-foreground transition-opacity peer-focus:opacity-0 md:block">/</kbd>
         )}
       </div>
 
@@ -237,7 +255,7 @@ export function GlobalSearch() {
       )}
 
       {open && results.length === 0 && query.length >= 2 && !searching && (
-        <Card className="absolute top-full left-0 right-0 mt-1 z-50 shadow-sm">
+        <Card className="gap-0 py-0 absolute top-full left-0 right-0 mt-1 z-50 shadow-sm">
           <CardContent className="p-4 text-center" role="status">
             <p className="text-sm text-muted-foreground">No results found for &quot;{query}&quot;</p>
             <p className="text-xs text-muted-foreground mt-1">Try searching for patient names, phone numbers, or doctor names</p>
