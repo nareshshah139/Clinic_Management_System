@@ -64,7 +64,7 @@ export function CountRecord({
           </p>
         )}
         {detail.signOffNote && (
-          <blockquote className="border-l-4 border-border pl-3 text-base">
+          <blockquote className="border-l-2 border-border pl-3 text-base">
             <span className="sr-only">Sign-off note: </span>“{detail.signOffNote}”
           </blockquote>
         )}

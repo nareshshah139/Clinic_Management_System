@@ -353,7 +353,7 @@ export default function RoomCalendar() {
             <div className="flex items-center gap-2">
               <div>
                 <p className="text-sm text-muted-foreground">Appointments</p>
-                <p className="text-2xl font-bold text-highlight-text">
+                <p className="text-2xl font-bold">
                   {Object.values(roomSchedules).reduce((total, schedule) => 
                     total + schedule.appointments.length, 0
                   )}

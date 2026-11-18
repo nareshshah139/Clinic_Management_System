@@ -257,42 +257,36 @@ export default function ReportsPage() {
       name: 'Revenue',
       description: 'Financial performance and revenue analysis',
       icon: DollarSign,
-      color: 'text-success-text',
     },
     {
       id: 'patients' as ReportType,
       name: 'Patients',
       description: 'Patient demographics and statistics',
       icon: Users,
-      color: 'text-info-text',
     },
     {
       id: 'doctors' as ReportType,
       name: 'Doctors',
       description: 'Doctor productivity and patient metrics',
       icon: Activity,
-      color: 'text-highlight-text',
     },
     {
       id: 'appointments' as ReportType,
       name: 'Appointments',
       description: 'Scheduling patterns and appointment data',
       icon: Calendar,
-      color: 'text-warning-text',
     },
     {
       id: 'inventory' as ReportType,
       name: 'Inventory',
       description: 'Stock levels and inventory movements',
       icon: BarChart3,
-      color: 'text-info-text',
     },
     {
       id: 'payments' as ReportType,
       name: 'Payments',
       description: 'Payment methods and transaction analysis',
       icon: TrendingUp,
-      color: 'text-success-text',
     },
   ];
 
@@ -420,7 +414,7 @@ export default function ReportsPage() {
                 <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Total Revenue</p>
                 </div>
-                <p className="text-2xl font-bold text-success-text">
+                <p className="text-2xl font-bold">
                   {formatCurrency(data.totalRevenue || 0)}
                 </p>
               </div>
@@ -432,7 +426,7 @@ export default function ReportsPage() {
                 <div className="mb-1">
                   <p className="text-sm text-muted-foreground">GST Amount</p>
                 </div>
-                <p className="text-2xl font-bold text-info-text">
+                <p className="text-2xl font-bold">
                   {formatCurrency(data.totalGst || 0)}
                 </p>
               </div>
@@ -444,7 +438,7 @@ export default function ReportsPage() {
                 <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Net Revenue</p>
                 </div>
-                <p className="text-2xl font-bold text-highlight-text">
+                <p className="text-2xl font-bold">
                   {formatCurrency(data.netRevenue || 0)}
                 </p>
               </div>
@@ -456,7 +450,7 @@ export default function ReportsPage() {
                 <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Total Invoices</p>
                 </div>
-                <p className="text-2xl font-bold text-warning-text">
+                <p className="text-2xl font-bold">
                   {data.totalInvoices || 0}
                 </p>
               </div>
@@ -537,7 +531,7 @@ export default function ReportsPage() {
                 <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Total Patients</p>
                 </div>
-                <p className="text-2xl font-bold text-info-text">
+                <p className="text-2xl font-bold">
                   {data.totalPatients || 0}
                 </p>
               </div>
@@ -549,7 +543,7 @@ export default function ReportsPage() {
                 <div className="mb-1">
                   <p className="text-sm text-muted-foreground">New Patients</p>
                 </div>
-                <p className="text-2xl font-bold text-success-text">
+                <p className="text-2xl font-bold">
                   {data.newPatients || 0}
                 </p>
               </div>
@@ -561,7 +555,7 @@ export default function ReportsPage() {
                 <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Returning Patients</p>
                 </div>
-                <p className="text-2xl font-bold text-warning-text">
+                <p className="text-2xl font-bold">
                   {data.returningPatients || 0}
                 </p>
               </div>
@@ -573,7 +567,7 @@ export default function ReportsPage() {
                 <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Avg Age</p>
                 </div>
-                <p className="text-2xl font-bold text-highlight-text">
+                <p className="text-2xl font-bold">
                   {data.ageGroupBreakdown ? 
                     Math.round(data.ageGroupBreakdown.reduce((acc: number, group: AgeGroupBreakdown) => acc + (group.count * parseFloat(group.ageGroup.split('-')[0] || '0')), 0) / data.totalPatients) 
                     : 0}
@@ -651,7 +645,7 @@ export default function ReportsPage() {
                 <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Total Doctors</p>
                 </div>
-                <p className="text-2xl font-bold text-info-text">
+                <p className="text-2xl font-bold">
                   {data.totalDoctors || 0}
                 </p>
               </div>
@@ -663,7 +657,7 @@ export default function ReportsPage() {
                 <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Active Doctors</p>
                 </div>
-                <p className="text-2xl font-bold text-success-text">
+                <p className="text-2xl font-bold">
                   {data.activeDoctors || 0}
                 </p>
               </div>
@@ -675,7 +669,7 @@ export default function ReportsPage() {
                 <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Departments</p>
                 </div>
-                <p className="text-2xl font-bold text-highlight-text">
+                <p className="text-2xl font-bold">
                   {data.departmentBreakdown?.length || 0}
                 </p>
               </div>
@@ -745,7 +739,7 @@ export default function ReportsPage() {
                 <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Total Appointments</p>
                 </div>
-                <p className="text-2xl font-bold text-info-text">
+                <p className="text-2xl font-bold">
                   {data.totalAppointments || 0}
                 </p>
               </div>
@@ -866,7 +860,7 @@ export default function ReportsPage() {
                 <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Total Items</p>
                 </div>
-                <p className="text-2xl font-bold text-info-text">
+                <p className="text-2xl font-bold">
                   {data.totalItems || 0}
                 </p>
               </div>
@@ -878,7 +872,7 @@ export default function ReportsPage() {
                 <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Total Value</p>
                 </div>
-                <p className="text-2xl font-bold text-success-text">
+                <p className="text-2xl font-bold">
                   {formatCurrency(data.totalValue || 0)}
                 </p>
               </div>
@@ -984,7 +978,7 @@ export default function ReportsPage() {
                 <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Total Payments</p>
                 </div>
-                <p className="text-2xl font-bold text-info-text">
+                <p className="text-2xl font-bold">
                   {data.totalPayments || 0}
                 </p>
               </div>
@@ -996,7 +990,7 @@ export default function ReportsPage() {
                 <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Total Amount</p>
                 </div>
-                <p className="text-2xl font-bold text-success-text">
+                <p className="text-2xl font-bold">
                   {formatCurrency(data.totalAmount || 0)}
                 </p>
               </div>
@@ -1184,7 +1178,7 @@ export default function ReportsPage() {
         <TabsList aria-label="Report" className="justify-start">
           {reportTypes.map((report) => (
             <TabsTrigger key={report.id} value={report.id} className="flex-none px-3">
-              <report.icon className={report.color} aria-hidden="true" />
+              <report.icon aria-hidden="true" />
               {report.name}
             </TabsTrigger>
           ))}

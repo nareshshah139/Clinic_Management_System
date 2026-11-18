@@ -619,11 +619,11 @@ export default function AppointmentsCalendar({
 
           {!!bookingDetails && (
             <div 
-              className="p-4 rounded-r text-sm shadow-sm"
+              className="p-4 rounded-md text-sm shadow-sm"
               role="status"
               style={{
                 backgroundColor: 'var(--success-soft)',
-                borderLeft: '4px solid var(--success)',
+                border: '1px solid var(--success-border)',
                 color: 'var(--success-text)'
               }}
             >

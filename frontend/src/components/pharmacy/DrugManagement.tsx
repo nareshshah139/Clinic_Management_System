@@ -297,10 +297,7 @@ export function DrugManagement() {
             Pharmacy Desk
           </Link>
         </Button>
-        <Button
-          onClick={() => setShowAddDialog(true)}
-          className="bg-info hover:bg-info/90"
-        >
+        <Button onClick={() => setShowAddDialog(true)}>
           <Plus className="h-4 w-4 mr-2" />
           Add drug
         </Button>
