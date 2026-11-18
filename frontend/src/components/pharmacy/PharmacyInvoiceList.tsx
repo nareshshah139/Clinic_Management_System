@@ -20,9 +20,7 @@ import {
   Eye,
   Trash2,
   Download,
-  CreditCard,
   FileText,
-  IndianRupee,
   CheckCircle,
   Pencil,
 } from 'lucide-react';
@@ -311,7 +309,6 @@ export function PharmacyInvoiceList() {
                 <p className="text-sm text-muted-foreground">Total Invoices</p>
                 <p className="text-2xl font-bold">{invoices.length}</p>
               </div>
-              <FileText className="h-8 w-8 text-info-text" />
             </div>
           </CardContent>
         </Card>
@@ -323,7 +320,6 @@ export function PharmacyInvoiceList() {
                 <p className="text-sm text-muted-foreground">Total Amount</p>
                 <p className="text-2xl font-bold">₹{stats.totalAmount.toFixed(2)}</p>
               </div>
-              <IndianRupee className="h-8 w-8 text-success-text" />
             </div>
           </CardContent>
         </Card>
@@ -335,7 +331,6 @@ export function PharmacyInvoiceList() {
                 <p className="text-sm text-muted-foreground">Completed</p>
                 <p className="text-2xl font-bold">{stats.completedInvoices}</p>
               </div>
-              <CheckCircle className="h-8 w-8 text-success-text" />
             </div>
           </CardContent>
         </Card>
@@ -347,7 +342,6 @@ export function PharmacyInvoiceList() {
                 <p className="text-sm text-muted-foreground">Pending Amount</p>
                 <p className="text-2xl font-bold">₹{stats.pendingAmount.toFixed(2)}</p>
               </div>
-              <CreditCard className="h-8 w-8 text-warning-text" />
             </div>
           </CardContent>
         </Card>

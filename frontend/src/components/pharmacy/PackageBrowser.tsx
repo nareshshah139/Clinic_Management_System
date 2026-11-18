@@ -168,13 +168,6 @@ export function PackageBrowser({ onSelectPackage, reloadKey }: PackageBrowserPro
               ? 'Try adjusting your search terms' 
               : 'No packages are available yet. Refresh to check for updates.'}
           </p>
-          <Button 
-            variant="outline" 
-            onClick={loadPackages} 
-            className="mt-4"
-          >
-            Retry Loading
-          </Button>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

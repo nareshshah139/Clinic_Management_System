@@ -32,17 +32,16 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import Link from 'next/link';
 import {
+  ArrowLeft,
   Search,
   Plus,
   Edit,
   Trash2,
   Filter,
   Pill,
-  Package,
   DollarSign,
-  Building,
-  Calendar,
   AlertTriangle,
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
@@ -291,6 +290,13 @@ export function DrugManagement() {
       {confirmDialog}
       {/* Header */}
       <PageHeader title="Drug Database" description="Manage your pharmacy's drug inventory" actions={
+        <>
+        <Button variant="outline" asChild>
+          <Link href="/dashboard/pharmacy">
+            <ArrowLeft className="h-4 w-4" />
+            Pharmacy Desk
+          </Link>
+        </Button>
         <Button
           onClick={() => setShowAddDialog(true)}
           className="bg-info hover:bg-info/90"
@@ -298,6 +304,7 @@ export function DrugManagement() {
           <Plus className="h-4 w-4 mr-2" />
           Add New Drug
         </Button>
+        </>
       } />
 
       {/* Stats Cards */}
@@ -311,7 +318,6 @@ export function DrugManagement() {
                   {pagination.total.toLocaleString()}
                 </p>
               </div>
-              <Pill className="h-8 w-8 text-info-text" />
             </div>
           </CardContent>
         </Card>
@@ -323,7 +329,6 @@ export function DrugManagement() {
                 <p className="text-sm text-muted-foreground">Categories</p>
                 <p className="text-2xl font-bold">{categories.length}</p>
               </div>
-              <Package className="h-8 w-8 text-success-text" />
             </div>
           </CardContent>
         </Card>
@@ -335,7 +340,6 @@ export function DrugManagement() {
                 <p className="text-sm text-muted-foreground">Manufacturers</p>
                 <p className="text-2xl font-bold">{manufacturers.length}</p>
               </div>
-              <Building className="h-8 w-8 text-highlight-text" />
             </div>
           </CardContent>
         </Card>
@@ -349,7 +353,6 @@ export function DrugManagement() {
                   {drugs.filter((d) => d.isActive).length}
                 </p>
               </div>
-              <Calendar className="h-8 w-8 text-warning-text" />
             </div>
           </CardContent>
         </Card>

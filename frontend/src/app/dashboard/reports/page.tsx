@@ -20,14 +20,11 @@ import {
   Activity,
   PieChart,
   AlertCircle,
-  Package,
   CreditCard,
   Clock,
-  UserCheck,
   Building2,
   Stethoscope,
   ShoppingCart,
-  RefreshCw,
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { paymentModeLabel } from '@/lib/clinic-payment-modes';
@@ -421,7 +418,6 @@ export default function ReportsPage() {
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <DollarSign className="h-5 w-5 text-success-text mr-2" />
                   <p className="text-sm text-muted-foreground">Total Revenue</p>
                 </div>
                 <p className="text-2xl font-bold text-success-text">
@@ -434,7 +430,6 @@ export default function ReportsPage() {
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <FileText className="h-5 w-5 text-info-text mr-2" />
                   <p className="text-sm text-muted-foreground">GST Amount</p>
                 </div>
                 <p className="text-2xl font-bold text-info-text">
@@ -447,7 +442,6 @@ export default function ReportsPage() {
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <TrendingUp className="h-5 w-5 text-highlight-text mr-2" />
                   <p className="text-sm text-muted-foreground">Net Revenue</p>
                 </div>
                 <p className="text-2xl font-bold text-highlight-text">
@@ -460,7 +454,6 @@ export default function ReportsPage() {
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <FileText className="h-5 w-5 text-warning-text mr-2" />
                   <p className="text-sm text-muted-foreground">Total Invoices</p>
                 </div>
                 <p className="text-2xl font-bold text-warning-text">
@@ -542,7 +535,6 @@ export default function ReportsPage() {
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <Users className="h-5 w-5 text-info-text mr-2" />
                   <p className="text-sm text-muted-foreground">Total Patients</p>
                 </div>
                 <p className="text-2xl font-bold text-info-text">
@@ -555,7 +547,6 @@ export default function ReportsPage() {
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <UserCheck className="h-5 w-5 text-success-text mr-2" />
                   <p className="text-sm text-muted-foreground">New Patients</p>
                 </div>
                 <p className="text-2xl font-bold text-success-text">
@@ -568,7 +559,6 @@ export default function ReportsPage() {
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <RefreshCw className="h-5 w-5 text-warning-text mr-2" />
                   <p className="text-sm text-muted-foreground">Returning Patients</p>
                 </div>
                 <p className="text-2xl font-bold text-warning-text">
@@ -581,7 +571,6 @@ export default function ReportsPage() {
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <Calendar className="h-5 w-5 text-highlight-text mr-2" />
                   <p className="text-sm text-muted-foreground">Avg Age</p>
                 </div>
                 <p className="text-2xl font-bold text-highlight-text">
@@ -660,7 +649,6 @@ export default function ReportsPage() {
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <Stethoscope className="h-5 w-5 text-info-text mr-2" />
                   <p className="text-sm text-muted-foreground">Total Doctors</p>
                 </div>
                 <p className="text-2xl font-bold text-info-text">
@@ -673,7 +661,6 @@ export default function ReportsPage() {
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <Activity className="h-5 w-5 text-success-text mr-2" />
                   <p className="text-sm text-muted-foreground">Active Doctors</p>
                 </div>
                 <p className="text-2xl font-bold text-success-text">
@@ -686,7 +673,6 @@ export default function ReportsPage() {
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <Building2 className="h-5 w-5 text-highlight-text mr-2" />
                   <p className="text-sm text-muted-foreground">Departments</p>
                 </div>
                 <p className="text-2xl font-bold text-highlight-text">
@@ -757,7 +743,6 @@ export default function ReportsPage() {
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <Calendar className="h-5 w-5 text-info-text mr-2" />
                   <p className="text-sm text-muted-foreground">Total Appointments</p>
                 </div>
                 <p className="text-2xl font-bold text-info-text">
@@ -770,7 +755,6 @@ export default function ReportsPage() {
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <UserCheck className="h-5 w-5 text-success-text mr-2" />
                   <p className="text-sm text-muted-foreground">Completed</p>
                 </div>
                 <p className="text-2xl font-bold text-success-text">
@@ -786,7 +770,6 @@ export default function ReportsPage() {
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <AlertCircle className="h-5 w-5 text-destructive-text mr-2" />
                   <p className="text-sm text-muted-foreground">Cancelled</p>
                 </div>
                 <p className="text-2xl font-bold text-destructive-text">
@@ -802,7 +785,6 @@ export default function ReportsPage() {
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <Clock className="h-5 w-5 text-warning-text mr-2" />
                   <p className="text-sm text-muted-foreground">No Show</p>
                 </div>
                 <p className="text-2xl font-bold text-warning-text">
@@ -882,7 +864,6 @@ export default function ReportsPage() {
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <Package className="h-5 w-5 text-info-text mr-2" />
                   <p className="text-sm text-muted-foreground">Total Items</p>
                 </div>
                 <p className="text-2xl font-bold text-info-text">
@@ -895,7 +876,6 @@ export default function ReportsPage() {
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <DollarSign className="h-5 w-5 text-success-text mr-2" />
                   <p className="text-sm text-muted-foreground">Total Value</p>
                 </div>
                 <p className="text-2xl font-bold text-success-text">
@@ -908,7 +888,6 @@ export default function ReportsPage() {
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <AlertCircle className="h-5 w-5 text-destructive-text mr-2" />
                   <p className="text-sm text-muted-foreground">Low Stock</p>
                 </div>
                 <p className="text-2xl font-bold text-destructive-text">
@@ -922,7 +901,6 @@ export default function ReportsPage() {
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <AlertCircle className="h-5 w-5 text-warning-text mr-2" />
                   <p className="text-sm text-muted-foreground">Out of Stock</p>
                 </div>
                 <p className="text-2xl font-bold text-warning-text">
@@ -1004,7 +982,6 @@ export default function ReportsPage() {
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <CreditCard className="h-5 w-5 text-info-text mr-2" />
                   <p className="text-sm text-muted-foreground">Total Payments</p>
                 </div>
                 <p className="text-2xl font-bold text-info-text">
@@ -1017,7 +994,6 @@ export default function ReportsPage() {
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <DollarSign className="h-5 w-5 text-success-text mr-2" />
                   <p className="text-sm text-muted-foreground">Total Amount</p>
                 </div>
                 <p className="text-2xl font-bold text-success-text">
@@ -1030,7 +1006,6 @@ export default function ReportsPage() {
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <UserCheck className="h-5 w-5 text-success-text mr-2" />
                   <p className="text-sm text-muted-foreground">Successful</p>
                 </div>
                 <p className="text-2xl font-bold text-success-text">
@@ -1046,7 +1021,6 @@ export default function ReportsPage() {
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <AlertCircle className="h-5 w-5 text-destructive-text mr-2" />
                   <p className="text-sm text-muted-foreground">Failed</p>
                 </div>
                 <p className="text-2xl font-bold text-destructive-text">

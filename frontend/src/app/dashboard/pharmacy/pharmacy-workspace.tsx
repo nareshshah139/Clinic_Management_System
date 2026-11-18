@@ -18,7 +18,6 @@ import {
   ArrowRight,
   Bot,
   ClipboardCheck,
-  IndianRupee,
   MessageSquare,
   Package,
   Pill,
@@ -248,10 +247,10 @@ function PharmacyDeskPanel({
 
       {sells && (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <MetricStrip label="Sales" value={`₹${todaySales.toFixed(2)}`} detail={`${todayGrowth >= 0 ? '+' : ''}${todayGrowth.toFixed(1)}%`} icon={<IndianRupee className="h-4 w-4" />} />
-          <MetricStrip label="Invoices" value={invoicesToday} detail={`${pendingInvoices} pending`} icon={<Receipt className="h-4 w-4" />} />
-          <MetricStrip label="Low stock" value={lowStockDrugs} detail="at or below minimum stock" icon={<Pill className="h-4 w-4" />} />
-          <MetricStrip label="Packages" value={packagesCount} detail="bundles" icon={<Package className="h-4 w-4" />} />
+          <MetricStrip label="Sales" value={`₹${todaySales.toFixed(2)}`} detail={`${todayGrowth >= 0 ? '+' : ''}${todayGrowth.toFixed(1)}%`} />
+          <MetricStrip label="Invoices" value={invoicesToday} detail={`${pendingInvoices} pending`} />
+          <MetricStrip label="Low stock" value={lowStockDrugs} detail="at or below minimum stock" />
+          <MetricStrip label="Packages" value={packagesCount} detail="bundles" />
         </div>
       )}
 
@@ -354,16 +353,13 @@ function PharmacyGuide() {
   );
 }
 
-function MetricStrip({ label, value, detail, icon }: { label: string; value: string | number; detail: string; icon: ReactNode }) {
+function MetricStrip({ label, value, detail }: { label: string; value: string | number; detail: string }) {
   return (
     <div className="flex items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3 shadow-sm">
       <div className="min-w-0">
         <p className="text-sm text-muted-foreground">{label}</p>
         <p className="truncate text-xl font-semibold tabular-nums text-foreground">{value}</p>
         <p className="text-xs text-muted-foreground">{detail}</p>
-      </div>
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-        {icon}
       </div>
     </div>
   );
@@ -395,10 +391,7 @@ function PackagesPanel() {
     <Card>
       <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <Package className="h-5 w-5" />
-            <CardTitle className="flex items-center gap-2">Treatment Packages</CardTitle>
-          </div>
+          <CardTitle>Treatment Packages</CardTitle>
           <Dialog>
             <DialogTrigger asChild>
               <Button>
