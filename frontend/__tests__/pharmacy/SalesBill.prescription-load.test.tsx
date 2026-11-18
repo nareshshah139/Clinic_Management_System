@@ -397,7 +397,7 @@ it('reads prescribed directions in words and still submits the frequency code', 
   render(<SalesBillPage />);
   await loadPatient();
   const line = (await screen.findByRole('heading', { name: names[1], level: 4 })).closest('[data-invoice-item]') as HTMLElement;
-  expect(within(line).getByText('Medicine')).toBeInTheDocument();
+  expect(within(line).queryByText('Medicine')).not.toBeInTheDocument();
   expect(within(line).getByLabelText(`Dosage for ${names[1]}`)).toHaveValue('1 capsule');
   expect(within(line).getByRole('combobox', { name: `Frequency for ${names[1]}` })).toHaveDisplayValue('Once daily');
   expect(within(line).getByLabelText(`Duration for ${names[1]}`)).toHaveValue('30 days');

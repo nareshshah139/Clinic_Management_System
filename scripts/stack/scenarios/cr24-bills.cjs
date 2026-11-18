@@ -209,6 +209,7 @@ const clean = (text) => String(text ?? "").replace(/[  ]/g, " ").replace(/\s+/g,
         await addDrug(page, GEL);
         await line(page, TABLET).getByLabel("Quantity").fill("3");
         await line(page, TABLET).locator("input[type=number]").nth(2).fill("5");
+        await page.getByRole("button", { name: "Add note" }).click();
         await page.getByLabel("Notes").fill("Collect after 6 pm");
         const beforeDraft = await stocks();
         await page.getByRole("button", { name: "Save draft" }).click();
@@ -285,6 +286,7 @@ const clean = (text) => String(text ?? "").replace(/[  ]/g, " ").replace(/\s+/g,
         await go(tabB.page, `/dashboard/pharmacy/sales/bill?draft=${shared.id}`);
         await line(tabA, CREAM).waitFor({ timeout: 120000 });
         await line(tabB.page, CREAM).waitFor({ timeout: 120000 });
+        await tabA.getByRole("button", { name: "Add note" }).click();
         await tabA.getByLabel("Notes").fill("From the front desk");
         await tabA.getByRole("button", { name: "Save draft" }).click();
         await tabA.getByText("All changes saved to the draft").waitFor({ timeout: 60000 });

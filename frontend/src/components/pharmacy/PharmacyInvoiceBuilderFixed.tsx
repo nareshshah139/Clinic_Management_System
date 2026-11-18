@@ -7,7 +7,7 @@ import { isIssuedBillNumber } from '@/lib/bill-number';
 import { Spinner } from '@/components/ui/spinner';
 import { useState, useEffect, useRef, useCallback } from 'react';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -31,28 +31,24 @@ import {
   TabsContent,
   TabsList,
   TabsTrigger,
-  TabsFontSizeControls,
 } from '@/components/ui/tabs';
 import {
-  Search,
-  Plus,
-  Trash2,
-  Save,
-  Calculator,
-  User,
-  CreditCard,
-  Pill,
-  Package as PackageIcon,
-  FileText,
+  ArrowLeftRight,
   ChevronDown,
-  Printer,
   Download,
+  FileText,
+  MessageSquarePlus,
+  Plus,
+  Printer,
+  Save,
+  Search,
+  Trash2,
   ZoomIn,
   ZoomOut,
 } from 'lucide-react';
 import { PrescriptionInventoryLink } from './PrescriptionInventoryLink';
 import { apiClient } from '@/lib/api';
-import { getErrorMessage } from '@/lib/utils';
+import { cn, getErrorMessage } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { billLineName, prescribedNameShown } from '@/lib/bill-line-name';
 import { enumLabel, plural } from '@/lib/labels';
@@ -262,6 +258,10 @@ function savedLines(draft: SavedDraft): InvoiceItem[] {
 
 const doctorName = (doctor: Pick<Doctor, 'firstName' | 'lastName'>) => `Dr. ${doctor.firstName} ${doctor.lastName}`.trim();
 
+const frequencyText = (code: string) => (/^[A-Z0-9_]+$/.test(code) ? prescriptionLabel('frequency', code) : code);
+
+const LINE_GRID = 'grid-cols-4 @md:grid-cols-6 @2xl:grid-cols-[minmax(0,1fr)_3.5rem_4.5rem_3.25rem_3.25rem_5.5rem_4.25rem]';
+
 export function PharmacyInvoiceBuilderFixed({
   prefill: suppliedPrefill,
   draft,
@@ -366,6 +366,17 @@ export function PharmacyInvoiceBuilderFixed({
   const [savingPdf, setSavingPdf] = useState(false);
   const [savingInvoiceFromPreview, setSavingInvoiceFromPreview] =
     useState(false);
+  /**
+   * @cc [owner:nareshshah139,label:product] collapsed-line-directions-summarised
+   * A bill line's directions start collapsed. While collapsed, its Directions control MUST show the
+   * set dosage, frequency and duration, or the instructions when only those are set.
+   */
+  const [openDirections, setOpenDirections] = useState<ReadonlySet<string>>(() => new Set());
+  /**
+   * @cc [owner:nareshshah139,label:product] saved-note-opens-shown
+   * A bill opened with a saved note MUST show that note without another click.
+   */
+  const [noteOpen, setNoteOpen] = useState(() => Boolean(draft?.fields.notes));
 
   // Refs for click-outside handling
   const patientSearchRef = useRef<HTMLDivElement>(null);
@@ -2153,22 +2164,21 @@ export function PharmacyInvoiceBuilderFixed({
 
     const unlinkedItems = prescriptionItems.filter(item => !item.drugId);
     return (
-      <details className="group mx-6 rounded-lg border border-info-border bg-info-soft text-sm text-info-text">
+      <details className="group mx-6 rounded-md border border-border text-sm text-muted-foreground">
         <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 [&::-webkit-details-marker]:hidden">
-          <FileText className="h-4 w-4 text-info-text" />
-          <h3 className="font-semibold text-info-text">Linked Prescription</h3>
+          <h3 className="font-medium text-foreground">Linked Prescription</h3>
           <span>· {prescriptionItems.length} {prescriptionItems.length === 1 ? 'item' : 'items'}</span>
-          {unlinkedItems.length > 0 && <span className="font-medium">· {unlinkedItems.length} to link to inventory</span>}
+          {unlinkedItems.length > 0 && <span className="font-medium text-warning-text">· {unlinkedItems.length} to link to inventory</span>}
           <ChevronDown className="ml-auto h-4 w-4 transition-transform group-open:rotate-180" aria-hidden />
         </summary>
-        <div className="px-3 pb-2">
+        <div className="space-y-2 border-t border-border px-3 py-2">
           <p>
-            <strong>Prescription ID:</strong> {prescriptionData.id}
+            <strong className="font-medium text-foreground">Prescription ID:</strong> {prescriptionData.id}
           </p>
-          {unlinkedItems.map(item => <div key={item.id} className="mt-2">
+          {unlinkedItems.map(item => <div key={item.id}>
             {item.prescribedDrugName}: link inventory before billing. {canLinkInventory && <PrescriptionInventoryLink prescriptionId={prescriptionData.id} lineIndex={item.prescriptionLineIndex!} prescriptionVersion={item.prescriptionVersion} name={item.prescribedDrugName || ''} onLinked={() => loadPrescriptionData(prescriptionData.id)} />}
           </div>)}
-          <p className="mt-2 text-xs text-info-text">
+          <p className="text-xs">
             Review stock warnings, substitute medicines, adjust quantities or remove items before billing.
             Changes here do not alter the doctor's prescription.
           </p>
@@ -2177,9 +2187,16 @@ export function PharmacyInvoiceBuilderFixed({
     );
   };
 
+  const toggleDirections = (itemId: string) =>
+    setOpenDirections((open) => {
+      const next = new Set(open);
+      if (!next.delete(itemId)) next.add(itemId);
+      return next;
+    });
+
   return (
     <>
-    <Card>
+    <Card className="gap-4">
       {refusal && (
         <div ref={refusalRef} tabIndex={-1} role="alert" className="m-4 flex scroll-mt-4 flex-wrap items-center gap-3 rounded-md border border-destructive-border bg-destructive-soft p-3 text-sm text-destructive-text outline-none">
           <p className="min-w-0 flex-1">{refusal.message} Your changes on this screen were not saved.</p>
@@ -2199,32 +2216,25 @@ export function PharmacyInvoiceBuilderFixed({
         </div>
       )}
       {loadingPrescription && (
-        <div className="p-4 bg-warning-soft border border-warning-border rounded-lg">
-          <div className="flex items-center gap-2">
-            <Spinner className="  h-4 w-4  " />
-            <span className="text-warning-text">
-              Loading prescription data...
-            </span>
-          </div>
+        <div className="mx-6 flex items-center gap-2 text-sm text-muted-foreground">
+          <Spinner className="h-4 w-4" />
+          <span>Loading prescription data...</span>
         </div>
       )}
 
       {renderPrescriptionHeader()}
 
       {session.kind === 'draft' && (
-        <CardHeader>
-          <CardTitle className="flex flex-wrap items-center gap-2">
-            <Pill className="h-5 w-5" />
-            <Badge variant="warning">Draft</Badge>
-            {session.number ? <span>{session.number} not final</span> : <span className="text-base font-normal text-muted-foreground">Gets its bill number when finished</span>}
-          </CardTitle>
-        </CardHeader>
+        <div className="flex flex-wrap items-center gap-2 px-6 text-sm">
+          <Badge variant="warning">Draft</Badge>
+          {session.number ? <span className="font-medium">{session.number} not final</span> : <span className="text-muted-foreground">Gets its bill number when finished</span>}
+        </div>
       )}
       <CardContent>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_19rem]">
           {prefillError && (
-            <div className="lg:col-span-3">
-              <div role="alert" className="p-3 bg-warning-soft border border-warning-border rounded-md text-sm text-warning-text">
+            <div className="lg:col-span-2">
+              <div role="alert" className="rounded-md border border-warning-border bg-warning-soft p-3 text-sm text-warning-text">
                 {prefillError}
                 {invoiceData.prescriptionId && (
                   <Button className="ml-3" variant="outline" size="sm" disabled={loadingPrescription}
@@ -2235,618 +2245,548 @@ export function PharmacyInvoiceBuilderFixed({
               </div>
             </div>
           )}
-          {/* Left Column - Invoice Details */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Patient & Doctor Selection */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <User className="h-4 w-4" />
-                  Patient & Doctor Details
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="patient">Patient *</Label>
-                    <div className="relative" ref={patientSearchRef}>
-                      <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="patient"
-                        placeholder="Search patients by name or phone..."
-                        className="pl-8"
-                        value={patientSearchQuery}
-                        onChange={(e) => {
-                          setPatientSearchQuery(e.target.value);
-                          setShowPatientSearchResults(true);
-                        }}
-                        onClick={() => setShowPatientSearchResults(true)}
-                        onFocus={() => setShowPatientSearchResults(true)}
-                      />
-                      {showPatientSearchResults && (
-                        <div className="absolute z-20 mt-1 w-full bg-white border rounded-md max-h-64 overflow-auto shadow-sm transition-all duration-200 ease-in-out animate-in fade-in-0 slide-in-from-top-1">
-                          {patients
-                            .filter((p) => {
-                              const q = patientSearchQuery.trim().toLowerCase();
-                              if (!q) return true;
-                              return (
-                                p.name.toLowerCase().includes(q) ||
-                                (p.phone || '').includes(q)
+          <div className="@container min-w-0 space-y-5 lg:border-r lg:border-border lg:pr-6">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="patient">Patient *</Label>
+                <div className="relative" ref={patientSearchRef}>
+                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="patient"
+                    placeholder="Search patients by name or phone..."
+                    className="pl-8"
+                    value={patientSearchQuery}
+                    onChange={(e) => {
+                      setPatientSearchQuery(e.target.value);
+                      setShowPatientSearchResults(true);
+                    }}
+                    onClick={() => setShowPatientSearchResults(true)}
+                    onFocus={() => setShowPatientSearchResults(true)}
+                  />
+                  {showPatientSearchResults && (
+                    <div className="absolute z-20 mt-1 max-h-64 w-full overflow-auto rounded-md border border-border bg-popover shadow-sm">
+                      {patients
+                        .filter((p) => {
+                          const q = patientSearchQuery.trim().toLowerCase();
+                          if (!q) return true;
+                          return (
+                            p.name.toLowerCase().includes(q) ||
+                            (p.phone || '').includes(q)
+                          );
+                        })
+                        .slice(0, 20)
+                        .map((p) => (
+                          <div
+                            key={p.id}
+                            className="cursor-pointer px-3 py-2 text-sm hover:bg-accent"
+                            onMouseDown={() => {
+                              setSelectedPatient(p);
+                              setInvoiceData((prev) => ({
+                                ...prev,
+                                patientId: p.id,
+                                billingName: p.name,
+                                billingPhone: p.phone || '',
+                              }));
+                              setPatientSearchQuery(
+                                `${p.name}${p.phone ? ` (${p.phone})` : ''}`
                               );
-                            })
-                            .slice(0, 20)
-                            .map((p) => (
-                              <div
-                                key={p.id}
-                                className="px-3 py-2 hover:bg-accent cursor-pointer text-sm"
-                                onMouseDown={() => {
-                                  setSelectedPatient(p);
-                                  setInvoiceData((prev) => ({
-                                    ...prev,
-                                    patientId: p.id,
-                                    billingName: p.name,
-                                    billingPhone: p.phone || '',
-                                  }));
-                                  setPatientSearchQuery(
-                                    `${p.name}${p.phone ? ` (${p.phone})` : ''}`
-                                  );
-                                  setShowPatientSearchResults(false);
-                                }}
-                              >
-                                <div className="font-medium">{p.name}</div>
-                                <div className="text-xs text-muted-foreground">
-                                  {p.phone || ''}
-                                </div>
-                              </div>
-                            ))}
-                          {patients.length === 0 && (
-                            <div className="px-3 py-2 text-sm text-muted-foreground">
-                              No patients found
+                              setShowPatientSearchResults(false);
+                            }}
+                          >
+                            <div className="font-medium">{p.name}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {p.phone || ''}
                             </div>
-                          )}
+                          </div>
+                        ))}
+                      {patients.length === 0 && (
+                        <div className="px-3 py-2 text-sm text-muted-foreground">
+                          No patients found
                         </div>
                       )}
                     </div>
-                  </div>
-                  <div>
-                    <Label htmlFor="doctor">Doctor</Label>
-                    <Select
-                      value={invoiceData.doctorId}
-                      onValueChange={(value: string) =>
-                        setInvoiceData((prev) => ({ ...prev, doctorId: value }))
-                      }
-                    >
-                      <SelectTrigger id="doctor">
-                        <SelectValue placeholder="Select doctor" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {doctors.map((doctor) => (
-                          <SelectItem key={doctor.id} value={doctor.id}>
-                            Dr. {doctor.firstName} {doctor.lastName}
-                            {doctor.department && ` (${doctor.department})`}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  )}
                 </div>
-              </CardContent>
-            </Card>
-
-            {/* Add Items */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Add Items to Invoice</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Tabs
-                  value={selectedTab}
-                  onValueChange={(value: 'drugs' | 'packages') =>
-                    setSelectedTab(value)
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="doctor">Doctor</Label>
+                <Select
+                  value={invoiceData.doctorId}
+                  onValueChange={(value: string) =>
+                    setInvoiceData((prev) => ({ ...prev, doctorId: value }))
                   }
                 >
-                  <div className="flex justify-end mb-2">
-                    <TabsFontSizeControls />
-                  </div>
-                  <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger
-                      value="drugs"
-                      className="flex items-center gap-2"
-                    >
-                      <Pill className="h-4 w-4" />
-                      Individual Drugs
-                    </TabsTrigger>
-                    <TabsTrigger
-                      value="packages"
-                      className="flex items-center gap-2"
-                    >
-                      <PackageIcon className="h-4 w-4" />
-                      Treatment Packages
-                    </TabsTrigger>
-                  </TabsList>
+                  <SelectTrigger id="doctor" className="w-full">
+                    <SelectValue placeholder="Select doctor" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {doctors.map((doctor) => (
+                      <SelectItem key={doctor.id} value={doctor.id}>
+                        Dr. {doctor.firstName} {doctor.lastName}
+                        {doctor.department && ` (${doctor.department})`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
 
-                  <TabsContent value="drugs" className="space-y-4">
-                    <div ref={drugSearchRef} className="space-y-2">
-                      {substitutingItemId && (
-                        <div role="status" className="flex items-center justify-between rounded-md border border-info-border bg-info-soft p-3 text-sm text-info-text">
-                          <span>Choose a replacement for {billLineName(items.find(item => item.id === substitutingItemId) ?? {})}. The prescribed quantity will be kept.</span>
-                          <Button variant="ghost" size="sm" onClick={() => setSubstitutingItemId(null)}>Cancel substitution</Button>
-                        </div>
-                      )}
-                      <Label htmlFor="drugSearch">Search Drugs</Label>
-                      <div className="relative">
-                        <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <Input
-                          id="drugSearch"
-                          ref={searchInputRef}
-                          placeholder="Search by drug name, manufacturer, or ingredient..."
-                          value={drugSearchQuery}
-                          onChange={(e) => setDrugSearchQuery(e.target.value)}
-                          className="pl-8"
-                        />
-                      </div>
-
-                      {showDrugSearchResults && searchResults.length > 0 && (
-                        <div className="border rounded-md max-h-60 overflow-y-auto transition-all duration-200 ease-in-out animate-in fade-in-0 slide-in-from-top-1">
-                          {searchResults.map((drug, index) => (
-                            <div
-                              key={drug.id}
-                              role="button"
-                              tabIndex={0}
-                              className={`p-3 hover:bg-accent cursor-pointer border-b last:border-b-0 ${
-                                index === 0
-                                  ? 'bg-success-soft border-l-4 border-l-success'
-                                  : index < 3
-                                    ? 'bg-info-soft border-l-4 border-l-info'
-                                    : ''
-                              }`}
-                              onClick={() => addDrugToInvoice(drug)}
-                              onKeyDown={(event) => {
-                                if (
-                                  event.key === 'Enter' ||
-                                  event.key === ' '
-                                ) {
-                                  event.preventDefault();
-                                  addDrugToInvoice(drug);
-                                }
-                              }}
-                            >
-                              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex flex-wrap items-center gap-y-1">
-                                    <h4 className="font-medium">
-                                      {highlightMatch(
-                                        drug.stockName || drug.name,
-                                        drugSearchQuery
-                                      )}
-                                    </h4>
-                                    {getRelevanceBadge(
-                                      drug,
-                                      drugSearchQuery,
-                                      index
-                                    )}
-                                  </div>
-                                  <p className="text-sm text-muted-foreground">
-                                    {highlightMatch(
-                                      drug.manufacturerName || '',
-                                      drugSearchQuery
-                                    )}{' '}
-                                    • {drug.packSizeLabel}
-                                  </p>
-                                  {drug.composition1 && (
-                                    <p className="text-xs text-muted-foreground">
-                                      {highlightMatch(
-                                        drug.composition1,
-                                        drugSearchQuery
-                                      )}
-                                    </p>
-                                  )}
-                                </div>
-                                <div className="flex shrink-0 items-start justify-between gap-3 text-right sm:justify-end">
-                                  <div>
-                                    <div className="font-semibold">
-                                      ₹{getDrugUnitPrice(drug).toFixed(2)}
-                                    </div>
-                                    {drug.category && (
-                                      <Badge
-                                        variant="outline"
-                                        className="text-xs"
-                                      >
-                                        {highlightMatch(
-                                          drug.category,
-                                          drugSearchQuery
-                                        )}
-                                      </Badge>
-                                    )}
-                                  </div>
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    onClick={(event) => {
-                                      event.stopPropagation();
-                                      addDrugToInvoice(drug);
-                                    }}
-                                  >
-                                    <Plus className="h-4 w-4 mr-1" />
-                                    Add
-                                  </Button>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {showDrugSearchResults &&
-                        drugSearchQuery.trim() &&
-                        searchResults.length === 0 && (
-                          <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
-                            No matching drugs found in the drug master.
-                          </div>
-                        )}
-                      </div>
-                  </TabsContent>
-
-                  <TabsContent value="packages" className="space-y-4">
-                    <div className="space-y-3">
-                      {packages.length === 0 ? (
-                        <div className="text-center py-8 text-muted-foreground">
-                          <PackageIcon className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                          <p>No packages available</p>
-                        </div>
-                      ) : (
-                        packages.map((pkg) => (
-                          <div
-                            key={pkg.id}
-                            className="border rounded-lg p-4 hover:bg-accent cursor-pointer"
-                            onClick={() => addPackageToInvoice(pkg)}
-                          >
-                            <div className="flex justify-between items-start mb-2">
-                              <div className="flex-1">
-                                <h4 className="font-medium">{pkg.name}</h4>
-                                <p className="text-sm text-muted-foreground">
-                                  {pkg.description}
-                                </p>
-                                <div className="flex items-center gap-2 mt-1">
-                                  <Badge
-                                    variant="secondary"
-                                    className="text-xs"
-                                  >
-                                    {pkg.subcategory}
-                                  </Badge>
-                                  <span className="text-xs text-muted-foreground">
-                                    {plural(pkg.items.length, 'item')}
-                                  </span>
-                                  {pkg.duration && (
-                                    <span className="text-xs text-muted-foreground">
-                                      • {pkg.duration}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                              <div className="text-right">
-                                <div className="text-sm text-muted-foreground line-through">
-                                  ₹{pkg.originalPrice.toFixed(2)}
-                                </div>
-                                <div className="font-semibold">
-                                  ₹{pkg.packagePrice.toFixed(2)}
-                                </div>
-                                <Badge
-                                  variant="destructive"
-                                  className="text-xs"
-                                >
-                                  {pkg.discountPercent.toFixed(0)}% OFF
-                                </Badge>
-                              </div>
-                            </div>
-
-                            {pkg.indications && (
-                              <p className="text-xs text-muted-foreground mt-2">
-                                <strong>For:</strong> {pkg.indications}
-                              </p>
-                            )}
-                          </div>
-                        ))
-                      )}
+            <Tabs
+              value={selectedTab}
+              onValueChange={(value: 'drugs' | 'packages') =>
+                setSelectedTab(value)
+              }
+              className="grid grid-cols-1 items-start gap-2 @md:grid-cols-[minmax(0,1fr)_auto]"
+            >
+              <TabsContent value="drugs" className="row-start-2 @md:col-start-1 @md:row-start-1">
+                <div ref={drugSearchRef} className="space-y-2">
+                  {substitutingItemId && (
+                    <div role="status" className="flex items-center justify-between gap-2 rounded-md border border-info-border bg-info-soft px-3 py-2 text-sm text-info-text">
+                      <span>Choose a replacement for {billLineName(items.find(item => item.id === substitutingItemId) ?? {})}. The prescribed quantity will be kept.</span>
+                      <Button variant="ghost" size="sm" onClick={() => setSubstitutingItemId(null)}>Cancel substitution</Button>
                     </div>
-                  </TabsContent>
-                </Tabs>
-              </CardContent>
-            </Card>
+                  )}
+                  <Label htmlFor="drugSearch" className="sr-only">Search Drugs</Label>
+                  <div className="relative">
+                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="drugSearch"
+                      ref={searchInputRef}
+                      placeholder="Search by drug name, manufacturer, or ingredient..."
+                      value={drugSearchQuery}
+                      onChange={(e) => setDrugSearchQuery(e.target.value)}
+                      className="pl-8"
+                    />
+                  </div>
 
-            {/* Invoice Items */}
-            {items.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Invoice Items</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {items.map((item) => (
-                      <Card key={item.id} data-invoice-item={item.id} className="p-4">
-                        <div className="mb-3 flex flex-col-reverse gap-2 sm:flex-row sm:items-start sm:justify-between">
-                          <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-2 mb-1">
-                              {isPrescriptionItem(item.id) && (
-                                <Badge variant="info">From prescription</Badge>
-                              )}
-                              {item.itemType === 'DRUG' ? (
-                                <Pill className="h-4 w-4 text-info" />
-                              ) : (
-                                <PackageIcon className="h-4 w-4 text-success" />
-                              )}
-                              <h4 className="font-medium">{billLineName(item)}</h4>
-                              {item.stockStatus === 'CHECK_FAILED' ? (
-                                <Badge variant="destructive">Inventory check failed</Badge>
-                              ) : item.itemType === 'DRUG' && !item.drugId ? (
-                                <Badge variant="destructive">No match</Badge>
-                              ) : item.stockStatus === 'OUT_OF_STOCK' ? (
-                                <Badge variant="destructive">Out of stock</Badge>
-                              ) : item.availableStock !== undefined && item.quantity > item.availableStock ? (
-                                <Badge variant="destructive">Insufficient stock: {item.availableStock} available</Badge>
-                              ) : item.stockStatus === 'LOW_STOCK' ? (
-                                <Badge variant="outline">Low stock: {item.availableStock} available</Badge>
-                              ) : null}
-                              <Badge
-                                variant={
-                                  item.itemType === 'DRUG'
-                                    ? 'outline'
-                                    : 'default'
-                                }
-                              >
-                                {enumLabel('itemType', item.itemType)}
-                              </Badge>
-                            </div>
-                            {item.itemType === 'DRUG' && (item.drug?.manufacturerName || item.drug?.packSizeLabel) && (
-                              <p className="text-sm text-muted-foreground">
-                                {[item.drug?.manufacturerName, item.drug?.packSizeLabel].filter(Boolean).join(' • ')}
-                              </p>
-                            )}
-                            {item.quantityReview && (
-                              <div
-                                role="status"
-                                className="mt-2 flex items-center gap-2 rounded-md border border-warning-border bg-warning-soft px-2 py-1 text-xs text-warning-text"
-                              >
-                                <span className="flex-1">{item.quantityReview}</span>
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-6 border-warning-border px-2 text-xs"
-                                  onClick={() => clearQuantityReview(item.id)}
-                                >
-                                  Confirm
-                                </Button>
+                  {showDrugSearchResults && searchResults.length > 0 && (
+                    <div className="max-h-60 divide-y divide-border overflow-y-auto rounded-md border border-border">
+                      {searchResults.map((drug, index) => (
+                        <div
+                          key={drug.id}
+                          role="button"
+                          tabIndex={0}
+                          className="cursor-pointer px-3 py-2 hover:bg-accent"
+                          onClick={() => addDrugToInvoice(drug)}
+                          onKeyDown={(event) => {
+                            if (
+                              event.key === 'Enter' ||
+                              event.key === ' '
+                            ) {
+                              event.preventDefault();
+                              addDrugToInvoice(drug);
+                            }
+                          }}
+                        >
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-y-1">
+                                <h4 className="text-sm font-medium">
+                                  {highlightMatch(
+                                    drug.stockName || drug.name,
+                                    drugSearchQuery
+                                  )}
+                                </h4>
+                                {getRelevanceBadge(
+                                  drug,
+                                  drugSearchQuery,
+                                  index
+                                )}
                               </div>
-                            )}
-                            {prescribedNameShown(item) && (
-                              <p className="text-sm text-info-text">Prescribed: {prescribedNameShown(item)}</p>
-                            )}
-                            {item.itemType === 'PACKAGE' && item.package && (
-                              <p className="text-sm text-muted-foreground">
-                                {item.package.description} •{' '}
-                                {plural(item.package.items.length, 'item')}
+                              <p className="text-xs text-muted-foreground">
+                                {highlightMatch(
+                                  drug.manufacturerName || '',
+                                  drugSearchQuery
+                                )}{' '}
+                                · {drug.packSizeLabel}
+                                {drug.composition1 && (
+                                  <>
+                                    {' · '}
+                                    {highlightMatch(
+                                      drug.composition1,
+                                      drugSearchQuery
+                                    )}
+                                  </>
+                                )}
                               </p>
-                            )}
-
+                            </div>
+                            <div className="flex shrink-0 items-center justify-between gap-3 sm:justify-end">
+                              <div className="text-right">
+                                <div className="text-sm font-medium tabular-nums">
+                                  ₹{getDrugUnitPrice(drug).toFixed(2)}
+                                </div>
+                                {drug.category && (
+                                  <div className="text-xs text-muted-foreground">
+                                    {highlightMatch(
+                                      drug.category,
+                                      drugSearchQuery
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  addDrugToInvoice(drug);
+                                }}
+                              >
+                                <Plus />
+                                Add
+                              </Button>
+                            </div>
                           </div>
-                          <div className="flex shrink-0 flex-wrap justify-end gap-1 self-end sm:self-auto">
-                            {item.itemType === 'DRUG' && (
-                              <Button variant="outline" size="sm" aria-label={`Substitute ${billLineName(item)}`}
-                                onClick={() => {
-                                  setSubstitutingItemId(item.id);
-                                  setSelectedTab('drugs');
-                                  setDrugSearchQuery('');
-                                  requestAnimationFrame(() => {
-                                    searchInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                    searchInputRef.current?.focus({ preventScroll: true });
-                                  });
-                                }}>
-                                Substitute
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {showDrugSearchResults &&
+                    drugSearchQuery.trim() &&
+                    searchResults.length === 0 && (
+                      <p className="px-1 text-sm text-muted-foreground">
+                        No matching drugs found in the drug master.
+                      </p>
+                    )}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="packages" className="row-start-2 @md:col-start-1 @md:row-start-1">
+                {packages.length === 0 ? (
+                  <p className="py-2 text-sm text-muted-foreground">No packages available</p>
+                ) : (
+                  <div className="divide-y divide-border rounded-md border border-border">
+                    {packages.map((pkg) => (
+                      <div
+                        key={pkg.id}
+                        className="flex cursor-pointer items-start justify-between gap-3 px-3 py-2 hover:bg-accent"
+                        onClick={() => addPackageToInvoice(pkg)}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <h4 className="text-sm font-medium">{pkg.name}</h4>
+                          <p className="text-xs text-muted-foreground">
+                            {[pkg.subcategory, plural(pkg.items.length, 'item'), pkg.duration].filter(Boolean).join(' · ')}
+                          </p>
+                          {pkg.description && (
+                            <p className="text-xs text-muted-foreground">{pkg.description}</p>
+                          )}
+                          {pkg.indications && (
+                            <p className="text-xs text-muted-foreground">
+                              For: {pkg.indications}
+                            </p>
+                          )}
+                        </div>
+                        <div className="shrink-0 text-right text-sm tabular-nums">
+                          <div className="font-medium">₹{pkg.packagePrice.toFixed(2)}</div>
+                          <div className="text-xs text-muted-foreground">
+                            <span className="line-through">₹{pkg.originalPrice.toFixed(2)}</span>{' '}
+                            <span className="text-success-text">{pkg.discountPercent.toFixed(0)}% off</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
+
+              <TabsList className="row-start-1 @md:col-start-2">
+                <TabsTrigger value="drugs">Medicines</TabsTrigger>
+                <TabsTrigger value="packages">Packages</TabsTrigger>
+              </TabsList>
+            </Tabs>
+
+            {items.length > 0 && (
+              <div>
+                <div aria-hidden className={cn('hidden gap-x-2 border-b border-border pb-2 text-xs font-medium text-muted-foreground @2xl:grid', LINE_GRID)}>
+                  <span>Item</span>
+                  <span>Qty</span>
+                  <span>Price</span>
+                  <span>Disc %</span>
+                  <span>Tax %</span>
+                  <span className="text-right">Total</span>
+                </div>
+                <div className="divide-y divide-border">
+                  {items.map((item) => {
+                    const directionsOpen = openDirections.has(item.id);
+                    const directionsSummary = item.itemType === 'DRUG'
+                      ? [item.dosage, item.frequency && frequencyText(item.frequency), item.duration].filter(Boolean).join(' · ') || item.instructions
+                      : undefined;
+                    const meta = item.itemType === 'DRUG'
+                      ? [item.drug?.manufacturerName, item.drug?.packSizeLabel].filter(Boolean).join(' · ')
+                      : item.package
+                        ? [item.package.description, plural(item.package.items.length, 'item')].filter(Boolean).join(' · ')
+                        : '';
+                    return (
+                      <div key={item.id} data-invoice-item={item.id} className={cn('grid gap-x-2 gap-y-1.5 py-2.5 @2xl:items-center', LINE_GRID)}>
+                        <div className="col-span-2 min-w-0 @md:col-span-4 @2xl:col-span-1">
+                          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                            <h4 className="min-w-0 break-words text-sm font-medium text-foreground">{billLineName(item)}</h4>
+                            {item.stockStatus === 'CHECK_FAILED' ? (
+                              <Badge variant="danger">Inventory check failed</Badge>
+                            ) : item.itemType === 'DRUG' && !item.drugId ? (
+                              <Badge variant="danger">No match</Badge>
+                            ) : item.stockStatus === 'OUT_OF_STOCK' ? (
+                              <Badge variant="danger">Out of stock</Badge>
+                            ) : item.availableStock !== undefined && item.quantity > item.availableStock ? (
+                              <Badge variant="danger">Insufficient stock: {item.availableStock} available</Badge>
+                            ) : item.stockStatus === 'LOW_STOCK' ? (
+                              <Badge variant="warning">Low stock: {item.availableStock} available</Badge>
+                            ) : null}
+                            {isPrescriptionItem(item.id) && (
+                              <Badge variant="neutral">From prescription</Badge>
+                            )}
+                            {item.itemType === 'PACKAGE' && (
+                              <Badge variant="neutral">{enumLabel('itemType', item.itemType)}</Badge>
+                            )}
+                          </div>
+                          <div className="flex min-w-0 flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+                            {meta && <span className="min-w-0 truncate">{meta}</span>}
+                            {prescribedNameShown(item) && (
+                              <span>Prescribed: {prescribedNameShown(item)}</span>
+                            )}
+                            {(item.itemType === 'DRUG' || item.package) && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="-ml-1.5 h-6 min-h-6 max-w-full gap-1 px-1.5 text-xs font-normal text-muted-foreground"
+                                aria-expanded={directionsOpen}
+                                aria-controls={`directions-${item.id}`}
+                                onClick={() => toggleDirections(item.id)}
+                              >
+                                {item.itemType === 'DRUG' ? (
+                                  directionsSummary ? (
+                                    <span className="truncate"><span className="sr-only">Directions: </span>{directionsSummary}</span>
+                                  ) : 'Directions'
+                                ) : 'Contents'}
+                                <ChevronDown className={cn('size-3 transition-transform', directionsOpen && 'rotate-180')} aria-hidden />
                               </Button>
                             )}
+                          </div>
+                        </div>
+
+                        <div className="min-w-0">
+                          <Label htmlFor={`quantity-${item.id}`} className="mb-1 block truncate text-xs font-normal text-muted-foreground @2xl:sr-only">Quantity</Label>
+                          <Input
+                            id={`quantity-${item.id}`}
+                            aria-label={`Quantity for ${billLineName(item)}`}
+                            type="number"
+                            min="1"
+                            value={item.quantity}
+                            onChange={(e) =>
+                              updateItemQuantity(
+                                item.id,
+                                parseInt(e.target.value) || 1,
+                                item.itemType
+                              )
+                            }
+                            className="h-8 px-2 tabular-nums"
+                          />
+                        </div>
+                        <div className="min-w-0">
+                          <Label htmlFor={`price-${item.id}`} className="mb-1 block truncate text-xs font-normal text-muted-foreground @2xl:sr-only">Unit Price</Label>
+                          <Input
+                            id={`price-${item.id}`}
+                            aria-label={`Unit price for ${billLineName(item)}`}
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={item.unitPrice}
+                            onChange={(e) =>
+                              updateItemUnitPrice(
+                                item.id,
+                                parseFloat(e.target.value) || 0
+                              )
+                            }
+                            className="h-8 px-2 tabular-nums"
+                          />
+                        </div>
+                        <div className="min-w-0">
+                          <Label htmlFor={`discount-${item.id}`} className="mb-1 block truncate text-xs font-normal text-muted-foreground @2xl:sr-only">Discount %</Label>
+                          <Input
+                            id={`discount-${item.id}`}
+                            aria-label={`Discount % for ${billLineName(item)}`}
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="0.1"
+                            value={item.discountPercent}
+                            onChange={(e) =>
+                              updateItemDiscount(
+                                item.id,
+                                parseFloat(e.target.value) || 0
+                              )
+                            }
+                            className="h-8 px-2 tabular-nums"
+                          />
+                        </div>
+                        <div className="min-w-0">
+                          <Label htmlFor={`gst-${item.id}`} className="mb-1 block truncate text-xs font-normal text-muted-foreground @2xl:sr-only">Tax %</Label>
+                          <Input
+                            id={`gst-${item.id}`}
+                            aria-label={`Tax % for ${billLineName(item)}`}
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="0.1"
+                            value={item.taxPercent ?? ''}
+                            aria-invalid={item.taxPercent === null}
+                            aria-describedby={item.taxPercent === null ? `gst-review-${item.id}` : undefined}
+                            onChange={(e) =>
+                              updateItemTax(
+                                item.id,
+                                e.target.value === '' ? null : Number(e.target.value)
+                              )
+                            }
+                            className="h-8 px-2 tabular-nums"
+                          />
+                        </div>
+                        <div className="col-span-2 col-start-3 min-w-0 @md:col-start-auto @2xl:col-span-1">
+                          <Label htmlFor={`total-${item.id}`} className="mb-1 block truncate text-right text-xs font-normal text-muted-foreground @2xl:sr-only">Total</Label>
+                          <output
+                            id={`total-${item.id}`}
+                            aria-live="off"
+                            aria-label={`Total for ${billLineName(item)}`}
+                            className={cn('flex h-8 items-center justify-end whitespace-nowrap text-sm font-medium tabular-nums', item.taxPercent === null && 'text-destructive-text')}
+                          >
+                            {item.taxPercent === null ? 'GST pending' : `₹${item.totalAmount.toFixed(2)}`}
+                          </output>
+                        </div>
+
+                        <div className="col-span-2 col-start-3 row-start-1 flex items-start justify-end gap-1 @md:col-start-5 @2xl:col-span-1 @2xl:col-start-auto @2xl:row-start-auto @2xl:items-center">
+                          {item.itemType === 'DRUG' && (
+                            <Button variant="ghost" size="icon" className="size-8 text-muted-foreground" title="Substitute" aria-label={`Substitute ${billLineName(item)}`}
+                              onClick={() => {
+                                setSubstitutingItemId(item.id);
+                                setSelectedTab('drugs');
+                                setDrugSearchQuery('');
+                                requestAnimationFrame(() => {
+                                  searchInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                  searchInputRef.current?.focus({ preventScroll: true });
+                                });
+                              }}>
+                              <ArrowLeftRight />
+                            </Button>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label={`Remove ${billLineName(item)}`}
+                            onClick={() => removeItem(item.id)}
+                            className="size-8 text-destructive-text hover:text-destructive-text"
+                          >
+                            <Trash2 />
+                          </Button>
+                        </div>
+
+                        {item.quantityReview && (
+                          <div
+                            role="status"
+                            className="col-span-full flex items-center gap-2 rounded-md border border-warning-border bg-warning-soft px-2 py-1 text-xs text-warning-text"
+                          >
+                            <span className="flex-1">{item.quantityReview}</span>
                             <Button
-                              variant="ghost"
+                              type="button"
                               size="sm"
-                              aria-label={`Remove ${billLineName(item)}`}
-                              onClick={() => removeItem(item.id)}
-                              className="text-destructive-text hover:text-destructive-text"
+                              variant="outline"
+                              className="h-6 min-h-6 border-warning-border px-2 text-xs"
+                              onClick={() => clearQuantityReview(item.id)}
                             >
-                              <Trash2 className="h-4 w-4" />
+                              Confirm
                             </Button>
                           </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-3 md:grid-cols-[repeat(4,minmax(4.5rem,1fr))_minmax(max-content,1fr)]">
-                          <div>
-                            <Label htmlFor={`quantity-${item.id}`} className="text-xs">Quantity</Label>
-                            <Input
-                              id={`quantity-${item.id}`}
-                              aria-label={`Quantity for ${billLineName(item)}`}
-                              type="number"
-                              min="1"
-                              value={item.quantity}
-                              onChange={(e) =>
-                                updateItemQuantity(
-                                  item.id,
-                                  parseInt(e.target.value) || 1,
-                                  item.itemType
-                                )
-                              }
-                              className="h-8"
-                            />
-                          </div>
-                          <div>
-                            <Label htmlFor={`price-${item.id}`} className="text-xs">Unit Price</Label>
-                            <Input
-                              id={`price-${item.id}`}
-                              aria-label={`Unit price for ${billLineName(item)}`}
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={item.unitPrice}
-                              onChange={(e) =>
-                                updateItemUnitPrice(
-                                  item.id,
-                                  parseFloat(e.target.value) || 0
-                                )
-                              }
-                              className="h-8"
-                            />
-                          </div>
-                          <div>
-                            <Label htmlFor={`discount-${item.id}`} className="text-xs">Discount %</Label>
-                            <Input
-                              id={`discount-${item.id}`}
-                              aria-label={`Discount % for ${billLineName(item)}`}
-                              type="number"
-                              min="0"
-                              max="100"
-                              step="0.1"
-                              value={item.discountPercent}
-                              onChange={(e) =>
-                                updateItemDiscount(
-                                  item.id,
-                                  parseFloat(e.target.value) || 0
-                                )
-                              }
-                              className="h-8"
-                            />
-                          </div>
-                          <div>
-                            <Label htmlFor={`gst-${item.id}`} className="text-xs">Tax %</Label>
-                            <Input
-                              id={`gst-${item.id}`}
-                              aria-label={`Tax % for ${billLineName(item)}`}
-                              type="number"
-                              min="0"
-                              max="100"
-                              step="0.1"
-                              value={item.taxPercent ?? ''}
-                              aria-invalid={item.taxPercent === null}
-                              aria-describedby={item.taxPercent === null ? `gst-review-${item.id}` : undefined}
-                              onChange={(e) =>
-                                updateItemTax(
-                                  item.id,
-                                  e.target.value === '' ? null : Number(e.target.value)
-                                )
-                              }
-                              className="h-8"
-                            />
-                          </div>
-                          <div>
-                            <Label htmlFor={`total-${item.id}`} className="text-xs">Total</Label>
-                            <output
-                              id={`total-${item.id}`}
-                              aria-live="off"
-                              aria-label={`Total for ${billLineName(item)}`}
-                              className={`flex h-8 items-center whitespace-nowrap rounded-md bg-muted px-3 text-sm font-medium tabular-nums ${item.taxPercent === null ? 'text-destructive-text' : ''}`}
-                            >
-                              {item.taxPercent === null ? 'GST pending' : `₹${item.totalAmount.toFixed(2)}`}
-                            </output>
-                          </div>
-                        </div>
+                        )}
 
                         {item.taxPercent === null && (
-                          <p id={`gst-review-${item.id}`} className="mt-2 text-sm text-destructive">
+                          <p id={`gst-review-${item.id}`} className="col-span-full text-xs text-destructive-text">
                             GST rate needs review. Enter Tax % before previewing or confirming this invoice.
                           </p>
                         )}
 
                         {item.itemType === 'PACKAGE' && item.package && (
-                          <div className="mt-3 p-3 bg-muted rounded-md">
-                            <h5 className="text-sm font-medium mb-2">
-                              Package Contents:
-                            </h5>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                          <div id={`directions-${item.id}`} className={cn('col-span-full space-y-1 text-xs', !directionsOpen && 'hidden')}>
+                            <ul className="grid gap-x-6 gap-y-0.5 @md:grid-cols-2">
                               {item.package.items
                                 .sort((a, b) => a.sequence - b.sequence)
                                 .map((packageItem) => (
-                                  <div
+                                  <li
                                     key={packageItem.id}
-                                    className="flex justify-between"
+                                    className="flex justify-between gap-2"
                                   >
                                     <span>{packageItem.drug.name}</span>
-                                    <span>×{packageItem.quantity}</span>
-                                  </div>
+                                    <span className="tabular-nums text-muted-foreground">×{packageItem.quantity}</span>
+                                  </li>
                                 ))}
-                            </div>
+                            </ul>
                             {item.package.instructions && (
-                              <p className="text-xs text-muted-foreground mt-2">
-                                <strong>Instructions:</strong>{' '}
-                                {item.package.instructions}
+                              <p className="text-muted-foreground">
+                                Instructions: {item.package.instructions}
                               </p>
                             )}
                           </div>
                         )}
 
                         {item.itemType === 'DRUG' && (
-                          <div className="mt-3 rounded-md border bg-muted p-3">
-                            <div className="mb-2 flex items-center gap-2">
-                              <FileText className="h-4 w-4 text-muted-foreground" />
-                              <h5 className="text-sm font-medium">
-                                Prescription directions
-                              </h5>
+                          <div id={`directions-${item.id}`} className={cn('col-span-full grid gap-2 @md:grid-cols-3', !directionsOpen && 'hidden')}>
+                            <div className="min-w-0">
+                              <Label htmlFor={`dosage-${item.id}`} className="mb-1 text-xs font-normal text-muted-foreground">Dosage</Label>
+                              <Input
+                                id={`dosage-${item.id}`}
+                                aria-label={`Dosage for ${billLineName(item)}`}
+                                value={item.dosage || ''}
+                                onChange={(event) =>
+                                  updateItemPrescriptionField(
+                                    item.id,
+                                    'dosage',
+                                    event.target.value
+                                  )
+                                }
+                                placeholder="e.g. 1 tablet"
+                                className="h-8"
+                              />
                             </div>
-                            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                              <div>
-                                <Label htmlFor={`dosage-${item.id}`} className="text-xs">Dosage</Label>
-                                <Input
-                                  id={`dosage-${item.id}`}
-                                  aria-label={`Dosage for ${billLineName(item)}`}
-                                  value={item.dosage || ''}
-                                  onChange={(event) =>
-                                    updateItemPrescriptionField(
-                                      item.id,
-                                      'dosage',
-                                      event.target.value
-                                    )
-                                  }
-                                  placeholder="e.g. 1 tablet"
-                                  className="h-9"
-                                />
-                              </div>
-                              <div>
-                                <Label htmlFor={`frequency-${item.id}`} className="text-xs">Frequency</Label>
-                                <NativeSelect
-                                  id={`frequency-${item.id}`}
-                                  aria-label={`Frequency for ${billLineName(item)}`}
-                                  className="w-full"
-                                  value={item.frequency || ''}
-                                  onChange={(event) =>
-                                    updateItemPrescriptionField(
-                                      item.id,
-                                      'frequency',
-                                      event.target.value
-                                    )
-                                  }
-                                >
-                                  <option value="">Not set</option>
-                                  {(item.frequency && !FREQUENCY_CODES.includes(item.frequency) ? [item.frequency, ...FREQUENCY_CODES] : FREQUENCY_CODES).map((code) => (
-                                    <option key={code} value={code}>{/^[A-Z0-9_]+$/.test(code) ? prescriptionLabel('frequency', code) : code}</option>
-                                  ))}
-                                </NativeSelect>
-                              </div>
-                              <div>
-                                <Label htmlFor={`duration-${item.id}`} className="text-xs">Duration</Label>
-                                <Input
-                                  id={`duration-${item.id}`}
-                                  aria-label={`Duration for ${billLineName(item)}`}
-                                  value={item.duration || ''}
-                                  onChange={(event) =>
-                                    updateItemPrescriptionField(
-                                      item.id,
-                                      'duration',
-                                      event.target.value
-                                    )
-                                  }
-                                  placeholder="e.g. 7 days"
-                                  className="h-9"
-                                />
-                              </div>
+                            <div className="min-w-0">
+                              <Label htmlFor={`frequency-${item.id}`} className="mb-1 text-xs font-normal text-muted-foreground">Frequency</Label>
+                              <NativeSelect
+                                id={`frequency-${item.id}`}
+                                aria-label={`Frequency for ${billLineName(item)}`}
+                                className="h-8 w-full"
+                                value={item.frequency || ''}
+                                onChange={(event) =>
+                                  updateItemPrescriptionField(
+                                    item.id,
+                                    'frequency',
+                                    event.target.value
+                                  )
+                                }
+                              >
+                                <option value="">Not set</option>
+                                {(item.frequency && !FREQUENCY_CODES.includes(item.frequency) ? [item.frequency, ...FREQUENCY_CODES] : FREQUENCY_CODES).map((code) => (
+                                  <option key={code} value={code}>{frequencyText(code)}</option>
+                                ))}
+                              </NativeSelect>
                             </div>
-                            <div className="mt-3">
-                              <Label htmlFor={`instructions-${item.id}`} className="text-xs">Instructions</Label>
+                            <div className="min-w-0">
+                              <Label htmlFor={`duration-${item.id}`} className="mb-1 text-xs font-normal text-muted-foreground">Duration</Label>
+                              <Input
+                                id={`duration-${item.id}`}
+                                aria-label={`Duration for ${billLineName(item)}`}
+                                value={item.duration || ''}
+                                onChange={(event) =>
+                                  updateItemPrescriptionField(
+                                    item.id,
+                                    'duration',
+                                    event.target.value
+                                  )
+                                }
+                                placeholder="e.g. 7 days"
+                                className="h-8"
+                              />
+                            </div>
+                            <div className="min-w-0 @md:col-span-3">
+                              <Label htmlFor={`instructions-${item.id}`} className="mb-1 text-xs font-normal text-muted-foreground">Instructions</Label>
                               <Textarea
                                 id={`instructions-${item.id}`}
                                 aria-label={`Instructions for ${billLineName(item)}`}
@@ -2859,73 +2799,53 @@ export function PharmacyInvoiceBuilderFixed({
                                   )
                                 }
                                 placeholder="e.g. apply after cleansing; avoid eyes"
-                                className="min-h-16"
+                                className="min-h-14"
                               />
                             </div>
                           </div>
                         )}
-                      </Card>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             )}
           </div>
 
-          {/* Right Column - Summary & Billing */}
-          <div className="space-y-6">
-            {/* Invoice Summary */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Calculator className="h-4 w-4" />
-                  Invoice Summary
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div className="flex justify-between">
-                    <span>Subtotal:</span>
-                    <span>₹{subtotal.toFixed(2)}</span>
-                  </div>
-                  {lineDiscount > 0 && (
-                    <div className="flex justify-between text-success-text">
-                      <span>Item discounts:</span>
-                      <span>-₹{lineDiscount.toFixed(2)}</span>
-                    </div>
-                  )}
-                  <BillDiscountInput value={billDiscount} onChange={setBillDiscount} problem={discountProblem} disabled={loading} />
-                  {billDiscountAmount > 0 && (
-                    <div className="flex justify-between text-success-text">
-                      <span>Bill discount{billDiscount?.kind === 'PERCENT' ? ` (${billDiscount.value}%)` : ''}:</span>
-                      <span>-₹{billDiscountAmount.toFixed(2)}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between">
-                    <span>Tax:</span>
-                    <span>{hasUnresolvedGst ? 'GST pending' : `₹${totalTax.toFixed(2)}`}</span>
-                  </div>
-                  <div className="border-t pt-3">
-                    <div className="flex justify-between font-semibold text-lg">
-                      <span>Total:</span>
-                      <span>{hasUnresolvedGst ? 'GST pending' : `₹${grandTotal.toFixed(2)}`}</span>
-                    </div>
-                  </div>
+          <div className="space-y-6 border-t border-border pt-6 lg:sticky lg:top-4 lg:self-start lg:border-t-0 lg:pt-0">
+            <div className="space-y-2 text-sm">
+              <h2 className="sr-only">Invoice Summary</h2>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Subtotal:</span>
+                <span className="tabular-nums">₹{subtotal.toFixed(2)}</span>
+              </div>
+              {lineDiscount > 0 && (
+                <div className="flex justify-between text-success-text">
+                  <span>Item discounts:</span>
+                  <span className="tabular-nums">-₹{lineDiscount.toFixed(2)}</span>
                 </div>
-              </CardContent>
-            </Card>
+              )}
+              <BillDiscountInput value={billDiscount} onChange={setBillDiscount} problem={discountProblem} disabled={loading} />
+              {billDiscountAmount > 0 && (
+                <div className="flex justify-between text-success-text">
+                  <span>Bill discount{billDiscount?.kind === 'PERCENT' ? ` (${billDiscount.value}%)` : ''}:</span>
+                  <span className="tabular-nums">-₹{billDiscountAmount.toFixed(2)}</span>
+                </div>
+              )}
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Tax:</span>
+                <span className="tabular-nums">{hasUnresolvedGst ? 'GST pending' : `₹${totalTax.toFixed(2)}`}</span>
+              </div>
+              <div className="flex justify-between border-t border-border pt-2 text-base font-semibold">
+                <span>Total:</span>
+                <span className="tabular-nums">{hasUnresolvedGst ? 'GST pending' : `₹${grandTotal.toFixed(2)}`}</span>
+              </div>
+            </div>
 
-            {/* Billing Information */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <CreditCard className="h-4 w-4" />
-                  Billing Information
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label htmlFor="billingName">Billing Name *</Label>
+            <div className="space-y-3 border-t border-border pt-6">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="min-w-0 space-y-1">
+                  <Label htmlFor="billingName" className="text-xs font-normal text-muted-foreground">Billing Name *</Label>
                   <Input
                     id="billingName"
                     value={invoiceData.billingName}
@@ -2936,10 +2856,11 @@ export function PharmacyInvoiceBuilderFixed({
                       }))
                     }
                     placeholder="Full name"
+                    className="h-8"
                   />
                 </div>
-                <div>
-                  <Label htmlFor="billingPhone">Phone *</Label>
+                <div className="min-w-0 space-y-1">
+                  <Label htmlFor="billingPhone" className="text-xs font-normal text-muted-foreground">Phone *</Label>
                   <Input
                     id="billingPhone"
                     value={invoiceData.billingPhone}
@@ -2950,34 +2871,49 @@ export function PharmacyInvoiceBuilderFixed({
                       }))
                     }
                     placeholder="Phone number"
+                    className="h-8"
                   />
                 </div>
-                <div>
-                  <Label htmlFor="paymentMethod">Payment Method</Label>
-                  <Select
-                    value={invoiceData.paymentMethod}
-                    onValueChange={(
-                      value: 'CASH' | 'CARD' | 'UPI' | 'NETBANKING'
-                    ) =>
-                      setInvoiceData((prev) => ({
-                        ...prev,
-                        paymentMethod: value,
-                      }))
-                    }
-                  >
-                    <SelectTrigger id="paymentMethod">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="CASH">Cash</SelectItem>
-                      <SelectItem value="CARD">Card</SelectItem>
-                      <SelectItem value="UPI">UPI</SelectItem>
-                      <SelectItem value="NETBANKING">Net Banking</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label htmlFor="notes">Notes</Label>
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="paymentMethod" className="text-xs font-normal text-muted-foreground">Payment Method</Label>
+                <Select
+                  value={invoiceData.paymentMethod}
+                  onValueChange={(
+                    value: 'CASH' | 'CARD' | 'UPI' | 'NETBANKING'
+                  ) =>
+                    setInvoiceData((prev) => ({
+                      ...prev,
+                      paymentMethod: value,
+                    }))
+                  }
+                >
+                  <SelectTrigger id="paymentMethod" size="sm" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="CASH">Cash</SelectItem>
+                    <SelectItem value="CARD">Card</SelectItem>
+                    <SelectItem value="UPI">UPI</SelectItem>
+                    <SelectItem value="NETBANKING">Net Banking</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="-ml-2 text-muted-foreground"
+                  aria-expanded={noteOpen}
+                  aria-controls="bill-note"
+                  onClick={() => setNoteOpen((open) => !open)}
+                >
+                  <MessageSquarePlus />
+                  {invoiceData.notes ? 'Note added' : 'Add note'}
+                </Button>
+                <div id="bill-note" className={cn('mt-1', !noteOpen && 'hidden')}>
+                  <Label htmlFor="notes" className="sr-only">Notes</Label>
                   <Textarea
                     id="notes"
                     value={invoiceData.notes}
@@ -2988,13 +2924,12 @@ export function PharmacyInvoiceBuilderFixed({
                       }))
                     }
                     placeholder="Additional notes..."
-                    rows={3}
+                    rows={2}
                   />
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
 
-            {/* Actions */}
             <div className="space-y-2">
               <Button
                 onClick={handleOpenPrintPreview}
@@ -3002,53 +2937,53 @@ export function PharmacyInvoiceBuilderFixed({
                   loading || !invoiceData.patientId || items.length === 0
                 }
                 className="w-full"
-                size="lg"
               >
                 {loading ? (
                   <>
-                    <Spinner className="  h-4 w-4   mr-2" />
+                    <Spinner className="h-4 w-4" />
                     Confirming Invoice...
                   </>
                 ) : (
                   <>
-                    <FileText className="h-4 w-4 mr-2" />
+                    <FileText />
                     Print Preview
                   </>
                 )}
               </Button>
-              <p className="text-xs text-muted-foreground text-center">
-                {plural(items.length, 'item')} • {hasUnresolvedGst ? 'GST pending' : `₹${grandTotal.toFixed(2)} total`}
-              </p>
               {!checkoutAttempt && (
-                <div className="space-y-2 border-t pt-3">
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => void saveDraft()}
-                    disabled={savingDraft || loading || discarding}
-                  >
-                    {savingDraft ? <Spinner className="mr-2 h-4 w-4" /> : <Save className="mr-2 h-4 w-4" />}
-                    {savingDraft ? 'Saving draft…' : 'Save draft'}
-                  </Button>
-                  <p role="status" className="text-center text-xs text-muted-foreground">
+                <>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => void saveDraft()}
+                      disabled={savingDraft || loading || discarding}
+                    >
+                      {savingDraft ? <Spinner className="h-4 w-4" /> : <Save />}
+                      {savingDraft ? 'Saving draft…' : 'Save draft'}
+                    </Button>
+                    {session.kind === 'draft' && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="flex-1 text-destructive-text hover:text-destructive-text"
+                        onClick={() => setDiscardOpen(true)}
+                        disabled={savingDraft || loading || discarding}
+                      >
+                        <Trash2 />
+                        Discard draft
+                      </Button>
+                    )}
+                  </div>
+                  <p role="status" className="text-xs text-muted-foreground">
                     {session.kind === 'new'
                       ? 'Saves the bill to Sales without moving stock or taking payment.'
                       : draftChanged
                         ? 'Unsaved changes'
                         : 'All changes saved to the draft'}
                   </p>
-                  {session.kind === 'draft' && (
-                    <Button
-                      variant="ghost"
-                      className="w-full text-destructive-text hover:text-destructive-text"
-                      onClick={() => setDiscardOpen(true)}
-                      disabled={savingDraft || loading || discarding}
-                    >
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Discard draft
-                    </Button>
-                  )}
-                </div>
+                </>
               )}
             </div>
           </div>
