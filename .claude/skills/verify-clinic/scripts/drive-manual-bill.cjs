@@ -149,8 +149,8 @@ async function receive(browser, state, dir, key, run, c) {
 
 // Re-entering an already posted bill must be refused with a way forward, and must not add stock.
 async function duplicate(browser, state, dir, c) {
-  const run = { ...RUNS.new, label: "duplicate of the first bill", dir, key: "duplicate" };
-  const { context, page } = await openPage(browser, state, "pharmacist", { viewport: DESKTOP });
+  const run = { ...RUNS.new, label: "duplicate of the first bill, phone 390px", dir, key: "duplicate" };
+  const { context, page } = await openPage(browser, state, "pharmacist", { viewport: PHONE, isMobile: true, hasTouch: true });
   const log = recorder(page, state);
   const before = stockByName(state, [cream]);
   await page.goto(`${state.base}${INTAKE}`, { waitUntil: "domcontentloaded", timeout: 180000 });
@@ -159,18 +159,29 @@ async function duplicate(browser, state, dir, c) {
   const primary = page.getByRole("button", { name: "Confirm reviewed values & add stock" });
   if (await primary.isEnabled().catch(() => false)) await primary.click();
   else await page.getByRole("button", { name: "Save draft" }).click();
-  const refusal = page.getByText(/already saved|already exists|duplicate/i).first();
-  await refusal.waitFor({ timeout: 30000 }).catch(() => {});
-  // UX: a refusal the user has to go looking for is a refusal they miss. Measure before scrolling.
-  const box = await refusal.boundingBox().catch(() => null);
-  const onScreen = Boolean(box && box.y >= 0 && box.y + box.height <= DESKTOP.height);
+  // The outcome belongs where the user clicked: the sticky action bar, judged by state (status pill,
+  // which controls exist, what is covered), not by matching prose.
+  const bar = page.getByRole("region", { name: "Invoice actions" });
+  const outcome = bar.getByRole("alert");
+  await outcome.waitFor({ timeout: 30000 }).catch(() => {});
+  const box = await outcome.boundingBox().catch(() => null);
   await shot(page, dir, "duplicate-refused-as-seen");
-  await refusal.scrollIntoViewIfNeeded().catch(() => {});
-  await shot(page, dir, "duplicate-refused-message");
-  const message = await refusal.innerText().catch(() => null);
-  c.ok("[duplicate] user is told the bill already exists", Boolean(message), message);
-  c.ok("[duplicate] refusal is on screen where the user clicked (no scrolling)", onScreen, box && { y: Math.round(box.y), viewportHeight: DESKTOP.height });
-  c.ok('[duplicate] offers "Open existing invoice"', await page.getByRole("button", { name: "Open existing invoice" }).isVisible().catch(() => false));
+  const open = bar.getByRole("button", { name: "Open existing invoice" });
+  const reachable = await open.evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+    return r.top >= 0 && r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth && el.contains(hit);
+  }).catch(() => false);
+  const message = await outcome.innerText().catch(() => null);
+  c.ok("[duplicate] action bar shows a refusal at the click site, on screen", Boolean(box && box.y >= 0 && box.y + box.height <= PHONE.height), box && { y: Math.round(box.y), viewportHeight: PHONE.height });
+  c.ok("[duplicate] refusal carries the red cross status", (await outcome.locator('[data-review-state="error"]').count()) === 1, message);
+  c.ok("[duplicate] refused action is no longer offered", (await bar.getByRole("button", { name: "Confirm reviewed values & add stock" }).count()) === 0 && (await bar.getByRole("button", { name: "Save draft" }).count()) === 0);
+  c.ok('[duplicate] "Open existing invoice" is in the bar and not covered', reachable);
+  await open.click().catch(() => {});
+  const compare = page.getByRole("region", { name: "Compare with saved invoice" }).or(page.locator('[aria-label="Compare with saved invoice"]'));
+  await compare.first().waitFor({ timeout: 30000 }).catch(() => {});
+  c.ok('[duplicate] "Open existing invoice" opens the comparison', await compare.first().isVisible().catch(() => false));
+  await shot(page, dir, "duplicate-open-existing");
   const after = stockByName(state, [cream]);
   c.ok("[duplicate] stock unchanged", after[cream] === before[cream], { before, after });
   const [{ n }] = sql(state, `SELECT count(*)::int AS n FROM pharmacy_purchase_invoices WHERE "invoiceNumber" = '${run.bill}'`);
