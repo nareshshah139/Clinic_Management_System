@@ -1058,25 +1058,23 @@ function MedicationRow({
       <div className="min-w-0">
         <p className="truncate text-sm font-medium text-foreground">{medication.drugName}</p>
         <p className="truncate text-xs text-muted-foreground">{regimen || 'Dose not specified'}</p>
-        {showStockName || inventoryLink ? (
-          <div className="flex min-w-0 items-center text-xs text-muted-foreground">
-            {showStockName ? (
-              <span className="truncate">
-                Stock item <span>{stockName}</span>
-              </span>
-            ) : null}
-            {inventoryLink}
-          </div>
+        {showStockName ? (
+          <p className="truncate text-xs text-muted-foreground" title={stockName ?? undefined}>
+            Stock item <span>{stockName}</span>
+          </p>
         ) : null}
       </div>
 
       <div className="min-w-0">
-        {stock ? (
-          <StatusBadge domain="stock" status={stock.stockStatus} />
-        ) : (
-          <Badge variant="neutral">{loadingStock ? 'Checking' : 'Not checked'}</Badge>
-        )}
-        <p className="mt-1 truncate text-xs tabular-nums text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-y-1 text-xs text-muted-foreground">
+          {stock ? (
+            <StatusBadge domain="stock" status={stock.stockStatus} />
+          ) : (
+            <Badge variant="neutral">{loadingStock ? 'Checking' : 'Not checked'}</Badge>
+          )}
+          {inventoryLink}
+        </div>
+        <p className="mt-1 text-xs tabular-nums text-muted-foreground">
           {pick}
           {stock ? (
             <>
@@ -1148,7 +1146,7 @@ function MedicationRow({
   );
 }
 
-const REVIEW_GRID = '@2xl:grid-cols-[minmax(0,1.3fr)_minmax(0,0.9fr)_minmax(0,1.1fr)_190px]';
+const REVIEW_GRID = '@2xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1.25fr)_minmax(0,1fr)_190px]';
 
 type NextStep = { label: string; status: DispenseTaskStatus } | 'bill' | null;
 
