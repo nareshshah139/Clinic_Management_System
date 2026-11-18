@@ -78,6 +78,7 @@ interface PackageBrowserProps {
 export function PackageBrowser({ onSelectPackage, reloadKey }: PackageBrowserProps & { reloadKey?: string }) {
   const [packages, setPackages] = useState<PharmacyPackage[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPackage, setSelectedPackage] = useState<PharmacyPackage | null>(null);
   const [showViewDialog, setShowViewDialog] = useState(false);
@@ -94,6 +95,7 @@ export function PackageBrowser({ onSelectPackage, reloadKey }: PackageBrowserPro
         category: 'Dermatology',
         limit: 50
       });
+      setLoadFailed(false);
       if (response && Array.isArray((response as any).packages)) {
         setPackages((response as any).packages);
       } else {
@@ -103,6 +105,7 @@ export function PackageBrowser({ onSelectPackage, reloadKey }: PackageBrowserPro
     } catch (error) {
       console.error('Error loading packages:', error);
       setPackages([]);
+      setLoadFailed(true);
       toast({
         title: "Error",
         description: "Failed to load pharmacy packages. Make sure the backend server is running.",
@@ -161,13 +164,20 @@ export function PackageBrowser({ onSelectPackage, reloadKey }: PackageBrowserPro
         <div className="text-center py-8">
           <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
           <h3 className="text-lg font-semibold mb-2">
-            {searchQuery ? 'No packages found' : 'No packages yet'}
+            {loadFailed ? "Couldn't load packages" : searchQuery ? 'No packages found' : 'No packages yet'}
           </h3>
           <p className="text-muted-foreground">
-            {searchQuery 
-              ? 'Try adjusting your search terms' 
-              : 'Create a package to bundle treatments for billing.'}
+            {loadFailed
+              ? 'Check the connection, then try again.'
+              : searchQuery
+                ? 'Try adjusting your search terms'
+                : 'Create a package to bundle treatments for billing.'}
           </p>
+          {loadFailed && (
+            <Button variant="outline" onClick={loadPackages} className="mt-4">
+              Try again
+            </Button>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

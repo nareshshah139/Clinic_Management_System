@@ -521,7 +521,7 @@ async function setup() {
                   target = Array.from(
                     document.querySelectorAll('[data-slot="card-title"]'),
                   )
-                    .find((e) => e.textContent.trim() === "Recent Submissions")
+                    .find((e) => e.textContent.trim() === "Recent submissions")
                     ?.closest('[data-slot="card"]');
               }
               if (!target)

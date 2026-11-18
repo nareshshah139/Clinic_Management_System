@@ -407,7 +407,7 @@ export default function ReportsPage() {
     return (
       <div className="space-y-6">
         {/* Main Revenue Metrics */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           <Card className="gap-0 py-0">
             <CardContent className="p-4">
               <div>
@@ -468,7 +468,7 @@ export default function ReportsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {data.paymentBreakdown.map((payment: PaymentBreakdown, index: number) => (
                   <div key={index} className="p-3 bg-muted rounded-lg">
                     <div className="flex justify-between items-center">
@@ -524,7 +524,7 @@ export default function ReportsPage() {
     return (
       <div className="space-y-6">
         {/* Main Patient Metrics */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           <Card className="gap-0 py-0">
             <CardContent className="p-4">
               <div>
@@ -587,7 +587,7 @@ export default function ReportsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {data.genderBreakdown.map((gender: GenderBreakdown, index: number) => (
                   <div key={index} className="p-3 bg-muted rounded-lg text-center">
                     <p className="font-medium">{enumLabel('gender', gender.gender)}</p>
@@ -638,7 +638,7 @@ export default function ReportsPage() {
     return (
       <div className="space-y-6">
         {/* Main Doctor Metrics */}
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <Card className="gap-0 py-0">
             <CardContent className="p-4">
               <div>
@@ -697,7 +697,7 @@ export default function ReportsPage() {
                       </div>
                       <Badge variant="secondary">{formatPercentage(doctor.completionRate)}</Badge>
                     </div>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 text-sm">
                       <div>
                         <p className="text-muted-foreground">Appointments</p>
                         <p className="font-bold">{doctor.totalAppointments}</p>
@@ -732,7 +732,7 @@ export default function ReportsPage() {
     return (
       <div className="space-y-6">
         {/* Main Appointment Metrics */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           <Card className="gap-0 py-0">
             <CardContent className="p-4">
               <div>
@@ -802,7 +802,7 @@ export default function ReportsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
                 {data.peakHours.slice(0, 8).map((peak: PeakHour, index: number) => (
                   <div key={index} className="p-3 bg-muted rounded-lg text-center">
                     <p className="font-medium">{peak.hour}:00</p>
@@ -853,7 +853,7 @@ export default function ReportsPage() {
     return (
       <div className="space-y-6">
         {/* Main Inventory Metrics */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           <Card className="gap-0 py-0">
             <CardContent className="p-4">
               <div>
@@ -971,7 +971,7 @@ export default function ReportsPage() {
     return (
       <div className="space-y-6">
         {/* Main Payment Metrics */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           <Card className="gap-0 py-0">
             <CardContent className="p-4">
               <div>
@@ -1035,7 +1035,7 @@ export default function ReportsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {data.paymentModeBreakdown.map((mode: PaymentModeBreakdown, index: number) => (
                   <div key={index} className="p-3 bg-muted rounded-lg">
                     <div className="flex justify-between items-center mb-2">
@@ -1064,7 +1064,7 @@ export default function ReportsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
                 <div className="p-3 bg-muted rounded-lg text-center">
                   <p className="text-sm text-muted-foreground">Total Transactions</p>
                   <p className="text-xl font-bold">{data.reconciliationSummary.totalTransactions}</p>
