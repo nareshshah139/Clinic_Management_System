@@ -94,7 +94,7 @@ describe('Pharmacy Report', () => {
     render(<PharmacyReportWorkspace />);
     expect(screen.getByRole('heading', { level: 1, name: 'Pharmacy Report' })).toBeInTheDocument();
     const common = within(screen.getByRole('region', { name: 'Common reports' }));
-    expect(common.getAllByRole('link').map((l) => l.querySelector('span')!.textContent)).toEqual([
+    expect(common.getAllByRole('link').map((l) => l.textContent)).toEqual([
       'Sales Register', 'Day wise Summary', 'GSTR-1', 'GSTR-3B', 'Item Wise Margin Report', 'Daily Collection',
     ]);
     const rail = within(screen.getByRole('navigation', { name: 'Pharmacy reports' }));

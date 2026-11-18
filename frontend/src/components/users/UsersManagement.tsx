@@ -479,7 +479,7 @@ export default function UsersManagement() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Users" description="Clinic staff accounts, their roles and what they can open." actions={<>
+      <PageHeader title="Users" actions={<>
         <QuickGuide
           title="Users guide"
           sections={[

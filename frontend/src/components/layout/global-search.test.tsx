@@ -90,3 +90,24 @@ describe('GlobalSearch keyboard', () => {
     expect(push).toHaveBeenCalledWith('/dashboard/users?search=u-praneeta');
   });
 });
+
+describe('GlobalSearch shortcut', () => {
+  it('jumps to search when / is pressed outside a text field', async () => {
+    const user = userEvent.setup();
+    render(<><button>Elsewhere</button><GlobalSearch /></>);
+    await user.click(screen.getByRole('button', { name: 'Elsewhere' }));
+    await user.keyboard('/');
+    const box = screen.getByRole('combobox', { name: 'Search patients, appointments, doctors' });
+    expect(box).toHaveFocus();
+    expect(box).toHaveValue('');
+  });
+
+  it('leaves / alone while typing in another field', async () => {
+    const user = userEvent.setup();
+    render(<><input aria-label="Dose" /><GlobalSearch /></>);
+    await user.click(screen.getByRole('textbox', { name: 'Dose' }));
+    await user.keyboard('1/2');
+    expect(screen.getByRole('textbox', { name: 'Dose' })).toHaveValue('1/2');
+    expect(screen.getByRole('combobox', { name: 'Search patients, appointments, doctors' })).not.toHaveFocus();
+  });
+});

@@ -5,7 +5,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { Spinner } from '@/components/ui/spinner';
 import { Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
 import dynamic from 'next/dynamic';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { PackageBrowser } from '@/components/pharmacy/PackageBrowser';
 import { PharmacyPackageCreator } from '@/components/pharmacy/PharmacyPackageCreator';
@@ -222,7 +222,6 @@ function PharmacyDeskPanel({
       <div className="space-y-3">
       <PageHeader
         title="Pharmacy Desk"
-        description="Queue, review, pick, bill, pay, dispense."
         actions={
           <>
             <PharmacyGuide />
@@ -251,7 +250,7 @@ function PharmacyDeskPanel({
           <MetricStrip label="Sales" value={`₹${todaySales.toFixed(2)}`} detail={`${todayGrowth >= 0 ? '+' : ''}${todayGrowth.toFixed(1)}%`} />
           <MetricStrip label="Invoices" value={invoicesToday} detail={`${pendingInvoices} pending`} />
           <MetricStrip label="Low stock" value={lowStockDrugs} detail="at or below minimum stock" />
-          <MetricStrip label="Packages" value={packagesCount} detail="bundles" />
+          <MetricStrip label="Packages" value={packagesCount} />
         </div>
       )}
 
@@ -259,13 +258,11 @@ function PharmacyDeskPanel({
         <QuickAction
           icon={<ClipboardCheck className="h-4 w-4" />}
           title="Pharmacy Counter"
-          detail="Prescription queue and new bills"
           onClick={onOpenCounter}
         />
         <QuickAction
           icon={<Package className="h-4 w-4" />}
           title="Inventory Control"
-          detail="Shelves, invoice scanning, expiry"
           onClick={onOpenInventoryControl}
         />
       </div>
@@ -296,7 +293,7 @@ function AgenticPharmacyLauncher({ onOpen }: { onOpen: () => void }) {
               Pharmacy assistant
             </h3>
             <p className="truncate text-xs text-muted-foreground">
-              Ask about stock and drug records. You review every change before it is saved.
+              You approve every change before it is saved.
             </p>
           </div>
         </div>
@@ -355,19 +352,19 @@ function PharmacyGuide() {
   );
 }
 
-function MetricStrip({ label, value, detail }: { label: string; value: string | number; detail: string }) {
+function MetricStrip({ label, value, detail }: { label: string; value: string | number; detail?: string }) {
   return (
     <div className="flex items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3 shadow-sm">
       <div className="min-w-0">
         <p className="text-sm text-muted-foreground">{label}</p>
         <p className="truncate text-xl font-semibold tabular-nums text-foreground">{value}</p>
-        <p className="text-xs text-muted-foreground">{detail}</p>
+        {detail && <p className="text-xs text-muted-foreground">{detail}</p>}
       </div>
     </div>
   );
 }
 
-function QuickAction({ icon, title, detail, onClick }: { icon: ReactNode; title: string; detail: string; onClick: () => void }) {
+function QuickAction({ icon, title, onClick }: { icon: ReactNode; title: string; onClick: () => void }) {
   return (
     <button
       type="button"
@@ -378,10 +375,7 @@ function QuickAction({ icon, title, detail, onClick }: { icon: ReactNode; title:
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent text-accent-foreground">
           {icon}
         </div>
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-foreground">{title}</p>
-          <p className="truncate text-xs text-muted-foreground">{detail}</p>
-        </div>
+        <p className="min-w-0 truncate text-sm font-semibold text-foreground">{title}</p>
       </div>
       <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-1" />
     </button>
@@ -414,9 +408,6 @@ function PackagesPanel() {
             </DialogContent>
           </Dialog>
         </div>
-        <CardDescription>
-          Browse and select from pre-built dermatology treatment packages
-        </CardDescription>
       </CardHeader>
       <CardContent>
         <PackagesWithReload />

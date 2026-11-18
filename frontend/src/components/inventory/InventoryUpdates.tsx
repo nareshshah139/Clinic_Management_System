@@ -101,11 +101,11 @@ export function InventoryUpdates() {
               </div>}
             </li>;
           })}</ul>}
-        <div className="flex items-center justify-between gap-3">
+        {pages > 1 && <div className="flex items-center justify-between gap-3">
           <Button variant="outline" disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</Button>
           <p>Page {page} of {pages}</p>
           <Button variant="outline" disabled={page >= pages} onClick={() => setPage(page + 1)}>Next</Button>
-        </div>
+        </div>}
       </>}
     <Dialog open={!!review} onOpenChange={(open: boolean) => { if (!open && !busy) setReview(null); }}>
       <DialogContent className="inventory-surface">

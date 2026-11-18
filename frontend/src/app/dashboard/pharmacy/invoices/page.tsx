@@ -12,7 +12,7 @@ export default function PharmacyInvoicesPage() {
     <div className="space-y-6">
       <PageHeader
         title="Pharmacy Invoices"
-        description="Find a bill, collect a balance or download a copy."
+       
         actions={
           <Button asChild variant="outline">
             <Link href="/dashboard/pharmacy?section=counter">

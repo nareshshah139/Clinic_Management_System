@@ -275,7 +275,7 @@ export function InventoryWorkspace() {
   };
   return (
     <section className="inventory-surface min-w-0 space-y-5 pb-12">
-      <PageHeader title={<>Inventory</>} description={<>Receive, review and manage pharmacy stock.</>} actions={<><InventoryAction
+      <PageHeader title={<>Inventory</>} actions={<><InventoryAction
           label="Refresh inventory"
           onClick={() => {
             void loadPermissions();
@@ -677,7 +677,7 @@ function WorkspaceToday({ navigate, open }: any) {
       .reduce((n: number, q: any) => n + q._count, 0) || 0;
   const rows = [
     ...(data?.pendingEdits != null ? [{
-      label: `Price/stock edits awaiting approval (${data.pendingEdits})`,
+      label: "Price/stock edits awaiting approval",
       count: data.pendingEdits,
       detail: "Review the reason and proposed changes before updating clinic stock.",
       target: { area: "stock", view: "approvals" },
@@ -743,10 +743,7 @@ function WorkspaceToday({ navigate, open }: any) {
       </div>
       <header>
         <h2 className="text-xl font-semibold">What needs attention</h2>
-        <p className="text-muted-foreground">
-          Every action opens the matching records.{" "}
-          {data && `As of ${displayClinicDate(data.asOf)} · current branch`}
-        </p>
+        {data && <p className="text-sm text-muted-foreground">As of {displayClinicDate(data.asOf)}</p>}
       </header>
       {error && (
         <p role="alert">
@@ -776,11 +773,11 @@ function WorkspaceToday({ navigate, open }: any) {
             {rows.map((r) => (
               <li key={r.label}>
                 <button
-                  className="flex w-full items-center gap-4 py-4 text-left hover:bg-muted/50"
+                  className={`flex w-full items-center gap-4 py-4 text-left transition-colors hover:bg-muted/50 ${r.count ? "" : "text-muted-foreground"}`}
                   title={r.detail}
                   onClick={() => navigate(r.target)}
                 >
-                  <span className="min-w-10 text-2xl font-semibold">
+                  <span className="min-w-10 text-2xl font-semibold tabular-nums">
                     {r.count ?? "—"}
                   </span>
                   <span className="flex-1">
@@ -792,30 +789,7 @@ function WorkspaceToday({ navigate, open }: any) {
               </li>
             ))}
           </ul>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              onClick={() =>
-                navigate({ area: "stock", view: "list", stock: "LOW" })
-              }
-            >
-              Check low stock
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() =>
-                navigate({ area: "stock", view: "list", expiryMonths: "3" })
-              }
-            >
-              Check next 3 months’ expiry
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => navigate({ area: "purchases", view: "ledger" })}
-            >
-              Check overdue supplier balances
-            </Button>
-          </div>
+          {data.recent.length > 0 && <>
           <h3 className="text-lg font-semibold">Recent activity</h3>
           <ul className="divide-y">
             {data.recent.map((d: any) => (
@@ -832,6 +806,7 @@ function WorkspaceToday({ navigate, open }: any) {
               </li>
             ))}
           </ul>
+          </>}
         </>
       )}
     </section>

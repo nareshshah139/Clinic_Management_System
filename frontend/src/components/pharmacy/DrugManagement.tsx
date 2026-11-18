@@ -289,7 +289,7 @@ export function DrugManagement() {
     <div className="space-y-6">
       {confirmDialog}
       {/* Header */}
-      <PageHeader title="Drug Database" description="Manage your pharmacy's drug inventory" actions={
+      <PageHeader title="Drug Database" actions={
         <>
         <Button variant="outline" asChild>
           <Link href="/dashboard/pharmacy">
@@ -431,9 +431,11 @@ export function DrugManagement() {
       <Card>
         <CardHeader>
           <CardTitle>Drugs ({pagination.total})</CardTitle>
-          <CardDescription>
-            Showing {drugs.length} of {pagination.total} drugs
-          </CardDescription>
+          {drugs.length < pagination.total && (
+            <CardDescription>
+              Showing {drugs.length} of {pagination.total}
+            </CardDescription>
+          )}
         </CardHeader>
         <CardContent>
           {loading ? (

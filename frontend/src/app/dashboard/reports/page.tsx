@@ -1137,7 +1137,7 @@ export default function ReportsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <PageHeader title={<>Reports & Analytics</>} description={<>Generate comprehensive reports and analyze your clinic&apos;s performance</>} actions={<><QuickGuide
+      <PageHeader title={<>Reports & Analytics</>} actions={<><QuickGuide
           title="Reports & Analytics Guide"
           sections={[
             {

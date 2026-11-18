@@ -473,9 +473,11 @@ export function PharmacyInvoiceList() {
       <Card>
         <CardHeader>
           <CardTitle>Invoices ({pagination.total})</CardTitle>
-          <CardDescription>
-            Showing {invoices.length} of {pagination.total} invoices
-          </CardDescription>
+          {invoices.length < pagination.total && (
+            <CardDescription>
+              Showing {invoices.length} of {pagination.total}
+            </CardDescription>
+          )}
         </CardHeader>
         <CardContent>
           {loading ? (

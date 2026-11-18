@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, Info, Search } from "lucide-react";
+import { ArrowLeft, ArrowRight, Info, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { inputClass } from "@/components/inventory/workspace-model";
 import { ComplianceCenter } from "../ComplianceCenter";
@@ -72,7 +72,7 @@ function Landing() {
       <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Pharmacy Report</h1>
       <p className="flex items-start gap-2 rounded-lg border border-warning-border bg-warning-soft p-3 text-base text-warning-text">
         <Info className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
-        Every figure comes from the stock and purchase records behind it. Until the stock take and medicine-name clean-up are done, check margins and GST totals against the bills before filing.
+        Until the stock take and medicine-name clean-up are done, check margins and GST against the bills before filing.
       </p>
       <section aria-labelledby="common-reports" className="space-y-3">
         <h2 id="common-reports" className="text-xl font-semibold">
@@ -81,9 +81,9 @@ function Landing() {
         <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {commonReports().map((report) => (
             <li key={report.id}>
-              <Link href={reportHref(report.id)} className="flex h-full flex-col gap-1 rounded-lg border p-4 hover:border-primary hover:bg-accent-soft focus-visible:outline-2 focus-visible:outline-primary">
-                <span className="text-lg font-semibold">{report.title}</span>
-                <span className="text-base">{report.about}</span>
+              <Link href={reportHref(report.id)} className="group flex h-full items-center justify-between gap-3 rounded-lg border p-4 text-lg font-semibold transition-colors hover:border-primary hover:bg-accent-soft focus-visible:outline-2 focus-visible:outline-primary">
+                {report.title}
+                <ArrowRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
               </Link>
             </li>
           ))}

@@ -17,7 +17,7 @@ export default function RoomsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Rooms" description="Room schedules, occupancy and setup." actions={<><QuickGuide
+      <PageHeader title="Rooms" actions={<><QuickGuide
           title="Rooms guide"
           sections={[
             {

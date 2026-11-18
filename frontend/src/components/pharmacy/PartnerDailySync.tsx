@@ -1,6 +1,6 @@
 'use client';
 
-import { displayCalendarDate, displayUtcDate } from '@/lib/date-display';
+import { displayUtcDate } from '@/lib/date-display';
 import { Spinner } from '@/components/ui/spinner';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -372,7 +372,6 @@ export function PartnerDailySync() {
         <Card>
           <CardHeader>
             <CardTitle>Manual daily entry</CardTitle>
-            <CardDescription>{displayCalendarDate(date)}</CardDescription>
           </CardHeader>
           <CardContent className="@container space-y-4">
             <div className="grid gap-4 @xl:grid-cols-2 @4xl:grid-cols-4">
@@ -575,9 +574,6 @@ export function PartnerDailySync() {
         <Card>
           <CardHeader>
             <CardTitle>Missing entries</CardTitle>
-            <CardDescription>
-              Organizations without a sale for {displayCalendarDate(date)}.
-            </CardDescription>
           </CardHeader>
           <CardContent>
             {missing.length === 0 ? (
@@ -617,7 +613,6 @@ export function PartnerDailySync() {
       <Card>
         <CardHeader>
           <CardTitle>Recent submissions</CardTitle>
-          <CardDescription>{displayCalendarDate(date)}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto rounded-md border">

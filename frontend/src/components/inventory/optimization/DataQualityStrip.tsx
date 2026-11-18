@@ -42,7 +42,7 @@ export function DataQualityStrip({ active, onOpen }: { active?: string; onOpen: 
   return (
     <section aria-label="Data quality" aria-busy={!counts} className="space-y-1.5 print:hidden">
       <h2 className="text-sm font-semibold">
-        Data quality <span className="font-normal text-muted-foreground">· press a count to list those batches</span>
+        Data quality
       </h2>
       <ul className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
         {GAPS.map((gap) => {

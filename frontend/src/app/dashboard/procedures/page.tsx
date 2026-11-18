@@ -492,7 +492,7 @@ export default function ProceduresPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Procedures" description="Record a procedure session and the machine settings for each pass." actions={<><QuickGuide
+      <PageHeader title="Procedures" actions={<><QuickGuide
               title="Procedures guide"
               sections={[
                 {
