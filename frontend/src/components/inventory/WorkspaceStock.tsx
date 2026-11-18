@@ -249,7 +249,7 @@ export function WorkspaceStock({
       <>
           <header className="flex flex-wrap justify-between gap-3">
             <div>
-              <div className="flex items-center gap-2"><h2 className="text-2xl font-semibold">Stock</h2>
+              <div className="flex items-center gap-2"><h2 className="text-xl font-semibold">Stock</h2>
                 <InventoryHelp label="Stock search">Search by product, generic, old name, batch, barcode or SKU. Open a batch to review its stock and movement history.</InventoryHelp>
               </div>
             </div>

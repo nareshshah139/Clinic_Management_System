@@ -195,7 +195,7 @@ export function InventoryItemPage({ itemId, query, navigate, capabilities, onTas
         <>
           <header className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto]">
             <div className="min-w-0 space-y-1">
-              <h2 className="text-2xl font-semibold">{item.productName || item.name}</h2>
+              <h2 className="text-xl font-semibold">{item.productName || item.name}</h2>
               {item.recordedName && <p className="text-sm text-muted-foreground">Recorded as {item.recordedName}</p>}
               <p className="flex flex-wrap gap-x-3 gap-y-1">
                 {item.manufacturer ? (

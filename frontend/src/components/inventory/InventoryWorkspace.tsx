@@ -420,7 +420,7 @@ export function InventoryWorkspace() {
           )}
           {area === "stock" && view === "opening" && (
             <>
-              <h2 className="text-2xl font-semibold">Opening stock import</h2>
+              <h2 className="text-xl font-semibold">Opening stock import</h2>
               <PharmacyInventoryStarterImport />
             </>
           )}
@@ -742,7 +742,7 @@ function WorkspaceToday({ navigate, open }: any) {
         <Button variant="outline" onClick={() => navigate({ area: "stock", view: "list" })}>Find or correct stock <ArrowRight className="h-4 w-4" /></Button>
       </div>
       <header>
-        <h2 className="text-2xl font-semibold">What needs attention</h2>
+        <h2 className="text-xl font-semibold">What needs attention</h2>
         <p className="text-muted-foreground">
           Every action opens the matching records.{" "}
           {data && `As of ${displayClinicDate(data.asOf)} · current branch`}
@@ -889,7 +889,7 @@ function WorkflowRegister({
       )}
       <header className="flex flex-wrap justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-semibold">{definition.label}</h2>
+          <h2 className="text-xl font-semibold">{definition.label}</h2>
           <p className="mt-1 max-w-3xl text-muted-foreground">
             {definition.help}
           </p>
@@ -1051,7 +1051,7 @@ function SupplierWorkspace({ canCreate, canUpdate, onAccount, onBills }: any) {
   return (
     <section className="space-y-4">
       <div className="flex justify-between">
-        <h2 className="text-2xl font-semibold">Suppliers</h2>
+        <h2 className="text-xl font-semibold">Suppliers</h2>
         {canCreate && (
           <Button
             onClick={() =>

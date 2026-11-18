@@ -319,7 +319,7 @@ export function PartnerDailySync() {
     <div className="@container space-y-6">
       <div className="flex flex-col gap-3 @2xl:flex-row @2xl:items-center @2xl:justify-between">
         <div>
-          <h2 className="text-2xl font-semibold tracking-normal">
+          <h2 className="text-xl font-semibold tracking-normal">
             Partner daily sync
           </h2>
         </div>

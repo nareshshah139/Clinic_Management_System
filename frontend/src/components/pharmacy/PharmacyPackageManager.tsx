@@ -385,7 +385,7 @@ export function PharmacyPackageManager() {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold flex items-center gap-2">
+          <h2 className="text-xl font-semibold flex items-center gap-2">
             <Package className="h-6 w-6" />
             Pharmacy Packages
           </h2>

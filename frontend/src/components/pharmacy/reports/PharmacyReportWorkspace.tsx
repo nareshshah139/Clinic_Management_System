@@ -69,7 +69,7 @@ function ReportRail({ query, onQuery, active }: { query: string; onQuery: (value
 function Landing() {
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Pharmacy Report</h1>
+      <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Pharmacy Report</h1>
       <p className="flex items-start gap-2 rounded-lg border border-warning-border bg-warning-soft p-3 text-base text-warning-text">
         <Info className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
         Every figure comes from the stock and purchase records behind it. Until the stock take and medicine-name clean-up are done, check margins and GST totals against the bills before filing.
@@ -141,7 +141,7 @@ export function PharmacyReportWorkspace() {
               <span className="text-muted-foreground"> / {entry.category}</span>
             </nav>
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-semibold">{entry.title}</h1>
+              <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{entry.title}</h1>
               <ReportInfoTip label={`the ${entry.title} report`}>{entry.about}</ReportInfoTip>
             </div>
             <ReportBody entry={entry} params={params} today={today} onApply={apply} />

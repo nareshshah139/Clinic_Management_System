@@ -258,7 +258,7 @@ export function StockOptimization({ canWrite, ran, onRan, onDocument, onReturns 
     <div className="space-y-5">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="max-w-3xl space-y-1">
-          <h2 className="text-2xl font-semibold">Stock optimization</h2>
+          <h2 className="text-xl font-semibold">Stock optimization</h2>
           <p className="text-sm text-muted-foreground">
             Finds stock that has not sold for a while. What was bought from a distributor in the last year can go back to them on a return draft; the rest stays here with its shelf life so you can discount it or use it in the clinic first.
           </p>
