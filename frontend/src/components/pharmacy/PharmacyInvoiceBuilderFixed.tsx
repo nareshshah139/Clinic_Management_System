@@ -33,15 +33,16 @@ import {
   TabsTrigger,
 } from '@/components/ui/tabs';
 import {
-  Search,
-  Plus,
-  Trash2,
-  Save,
-  FileText,
+  ArrowLeftRight,
   ChevronDown,
-  MessageSquarePlus,
-  Printer,
   Download,
+  FileText,
+  MessageSquarePlus,
+  Plus,
+  Printer,
+  Save,
+  Search,
+  Trash2,
   ZoomIn,
   ZoomOut,
 } from 'lucide-react';
@@ -259,7 +260,7 @@ const doctorName = (doctor: Pick<Doctor, 'firstName' | 'lastName'>) => `Dr. ${do
 
 const frequencyText = (code: string) => (/^[A-Z0-9_]+$/.test(code) ? prescriptionLabel('frequency', code) : code);
 
-const LINE_GRID = 'grid-cols-4 @md:grid-cols-6 @2xl:grid-cols-[minmax(0,1fr)_3.75rem_4.75rem_3.75rem_3.75rem_5.75rem_7.5rem]';
+const LINE_GRID = 'grid-cols-4 @md:grid-cols-6 @2xl:grid-cols-[minmax(0,1fr)_3.5rem_4.5rem_3.25rem_3.25rem_5.5rem_4.25rem]';
 
 export function PharmacyInvoiceBuilderFixed({
   prefill: suppliedPrefill,
@@ -2230,9 +2231,9 @@ export function PharmacyInvoiceBuilderFixed({
         </div>
       )}
       <CardContent>
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_19rem]">
           {prefillError && (
-            <div className="lg:col-span-3">
+            <div className="lg:col-span-2">
               <div role="alert" className="rounded-md border border-warning-border bg-warning-soft p-3 text-sm text-warning-text">
                 {prefillError}
                 {invoiceData.prescriptionId && (
@@ -2244,7 +2245,7 @@ export function PharmacyInvoiceBuilderFixed({
               </div>
             </div>
           )}
-          <div className="@container min-w-0 space-y-5 lg:col-span-2 lg:border-r lg:border-border lg:pr-6">
+          <div className="@container min-w-0 space-y-5 lg:border-r lg:border-border lg:pr-6">
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="patient">Patient *</Label>
@@ -2656,7 +2657,7 @@ export function PharmacyInvoiceBuilderFixed({
 
                         <div className="col-span-2 col-start-3 row-start-1 flex items-start justify-end gap-1 @md:col-start-5 @2xl:col-span-1 @2xl:col-start-auto @2xl:row-start-auto @2xl:items-center">
                           {item.itemType === 'DRUG' && (
-                            <Button variant="ghost" size="sm" className="px-2 text-xs" aria-label={`Substitute ${billLineName(item)}`}
+                            <Button variant="ghost" size="icon" className="size-8 text-muted-foreground" title="Substitute" aria-label={`Substitute ${billLineName(item)}`}
                               onClick={() => {
                                 setSubstitutingItemId(item.id);
                                 setSelectedTab('drugs');
@@ -2666,7 +2667,7 @@ export function PharmacyInvoiceBuilderFixed({
                                   searchInputRef.current?.focus({ preventScroll: true });
                                 });
                               }}>
-                              Substitute
+                              <ArrowLeftRight />
                             </Button>
                           )}
                           <Button
