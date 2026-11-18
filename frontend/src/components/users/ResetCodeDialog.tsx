@@ -36,7 +36,7 @@ export function ResetCodeDialog({ user, open, onOpenChange }: {
           <div className="space-y-3 text-sm text-foreground">
             <p>Give this code to {name} in person. It works once and expires {displayClinicDateTime(step.expiresAt)}.</p>
             <p className="rounded-md border bg-muted py-3 text-center font-mono text-2xl tracking-widest" aria-label="Reset code">{step.code}</p>
-            <p>They open the sign-in page, choose <strong>Use a reset code</strong>, type the code and pick a new password. You won&apos;t see their new password.</p>
+            <p>They open the sign-in page, choose <strong>use a reset code</strong>, type the code and pick a new password. You won&apos;t see their new password.</p>
             <p className="text-xs text-muted-foreground">This code is shown only once. Closing this window does not cancel it; issuing another code does.</p>
             <Button type="button" variant="outline" size="sm" onClick={() => void navigator.clipboard?.writeText(step.code)}>Copy code</Button>
           </div>

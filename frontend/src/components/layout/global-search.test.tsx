@@ -111,3 +111,13 @@ describe('GlobalSearch shortcut', () => {
     expect(screen.getByRole('combobox', { name: 'Search patients, appointments, doctors' })).not.toHaveFocus();
   });
 });
+
+describe('GlobalSearch shortcut inside a dialog', () => {
+  it('does not pull focus out of an open modal dialog', async () => {
+    const user = userEvent.setup();
+    render(<><div role="dialog" aria-modal="true"><button>Inside</button></div><GlobalSearch /></>);
+    await user.click(screen.getByRole('button', { name: 'Inside' }));
+    await user.keyboard('/');
+    expect(screen.getByRole('button', { name: 'Inside' })).toHaveFocus();
+  });
+});

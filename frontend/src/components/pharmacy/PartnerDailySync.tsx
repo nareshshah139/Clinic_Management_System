@@ -574,6 +574,7 @@ export function PartnerDailySync() {
         <Card>
           <CardHeader>
             <CardTitle>Missing entries</CardTitle>
+            <CardDescription>Partners with no sale for this date.</CardDescription>
           </CardHeader>
           <CardContent>
             {missing.length === 0 ? (

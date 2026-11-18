@@ -293,7 +293,7 @@ function AgenticPharmacyLauncher({ onOpen }: { onOpen: () => void }) {
               Pharmacy assistant
             </h3>
             <p className="truncate text-xs text-muted-foreground">
-              You approve every change before it is saved.
+              Ask about stock and drug records. You approve every change.
             </p>
           </div>
         </div>

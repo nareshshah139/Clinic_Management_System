@@ -779,7 +779,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
               <p class="text-sm text-highlight-text text-center leading-relaxed">
                 Use <strong>Calendar View</strong> during peak hours to see the big picture. 
                 Switch to <strong>Slots View</strong> during quiet times for quick bookings. 
-                The "Quick Guide" button (Info icon) is always there if you need a refresher!
+                The Quick guide button (the ? icon) is always there if you need a refresher.
               </p>
             </div>
           </div>

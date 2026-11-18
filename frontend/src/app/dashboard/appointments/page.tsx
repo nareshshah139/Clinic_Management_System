@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/input';
 import { apiClient } from '@/lib/api';
 import type { User } from '@/lib/types';
 import { getISTDateString } from '@/lib/utils';
-import { ChevronLeft, ChevronRight, Info } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CircleHelp, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useDashboardUser } from '@/components/layout/dashboard-user-context';
@@ -115,8 +115,8 @@ function AppointmentsPageInner() {
               <TabsTrigger value="slots">Slots</TabsTrigger>
             </TabsList>
             <CalendarLegend />
-            <Button variant="outline" size="icon" aria-label="Quick Guide" title="Quick Guide" onClick={() => setGuideDialogOpen(true)}>
-              <Info className="h-4 w-4" />
+            <Button variant="outline" size="icon" aria-label="Quick guide" title="Quick guide" onClick={() => setGuideDialogOpen(true)}>
+              <CircleHelp className="h-4 w-4" />
             </Button>
           </>
         }

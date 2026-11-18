@@ -22,8 +22,6 @@ const ROUTES = [
   ["reset-password", "/reset-password", null],
 ];
 
-const DATA = /^([₹$]?[\d.,:/%+\-–]+[a-z]{0,3}|\d{1,2}\s\w{3}\s\d{4})$/i;
-
 function readChrome() {
   const root = document.querySelector("main") || document.body;
   const skip = (el) => el.closest("tbody, [role=row], input, textarea, select, option, script, style, [aria-hidden=true], .sr-only, [data-text-budget=data]");
