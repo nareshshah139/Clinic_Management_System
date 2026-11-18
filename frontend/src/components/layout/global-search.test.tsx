@@ -2,6 +2,7 @@ import React from 'react';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { GlobalSearch } from './global-search';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 
 const push = jest.fn();
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push }) }));
@@ -112,12 +113,30 @@ describe('GlobalSearch shortcut', () => {
   });
 });
 
-describe('GlobalSearch shortcut inside a dialog', () => {
-  it('does not pull focus out of an open modal dialog', async () => {
+describe('GlobalSearch shortcut inside an overlay', () => {
+  it('leaves an open dialog alone', async () => {
     const user = userEvent.setup();
-    render(<><div role="dialog" aria-modal="true"><button>Inside</button></div><GlobalSearch /></>);
-    await user.click(screen.getByRole('button', { name: 'Inside' }));
+    render(
+      <>
+        <GlobalSearch />
+        <Dialog open>
+          <DialogContent aria-describedby={undefined}>
+            <DialogTitle>Quick guide</DialogTitle>
+            <p>Guide text</p>
+          </DialogContent>
+        </Dialog>
+      </>,
+    );
+    await user.click(screen.getByText('Guide text'));
     await user.keyboard('/');
-    expect(screen.getByRole('button', { name: 'Inside' })).toHaveFocus();
+    expect(screen.getByRole('combobox', { hidden: true, name: 'Search patients, appointments, doctors' })).not.toHaveFocus();
+  });
+
+  it('leaves a running tour alone', async () => {
+    const user = userEvent.setup();
+    render(<><GlobalSearch /><div className="introjs-overlay" /><button>Next step</button></>);
+    await user.click(screen.getByRole('button', { name: 'Next step' }));
+    await user.keyboard('/');
+    expect(screen.getByRole('button', { name: 'Next step' })).toHaveFocus();
   });
 });

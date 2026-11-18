@@ -123,7 +123,7 @@ export function GlobalSearch() {
       if (event.key !== '/' || event.ctrlKey || event.metaKey || event.altKey || event.defaultPrevented || event.isComposing) return;
       const target = event.target as HTMLElement | null;
       if (target?.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"], [role="textbox"], [role="combobox"]')) return;
-      if (document.querySelector('[role="dialog"][aria-modal="true"], [role="alertdialog"]')) return;
+      if (document.querySelector('[role="dialog"], [role="alertdialog"], .introjs-overlay')) return;
       event.preventDefault();
       inputRef.current?.focus();
     }
