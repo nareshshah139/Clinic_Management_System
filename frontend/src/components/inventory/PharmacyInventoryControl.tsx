@@ -256,7 +256,7 @@ function ScenarioCard({
     <button
       type="button"
       onClick={onClick}
-      className={`group flex min-h-36 flex-col justify-between rounded-md border p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-sm ${
+      className={`group flex min-h-36 flex-col justify-between rounded-md border p-4 text-left shadow-sm transition-colors ${
         active
           ? 'border-primary bg-accent text-foreground'
           : 'border-border bg-card text-foreground hover:bg-accent'

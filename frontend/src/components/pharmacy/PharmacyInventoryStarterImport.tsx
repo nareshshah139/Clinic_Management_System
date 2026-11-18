@@ -342,7 +342,7 @@ export function PharmacyInventoryStarterImport({
               selectFile(event.dataTransfer.files?.[0]);
             }}
           >
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-success-soft text-success-text transition-transform duration-300 group-hover:scale-105">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-success-soft text-success-text">
               <FileSpreadsheet className="h-6 w-6" />
             </div>
             {selectedFile ? (
@@ -510,7 +510,7 @@ export function PharmacyInventoryStarterImport({
             selectFile(event.dataTransfer.files?.[0]);
           }}
         >
-          <FileSpreadsheet className="mb-3 h-10 w-10 text-success-text transition-transform duration-700 ease-out group-hover:scale-105" />
+          <FileSpreadsheet className="mb-3 h-10 w-10 text-success-text" />
           {selectedFile ? (
             <div className="space-y-3">
               <div>
