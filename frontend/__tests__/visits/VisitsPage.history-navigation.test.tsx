@@ -47,7 +47,7 @@ it('opens on the patient and doctor pickers, and lists matches by name and phone
   render(<VisitsPage />, { wrapper: LayoutSession });
   const search = await screen.findByPlaceholderText('Search name, phone, or email');
   expect(screen.getAllByRole('heading').map((h) => h.textContent)).toEqual(['Visit Documentation']);
-  expect(['Start New Visit', 'Your Role & Permissions', 'Available Features'].map((text) => screen.queryByText(text) !== null)).toEqual([true, false, false]);
+  expect(['Start a visit', 'Your Role & Permissions', 'Available Features'].map((text) => screen.queryByText(text) !== null)).toEqual([true, false, false]);
   fireEvent.focus(search);
   const match = await screen.findByRole('option', { name: /Ananya Reddy/ });
   expect(match).toHaveTextContent(/^Ananya Reddy9848010000$/);

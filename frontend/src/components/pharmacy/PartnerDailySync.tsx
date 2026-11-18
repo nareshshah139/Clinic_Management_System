@@ -320,7 +320,7 @@ export function PartnerDailySync() {
       <div className="flex flex-col gap-3 @2xl:flex-row @2xl:items-center @2xl:justify-between">
         <div>
           <h2 className="text-2xl font-semibold tracking-normal">
-            Partner Daily Sync
+            Partner daily sync
           </h2>
         </div>
         <Button variant="outline" onClick={loadData} disabled={loading}>
@@ -350,7 +350,7 @@ export function PartnerDailySync() {
         </Card>
         <Card className="gap-0 py-4">
           <CardHeader>
-            <CardDescription>Submitted Today</CardDescription>
+            <CardDescription>Submitted today</CardDescription>
             <CardTitle>{summary?.submittedCount ?? 0}</CardTitle>
           </CardHeader>
         </Card>
@@ -362,7 +362,7 @@ export function PartnerDailySync() {
         </Card>
         <Card className="gap-0 py-4">
           <CardHeader>
-            <CardDescription>Net Sales</CardDescription>
+            <CardDescription>Net sales</CardDescription>
             <CardTitle>{money(summary?.netAmount)}</CardTitle>
           </CardHeader>
         </Card>
@@ -371,7 +371,7 @@ export function PartnerDailySync() {
       <div className="grid grid-cols-1 gap-6 @7xl:grid-cols-[minmax(0,1.25fr)_minmax(360px,0.75fr)]">
         <Card>
           <CardHeader>
-            <CardTitle>Manual Daily Entry</CardTitle>
+            <CardTitle>Manual daily entry</CardTitle>
             <CardDescription>{displayCalendarDate(date)}</CardDescription>
           </CardHeader>
           <CardContent className="@container space-y-4">
@@ -397,7 +397,7 @@ export function PartnerDailySync() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="partner-name">Organization Name</Label>
+                <Label htmlFor="partner-name">Organization name</Label>
                 <Input
                   id="partner-name"
                   value={partnerOrganizationName}
@@ -408,7 +408,7 @@ export function PartnerDailySync() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="partner-user">Submitted By</Label>
+                <Label htmlFor="partner-user">Submitted by</Label>
                 <Input
                   id="partner-user"
                   value={partnerUserName}
@@ -553,7 +553,7 @@ export function PartnerDailySync() {
                 onClick={() => setItems((current) => [...current, newLine()])}
               >
                 <Plus className="mr-2 h-4 w-4" />
-                Add Item
+                Add medicine
               </Button>
               <div className="flex items-center gap-3">
                 <span className="text-sm text-muted-foreground">
@@ -574,7 +574,7 @@ export function PartnerDailySync() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Missing Entries</CardTitle>
+            <CardTitle>Missing entries</CardTitle>
             <CardDescription>
               Organizations without a sale for {displayCalendarDate(date)}.
             </CardDescription>
@@ -616,7 +616,7 @@ export function PartnerDailySync() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Recent Submissions</CardTitle>
+          <CardTitle>Recent submissions</CardTitle>
           <CardDescription>{displayCalendarDate(date)}</CardDescription>
         </CardHeader>
         <CardContent>

@@ -306,7 +306,7 @@ export function PharmacyInvoiceList() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Total Invoices</p>
+                <p className="text-sm text-muted-foreground">Total invoices</p>
                 <p className="text-2xl font-bold">{invoices.length}</p>
               </div>
             </div>
@@ -317,7 +317,7 @@ export function PharmacyInvoiceList() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Total Amount</p>
+                <p className="text-sm text-muted-foreground">Total amount</p>
                 <p className="text-2xl font-bold">₹{stats.totalAmount.toFixed(2)}</p>
               </div>
             </div>
@@ -339,7 +339,7 @@ export function PharmacyInvoiceList() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Pending Amount</p>
+                <p className="text-sm text-muted-foreground">Pending amount</p>
                 <p className="text-2xl font-bold">₹{stats.pendingAmount.toFixed(2)}</p>
               </div>
             </div>
@@ -392,7 +392,7 @@ export function PharmacyInvoiceList() {
             </div>
             
             <div>
-              <Label htmlFor="invoice-payment-status-filter">Payment Status</Label>
+              <Label htmlFor="invoice-payment-status-filter">Payment status</Label>
               <Select
                 value={paymentStatusFilter}
                 onValueChange={(value: string) => {
@@ -415,7 +415,7 @@ export function PharmacyInvoiceList() {
             </div>
             
             <div>
-              <Label htmlFor="invoice-payment-method-filter">Payment Method</Label>
+              <Label htmlFor="invoice-payment-method-filter">Payment method</Label>
               <Select
                 value={paymentMethodFilter}
                 onValueChange={(value: string) => {
@@ -438,7 +438,7 @@ export function PharmacyInvoiceList() {
             </div>
             
             <div>
-              <Label htmlFor="invoice-date-filter">Date Range</Label>
+              <Label htmlFor="invoice-date-filter">Date range</Label>
               <Select
                 value={dateRange}
                 onValueChange={(value: string) => {

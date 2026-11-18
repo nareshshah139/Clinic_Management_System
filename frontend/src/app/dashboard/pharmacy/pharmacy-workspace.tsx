@@ -302,7 +302,7 @@ function AgenticPharmacyLauncher({ onOpen }: { onOpen: () => void }) {
         </div>
         <Button size="sm" className="h-9 shrink-0 gap-2" onClick={onOpen}>
           <MessageSquare className="h-4 w-4" />
-          Open AI Assistant
+          Open assistant
         </Button>
       </div>
     </section>
@@ -393,16 +393,16 @@ function PackagesPanel() {
     <Card>
       <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <CardTitle>Treatment Packages</CardTitle>
+          <CardTitle>Treatment packages</CardTitle>
           <Dialog>
             <DialogTrigger asChild>
               <Button>
-                <Plus className="h-4 w-4 mr-2" /> Create Package
+                <Plus className="h-4 w-4 mr-2" /> Create package
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-3xl">
               <DialogHeader>
-                <DialogTitle>Create Treatment Package</DialogTitle>
+                <DialogTitle>Create treatment package</DialogTitle>
               </DialogHeader>
               <PharmacyPackageCreator onCreated={() => {
                 const ev = new CustomEvent('reload-packages');

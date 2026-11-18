@@ -75,7 +75,7 @@ it('disables the picker once a visit is created in this session', async () => {
     return {} as any;
   });
   render(<VisitsPage />, { wrapper: LayoutSession });
-  fireEvent.click(await screen.findByRole('combobox', { name: 'Select Doctor' }));
+  fireEvent.click(await screen.findByRole('combobox', { name: 'Doctor' }));
   fireEvent.click(await screen.findByRole('option', { name: /Dr\. Shravya Rao/ }));
   const picker = await screen.findByRole('combobox', { name: 'Attending doctor' });
   expect(picker).toBeEnabled();
@@ -97,7 +97,7 @@ it('keeps the appointment link when the doctor picks another patient and then re
   fireEvent.click(screen.getByRole('button', { name: 'Back to Setup' }));
   fireEvent.focus(await screen.findByPlaceholderText('Search name, phone, or email'));
   fireEvent.click(await screen.findByRole('option', { name: /Rahul Kumar/ }));
-  await waitFor(() => expect(screen.getByRole('combobox', { name: 'Select Doctor' })).toHaveTextContent('Dr. Shravya Rao'));
+  await waitFor(() => expect(screen.getByRole('combobox', { name: 'Doctor' })).toHaveTextContent('Dr. Shravya Rao'));
 
   fireEvent.focus(screen.getByPlaceholderText('Search name, phone, or email'));
   fireEvent.click(await screen.findByRole('option', { name: /Ananya Reddy/ }));

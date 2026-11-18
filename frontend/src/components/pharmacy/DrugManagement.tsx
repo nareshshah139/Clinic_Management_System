@@ -302,7 +302,7 @@ export function DrugManagement() {
           className="bg-info hover:bg-info/90"
         >
           <Plus className="h-4 w-4 mr-2" />
-          Add New Drug
+          Add drug
         </Button>
         </>
       } />
@@ -363,7 +363,7 @@ export function DrugManagement() {
         <CardContent className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
-              <Label>Search Drugs</Label>
+              <Label>Search</Label>
               <div className="relative">
                 <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -422,7 +422,7 @@ export function DrugManagement() {
                 className="w-full"
               >
                 <Filter className="h-4 w-4 mr-2" />
-                Clear Filters
+                Clear filters
               </Button>
             </div>
           </div>
@@ -441,7 +441,7 @@ export function DrugManagement() {
           {loading ? (
             <LoadingSkeleton label="Loading drugs…" variant="cards" />
           ) : drugs.length === 0 ? (
-            <EmptyState title="No drugs found" description="Adjust your search or add a drug to the database." icon={Pill} action={<Button onClick={() => setShowAddDialog(true)}><Plus className="size-4" />Add New Drug</Button>} />
+            <EmptyState title="No drugs found" description="Adjust your search or add a drug to the database." icon={Pill} action={<Button onClick={() => setShowAddDialog(true)}><Plus className="size-4" />Add drug</Button>} />
           ) : (
             <div className="space-y-4">
               {drugs.map((drug) => (
@@ -583,7 +583,7 @@ export function DrugManagement() {
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              {editingDrug ? 'Edit Drug' : 'Add New Drug'}
+              {editingDrug ? 'Edit drug' : 'Add drug'}
             </DialogTitle>
           </DialogHeader>
 

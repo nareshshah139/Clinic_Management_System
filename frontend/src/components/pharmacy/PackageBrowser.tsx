@@ -141,7 +141,7 @@ export function PackageBrowser({ onSelectPackage, reloadKey }: PackageBrowserPro
     <div className="space-y-6">
       {/* Search */}
       <div>
-        <Label htmlFor="packageSearch">Search Treatment Packages</Label>
+        <Label htmlFor="packageSearch">Search packages</Label>
         <div className="relative">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
@@ -161,12 +161,12 @@ export function PackageBrowser({ onSelectPackage, reloadKey }: PackageBrowserPro
         <div className="text-center py-8">
           <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
           <h3 className="text-lg font-semibold mb-2">
-            {searchQuery ? 'No packages found' : 'No packages available'}
+            {searchQuery ? 'No packages found' : 'No packages yet'}
           </h3>
           <p className="text-muted-foreground">
             {searchQuery 
               ? 'Try adjusting your search terms' 
-              : 'No packages are available yet. Refresh to check for updates.'}
+              : 'Create a package to bundle treatments for billing.'}
           </p>
         </div>
       ) : (
