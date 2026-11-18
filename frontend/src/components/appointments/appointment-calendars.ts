@@ -49,11 +49,14 @@ export const CALENDAR_ORDER = Object.keys(CALENDARS) as AppointmentCalendar[];
 /** Only appointments still being planned can move; the server refuses the rest. */
 export const canMove = (status: AppointmentStatus) => CALENDAR_ORDER.some((c) => CALENDARS[c].entryStatus === status);
 
+/** An owner or admin of a small clinic is usually its doctor, and no field records which of them practise. */
+const DOCTOR_VIEW_ROLES: readonly string[] = [UserRole.DOCTOR, UserRole.OWNER, UserRole.ADMIN];
+
 /**
  * @cc [owner:nareshshah139,label:product] doctor-day-is-confirmed
- * A doctor's day MUST open on the Confirmed calendar. Each other calendar folds to its count, which
- * the doctor can open and hide again. Every other role MUST see every calendar open and is offered
- * no fold control. This is a default view, not a permission.
+ * For a DOCTOR, OWNER or ADMIN the day MUST open on the Confirmed calendar. Each other calendar
+ * folds to its count, which the viewer can open and hide again. Every other role MUST see every
+ * calendar open and is offered no fold control. This is a default view, not a permission.
  */
 export const foldedCalendarsFor = (role: string | undefined): readonly AppointmentCalendar[] =>
-  role === UserRole.DOCTOR ? ['SCHEDULED'] : [];
+  role !== undefined && DOCTOR_VIEW_ROLES.includes(role) ? ['SCHEDULED'] : [];

@@ -133,7 +133,7 @@ function AppointmentsPageInner() {
           <div className="space-y-3">
             <ul className="text-sm text-foreground space-y-2">
               {foldedCalendars.length > 0 && (
-                <li>• Your day opens on <strong>Confirmed</strong>. <strong>Scheduled</strong> is folded to a count on the left. Press <strong>Show</strong> to see who is still to be confirmed.</li>
+                <li>• The day opens on <strong>Confirmed</strong>. <strong>Scheduled</strong> is folded to a count on the left. Press <strong>Show</strong> to see who is still to be confirmed.</li>
               )}
               <li>• <strong>Scheduled</strong> (left) holds patients booked ahead who still need a confirmation call. <strong>Confirmed</strong> (right) is the doctor&apos;s real day, with walk-ins.</li>
               <li>• When a patient confirms on the call, click them and press <strong>Confirm</strong>. They move to Confirmed at the same time.</li>
