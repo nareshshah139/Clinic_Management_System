@@ -1,5 +1,6 @@
 import {
   DOSE_PATTERN_OPTIONS,
+  frequencyForStoredItem,
   inferFrequencyFromDosePattern,
   inferTimingFromDosePattern,
 } from '@/lib/frequency';
@@ -111,4 +112,26 @@ describe('timing-inferred-only-from-single-slot-patterns', () => {
       expect(inferTimingFromDosePattern(pattern as string)).toBeNull();
     },
   );
+});
+
+describe('stored-frequency-never-defaults', () => {
+  it.each([
+    ['TWICE_DAILY', '', 'TWICE_DAILY'],
+    ['twice daily', '', 'TWICE_DAILY'],
+    [undefined, '1-0-1', 'TWICE_DAILY'],
+    ['', 'bd', 'TWICE_DAILY'],
+    ['TDS', '', 'TDS'],
+  ])('keeps or infers stored frequency %j with pattern %j as %s', (raw, pattern, expected) => {
+    expect(frequencyForStoredItem(raw, pattern)).toBe(expected);
+  });
+
+  it.each([
+    [undefined, undefined],
+    ['', ''],
+    [null, 'q3h'],
+    ['   ', 'every 5 hours'],
+    [42, 'tds'],
+  ])('leaves frequency %j with pattern %j blank for the doctor', (raw, pattern) => {
+    expect(frequencyForStoredItem(raw, pattern as string | undefined)).toBe('');
+  });
 });
