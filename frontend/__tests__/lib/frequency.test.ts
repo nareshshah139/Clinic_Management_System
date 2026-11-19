@@ -86,8 +86,8 @@ describe('unknown-dose-text-never-becomes-a-frequency', () => {
     },
   );
 
-  it.failing.each(['q3h', 'every 5 hours', 'q2h', '1.5-0-1', 'twice a day 2 weeks'])(
-    'target: unknown text with digits (%s) returns null',
+  it.each(['q3h', 'every 5 hours', 'q2h', '1.5-0-1', 'twice a day 2 weeks', 'x2 days', '1', '1-0', '1/2-0-1'])(
+    'unknown text with digits (%s) returns null',
     (input) => {
       expect(inferFrequencyFromDosePattern(input)).toBeNull();
     },
