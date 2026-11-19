@@ -236,6 +236,15 @@ export function inferFrequencyFromDosePattern(pattern: string): FrequencyOption 
   return 'FOUR_TIMES_DAILY';
 }
 
+export function frequencyForStoredItem(raw: unknown, pattern?: string): string {
+  const upper = typeof raw === 'string' ? raw.toUpperCase().replace(/\s+/g, '_') : '';
+  if (upper && getAllFrequencyOptions().includes(upper)) return upper;
+  const inferred = pattern ? inferFrequencyFromDosePattern(pattern) : null;
+  if (inferred) return inferred;
+  if (upper) return upper;
+  return 'ONCE_DAILY';
+}
+
 /**
  * @cc [owner:nareshshah139,label:safety] timing-inferred-only-from-single-slot-patterns
  * Timing MUST be inferred only when the first three numbers of the pattern have exactly one slot

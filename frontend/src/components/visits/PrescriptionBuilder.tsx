@@ -28,7 +28,7 @@ import { handleUnauthorizedRedirect } from '@/lib/authRedirect';
 import { getErrorMessage } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { ensureGlobalPrintStyles } from '@/lib/printStyles';
-import { inferTimingFromDosePattern, getAllFrequencyOptions, addCustomFrequency, getTimingOptionsForFrequency, TIMING_OPTIONS, getAllTimingOptions, addCustomTiming, getAllDosePatternOptions, addCustomDosePattern, getAllDurationUnitOptions, addCustomDurationUnit } from '@/lib/frequency';
+import { frequencyForStoredItem, inferTimingFromDosePattern, getAllFrequencyOptions, addCustomFrequency, getTimingOptionsForFrequency, TIMING_OPTIONS, getAllTimingOptions, addCustomTiming, getAllDosePatternOptions, addCustomDosePattern, getAllDurationUnitOptions, addCustomDurationUnit } from '@/lib/frequency';
 import { printedMedicineName } from '@/lib/medicine-names';
 import { buildLearnedPrescriptionPlan, type LearnedPlanSuggestion } from '@/lib/prescription-learning';
 import { editRegimenRow, beginRegimenSelection, applyRegimenSuggestion, acceptRegimenField, regimenLabels, type RegimenField, type RegimenRow } from '@/lib/medicine-regimen-defaults';
@@ -1769,18 +1769,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     return [];
   };
 
-  const normalizeFrequency = (raw: any, pattern?: string): Frequency => {
-    const upper = typeof raw === 'string' ? raw.toUpperCase().replace(/\s+/g, '_') : '';
-    if (upper) {
-      const allOpts = getAllFrequencyOptions();
-      if (allOpts.includes(upper)) return upper;
-    }
-    const inferred = pattern ? inferFrequencyFromDosePattern(pattern) : null;
-    if (inferred) return inferred;
-    if (upper) return upper;
-    return 'ONCE_DAILY';
-  };
-
   const normalizeDurationUnit = (raw: any): DurationUnit => {
     const upper = typeof raw === 'string' ? raw.toUpperCase().replace(/\s+/g, '_') : '';
     if (upper) return upper;
@@ -1800,7 +1788,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     if (!name) return null;
     const dosePattern = raw?.dosePattern || raw?.dose_pattern || '';
     const durationUnit = normalizeDurationUnit(raw?.durationUnit);
-    const frequency = normalizeFrequency(raw?.frequency, dosePattern);
+    const frequency = frequencyForStoredItem(raw?.frequency, dosePattern);
     const rawTiming = raw?.timing || inferTimingFromDosePattern(dosePattern || '') || '';
     const allowedTimings = getTimingOptionsForFrequency(frequency);
     const timing = rawTiming && allowedTimings.includes(rawTiming) ? rawTiming : (raw?.timing || '');
