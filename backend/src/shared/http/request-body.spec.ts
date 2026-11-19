@@ -84,6 +84,8 @@ function jsonOfSize(size: number): string {
 describe('Configured save request bodies', () => {
   let app: NestExpressApplication;
   let lines: string[];
+  let openResponses = 0;
+  const whenIdle: (() => void)[] = [];
 
   beforeAll(async () => {
     const module = await Test.createTestingModule({
@@ -95,6 +97,17 @@ describe('Configured save request bodies', () => {
     installHttpObservability(app, (line) => lines.push(line));
     configureRequestBody(app);
     await app.listen(0, '127.0.0.1');
+    app.getHttpServer().on('request', (_req: unknown, res: NodeJS.EventEmitter) => {
+      openResponses += 1;
+      res.once('close', () => {
+        openResponses -= 1;
+        if (openResponses === 0) whenIdle.splice(0).forEach((resolve) => resolve());
+      });
+    });
+  });
+
+  afterEach(async () => {
+    if (openResponses > 0) await new Promise<void>((resolve) => whenIdle.push(resolve));
   });
 
   beforeEach(() => {
