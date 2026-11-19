@@ -41,6 +41,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 
     const base = this as any;
     const getRequestContext = () => this.requestContext.get();
+    const logger = this.logger;
 
     const extended = this.$extends({
       query: {
@@ -99,6 +100,12 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       return null;
     }
 
+    /**
+     * @cc [owner:nareshshah139,label:integrity;security] audit-write-failure-logged
+     * A failed automatic audit write MUST NOT fail the mutation it records, which has already run,
+     * and MUST log an error naming the model, operation, entity id and the error's code (its class
+     * name when it has none), without field values or the database error message.
+     */
     async function audit({ base, model, operation, args, result, oldValues, getCtx }: any) {
       if (model === 'AuditLog') return;
       const allowed = new Set(['create', 'createMany', 'update', 'updateMany', 'upsert', 'delete', 'deleteMany']);
@@ -137,8 +144,10 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
             userAgent: ctx?.userAgent ?? null,
           },
         });
-      } catch {
-        // swallow audit errors
+      } catch (error) {
+        logger.error(
+          `Audit write failed for ${model}.${operation} on ${entityId ?? 'UNKNOWN'}: ${(error as any)?.code ?? (error as Error)?.name ?? 'unknown error'}`,
+        );
       }
     }
   }
