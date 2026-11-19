@@ -1,8 +1,15 @@
-import { Injectable, NestInterceptor, ExecutionContext, CallHandler } from '@nestjs/common';
+import { Injectable, Logger, NestInterceptor, ExecutionContext, CallHandler } from '@nestjs/common';
 import type { Request, Response } from 'express';
-import { Observable, of } from 'rxjs';
-import { tap, map } from 'rxjs/operators';
+import { Observable, from, of, throwError } from 'rxjs';
+import { catchError, concatMap, mergeMap } from 'rxjs/operators';
 import { PrismaService } from '../database/prisma.service';
+
+type Scope = { key: string; userId: string; resourceType: string; resourceId: string; method: string };
+type Claim = { kind: 'owner'; lease: Date } | { kind: 'open' } | { kind: 'replay'; statusCode: number; body: unknown };
+
+const PENDING = 0;
+const LEASE_MS = 300_000;
+const leaseEnd = () => new Date(Date.now() + LEASE_MS);
 
 /**
  * @cc [owner:nareshshah139,label:integrity] idempotent-write-replay
@@ -22,18 +29,22 @@ import { PrismaService } from '../database/prisma.service';
  */
 @Injectable()
 export class IdempotencyInterceptor implements NestInterceptor {
+  private readonly logger = new Logger(IdempotencyInterceptor.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
   /**
    * @cc [owner:nareshshah139,label:reliability] idempotency-store-fails-open
    * Deliberate fail-open: when the idempotency store cannot be read or written, the write MUST still
-   * run and return its normal response, and a later retry runs the handler again.
+   * run and return its normal response, a later retry runs the handler again, and each store failure
+   * MUST log a warning with its error code and no request or response data.
    */
   /**
-   * @cc [owner:nareshshah139,label:integrity;target] idempotency-concurrent-first-requests
-   * Two overlapping first requests with one key MUST run the handler once. Today both miss the store
-   * before either response is saved, so a client retry during a slow save can write twice.
-   * This is a target obligation, not a pass claim.
+   * @cc [owner:nareshshah139,label:integrity] idempotency-concurrent-first-requests
+   * Two overlapping first requests with one key MUST run the handler once, and the second MUST
+   * answer with the first one's stored response. When the first fails, a retry MUST run the handler.
+   * A claim held past its 5-minute lease MAY be taken over by one request only, and the superseded
+   * holder MUST NOT store a response into or delete the new holder's claim.
    */
   /**
    * @cc [owner:nareshshah139,label:security;target] idempotency-anonymous-keys-unscoped
@@ -61,67 +72,100 @@ export class IdempotencyInterceptor implements NestInterceptor {
     const segments = (req.path || '/').split('/').filter(Boolean);
     const resourceType = segments[0] || 'unknown';
     const resourceId = (req.params && (req.params as any).id) || segments[1] || '-';
+    const scope: Scope = { key: rawKey, userId: userId || '', resourceType, resourceId, method };
 
-    // Return cached response if found
-    return new Observable((subscriber) => {
-      (async () => {
-        try {
-          const existing = await this.prisma.idempotencyRecord.findFirst({
-            where: {
-              key: rawKey,
-              userId: userId || '',
-              resourceType,
-              resourceId,
-              method,
-            },
-          });
-          if (existing) {
-            try {
-              if (existing.statusCode && typeof res?.status === 'function') {
-                res.status(existing.statusCode);
-              }
-              const body = existing.responseBody ? JSON.parse(existing.responseBody) : undefined;
-              subscriber.next(body);
-              subscriber.complete();
-              return;
-            } catch {
-              // fall through to normal handler if parsing fails
-            }
-          }
-        } catch {
-          // On DB error, proceed without idempotency to avoid blocking request
+    return from(this.claim(scope)).pipe(
+      mergeMap((claim) => {
+        if (claim.kind === 'replay') {
+          if (claim.statusCode && typeof res?.status === 'function') res.status(claim.statusCode);
+          return of(claim.body);
         }
-
-        // No existing record; proceed and persist the response for future duplicates
-        const stream = next.handle().pipe(
-          tap(async (data) => {
-            try {
-              const toStore = {
-                key: rawKey,
-                userId: userId || '',
-                resourceType,
-                resourceId,
-                method,
-                statusCode: (res && typeof res.statusCode === 'number') ? res.statusCode : (method === 'POST' ? 201 : 200),
-                responseBody: JSON.stringify(data ?? null),
-                // Optional TTL support - not enforced here, but available for cleanup jobs
-                expiresAt: null as Date | null,
-              };
-              await this.prisma.idempotencyRecord.create({ data: toStore });
-            } catch {
-              // Swallow errors - idempotency should not break main flow
-            }
+        if (claim.kind === 'open') return next.handle();
+        return next.handle().pipe(
+          concatMap(async (data) => {
+            const statusCode =
+              res && typeof res.statusCode === 'number' ? res.statusCode : method === 'POST' ? 201 : 200;
+            await this.complete(scope, claim.lease, statusCode, data);
+            return data;
           }),
+          catchError((error) => from(this.release(scope, claim.lease)).pipe(mergeMap(() => throwError(() => error)))),
         );
+      }),
+    );
+  }
 
-        stream.subscribe({
-          next: (val) => subscriber.next(val),
-          error: (err) => subscriber.error(err),
-          complete: () => subscriber.complete(),
+  private async claim(scope: Scope): Promise<Claim> {
+    let pause = 25;
+    for (;;) {
+      const lease = leaseEnd();
+      try {
+        await this.prisma.idempotencyRecord.create({
+          data: { ...scope, statusCode: PENDING, responseBody: '', expiresAt: lease },
         });
-      })();
-    });
+        return { kind: 'owner', lease };
+      } catch (error) {
+        if ((error as any)?.code !== 'P2002') return this.failOpen('claim', error);
+      }
+
+      let existing;
+      try {
+        existing = await this.prisma.idempotencyRecord.findFirst({ where: scope });
+      } catch (error) {
+        return this.failOpen('read', error);
+      }
+      if (!existing) continue;
+
+      if (existing.statusCode !== PENDING) {
+        try {
+          const body = existing.responseBody ? JSON.parse(existing.responseBody) : undefined;
+          return { kind: 'replay', statusCode: existing.statusCode, body };
+        } catch (error) {
+          return this.failOpen('parse', error);
+        }
+      }
+
+      if (existing.expiresAt && existing.expiresAt.getTime() <= Date.now()) {
+        try {
+          const { count } = await this.prisma.idempotencyRecord.updateMany({
+            where: { ...scope, statusCode: PENDING, expiresAt: existing.expiresAt },
+            data: { expiresAt: lease },
+          });
+          if (count === 1) return { kind: 'owner', lease };
+        } catch (error) {
+          return this.failOpen('take over', error);
+        }
+        continue;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, pause));
+      pause = Math.min(pause * 2, 1000);
+    }
+  }
+
+  private async complete(scope: Scope, lease: Date, statusCode: number, data: unknown) {
+    try {
+      await this.prisma.idempotencyRecord.updateMany({
+        where: { ...scope, statusCode: PENDING, expiresAt: lease },
+        data: { statusCode, responseBody: JSON.stringify(data ?? null), expiresAt: null },
+      });
+    } catch (error) {
+      this.failOpen('save', error);
+      await this.release(scope, lease);
+    }
+  }
+
+  private async release(scope: Scope, lease: Date) {
+    try {
+      await this.prisma.idempotencyRecord.deleteMany({ where: { ...scope, statusCode: PENDING, expiresAt: lease } });
+    } catch (error) {
+      this.failOpen('release', error);
+    }
+  }
+
+  private failOpen(step: string, error: unknown): Claim {
+    this.logger.warn(
+      `Idempotency store ${step} failed; the write runs without replay protection: ${(error as any)?.code ?? (error as Error)?.name ?? 'unknown error'}`,
+    );
+    return { kind: 'open' };
   }
 }
-
-
