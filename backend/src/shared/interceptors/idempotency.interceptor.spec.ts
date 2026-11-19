@@ -27,10 +27,18 @@ type StoredRecord = {
   method: string;
   statusCode: number;
   responseBody: string;
+  expiresAt?: Date | null;
 };
 
-const scopeOf = (r: Omit<StoredRecord, 'statusCode' | 'responseBody'>) =>
+const scopeOf = (r: Pick<StoredRecord, 'key' | 'userId' | 'resourceType' | 'resourceId' | 'method'>) =>
   [r.key, r.userId, r.resourceType, r.resourceId, r.method].join('|');
+
+const matches = (record: StoredRecord, where: Partial<StoredRecord>) =>
+  Object.entries(where).every(([field, value]) =>
+    value instanceof Date
+      ? (record as any)[field]?.getTime() === value.getTime()
+      : (record as any)[field] === value,
+  );
 
 type FakeStore = {
   records: Map<string, StoredRecord>;
@@ -42,6 +50,11 @@ type FakeStore = {
       [{ where: StoredRecord }]
     >;
     create: jest.Mock<Promise<StoredRecord>, [{ data: StoredRecord }]>;
+    updateMany: jest.Mock<
+      Promise<{ count: number }>,
+      [{ where: Partial<StoredRecord>; data: Partial<StoredRecord> }]
+    >;
+    deleteMany: jest.Mock<Promise<{ count: number }>, [{ where: Partial<StoredRecord> }]>;
   };
 };
 
@@ -64,6 +77,20 @@ const store: FakeStore = {
         });
       store.records.set(scopeOf(data), data);
       return data;
+    }),
+    updateMany: jest.fn(async ({ where, data }) => {
+      await Promise.resolve();
+      if (store.failWrites) throw new Error('idempotency store unavailable');
+      const hits = [...store.records.values()].filter((r) => matches(r, where));
+      for (const r of hits) Object.assign(r, data);
+      return { count: hits.length };
+    }),
+    deleteMany: jest.fn(async ({ where }) => {
+      await Promise.resolve();
+      if (store.failWrites) throw new Error('idempotency store unavailable');
+      const hits = [...store.records.entries()].filter(([, r]) => matches(r, where));
+      for (const [scope] of hits) store.records.delete(scope);
+      return { count: hits.length };
     }),
   },
 };
@@ -343,8 +370,35 @@ describe('IdempotencyInterceptor over HTTP', () => {
     expect(calls.create).toBe(2);
   });
 
-  // Target idempotency-concurrent-first-requests: both requests miss the store before either response is saved.
-  it.failing(
+  it('takes over a claim whose lease expired and stores the new response', async () => {
+    const scope = {
+      key: 'k11',
+      userId: 'doctor-1',
+      resourceType: 'visits',
+      resourceId: '-',
+      method: 'POST',
+    };
+    store.records.set(scopeOf(scope), {
+      ...scope,
+      statusCode: 0,
+      responseBody: '',
+      expiresAt: new Date(Date.now() - 1000),
+    });
+    const res = await http()
+      .post('/visits')
+      .set('x-user', 'doctor-1')
+      .set('Idempotency-Key', 'k11')
+      .send({ note: 'after crash' });
+    expect(res.status).toBe(201);
+    expect(res.body).toEqual({ id: 'visit-1', note: 'after crash' });
+    expect(store.records.get(scopeOf(scope))).toMatchObject({
+      statusCode: 201,
+      responseBody: JSON.stringify({ id: 'visit-1', note: 'after crash' }),
+      expiresAt: null,
+    });
+  });
+
+  it(
     'runs the handler once when two first requests with one key overlap',
     async () => {
       slowGate = new Promise<void>((resolve) => {
@@ -364,6 +418,24 @@ describe('IdempotencyInterceptor over HTTP', () => {
       expect(calls.slow).toBe(1);
     },
   );
+
+  it('leaves a claim alone once another request has taken it over', async () => {
+    slowGate = new Promise<void>((resolve) => {
+      releaseSlow = resolve;
+    });
+    const late = http()
+      .post('/visits/slow/now')
+      .set('x-user', 'doctor-1')
+      .set('Idempotency-Key', 'k12')
+      .then((res) => res);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const [claim] = [...store.records.values()];
+    const takenOver = new Date(Date.now() + 60_000);
+    claim.expiresAt = takenOver;
+    releaseSlow();
+    expect((await late).status).toBe(201);
+    expect(claim).toMatchObject({ statusCode: 0, responseBody: '', expiresAt: takenOver });
+  });
 
   // Target idempotency-anonymous-keys-unscoped: requests without a user all share the empty user id.
   it.failing(

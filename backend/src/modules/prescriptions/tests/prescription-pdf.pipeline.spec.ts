@@ -18,6 +18,7 @@ describe('Prescription -> saved readback -> PDF pipeline', () => {
   let api: ApiClient;
   let state: any;
   const cache: any[] = [];
+  const matchesRow = (row: any, where: any) => Object.entries(where).every(([k, v]) => row[k] === v);
   const patient = { id: '00000000-0000-4000-8000-000000000001', name: 'SYNTHETIC TEST PATIENT', branchId: 'pipeline-branch', gender: 'FEMALE', dateOfBirth: '1990-01-01', phone: '', email: '' };
   const doctor = { id: '00000000-0000-4000-8000-000000000002', firstName: 'Test', lastName: 'Doctor', role: 'DOCTOR', branchId: patient.branchId, isActive: true };
   const payload = {
@@ -59,8 +60,23 @@ describe('Prescription -> saved readback -> PDF pipeline', () => {
     prescriptionTemplateVersion: { findMany: async () => [] },
     layoutVariant: { updateMany: async () => ({ count: 0 }) },
     idempotencyRecord: {
-      findFirst: async ({ where }: any) => cache.find(row => Object.entries(where).every(([k, v]) => row[k] === v)),
-      create: async ({ data }: any) => { cache.push(data); return data; },
+      findFirst: async ({ where }: any) => cache.find(row => matchesRow(row, where)),
+      create: async ({ data }: any) => {
+        const unique = ['key', 'userId', 'resourceType', 'resourceId', 'method'];
+        if (cache.some(row => unique.every(k => row[k] === data[k]))) throw Object.assign(new Error('Unique constraint failed'), { code: 'P2002' });
+        cache.push({ ...data });
+        return data;
+      },
+      updateMany: async ({ where, data }: any) => {
+        const rows = cache.filter(row => matchesRow(row, where));
+        rows.forEach(row => Object.assign(row, data));
+        return { count: rows.length };
+      },
+      deleteMany: async ({ where }: any) => {
+        const before = cache.length;
+        cache.splice(0, cache.length, ...cache.filter(row => !matchesRow(row, where)));
+        return { count: before - cache.length };
+      },
     },
   });
 
