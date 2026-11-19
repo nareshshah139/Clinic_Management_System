@@ -2822,7 +2822,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
         brandName: x.brandName,
         dosage: restoreLegacyDosage(x.dosage),
         dosageUnit: x.dosageUnit || 'TABLET',
-        frequency: x.frequency || 'ONCE_DAILY',
+        frequency: frequencyForStoredItem(x.frequency, x.dosePattern),
         duration: x.duration,
         durationUnit: x.durationUnit || 'DAYS',
         instructions: x.instructions,

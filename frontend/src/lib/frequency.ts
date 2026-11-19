@@ -236,13 +236,17 @@ export function inferFrequencyFromDosePattern(pattern: string): FrequencyOption 
   return 'FOUR_TIMES_DAILY';
 }
 
+/**
+ * @cc [owner:nareshshah139,label:safety] stored-frequency-never-defaults
+ * A stored medicine row's frequency MUST stay as its known option (any case and spacing), else come
+ * from its dose pattern, else stay as its own non-blank text. With none of these it MUST be blank so
+ * the doctor picks it, never ONCE_DAILY.
+ */
 export function frequencyForStoredItem(raw: unknown, pattern?: string): string {
-  const upper = typeof raw === 'string' ? raw.toUpperCase().replace(/\s+/g, '_') : '';
+  const upper = typeof raw === 'string' ? raw.trim().toUpperCase().replace(/\s+/g, '_') : '';
   if (upper && getAllFrequencyOptions().includes(upper)) return upper;
   const inferred = pattern ? inferFrequencyFromDosePattern(pattern) : null;
-  if (inferred) return inferred;
-  if (upper) return upper;
-  return 'ONCE_DAILY';
+  return inferred ?? upper;
 }
 
 /**
