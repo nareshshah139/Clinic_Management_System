@@ -9,13 +9,15 @@
    pharmacist may press Add to stock on the saved draft. A worker process may
    die at any point after registering.
 
-   MODE "code" is the code today. "fixed" adds the one guard the model asks
-   for. Every other mode is "fixed" with one guard removed. *)
+   MODE "before" is the code before the fix, kept as a regression control.
+   "code" is the code today, which keeps a saved bill by exact identity and so
+   takes the same branches as "fixed". Every other mode is "fixed" with one
+   guard removed. *)
 EXTENDS Naturals
 
 CONSTANTS Workers, MODE
 
-ASSUME MODE \in {"code", "fixed", "typeProbe", "noClaim", "bindOutsideTx",
+ASSUME MODE \in {"before", "code", "fixed", "typeProbe", "noClaim", "bindOutsideTx",
                  "finalizeByIdOnly", "checkOutsideTx", "retryReregisters",
                  "resolveRefusesRunning", "noFinalizeOnError"}
 
@@ -42,7 +44,7 @@ VARIABLES status, link, saved, committed, posts, pc, result, seen, desk, deskSee
 
 vars == <<status, link, saved, committed, posts, pc, result, seen, desk, deskSeen, history>>
 
-KeepsSaved == MODE # "code"
+KeepsSaved == MODE # "before"
 
 \* CHECK purchase_import_outcome, migration 20261024150000. A write that breaks it fails.
 CheckOK(s, l) ==
@@ -178,7 +180,9 @@ PharmacistStopsImport ==
 
 (* recoverDelegated under the branch lock and the row lock. stray: the request
    names an original that is linked to another, already saved bill. The
-   workbench adds the original it has open to sourceDocumentIds. *)
+   workbench adds the original it has open to sourceDocumentIds. Without
+   KeepsSaved a stray original rejects a saved import. With it, the code
+   rewrites INVOICE_SAVED and the same bill, which changes no variable here. *)
 ManagerRecovers ==
   /\ \E stray \in BOOLEAN :
     \/ /\ status \in {"ABSENT", "RUNNING"}

@@ -2,7 +2,7 @@
 
 An automatic purchase import reads a supplier bill with OCR, saves a draft bill, and adds its stock. `PharmacyPurchaseImportAttempt` is the durable fence around that work. The client picks an attempt id before it uploads, so a lost response or a retry finds the same row.
 
-This is one of the best-built machines in the repo. TLC finds that seven of the eight rules hold in `code` mode. The negative controls show which guard each rule rests on. One rule breaks. A manager's recovery can turn an import that already saved its bill into a rejected one, and that bill can then never add stock.
+This is one of the best-built machines in the repo. TLC finds that all eight rules hold in `code` mode. The negative controls show which guard each rule rests on. Before the fix one rule broke. A manager's recovery could turn an import that already saved its bill into a rejected one, and that bill could then never add stock. `before` mode keeps that behavior as a regression control.
 
 ## Model
 
@@ -33,7 +33,7 @@ The CHECK constraint `purchase_import_outcome` is in the model as `CheckOK`. A w
 | `WorkerDies` | the Node process stops |
 | `PharmacistOpensDraft`, `PharmacistAddsStock` | `commitStock`, `pharmacy-purchase-invoice.service.ts:1357-1368`, which shares `commitStockInTransaction` |
 | `PharmacistStopsImport` | `resolve`, `purchase-import-recovery.ts:212-222`. A tombstone create, or `updateMany` where status RUNNING. |
-| `ManagerRecovers` | `recoverDelegated`, `purchase-import-recovery.ts:95-175`. The decision is `:143-148`. |
+| `ManagerRecovers` | `recoverDelegated`, `purchase-import-recovery.ts:96-175`. A saved bill that exists is looked up first, `:135-138`. The decision is `:143-148`. |
 | `CheckOK` | `migrations/20261024150000_unlinked_purchase_recovery/migration.sql:4-8` |
 | `Blocked` | the same migration, `purchase_recovery_guard` and trigger `purchase_recovery_commit` |
 
@@ -44,27 +44,22 @@ The CHECK constraint `purchase_import_outcome` is in the model as `CheckOK`. A w
 | `TypeOK` | invariant | holds | |
 | `NeverRunningAgain` | invariant | holds | `execute` uses `create`, never an upsert |
 | `TerminalStaysTerminal` | invariant | holds | the claim in `createDraft` and the RUNNING predicate in `execute`'s final write |
-| `SavedStaysSaved` | invariant | **breaks** | `recoverDelegated` rejects a saved import when the request names a stray original |
+| `SavedStaysSaved` | invariant | holds | `recoverDelegated` keeps an INVOICE_SAVED attempt's existing bill before it counts the originals, `:135-144` |
 | `InvoiceRecorded` | invariant | holds | the bind shares the bill's transaction |
 | `StockOnce` | invariant | holds | the stock claim's `stockCommittedAt: null` predicate inside the transaction |
 | `ResolveAlwaysPossible` | invariant | holds | `resolve` accepts RUNNING |
 | `RunningSettles` | property | holds | `execute`'s catch block records NO_STOCK_WRITTEN |
 
-## The break: a saved bill loses its import
+## The fix
 
-TLC's shortest path, from `results/code.md`:
+`recoverDelegated` gathered bill ids from the attempt and from every original in the request, `purchase-import-recovery.ts:143`. When the workbench sent an original linked to another saved bill, that made two ids, `invoice` was null, and the status became RETRY_REJECTED. The trigger then refused stock for the import's bill and for the other bill. The contract at `:93` says a saved invoice must win by exact identity.
 
-1. No import yet.
-2. The upload registers the import.
-3. OCR reads the bill.
-4. The worker saves the draft bill. The attempt is INVOICE_SAVED and names the bill.
-5. A manager recovers the import while the workbench has another saved bill's original open.
+- `purchase-import-recovery.ts:135-137` looks up the attempt's own bill when the attempt is INVOICE_SAVED. `:144` makes that bill the decision whenever it exists, so stray originals no longer count. The recovery still records its reason and audit, as it does for any first recovery of a saved import. The repeat-recovery shortcut at `:138` reuses the same lookup.
+- `recoverUnlinked` had the same shape, `:63-77`. `:63` returns the attempt unchanged when it names a bill that exists. Its contract covers legacy and orphaned imports, and an attempt whose bill exists is neither. An orphaned attempt, whose bill is missing, still goes to RETRY_REJECTED.
 
-`recoverDelegated` gathers bill ids from the attempt and from every original in the request, `purchase-import-recovery.ts:143`. The attempt's own bill and the other bill make two ids, so `invoice` is null and the status becomes RETRY_REJECTED, `:148`. The attempt keeps naming its bill. The trigger then refuses stock for that bill and for the other bill, because both are in `historicalInvoiceIds`. The code's own contract at `:92` says a saved invoice must win by exact identity.
+In the model, `KeepsSaved` is now true in every mode but `before`. A recovery of a saved import with a stray original rewrites INVOICE_SAVED and the same bill, which changes no model variable, so `code` takes the same branches as `fixed`.
 
-`backend/src/modules/pharmacy/tests/purchase-import.formal-replay.database.spec.ts` replays the path through the real `PharmacyPurchaseInvoiceService` with only OCR stubbed. It pauses the worker after the save, recovers, then lets the worker continue. The `today:` test shows the attempt becomes RETRY_REJECTED, the import ends SAVED_FOR_REVIEW, and `commitStock` fails with the trigger's message for both the reviewed import bill and the other bill.
-
-`fixed` mode keeps an INVOICE_SAVED attempt whose bill exists. The smallest code change is to return the saved bill, or refuse with 409, when `prior.status` is INVOICE_SAVED and its bill exists, before the stray originals are counted. `recoverUnlinked` has the same shape at `:64-76`, but its contract allows rejection on conflicting links, so it is outside this rule.
+`backend/src/modules/pharmacy/tests/purchase-import.formal-replay.database.spec.ts` replays TLC's shortest path from `results/before.md` through the real `PharmacyPurchaseInvoiceService` with only OCR stubbed. It pauses the worker after the save, recovers with another bill's original, then lets the worker continue. It asserts the attempt stays INVOICE_SAVED with its bill, the worker adds the bill's stock, and the other bill can still add stock. `purchase-import-delegation.database.spec.ts` covers the same request through `recoverUnlinked` and `recoverDelegated` directly.
 
 ## Negative controls
 

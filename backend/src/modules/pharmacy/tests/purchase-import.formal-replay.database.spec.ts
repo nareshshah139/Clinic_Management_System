@@ -11,7 +11,7 @@ const databaseTests = process.env.FORMAL_REPLAY_TEST_DATABASE_URL ? describe : d
 
 /**
  * Replays TLC's shortest path to a broken rule in
- * verification/state-machines/purchase-import (results/code.md).
+ * verification/state-machines/purchase-import (results/before.md), which the fix closed.
  */
 databaseTests('Purchase import formal replay', () => {
   let database: Awaited<ReturnType<typeof localDatabase>>;
