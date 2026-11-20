@@ -65,6 +65,28 @@ export class PatientsService {
     throw new ConflictException('Could not generate unique patient code after retries');
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product] patient-phone-search-by-digits
+   * A phone-shaped search term (digits with optional +, spaces, dashes, dots or parentheses) MUST
+   * match stored digits-only phones by the term's digits as a prefix. A term with the Indian
+   * country code (12 digits starting 91, or a leading +91) also matches the stored 10-digit number,
+   * and a 10-digit term also matches a stored number carrying the 91 prefix. Terms with other
+   * characters keep their raw-prefix phone match.
+   */
+  private phoneSearchClauses(searchTerm: string): Prisma.PatientWhereInput[] {
+    const clauses: Prisma.PatientWhereInput[] = [{ phone: { startsWith: searchTerm } }];
+    if (!/^\+?[\d\s\-().]+$/.test(searchTerm)) return clauses;
+    const digits = this.normalizePhone(searchTerm);
+    const prefixes = new Set([digits]);
+    const hasCountryCode = digits.startsWith('91') && (digits.length === 12 || searchTerm.startsWith('+'));
+    if (hasCountryCode && digits.length > 2) prefixes.add(digits.slice(2));
+    if (digits.length === 10) prefixes.add(`91${digits}`);
+    for (const prefix of prefixes) {
+      if (prefix !== searchTerm) clauses.push({ phone: { startsWith: prefix } });
+    }
+    return clauses;
+  }
+
   private ageToApproximateDob(age: number): Date {
     const now = new Date();
     return new Date(now.getFullYear() - age, 0, 1);
@@ -183,7 +205,7 @@ export class PatientsService {
       andConditions.push({
         OR: [
           { name: { contains: searchTerm, mode: 'insensitive' } },
-          { phone: { startsWith: searchTerm } },
+          ...this.phoneSearchClauses(searchTerm),
           { abhaId: { contains: searchTerm } },
           { patientCode: { startsWith: searchTerm.toUpperCase() } },
           { email: { contains: searchTerm, mode: 'insensitive' } },
