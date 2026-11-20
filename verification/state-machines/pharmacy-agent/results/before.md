@@ -120,10 +120,12 @@ No proposal or action stays shown as being applied forever.
 4. the agent saves its proposal: Asking the agent
 5. the agent posts its answer: Proposal waiting for review
 6. a reviewer clicks Apply: Being applied
-7. an action starts: Being applied
+7. the thread update fails: Being applied
 8. a reviewer clicks Reject: Being applied
-9. the server restarts: Apply abandoned half way
-From step 9 the system can repeat these steps, or stop here, forever.
+9. the agent says nothing changed: Completed run marked failed
+10. an action starts: Completed run marked failed
+11. the server restarts: Apply abandoned half way
+From step 11 the system can repeat these steps, or stop here, forever.
 
 ## Steps the chart hides
 
