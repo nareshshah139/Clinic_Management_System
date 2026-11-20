@@ -31,7 +31,7 @@ databaseTests('Patient phone search on PostgreSQL', () => {
     for (const id of ['A', 'B']) await db.branch.create({ data: { id, name: `Branch ${id}`, address: 'Synthetic' } });
     // Phones are stored digits only; one number carries the 91 country code.
     await db.patient.create({ data: { id: 'ten', name: 'TenDigit Patient', gender: 'F', phone: '9876543210', email: 'ten@example.test', branchId: 'A' } });
-    await db.patient.create({ data: { id: 'cc', name: 'CountryCode Patient', gender: 'M', phone: '919876500001', branchId: 'A' } });
+    await db.patient.create({ data: { id: 'cc', name: 'CountryCode Patient', gender: 'M', phone: '919876500001', patientCode: 'PCC01', branchId: 'A' } });
     await db.patient.create({ data: { id: 'other', name: 'Other Patient', gender: 'M', phone: '9123456789', branchId: 'A' } });
     await db.patient.create({ data: { id: 'elsewhere', name: 'Elsewhere Patient', gender: 'M', phone: '9876543210', branchId: 'B' } });
   }, 120000);
@@ -67,11 +67,14 @@ databaseTests('Patient phone search on PostgreSQL', () => {
   it('keeps name, email, and patient code search unchanged', async () => {
     expect(await search('tendigit')).toEqual(['TenDigit Patient']);
     expect(await search('ten@example')).toEqual(['TenDigit Patient']);
-    const { patientCode } = (await db.patient.findUniqueOrThrow({ where: { id: 'cc' }, select: { patientCode: true } }));
-    if (patientCode) expect(await search(patientCode)).toEqual(['CountryCode Patient']);
+    expect(await search('PCC01')).toEqual(['CountryCode Patient']);
   });
 
   it('does not treat digits inside a name search as a phone', async () => {
     expect(await search('Patient 9')).toEqual([]);
+  });
+
+  it('matches nobody by phone for a punctuation-only term', async () => {
+    expect([await search('--'), await search('()'), await search('+-')]).toEqual([[], [], []]);
   });
 });
