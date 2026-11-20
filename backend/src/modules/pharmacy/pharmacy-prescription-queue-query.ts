@@ -210,8 +210,9 @@ export function queueStatusPage(
       FROM branch_prescriptions p LEFT JOIN invoice_state i ON i.id = p.id LEFT JOIN coverage_state c ON c.id = p.id
     ), synced AS (
       SELECT *, CASE
-        WHEN task_status IN ('CANCELLED', 'PAID') THEN task_status
+        WHEN task_status = 'PAID' THEN task_status
         WHEN derived_status = 'dispensed' THEN 'DISPENSED'
+        WHEN task_status = 'CANCELLED' THEN task_status
         WHEN task_status = 'DISPENSED' AND derived_status = 'partial' THEN 'PARTIALLY_FILLED'
         WHEN task_status = 'DISPENSED' THEN 'QUEUED'
         WHEN task_status = 'QUEUED' AND derived_status = 'partial' THEN 'PARTIALLY_FILLED'

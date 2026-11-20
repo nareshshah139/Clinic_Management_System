@@ -8,7 +8,7 @@ import {
   PharmacyDispenseTaskStatusDto,
 } from '../dto/pharmacy-dispense-task.dto';
 
-// Replays of verification/state-machines/dispense-queue/results/code.md, one call per model step.
+// Replays of verification/state-machines/dispense-queue/results/before.md, one call per model step.
 const databaseTests = process.env.FORMAL_REPLAY_TEST_DATABASE_URL
   ? describe
   : describe.skip;
@@ -119,7 +119,7 @@ databaseTests('Dispense queue formal replay on PostgreSQL', () => {
   const setStatus = (taskId: string, status: PharmacyDispenseTaskStatusDto) =>
     queue.updateTaskStatus(taskId, { status }, branchId, pharmacist).then(
       () => 'saved',
-      () => 'refused',
+      (error: Error) => error.message,
     );
 
   const youMarkTheMedicine = async (id: string, action: PharmacyDispenseLineActionDto) => {
@@ -142,18 +142,10 @@ databaseTests('Dispense queue formal replay on PostgreSQL', () => {
     return { id, task, marked };
   }
 
-  it.failing('PaidNeedsBill: marking a task paid with no bill is refused', async () => {
-    const { task, marked } = await paidWithNoBill();
-    expect([marked, (await storedTask(task)).status]).toEqual(['refused', 'QUEUED']);
-  });
-
-  it('today: PaidNeedsBill: a task with no bill is saved as Paid', async () => {
+  it('PaidNeedsBill: marking a task paid with no bill is refused', async () => {
     const { id, task, marked } = await paidWithNoBill();
-    expect([
-      marked,
-      (await storedTask(task)).status,
-      await db.pharmacyInvoice.count({ where: { prescriptionId: id } }),
-    ]).toEqual(['saved', 'PAID', 0]);
+    expect([marked, (await storedTask(task)).status, (await queue.findOne(id, branchId)).allowedStatuses])
+      .toEqual(['Post the pharmacy bill before marking this prescription paid.', 'QUEUED', ['QUEUED', 'IN_REVIEW', 'PARTIALLY_FILLED', 'PAUSED', 'READY_TO_BILL', 'CANCELLED']]);
   });
 
   async function cancelledThenReopened() {
@@ -164,14 +156,10 @@ databaseTests('Dispense queue formal replay on PostgreSQL', () => {
     return { id, cancelled, reopened };
   }
 
-  it.failing('FinishedStaysFinished: a cancelled task cannot be opened for review again', async () => {
-    const { id } = await cancelledThenReopened();
-    expect(await shown(id)).toBe('CANCELLED');
-  });
-
-  it('today: FinishedStaysFinished: a cancelled task goes back to In Review', async () => {
+  it('FinishedStaysFinished: a cancelled task cannot be opened for review again', async () => {
     const { id, cancelled, reopened } = await cancelledThenReopened();
-    expect([cancelled, reopened, await shown(id)]).toEqual(['saved', 'saved', 'IN_REVIEW']);
+    expect([cancelled, reopened, await shown(id), (await queue.findOne(id, branchId)).allowedStatuses])
+      .toEqual(['saved', 'This prescription is already cancelled. Its status can no longer change.', 'CANCELLED', ['CANCELLED']]);
   });
 
   async function dispensedThenCancelled() {
@@ -183,14 +171,24 @@ databaseTests('Dispense queue formal replay on PostgreSQL', () => {
     return { id, before, cancelled };
   }
 
-  it.failing('DispensedStaysDispensed: a dispensed prescription keeps showing Dispensed after a cancel', async () => {
+  it('DispensedStaysDispensed: a dispensed prescription keeps showing Dispensed after a cancel', async () => {
     const { id } = await dispensedThenCancelled();
     expect(await shown(id)).toBe('DISPENSED');
   });
 
-  it('today: DispensedStaysDispensed: a cancel turns a dispensed task into Cancelled', async () => {
-    const { id, before, cancelled } = await dispensedThenCancelled();
-    expect([before, cancelled, await shown(id)]).toEqual(['DISPENSED', 'saved', 'CANCELLED']);
+  it('DispensedStaysDispensed: a dispensed prescription refuses Mark paid and Pause', async () => {
+    const id = await newPrescription();
+    const task = (await youOpenThePrescription(id)).dispenseTaskId!;
+    await theBillPosts(id);
+    const paid = await setStatus(task, PharmacyDispenseTaskStatusDto.PAID);
+    const paused = await setStatus(task, PharmacyDispenseTaskStatusDto.PAUSED);
+    expect([paid, paused, await shown(id), (await queue.findOne(id, branchId)).allowedStatuses])
+      .toEqual([
+        'This prescription is already dispensed. Its status can no longer change.',
+        'This prescription is already dispensed. Its status can no longer change.',
+        'DISPENSED',
+        [],
+      ]);
   });
 
   async function billedBeforeOpened() {
@@ -200,12 +198,8 @@ databaseTests('Dispense queue formal replay on PostgreSQL', () => {
     return [task.status, task.dispensedAt !== null];
   }
 
-  it.failing('StatusHasTimestamp: a task created as Dispensed records when it was dispensed', async () => {
+  it('StatusHasTimestamp: a task created as Dispensed records when it was dispensed', async () => {
     expect(await billedBeforeOpened()).toEqual(['DISPENSED', true]);
-  });
-
-  it('today: StatusHasTimestamp: a task created as Dispensed has no dispensed time', async () => {
-    expect(await billedBeforeOpened()).toEqual(['DISPENSED', false]);
   });
 
   async function billedThenCancelled() {
@@ -225,17 +219,16 @@ databaseTests('Dispense queue formal replay on PostgreSQL', () => {
     return { id, path };
   }
 
-  it.failing('BillShowsDone: a prescription whose bill posted is listed as dispensed', async () => {
+  it('BillShowsDone: a prescription whose bill posted is listed as dispensed', async () => {
     const { id } = await billedThenCancelled();
     expect(await queueStatus(id)).toEqual(['dispensed', 'dispensed']);
   });
 
-  it('today: BillShowsDone: a cancelled task keeps a billed prescription under Paused', async () => {
-    const { id, path } = await billedThenCancelled();
-    expect([path, await queueStatus(id), await shown(id)]).toEqual([
-      ['DISPENSED', 'saved', 'PAID', 'saved', 'DISPENSED', 'saved', 'CANCELLED'],
-      ['expired', 'expired'],
-      'CANCELLED',
-    ]);
+  it('BillShowsDone: a bill posted after a cancel lists the prescription as dispensed', async () => {
+    const id = await newPrescription();
+    const task = (await youOpenThePrescription(id)).dispenseTaskId!;
+    const cancelled = await setStatus(task, PharmacyDispenseTaskStatusDto.CANCELLED);
+    await theBillPosts(id);
+    expect([cancelled, await queueStatus(id), await shown(id)]).toEqual(['saved', ['dispensed', 'dispensed'], 'DISPENSED']);
   });
 });

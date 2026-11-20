@@ -107,6 +107,7 @@ type QueueEntry = {
   linkedInvoiceIds: string[];
   status: QueueStatus;
   dispenseStatus?: DispenseTaskStatus;
+  allowedStatuses?: DispenseTaskStatus[];
   source?: string;
   assignedToId?: string | null;
   statusReasonType?: string | null;
@@ -851,6 +852,7 @@ function DispenseReview({
     ? STATUS_MENU.filter(
         (item) =>
           item.status !== activeEntry.dispenseStatus &&
+          activeEntry.allowedStatuses?.includes(item.status) &&
           (typeof nextStep !== 'object' || nextStep === null || item.status !== nextStep.status),
       )
     : [];

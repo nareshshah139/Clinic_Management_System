@@ -5,46 +5,15 @@ stateDiagram-v2
   state "Waiting in the queue" as s0
   state "Billed before anyone opened it" as s1
   state "Open at the counter" as s2
-  state "Dispensed, with no dispensed time" as s3
+  state "Dispensed" as s3
   state "Cancelled" as s4
-  state "Dispensed" as s5
-  state "Paid, with no bill" as s6
-  state "Billed, but the counter shows Cancelled" as s7
-  state "Billed, but the counter shows Paid" as s8
-  state "Billed, but listed under Paused" as s9
-  state "Open again after it was paid or cancelled" as s10
-  state "Paid and billed" as s11
   [*] --> s0
   s0 --> s1: the bill posts
   s0 --> s2: you open the prescription
   s1 --> s3: you open the prescription
+  s2 --> s3: the bill posts
   s2 --> s4: an API call cancels
-  s2 --> s5: the bill posts
-  s2 --> s6: you mark paid
-  s3 --> s5: you mark ready to bill / you open it for review / you pause
-  s3 --> s7: an API call cancels
-  s3 --> s8: you mark paid
-  s4 --> s6: you mark paid
-  s4 --> s9: the bill posts
-  s4 --> s10: you mark ready to bill / you open it for review / you pause
-  s5 --> s7: an API call cancels
-  s5 --> s8: you mark paid
-  s6 --> s4: an API call cancels
-  s6 --> s10: you mark ready to bill / you open it for review / you pause
-  s6 --> s11: the bill posts
-  s7 --> s5: you mark ready to bill / you open it for review / you pause
-  s7 --> s8: you mark paid
-  s8 --> s5: you mark ready to bill / you open it for review / you pause
-  s8 --> s7: an API call cancels
-  s9 --> s5: you mark ready to bill / you open it for review / you pause
-  s9 --> s11: you mark paid
-  s10 --> s4: an API call cancels
-  s10 --> s5: the bill posts
-  s10 --> s6: you mark paid
-  s11 --> s5: you mark ready to bill / you open it for review / you pause
-  s11 --> s9: an API call cancels
+  s4 --> s3: the bill posts
   classDef breaks fill:#fde2dd,stroke:#b3261e,stroke-width:2px
   classDef stuck fill:#fdf0d5,stroke:#a35a05,stroke-width:2px,stroke-dasharray:5 3
   classDef breaksAndStuck fill:#fde2dd,stroke:#a35a05,stroke-width:2px,stroke-dasharray:5 3
-  class s3,s6,s10 breaks
-  class s7 breaksAndStuck
