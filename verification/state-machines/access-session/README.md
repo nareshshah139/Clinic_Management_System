@@ -49,10 +49,10 @@ Each replay has a `.failing` test that asserts the correct outcome and a `today:
 
 | Model | Code |
 | --- | --- |
-| `YouSignIn`, guard `Usable` | `POST /auth/login` (`auth.controller.ts:66`), `validateUser` refuses unless `status` is ACTIVE and `isActive` is not false (`auth.service.ts:67`), `login` signs id, email, role and branch (`auth.service.ts:88`) |
+| `YouSignIn`, guard `Usable` | `POST /auth/login` (`auth.controller.ts:67`), `validateUser` refuses unless `status` is ACTIVE and `isActive` is not false (`auth.service.ts:67`), `login` signs id, email, role and branch (`auth.service.ts:88`) |
 | `TokenWorks` | passport-jwt with `ignoreExpiration: false` (`jwt.strategy.ts:26`), lifetime `JWT_EXPIRES_IN` (`auth.module.ts:26`), default `1d` (`env.validation.ts:19`) |
 | `Accepts`, code mode | `JwtAuthGuard` (`jwt-auth.guard.ts:16`), `JwtStrategy.validate` returns claims only (`jwt.strategy.ts:31`), `RolesGuard` uses `request.user.role` (`roles.guard.ts:31`) |
-| `YouCallStaffRoute` | `GET /auth/me`, `Authenticated()` (`auth.controller.ts:138`) |
+| `YouCallStaffRoute` | `GET /auth/me`, `Authenticated()` (`auth.controller.ts:138` to `:139`) |
 | `YouCallManagerRoute` | `PATCH /users/:id/role`, `Roles(OWNER, ADMIN)` (`users.controller.ts:218`) |
 | `ManagerSuspends`, `ManagerReactivates` | `PATCH /users/:id/status` (`users.controller.ts:236`), `updateUserStatus` writes `{ status }` with no from-check (`users.service.ts:334` to `:351`) |
 | `ManagerDemotes`, `ManagerPromotes` | `PATCH /users/:id/role`, `assignRole` (`users.service.ts:355`, write at `:373`) |

@@ -28,7 +28,7 @@ All paths are under `backend/src/modules/pharmacy/` unless named otherwise. Line
 | `YouOpenPrescription`, task present | `ensureTaskForEntry` sync (`:653-667`): `syncedTaskStatus`, then `nextStatusAfterLineReview` when the result is Ready to bill |
 | `YouReviewLine` | `updateTaskLine` / `saveTaskLine` (`:468-548`): line update (`:514`), then `nextStatusAfterLineReview` on the stored status (`:532-541`) |
 | `YouRequestStatus`, `ServerSavesStatus` | `updateTaskStatus` / `saveTaskStatus` (`:394-466`). The check is `:432-443`, the write `:446-459` |
-| `Requestable` | the counter's Pause and Mark paid (`frontend/src/components/pharmacy/PharmacyCounterCockpit.tsx:1166`), Ready to bill (`:1155`), In Review on select (`:506`), and CANCELLED, which only an API caller sends |
+| `Requestable` | the counter's Pause and Mark paid (`frontend/src/components/pharmacy/PharmacyCounterCockpit.tsx:1167` and `:1168`), Ready to bill (`:1153`), In Review on select (`:506`), and CANCELLED, which only an API caller sends |
 | DISPENSED never requested | `updateTaskStatus` refuses DISPENSED (`:400`) |
 | `Allowed`, Ready to bill | every current line reviewed and none unavailable (`:432-443`) |
 | `DeskPostsBill` | `checkout` (`pharmacy-invoice.service.ts:142`) to `transitionInvoice` CONFIRMED (`:1358`). Billing never reads the dispense task |
