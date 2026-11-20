@@ -86,7 +86,7 @@ databaseTests('Idempotency formal replay: prescription pad saves', () => {
     patientId = (
       await prisma.patient.create({ data: { name: 'Synthetic Patient', gender: 'F', phone: '9000000000', branchId } })
     ).id;
-    store = gate(prisma, 'idempotencyRecord.create', { when: 'before' });
+    store = gate(prisma, 'idempotencyRecord.updateMany', { when: 'before' });
     const signedIn: CanActivate = {
       canActivate(context: ExecutionContext) {
         context.switchToHttp().getRequest().user = { id: doctorId, branchId, role: 'DOCTOR' };
@@ -114,25 +114,18 @@ databaseTests('Idempotency formal replay: prescription pad saves', () => {
     await app.close();
   });
 
-  async function retryDuringSlowSave() {
+  it('OnePrescriptionPerIssue: a retry during a slow save creates no second visit or prescription', async () => {
     const key = padKey();
     const first = save(key).then((res) => res);
     await store.arrived;
-    const retry = await save(key);
-    store.release();
-    await first;
-    return retry;
-  }
-
-  it.failing('OnePrescriptionPerIssue: a retry during a slow save creates no second visit or prescription', async () => {
-    await retryDuringSlowSave();
     expect(await counts()).toEqual({ visits: 1, prescriptions: 1 });
-  });
-
-  it('today: a retry during a slow save creates a second visit and prescription', async () => {
-    const retry = await retryDuringSlowSave();
-    expect(retry.status).toBe(201);
-    expect(await counts()).toEqual({ visits: 2, prescriptions: 2 });
+    const retry = await save(key);
+    expect([retry.status, retry.body.message]).toEqual([425, 'This save is still in progress. Wait a few seconds, then save again.']);
+    store.release();
+    const answered = await first;
+    const later = await save(key);
+    expect([answered.status, later.status, later.body.id]).toEqual([201, 201, answered.body.id]);
+    expect(await counts()).toEqual({ visits: 1, prescriptions: 1 });
   });
 
   async function saveSamePadTwice() {
