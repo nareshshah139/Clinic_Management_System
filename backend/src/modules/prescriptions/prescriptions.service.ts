@@ -1202,48 +1202,43 @@ export class PrescriptionsService {
     });
   }
 
-  async approveTemplateVersion(
-    templateId: string,
-    versionId: string,
-    branchId: string,
-    approverId: string,
-    note?: string,
-  ) {
-    const version = await this.prisma.prescriptionTemplateVersion.findFirst({
-      where: { id: versionId, template: { id: templateId, branchId } },
-    });
-    if (!version) throw new NotFoundException('Version not found');
-    if (version.status !== 'PENDING') throw new ConflictException('Only pending versions can be approved');
-    const updated = await this.prisma.prescriptionTemplateVersion.update({
-      where: { id: version.id },
-      data: { status: 'APPROVED' as any, approvedAt: new Date(), approvedBy: approverId },
-    });
-    await this.prisma.templateVersionApproval.create({
-      data: { versionId: version.id, reviewerId: approverId, status: 'APPROVED' as any, note: note || null },
-    });
-    return updated;
+  approveTemplateVersion(templateId: string, versionId: string, branchId: string, approverId: string, note?: string) {
+    return this.decideTemplateVersion(templateId, versionId, branchId, approverId, 'APPROVED', note);
   }
 
-  async rejectTemplateVersion(
+  rejectTemplateVersion(templateId: string, versionId: string, branchId: string, approverId: string, note?: string) {
+    return this.decideTemplateVersion(templateId, versionId, branchId, approverId, 'REJECTED', note);
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:product] template-review-decision
+   * A pending template version MUST take exactly one review decision. The status write MUST compare-and-set
+   * on PENDING and commit with its review record, so a late or failed review leaves no trace.
+   * Model: verification/state-machines/prescriptions.
+   */
+  private decideTemplateVersion(
     templateId: string,
     versionId: string,
     branchId: string,
-    approverId: string,
+    reviewerId: string,
+    status: 'APPROVED' | 'REJECTED',
     note?: string,
   ) {
-    const version = await this.prisma.prescriptionTemplateVersion.findFirst({
-      where: { id: versionId, template: { id: templateId, branchId } },
+    return this.prisma.$transaction(async tx => {
+      const version = await tx.prescriptionTemplateVersion.findFirst({
+        where: { id: versionId, template: { id: templateId, branchId } },
+      });
+      if (!version) throw new NotFoundException('Version not found');
+      const decided = await tx.prescriptionTemplateVersion.updateMany({
+        where: { id: version.id, status: 'PENDING' },
+        data: status === 'APPROVED' ? { status, approvedAt: new Date(), approvedBy: reviewerId } : { status },
+      });
+      if (decided.count !== 1) {
+        throw new ConflictException(`Only pending versions can be ${status === 'APPROVED' ? 'approved' : 'rejected'}`);
+      }
+      await tx.templateVersionApproval.create({ data: { versionId: version.id, reviewerId, status, note: note || null } });
+      return tx.prescriptionTemplateVersion.findUniqueOrThrow({ where: { id: version.id } });
     });
-    if (!version) throw new NotFoundException('Version not found');
-    if (version.status !== 'PENDING') throw new ConflictException('Only pending versions can be rejected');
-    const updated = await this.prisma.prescriptionTemplateVersion.update({
-      where: { id: version.id },
-      data: { status: 'REJECTED' as any },
-    });
-    await this.prisma.templateVersionApproval.create({
-      data: { versionId: version.id, reviewerId: approverId, status: 'REJECTED' as any, note: note || null },
-    });
-    return updated;
   }
 
   // ASSET LIBRARY

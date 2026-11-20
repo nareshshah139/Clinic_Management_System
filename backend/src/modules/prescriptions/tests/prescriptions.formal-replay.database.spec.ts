@@ -29,6 +29,10 @@ databaseTests('Prescriptions formal model replays (verification/state-machines/p
     new Proxy(client, {
       get(target, key) {
         const value = (target as any)[key];
+        if (key === '$transaction') {
+          return (work: (tx: object) => unknown, ...rest: unknown[]) =>
+            value.call(target, (tx: object) => work(throwingOn(tx, model, method)), ...rest);
+        }
         if (key !== model) return typeof value === 'function' ? value.bind(target) : value;
         return new Proxy(value, {
           get(delegate, name) {
@@ -134,7 +138,7 @@ databaseTests('Prescriptions formal model replays (verification/state-machines/p
   describe('OneDecision: two reviewers approve the same version at once', () => {
     const replay = async () => {
       const v = await pendingVersion();
-      const second = gate(prisma, 'prescriptionTemplateVersion.update', { when: 'before' });
+      const second = gate(prisma, 'prescriptionTemplateVersion.updateMany', { when: 'before' });
       const late = outcome(prescriptions(second.client).approveTemplateVersion(v.templateId, v.versionId, branchId, doctorId));
       await second.arrived;
       const early = await outcome(prescriptions().approveTemplateVersion(v.templateId, v.versionId, branchId, reviewerId));
@@ -142,39 +146,27 @@ databaseTests('Prescriptions formal model replays (verification/state-machines/p
       return [early, await late, (await v.read()).records];
     };
 
-    it.failing('OneDecision: the second approval is refused and one review record exists', async () => {
+    it('OneDecision: the second approval is refused and one review record exists', async () => {
       expect(await replay()).toEqual(['done', 'refused', ['APPROVED']]);
-    });
-
-    it('today: both approvals succeed and the version has two review records', async () => {
-      expect(await replay()).toEqual(['done', 'done', ['APPROVED', 'APPROVED']]);
     });
   });
 
   describe('DecidedStaysDecided: one reviewer approves while another rejects', () => {
     const replay = async () => {
       const v = await pendingVersion();
-      const rejecter = gate(prisma, 'prescriptionTemplateVersion.update', { when: 'before' });
+      const rejecter = gate(prisma, 'prescriptionTemplateVersion.updateMany', { when: 'before' });
       const rejection = outcome(prescriptions(rejecter.client).rejectTemplateVersion(v.templateId, v.versionId, branchId, doctorId));
       await rejecter.arrived;
-      const approver = gate(prisma, 'prescriptionTemplateVersion.update', { when: 'after' });
-      const approval = outcome(prescriptions(approver.client).approveTemplateVersion(v.templateId, v.versionId, branchId, reviewerId));
-      await approver.arrived;
+      await prescriptions().approveTemplateVersion(v.templateId, v.versionId, branchId, reviewerId);
       const afterApproval = (await v.read()).status;
       rejecter.release();
       const rejected = await rejection;
       const afterRejection = (await v.read()).status;
-      approver.release();
-      await approval;
       return [afterApproval, rejected, afterRejection];
     };
 
-    it.failing('DecidedStaysDecided: the late rejection is refused and the version stays approved', async () => {
+    it('DecidedStaysDecided: the late rejection is refused and the version stays approved', async () => {
       expect(await replay()).toEqual(['APPROVED', 'refused', 'APPROVED']);
-    });
-
-    it('today: the late rejection overwrites the approval', async () => {
-      expect(await replay()).toEqual(['APPROVED', 'done', 'REJECTED']);
     });
   });
 
@@ -186,12 +178,8 @@ databaseTests('Prescriptions formal model replays (verification/state-machines/p
       return [approval, await v.read()];
     };
 
-    it.failing('DecisionRecorded: a failed review record leaves the version undecided', async () => {
+    it('DecisionRecorded: a failed review record leaves the version undecided', async () => {
       expect(await replay()).toEqual(['refused', { status: 'PENDING', records: [] }]);
-    });
-
-    it('today: the version is approved with no review record', async () => {
-      expect(await replay()).toEqual(['refused', { status: 'APPROVED', records: [] }]);
     });
   });
 });
