@@ -128,23 +128,13 @@ databaseTests('Appointment and visit model replays', () => {
   });
 
   describe('CompletedVisitFrozen', () => {
-    it.failing('CompletedVisitFrozen: a completed visit keeps the diagnosis it was completed with', async () => {
+    it('CompletedVisitFrozen: a completed visit keeps the diagnosis it was completed with', async () => {
       const appointmentId = await booked();
       const visitId = await doctorStartsVisit(appointmentId);
       await doctorCompletesVisit(visitId);
       await attempt(doctorEditsNotes(visitId));
       const visit = await prisma.visit.findUniqueOrThrow({ where: { id: visitId } });
       expect({ status: visit.status, diagnosis: visit.diagnosis }).toEqual({ status: 'COMPLETED', diagnosis: null });
-    });
-
-    it('today: a completed visit accepts a new diagnosis', async () => {
-      const appointmentId = await booked();
-      const visitId = await doctorStartsVisit(appointmentId);
-      await doctorCompletesVisit(visitId);
-      expect(await attempt(doctorEditsNotes(visitId))).toBe('applied');
-      const visit = await prisma.visit.findUniqueOrThrow({ where: { id: visitId } });
-      expect({ status: visit.status, diagnosis: visit.diagnosis })
-        .toEqual({ status: 'COMPLETED', diagnosis: '[{"diagnosis":"Amended after signing"}]' });
     });
   });
 
