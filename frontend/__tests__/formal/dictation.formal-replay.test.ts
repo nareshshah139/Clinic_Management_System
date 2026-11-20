@@ -206,18 +206,10 @@ describe('voice fill clip: Escape while the permission prompt is open, then pres
     return hook;
   }
 
-  it.failing('ClipShownWhileRecording: the button shows recording while the microphone records', async () => {
+  it('ClipShownWhileRecording: the button shows recording while the microphone records', async () => {
     const { result } = await staleDenialThenGrant();
     expect({ shown: result.current.recording?.key ?? null, recorder: FakeRecorder.last.state }).toEqual({
       shown: 'notes',
-      recorder: 'recording',
-    });
-  });
-
-  it('today: the microphone records while the button shows idle', async () => {
-    const { result } = await staleDenialThenGrant();
-    expect({ shown: result.current.recording, recorder: FakeRecorder.last.state }).toEqual({
-      shown: null,
       recorder: 'recording',
     });
   });
