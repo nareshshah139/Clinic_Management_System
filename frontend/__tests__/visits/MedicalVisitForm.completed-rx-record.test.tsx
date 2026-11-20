@@ -2,11 +2,6 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import MedicalVisitForm from '@/components/visits/MedicalVisitForm';
 import { Toaster } from '@/components/ui/toaster';
 
-// The real visit form and prescription builder, with fetch stubbed as a stateful API that keeps
-// the prescription record the pharmacy reads. Like VisitsService.update, it refuses every
-// clinical write to a completed visit. Paged.js and the canvas PDF renderer cannot lay out pages
-// in jsdom, so they stand in as leaf renderers that keep the page text.
-
 jest.setTimeout(60_000);
 
 jest.mock('@/lib/pdf-export', () => ({

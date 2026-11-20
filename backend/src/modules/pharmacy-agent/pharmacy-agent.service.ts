@@ -229,12 +229,6 @@ export class PharmacyAgentService implements OnModuleInit {
     await this.ensureAgentPermissions();
   }
 
-  /**
-   * Closes runs and applies that a crashed or restarted process left behind. Age is the only
-   * sign that no live request owns a row: sendMessage runs Codex at most twice and
-   * spawnWithInput kills each run at the timeout, so five more minutes covers the database
-   * work around them and any Apply.
-   */
   @Cron(CronExpression.EVERY_5_MINUTES)
   async sweepAbandonedWork() {
     const prisma = this.prisma as any;
@@ -645,7 +639,6 @@ export class PharmacyAgentService implements OnModuleInit {
       };
     }
 
-    // The answer is committed. A failed thread rename must not report the run as failed.
     try {
       await prisma.pharmacyAgentSession.update({
         where: { id: session.id },
@@ -837,7 +830,6 @@ export class PharmacyAgentService implements OnModuleInit {
     return session;
   }
 
-  // appliedAt on a proposal still awaiting review marks an Apply in progress.
   private assertAwaitingReview(proposal: any) {
     if (proposal.status !== 'PENDING_REVIEW') {
       throw new BadRequestException(`Proposal is ${proposal.status}`);

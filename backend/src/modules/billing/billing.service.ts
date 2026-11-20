@@ -321,8 +321,6 @@ export class BillingService {
       if (replaceItems) await tx.newInvoiceItem.deleteMany({ where: { invoiceId: id } });
       const updated = await tx.newInvoice.update({ where: { id }, data: updateData, include });
       if (total === undefined) return updated;
-      // The update above holds the bill's row lock, so no payment or refund can move received
-      // between this read of it and the balance written from it.
       if (updated.received > total) {
         throw new BadRequestException(
           `Bill ${invoice.invoiceNo} has already received ${RUPEES.format(updated.received)}, so its total cannot go below that. Refund the difference first, then change the bill.`,

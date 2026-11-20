@@ -7,7 +7,6 @@ import { createHash } from 'crypto';
 import { UserStatus } from '@prisma/client';
 import { PrismaService } from '../../../shared/database/prisma.service';
 
-/** Changes with the password hash, so a token signed before a password reset or change stops working. */
 export const passwordStamp = (passwordHash: string) =>
   createHash('sha256').update(passwordHash).digest('base64url').slice(0, 16);
 

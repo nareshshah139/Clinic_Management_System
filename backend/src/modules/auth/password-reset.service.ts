@@ -9,7 +9,6 @@ export const RESET_CODE_TTL_MS = 24 * 60 * 60 * 1000;
 const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const ROLE_RANK: Record<string, number> = { OWNER: 3, ADMIN: 2, DOCTOR: 1 };
 
-/** Sign-in's test for a usable account. Rows saved before status writes also set isActive can disagree, so both are checked. */
 const USABLE = { status: UserStatus.ACTIVE, isActive: true } as const;
 
 const hashCode = (code: string) => createHash('sha256').update(code).digest('hex');

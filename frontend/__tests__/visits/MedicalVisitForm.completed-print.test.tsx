@@ -1,11 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import MedicalVisitForm from '@/components/visits/MedicalVisitForm';
 
-// The real visit form and prescription builder, with fetch stubbed as the API. Like
-// VisitsService.update, the stub refuses every clinical write to a completed visit with 400.
-// Paged.js and the canvas PDF renderer cannot lay out pages in jsdom, so they stand in as
-// leaf renderers that keep the page text.
-
 jest.setTimeout(60_000);
 
 const mockPdfPages: string[] = [];

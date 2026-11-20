@@ -9,10 +9,6 @@ import { PharmacyPurchaseInvoiceService } from '../pharmacy-purchase-invoice.ser
 
 const databaseTests = process.env.FORMAL_REPLAY_TEST_DATABASE_URL ? describe : describe.skip;
 
-/**
- * Replays TLC's shortest path to a broken rule in
- * verification/state-machines/purchase-import (results/before.md), which the fix closed.
- */
 databaseTests('Purchase import formal replay', () => {
   let database: Awaited<ReturnType<typeof localDatabase>>;
   let prisma: PrismaClient;

@@ -32,7 +32,6 @@ export class MicUnavailableError extends Error {
   }
 }
 
-// requestMs outlasts next.config's 300 s proxyTimeout, so it only ends a request nothing will ever answer.
 export const DICTATION_LIMITS = { maxMs: 600_000, connectMs: 10_000, finishMs: 8_000, tailMs: 300, requestMs: 330_000, minRecordedBytes: 1_000 };
 
 type TimerId = unknown;
@@ -201,7 +200,6 @@ async function openDictationSession(o: DictationOptions, release: () => void): P
     resolveOutcome(result);
   };
 
-  // A transcription request that never answers would otherwise hold the session, and the microphone lock, forever.
   const limitRequest = (onTimeout: DictationOutcome) =>
     arm(() => {
       finish(onTimeout);
