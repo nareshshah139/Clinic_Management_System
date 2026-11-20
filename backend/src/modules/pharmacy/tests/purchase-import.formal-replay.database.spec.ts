@@ -103,22 +103,14 @@ databaseTests('Purchase import formal replay', () => {
     return { recovered, imported, attempt, bill, savedBillId, otherBillId: otherBill.id };
   }
 
-  it.failing('SavedStaysSaved: recovering a saved import keeps its saved bill', async () => {
-    const { recovered, attempt, savedBillId } = await recoverAfterSave();
-    expect(recovered).toMatchObject({ outcome: 'DRAFT_SAVED', invoiceId: savedBillId });
-    expect(attempt.status).toBe('INVOICE_SAVED');
-  });
-
-  it('today: recovering a saved import with another bill\'s original open rejects it and blocks its stock', async () => {
+  it('SavedStaysSaved: recovering a saved import keeps its saved bill', async () => {
     const { recovered, imported, attempt, bill, savedBillId, otherBillId } = await recoverAfterSave();
-    expect(recovered).toMatchObject({ outcome: 'RETRY_REJECTED', invoiceId: savedBillId, stockOutcome: 'UNVERIFIED' });
-    expect(attempt.status).toBe('RETRY_REJECTED');
-    expect((attempt.result as any).historicalInvoiceIds.sort()).toEqual([savedBillId, otherBillId].sort());
-    expect(imported.automation.status).toBe('SAVED_FOR_REVIEW');
-    expect(bill.stockCommittedAt).toBeNull();
-    await service.markReviewed(savedBillId, {}, branchId);
-    await expect(service.commitStock(savedBillId, branchId, pharmacistId)).rejects.toThrow('Uncertain receipt was rejected for further intake');
+    expect(recovered).toMatchObject({ outcome: 'DRAFT_SAVED', invoiceId: savedBillId });
+    expect(attempt).toMatchObject({ status: 'INVOICE_SAVED', purchaseInvoiceId: savedBillId });
+    expect(imported.automation.status).toBe('STOCK_COMMITTED');
+    expect(bill.status).toBe('STOCK_COMMITTED');
     await service.markReviewed(otherBillId, {}, branchId);
-    await expect(service.commitStock(otherBillId, branchId, managerId)).rejects.toThrow('Uncertain receipt was rejected for further intake');
+    await service.commitStock(otherBillId, branchId, managerId);
+    expect(await prisma.pharmacyPurchaseInvoice.findUniqueOrThrow({ where: { id: otherBillId } })).toMatchObject({ status: 'STOCK_COMMITTED' });
   });
 });

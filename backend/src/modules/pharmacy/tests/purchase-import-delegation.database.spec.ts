@@ -254,6 +254,30 @@ function delegatedRecoveryDatabaseTests() {
     })).rejects.toThrow('Uncertain receipt was rejected for further intake');
     expect(await prisma.pharmacyPurchaseInvoice.findUnique({ where: { id: orphanInvoiceId } })).toBeNull();
   });
+
+  it('keeps a saved invoice when recovery names an original from another bill', async () => {
+    const attempt = await createRunning();
+    const invoiceId = randomUUID();
+    const otherInvoiceId = randomUUID();
+    await prisma.$transaction(async tx => {
+      await preparePurchaseWrite(tx, branchId);
+      await claimPurchaseImport(tx, fence(attempt.id));
+      await createInvoice(tx, invoiceId);
+      await bindPurchaseImport(tx, fence(attempt.id), invoiceId);
+      await createInvoice(tx, otherInvoiceId);
+    });
+    const otherOriginal = await prisma.pharmacyPurchaseInvoiceDocument.create({ data: {
+      branchId, uploadedBy: originalUserId, purchaseInvoiceId: otherInvoiceId, fileName: 'other-bill.txt', mimeType: 'text/plain',
+      sizeBytes: 5, sha256: randomUUID(), data: Buffer.from('other'),
+    } });
+    const saved = await savedAttempt(attempt.id);
+    expect(await recovery.recoverUnlinked(fence(attempt.id), { legacy: false, sourceDocumentIds: [otherOriginal.id], reason }))
+      .toMatchObject({ outcome: 'DRAFT_SAVED', invoiceId });
+    expect(await savedAttempt(attempt.id)).toEqual(saved);
+    expect(await recovery.recoverDelegated(actor(), { ...input(attempt.id), sourceDocumentIds: [otherOriginal.id] }))
+      .toMatchObject({ outcome: 'DRAFT_SAVED', invoiceId });
+    expect(await savedAttempt(attempt.id)).toMatchObject({ status: 'INVOICE_SAVED', purchaseInvoiceId: invoiceId });
+  });
 }
 
 databaseTests('Delegated purchase import recovery with real PostgreSQL', delegatedRecoveryDatabaseTests);
