@@ -128,7 +128,7 @@ def main():
     ap.add_argument("--check", action="store_true")
     ap.add_argument("dir")
     args = ap.parse_args()
-    d = Path(args.dir).resolve()
+    d = Path(args.dir).resolve() if Path(args.dir).exists() else (HERE / args.dir).resolve()
     jar = tlc.jar_path(args.jar)
     m = load(d / "model.py", f"{d.name}_model")
     view = load(d / "view.py", f"{d.name}_view")

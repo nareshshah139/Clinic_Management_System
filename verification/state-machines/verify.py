@@ -30,7 +30,7 @@ def load(path: Path, name: str):
 
 def model_dirs(names):
     if names:
-        return [(HERE / n).resolve() if not Path(n).is_absolute() else Path(n) for n in names]
+        return [Path(n).resolve() if Path(n).exists() else (HERE / n).resolve() for n in names]
     return sorted(p.parent for p in HERE.glob("*/model.py"))
 
 
