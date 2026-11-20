@@ -3,6 +3,7 @@ SPEC = "PharmacyAgent.tla"
 CONSTANTS = {"Reviewers": "{u1, u2}", "N": "2"}
 
 MODES = {
+    "before": {"MODE": '"before"'},
     "code": {"MODE": '"code"'},
     "fixed": {"MODE": '"fixed"'},
     "noClaim": {"MODE": '"noClaim"'},
@@ -41,7 +42,7 @@ RULE_TEXT = {
 ALL_HOLD = {rule: "holds" for rule in RULES}
 
 EXPECT = {
-    "code": {
+    "before": {
         "TypeOK": "holds",
         "AppliedOnce": "breaks",
         "DecisionIsFinal": "breaks",
@@ -52,6 +53,7 @@ EXPECT = {
         "RunLeavesRunning": "breaks",
         "ApplyingEnds": "breaks",
     },
+    "code": dict(ALL_HOLD),
     "fixed": dict(ALL_HOLD),
     "noClaim": {"AppliedOnce": "breaks", "DecisionIsFinal": "breaks"},
     "rejectNoCAS": {"RejectedMeansNotApplied": "breaks"},
@@ -62,7 +64,6 @@ EXPECT = {
     "typeProbe": {"TypeOK": "breaks"},
 }
 
-CHARTS = ["code", "fixed"]
+CHARTS = ["before", "code"]
 
-REPLAY = "backend/src/modules/pharmacy-agent/tests/pharmacy-agent.formal-replay.database.spec.ts"
-REPLAYS = {rule: REPLAY for rule, verdict in EXPECT["code"].items() if verdict == "breaks"}
+REPLAYS = {}
