@@ -83,39 +83,24 @@ databaseTests('Appointment and visit model replays', () => {
   };
 
   describe('StatusesAgree', () => {
-    it.failing('StatusesAgree: a desk status edit cannot move an appointment out of in progress while its visit is open', async () => {
+    it('StatusesAgree: a desk status edit cannot move an appointment out of in progress while its visit is open', async () => {
       const appointmentId = await booked();
       const visitId = await doctorStartsVisit(appointmentId);
       await attempt(deskSetsStatus(appointmentId, 'SCHEDULED'));
       expect(await rows(appointmentId, visitId)).toEqual({ appointment: 'IN_PROGRESS', visit: 'IN_PROGRESS' });
     });
 
-    it('today: a desk status edit moves the appointment back to scheduled while its visit is open', async () => {
-      const appointmentId = await booked();
-      const visitId = await doctorStartsVisit(appointmentId);
-      expect(await attempt(deskSetsStatus(appointmentId, 'SCHEDULED'))).toBe('applied');
-      expect(await rows(appointmentId, visitId)).toEqual({ appointment: 'SCHEDULED', visit: 'IN_PROGRESS' });
-    });
-
-    it.failing('StatusesAgree (screens only): a voice check-in planned before the visit started leaves the appointment in progress', async () => {
+    it('StatusesAgree (screens only): a voice check-in planned before the visit started leaves the appointment in progress', async () => {
       const appointmentId = await booked();
       await deskPlansCheckIn(appointmentId);
       const visitId = await doctorStartsVisit(appointmentId);
       await attempt(deskConfirmsCheckIn(appointmentId));
       expect(await rows(appointmentId, visitId)).toEqual({ appointment: 'IN_PROGRESS', visit: 'IN_PROGRESS' });
     });
-
-    it('today: a voice check-in planned before the visit started moves the appointment to checked in', async () => {
-      const appointmentId = await booked();
-      await deskPlansCheckIn(appointmentId);
-      const visitId = await doctorStartsVisit(appointmentId);
-      expect(await attempt(deskConfirmsCheckIn(appointmentId))).toBe('applied');
-      expect(await rows(appointmentId, visitId)).toEqual({ appointment: 'CHECKED_IN', visit: 'IN_PROGRESS' });
-    });
   });
 
   describe('NoResurrection', () => {
-    it.failing('NoResurrection: completing a visit does not turn a cancelled appointment into completed', async () => {
+    it('NoResurrection: completing a visit does not turn a cancelled appointment into completed', async () => {
       const appointmentId = await booked();
       const visitId = await doctorStartsVisit(appointmentId);
       const cancel = await attempt(deskSetsStatus(appointmentId, 'CANCELLED'));
@@ -123,16 +108,7 @@ databaseTests('Appointment and visit model replays', () => {
       expect(standingCancel(cancel, (await rows(appointmentId, visitId)).appointment)).toBe('CANCELLED');
     });
 
-    it('today: completing a visit turns its cancelled appointment into completed', async () => {
-      const appointmentId = await booked();
-      const visitId = await doctorStartsVisit(appointmentId);
-      expect(await attempt(deskSetsStatus(appointmentId, 'CANCELLED'))).toBe('applied');
-      expect((await rows(appointmentId, visitId)).appointment).toBe('CANCELLED');
-      expect(await attempt(doctorCompletesVisit(visitId))).toBe('applied');
-      expect(await rows(appointmentId, visitId)).toEqual({ appointment: 'COMPLETED', visit: 'COMPLETED' });
-    });
-
-    it.failing('NoResurrection (screens only): a voice check-in planned before a cancel leaves the appointment cancelled', async () => {
+    it('NoResurrection (screens only): a voice check-in planned before a cancel leaves the appointment cancelled', async () => {
       const appointmentId = await booked();
       await deskPlansCheckIn(appointmentId);
       await deskCancels(appointmentId);
@@ -140,15 +116,7 @@ databaseTests('Appointment and visit model replays', () => {
       expect((await prisma.appointment.findUniqueOrThrow({ where: { id: appointmentId } })).status).toBe('CANCELLED');
     });
 
-    it('today: a voice check-in planned before a cancel brings the appointment back as checked in', async () => {
-      const appointmentId = await booked();
-      await deskPlansCheckIn(appointmentId);
-      expect(await deskCancels(appointmentId)).toEqual({ message: 'Appointment cancelled successfully' });
-      expect(await attempt(deskConfirmsCheckIn(appointmentId))).toBe('applied');
-      expect((await prisma.appointment.findUniqueOrThrow({ where: { id: appointmentId } })).status).toBe('CHECKED_IN');
-    });
-
-    it.failing('NoResurrection (screens only): a cancel after a stale voice check-in survives the visit being completed', async () => {
+    it('NoResurrection (screens only): a cancel after a stale voice check-in survives the visit being completed', async () => {
       const appointmentId = await booked();
       await deskPlansCheckIn(appointmentId);
       const visitId = await doctorStartsVisit(appointmentId);
@@ -156,17 +124,6 @@ databaseTests('Appointment and visit model replays', () => {
       const cancel = await attempt(deskCancels(appointmentId));
       await attempt(doctorCompletesVisit(visitId));
       expect(standingCancel(cancel, (await rows(appointmentId, visitId)).appointment)).toBe('CANCELLED');
-    });
-
-    it('today: a cancel after a stale voice check-in is overwritten when the visit is completed', async () => {
-      const appointmentId = await booked();
-      await deskPlansCheckIn(appointmentId);
-      const visitId = await doctorStartsVisit(appointmentId);
-      expect(await attempt(deskConfirmsCheckIn(appointmentId))).toBe('applied');
-      expect(await deskCancels(appointmentId)).toEqual({ message: 'Appointment cancelled successfully' });
-      expect(await rows(appointmentId, visitId)).toEqual({ appointment: 'CANCELLED', visit: 'IN_PROGRESS' });
-      expect(await attempt(doctorCompletesVisit(visitId))).toBe('applied');
-      expect(await rows(appointmentId, visitId)).toEqual({ appointment: 'COMPLETED', visit: 'COMPLETED' });
     });
   });
 
@@ -194,22 +151,13 @@ databaseTests('Appointment and visit model replays', () => {
   describe('DisagreementHeals', () => {
     // The model has no timer, cron or reconciler to wait out. After the path, the reads
     // the screens make are the only thing left to run, and they must show agreement.
-    it.failing('DisagreementHeals: after a status edit during an open visit, the appointment ends up in progress again', async () => {
+    it('DisagreementHeals: after a status edit during an open visit, the appointment ends up in progress again', async () => {
       const appointmentId = await booked();
       const visitId = await doctorStartsVisit(appointmentId);
       await attempt(deskSetsStatus(appointmentId, 'CANCELLED'));
       await attempt(doctorEditsNotes(visitId));
       const shown = await appointments.findOne(appointmentId, branchId);
       expect({ appointment: shown.status, visit: shown.visit?.status }).toEqual({ appointment: 'IN_PROGRESS', visit: 'IN_PROGRESS' });
-    });
-
-    it('today: after a status edit during an open visit, the appointment stays cancelled while its visit stays open', async () => {
-      const appointmentId = await booked();
-      const visitId = await doctorStartsVisit(appointmentId);
-      expect(await attempt(deskSetsStatus(appointmentId, 'CANCELLED'))).toBe('applied');
-      expect(await attempt(doctorEditsNotes(visitId))).toBe('applied');
-      const shown = await appointments.findOne(appointmentId, branchId);
-      expect({ appointment: shown.status, visit: shown.visit?.status }).toEqual({ appointment: 'CANCELLED', visit: 'IN_PROGRESS' });
     });
   });
 });

@@ -105,36 +105,21 @@ databaseTests('Patient journey formal replay with PostgreSQL', () => {
   }
 
   describe('CalendarFollowsVisit', () => {
-    it.failing('CalendarFollowsVisit: a check-in sent after the doctor started the visit leaves the calendar showing the consultation', async () => {
+    it('CalendarFollowsVisit: a check-in sent after the doctor started the visit leaves the calendar showing the consultation', async () => {
       const c = await clinic();
       const appointment = await c.book();
       const visit = await c.doctorStartsVisit(appointment.id);
       await c.deskChecksIn(appointment.id).catch(() => undefined);
       expect([await c.appointmentStatus(appointment.id), await c.visitStatus(visit.id)]).toEqual(['IN_PROGRESS', 'IN_PROGRESS']);
     });
-
-    it('today: a check-in sent after the doctor started the visit puts the patient back in the waiting list', async () => {
-      const c = await clinic();
-      const appointment = await c.book();
-      const visit = await c.doctorStartsVisit(appointment.id);
-      await c.deskChecksIn(appointment.id);
-      expect([await c.appointmentStatus(appointment.id), await c.visitStatus(visit.id)]).toEqual(['CHECKED_IN', 'IN_PROGRESS']);
-    });
   });
 
   describe('CompletedOnlyAfterVisit', () => {
-    it.failing('CompletedOnlyAfterVisit: the desk cannot mark a booked appointment completed when no visit happened', async () => {
+    it('CompletedOnlyAfterVisit: the desk cannot mark a booked appointment completed when no visit happened', async () => {
       const c = await clinic();
       const appointment = await c.book();
       await c.deskMarksCompleted(appointment.id).catch(() => undefined);
       expect([await c.appointmentStatus(appointment.id), await c.visitCount()]).toEqual(['SCHEDULED', 0]);
-    });
-
-    it('today: the desk marks a booked appointment completed with no visit', async () => {
-      const c = await clinic();
-      const appointment = await c.book();
-      await c.deskMarksCompleted(appointment.id);
-      expect([await c.appointmentStatus(appointment.id), await c.visitCount()]).toEqual(['COMPLETED', 0]);
     });
   });
 
@@ -165,7 +150,7 @@ databaseTests('Patient journey formal replay with PostgreSQL', () => {
     const outcome = (attempt: Promise<{ status: string }>) =>
       attempt.then(visit => visit.status, (error: Error) => error.message);
 
-    it.failing('PatientLeavesServed: a checked-in patient whose appointment was marked completed can still be seen by the doctor', async () => {
+    it('PatientLeavesServed: a checked-in patient whose appointment was marked completed can still be seen by the doctor', async () => {
       const c = await clinic();
       const appointment = await c.book();
       await c.deskChecksIn(appointment.id);
@@ -173,18 +158,6 @@ databaseTests('Patient journey formal replay with PostgreSQL', () => {
       await c.doctorDeletesVisit(visit.id);
       await c.deskMarksCompleted(appointment.id).catch(() => undefined);
       expect(await outcome(c.doctorStartsVisit(appointment.id))).toBe('IN_PROGRESS');
-    });
-
-    it('today: once the desk marks the waiting patient completed, the doctor can never start the visit', async () => {
-      const c = await clinic();
-      const appointment = await c.book();
-      await c.deskChecksIn(appointment.id);
-      const visit = await c.doctorStartsVisit(appointment.id);
-      await c.doctorDeletesVisit(visit.id);
-      expect(await c.appointmentStatus(appointment.id)).toBe('CHECKED_IN');
-      await c.deskMarksCompleted(appointment.id);
-      expect(await outcome(c.doctorStartsVisit(appointment.id))).toBe('Cannot create a visit from a cancelled or completed appointment');
-      expect([await c.appointmentStatus(appointment.id), await c.visitCount()]).toEqual(['COMPLETED', 1]);
     });
   });
 });
