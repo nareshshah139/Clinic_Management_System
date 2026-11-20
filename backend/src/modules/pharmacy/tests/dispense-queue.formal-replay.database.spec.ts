@@ -183,14 +183,9 @@ databaseTests('Dispense queue formal replay on PostgreSQL', () => {
     return { id, before, cancelled };
   }
 
-  it.failing('DispensedStaysDispensed: a dispensed prescription keeps showing Dispensed after a cancel', async () => {
+  it('DispensedStaysDispensed: a dispensed prescription keeps showing Dispensed after a cancel', async () => {
     const { id } = await dispensedThenCancelled();
     expect(await shown(id)).toBe('DISPENSED');
-  });
-
-  it('today: DispensedStaysDispensed: a cancel turns a dispensed task into Cancelled', async () => {
-    const { id, before, cancelled } = await dispensedThenCancelled();
-    expect([before, cancelled, await shown(id)]).toEqual(['DISPENSED', 'saved', 'CANCELLED']);
   });
 
   async function billedBeforeOpened() {
@@ -221,17 +216,16 @@ databaseTests('Dispense queue formal replay on PostgreSQL', () => {
     return { id, path };
   }
 
-  it.failing('BillShowsDone: a prescription whose bill posted is listed as dispensed', async () => {
+  it('BillShowsDone: a prescription whose bill posted is listed as dispensed', async () => {
     const { id } = await billedThenCancelled();
     expect(await queueStatus(id)).toEqual(['dispensed', 'dispensed']);
   });
 
-  it('today: BillShowsDone: a cancelled task keeps a billed prescription under Paused', async () => {
-    const { id, path } = await billedThenCancelled();
-    expect([path, await queueStatus(id), await shown(id)]).toEqual([
-      ['DISPENSED', 'saved', 'PAID', 'saved', 'DISPENSED', 'saved', 'CANCELLED'],
-      ['expired', 'expired'],
-      'CANCELLED',
-    ]);
+  it('BillShowsDone: a bill posted after a cancel lists the prescription as dispensed', async () => {
+    const id = await newPrescription();
+    const task = (await youOpenThePrescription(id)).dispenseTaskId!;
+    const cancelled = await setStatus(task, PharmacyDispenseTaskStatusDto.CANCELLED);
+    await theBillPosts(id);
+    expect([cancelled, await queueStatus(id), await shown(id)]).toEqual(['saved', ['dispensed', 'dispensed'], 'DISPENSED']);
   });
 });

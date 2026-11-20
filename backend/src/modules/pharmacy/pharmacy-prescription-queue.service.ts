@@ -892,17 +892,16 @@ export class PharmacyPrescriptionQueueService {
     currentStatus: string,
     derivedStatus: PrescriptionQueueStatus,
   ): string {
-    if (
-      [
-        PharmacyDispenseTaskStatusDto.CANCELLED,
-        PharmacyDispenseTaskStatusDto.PAID,
-      ].includes(currentStatus as PharmacyDispenseTaskStatusDto)
-    ) {
+    if (currentStatus === PharmacyDispenseTaskStatusDto.PAID) {
       return currentStatus;
     }
 
     if (derivedStatus === PrescriptionQueueStatus.DISPENSED) {
       return PharmacyDispenseTaskStatusDto.DISPENSED;
+    }
+
+    if (currentStatus === PharmacyDispenseTaskStatusDto.CANCELLED) {
+      return currentStatus;
     }
 
     // Historical manual task states do not constitute a posted sale.
