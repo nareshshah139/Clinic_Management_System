@@ -4,45 +4,18 @@ title: "Clinic bill payments (code)"
 stateDiagram-v2
   state "Money due" as s0
   state "Bill wrong: a payment is refunded twice" as s1
-  state "Bill wrong: the balance due is wrong" as s2
-  state "Card or UPI payment waiting for confirmation" as s3
-  state "Paid in full" as s4
-  state "Bill wrong: the balance due is wrong and a payment is refunded twice" as s5
-  state "Bill wrong: the balance due is wrong and the bill holds more than its total" as s6
-  state "Bill wrong: the bill holds more than its total" as s7
+  state "Card or UPI payment waiting for confirmation" as s2
+  state "Paid in full" as s3
   [*] --> s0
   s0 --> s1: the admin refunds a payment
-  s0 --> s2: the admin saves an edited bill
-  s0 --> s3: the desk starts a card or UPI payment
-  s0 --> s4: the admin saves an edited bill / the desk takes a payment
-  s1 --> s5: the admin saves an edited bill
-  s2 --> s0: the admin saves an edited bill
-  s2 --> s3: the admin saves an edited bill
-  s2 --> s4: the admin saves an edited bill
-  s2 --> s5: the admin refunds a payment
-  s2 --> s6: the admin saves an edited bill / the desk confirms the card or UPI payment / the desk takes a payment
-  s2 --> s7: the admin saves an edited bill / the desk confirms the card or UPI payment / the desk takes a payment
-  s3 --> s0: the desk confirms the card or UPI payment
-  s3 --> s2: the admin saves an edited bill
-  s3 --> s4: the desk confirms the card or UPI payment
-  s3 --> s6: the admin saves an edited bill
-  s3 --> s7: the admin saves an edited bill
-  s4 --> s0: the admin refunds a payment / the admin saves an edited bill
-  s4 --> s1: the admin refunds a payment
-  s4 --> s2: the admin saves an edited bill
-  s4 --> s6: the admin saves an edited bill
-  s4 --> s7: the admin saves an edited bill
-  s5 --> s1: the admin saves an edited bill
-  s6 --> s2: the admin refunds a payment / the admin saves an edited bill
-  s6 --> s3: the admin saves an edited bill
-  s6 --> s4: the admin saves an edited bill
-  s6 --> s7: the admin saves an edited bill / the desk confirms the card or UPI payment / the desk takes a payment
-  s7 --> s2: the admin refunds a payment / the admin saves an edited bill
-  s7 --> s3: the admin saves an edited bill
-  s7 --> s4: the admin saves an edited bill
-  s7 --> s6: the admin refunds a payment / the admin saves an edited bill
+  s0 --> s2: the desk starts a card or UPI payment
+  s0 --> s3: the admin saves an edited bill / the desk takes a payment
+  s2 --> s0: the desk confirms the card or UPI payment
+  s2 --> s3: the desk confirms the card or UPI payment
+  s3 --> s0: the admin refunds a payment / the admin saves an edited bill
+  s3 --> s1: the admin refunds a payment
   classDef breaks fill:#fde2dd,stroke:#b3261e,stroke-width:2px
   classDef stuck fill:#fdf0d5,stroke:#a35a05,stroke-width:2px,stroke-dasharray:5 3
   classDef breaksAndStuck fill:#fde2dd,stroke:#a35a05,stroke-width:2px,stroke-dasharray:5 3
-  class s1,s2,s7 breaks
-  class s3 stuck
+  class s1 breaks
+  class s2 stuck

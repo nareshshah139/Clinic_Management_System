@@ -12,13 +12,16 @@
    Concurrent actors: the desk taking payments and refunds, one admin editing
    the bill, and two requests confirming the same gateway payment.
 
-   MODE "code" is the code today. "fixed" is the smallest set of guards that
-   makes every rule hold. The other modes are fixed with one guard removed. *)
+   MODE "before" is the code before the edit fix, kept as a regression
+   control. "code" is the code today: the edit reads received under the row
+   lock it writes with and refuses a total below it. "fixed" is the smallest
+   set of guards that makes every rule hold. The other modes are fixed with
+   one guard removed. *)
 EXTENDS Naturals, Sequences
 
 CONSTANTS StartTotal, Totals, PayAmounts, RefundAmount, MaxRows, Confirmers, MODE
 
-ASSUME MODE \in {"code", "fixed", "staleBalance", "editBelowReceived", "unlinkedRefund",
+ASSUME MODE \in {"before", "code", "fixed", "staleBalance", "editBelowReceived", "unlinkedRefund",
                  "confirmWithoutCAS", "noReconciler", "typeProbe"}
 
 MaxMoney == 4 * MaxRows * 4
@@ -26,15 +29,15 @@ Money == 0..MaxMoney
 Rows == 1..MaxRows
 
 \* The edit reads received before its transaction and writes an absolute balance.
-EditReadsInsideWrite == MODE \notin {"code", "staleBalance"}
+EditReadsInsideWrite == MODE \notin {"before", "staleBalance"}
 \* The edit refuses a total below what the bill has already received.
-EditRefusesBelowReceived == MODE \notin {"code", "editBelowReceived"}
+EditRefusesBelowReceived == MODE \notin {"before", "editBelowReceived"}
 \* A refund is linked to its payment and capped by what that payment has left.
-RefundCappedPerPayment == MODE \notin {"code", "unlinkedRefund"}
+RefundCappedPerPayment == MODE \notin {"before", "code", "unlinkedRefund"}
 \* confirmPayment's updateMany WHERE reconStatus = 'PENDING'.
 ConfirmUsesCAS == MODE # "confirmWithoutCAS"
 \* A job that closes a gateway payment nobody confirmed.
-HasReconciler == MODE \notin {"code", "noReconciler"}
+HasReconciler == MODE \notin {"before", "code", "noReconciler"}
 
 VARIABLES total, received, balance, pays, edit, confirm
 
@@ -143,8 +146,10 @@ AdminOpensEdit(t) ==
   /\ edit' = [ph |-> "read", seen |-> received, to |-> t]
   /\ UNCHANGED <<total, received, balance, pays, confirm>>
 
-\* updateInvoice's transaction: total from the new items or discount, and
-\* balance = max(total - received, 0) with received from the read.
+\* updateInvoice's transaction: total from the new items or discount. In
+\* "before", balance = max(total - received, 0) with received from the read.
+\* In "code", received comes from the row the transaction has locked, and a
+\* total below it rolls the transaction back.
 AdminSavesEdit ==
   /\ edit.ph = "read"
   /\ edit' = [edit EXCEPT !.ph = "idle"]

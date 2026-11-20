@@ -302,27 +302,33 @@ export class BillingService {
     if (updateInvoiceDto.discount !== undefined) {
       updateData.discount = updateInvoiceDto.discount;
     }
+    let total: number | undefined;
     if (replaceItems || updateInvoiceDto.discount !== undefined) {
       const items = replaceItems ? updateInvoiceDto.items! : invoice.items;
-      const { totalAmount } = this.calculateInvoiceTotals(items, updateInvoiceDto.discount ?? invoice.discount ?? 0);
-      updateData.total = totalAmount;
-      updateData.balance = Math.max(totalAmount - invoice.received, 0);
+      total = this.calculateInvoiceTotals(items, updateInvoiceDto.discount ?? invoice.discount ?? 0).totalAmount;
+      updateData.total = total;
     }
     if (replaceItems) {
       updateData.items = { create: await this.buildInvoiceItems(updateInvoiceDto.items!, branchId) };
     }
 
+    const include = {
+      patient: { select: { id: true, name: true, phone: true } },
+      items: true,
+      payments: true,
+    } as const;
     return this.prisma.$transaction(async (tx) => {
       if (replaceItems) await tx.newInvoiceItem.deleteMany({ where: { invoiceId: id } });
-      return tx.newInvoice.update({
-        where: { id },
-        data: updateData,
-        include: {
-          patient: { select: { id: true, name: true, phone: true } },
-          items: true,
-          payments: true,
-        },
-      });
+      const updated = await tx.newInvoice.update({ where: { id }, data: updateData, include });
+      if (total === undefined) return updated;
+      // The update above holds the bill's row lock, so no payment or refund can move received
+      // between this read of it and the balance written from it.
+      if (updated.received > total) {
+        throw new BadRequestException(
+          `Bill ${invoice.invoiceNo} has already received ${RUPEES.format(updated.received)}, so its total cannot go below that. Refund the difference first, then change the bill.`,
+        );
+      }
+      return tx.newInvoice.update({ where: { id }, data: { balance: total - updated.received }, include });
     });
   }
 

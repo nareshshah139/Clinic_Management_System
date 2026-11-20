@@ -53,16 +53,10 @@ databaseTests('Clinic billing formal replay', () => {
     await edit;
   }
 
-  it.failing('BalanceMatches: an edit saved while a payment lands keeps the balance at total less received', async () => {
+  it('BalanceMatches: an edit saved while a payment lands keeps the balance at total less received', async () => {
     const id = await newBill();
     await editRacesPayment(id, 200);
     expect(await bill(id)).toEqual({ total: 400, received: 200, balance: 200 });
-  });
-
-  it('today: an edit saved while a payment lands puts the paid amount back on the balance', async () => {
-    const id = await newBill();
-    await editRacesPayment(id, 200);
-    expect(await bill(id)).toEqual({ total: 400, received: 200, balance: 400 });
   });
 
   async function lowerAPaidBill(invoiceId: string) {
@@ -71,16 +65,10 @@ databaseTests('Clinic billing formal replay', () => {
     return billing(prisma).updateInvoice(invoiceId, { discount: 50 }, branchId);
   }
 
-  it.failing('ReceivedWithinTotal: a paid bill cannot be edited below what it has received', async () => {
+  it('ReceivedWithinTotal: a paid bill cannot be edited below what it has received', async () => {
     const id = await newBill();
-    await expect(lowerAPaidBill(id)).rejects.toThrow();
+    await expect(lowerAPaidBill(id)).rejects.toThrow('its total cannot go below');
     expect(await bill(id)).toEqual({ total: 400, received: 400, balance: 0 });
-  });
-
-  it('today: a paid bill edited to half its price holds twice its total with nothing due', async () => {
-    const id = await newBill();
-    await lowerAPaidBill(id);
-    expect(await bill(id)).toEqual({ total: 200, received: 400, balance: 0 });
   });
 
   async function payInFullTwiceAroundAnEdit(invoiceId: string) {
@@ -88,16 +76,10 @@ databaseTests('Clinic billing formal replay', () => {
     return pay(invoiceId, 400);
   }
 
-  it.failing('ReceivedWithinTotal: after an edit races a full payment, the desk cannot take the full amount again', async () => {
+  it('ReceivedWithinTotal: after an edit races a full payment, the desk cannot take the full amount again', async () => {
     const id = await newBill();
     await expect(payInFullTwiceAroundAnEdit(id)).rejects.toThrow('already paid in full');
     expect(await bill(id)).toEqual({ total: 400, received: 400, balance: 0 });
-  });
-
-  it('today: after an edit races a full payment, the desk takes the full amount a second time', async () => {
-    const id = await newBill();
-    await payInFullTwiceAroundAnEdit(id);
-    expect(await bill(id)).toEqual({ total: 400, received: 800, balance: 0 });
   });
 
   async function refundUpiPaymentTwice(invoiceId: string) {
