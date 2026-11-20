@@ -138,8 +138,6 @@ describe('dictation that stops while the live preview is still opening, with a s
     return field;
   }
 
-  // The request timeout is the only timer left once stop has sent the upload, so the field must
-  // still show Transcribing just before it and must have left just after.
   it('LeavesFinishing: the field leaves Transcribing when the upload times out', async () => {
     const field = await stopWhileOpening();
     expect(urls()).toEqual([LIVE_URL, UPLOAD_URL]);

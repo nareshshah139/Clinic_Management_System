@@ -4,12 +4,7 @@ import { from, Observable, of, throwError } from 'rxjs';
 import { catchError, concatMap, mergeMap } from 'rxjs/operators';
 import { PrismaService } from '../database/prisma.service';
 
-/** A stored row with this status is a claim whose handler has not answered yet. No HTTP response has status 0. */
 const PENDING = 0;
-/**
- * How long a claim blocks its key before another request may take it over. Keyed handlers finish
- * inside their 30 second transaction timeouts, so an older claim was left by a process that crashed.
- */
 const CLAIM_LEASE_MS = 2 * 60_000;
 const STILL_RUNNING = 'This save is still in progress. Wait a few seconds, then save again.';
 
@@ -103,7 +98,6 @@ export class IdempotencyInterceptor implements NestInterceptor {
     );
   }
 
-  /** Insert a pending row under the unique index before the handler runs, or report who already has the key. */
   private async claim(scope: Scope): Promise<Claim> {
     const existing = await this.prisma.idempotencyRecord.findFirst({ where: scope });
     if (existing && existing.statusCode !== PENDING) {
@@ -113,7 +107,6 @@ export class IdempotencyInterceptor implements NestInterceptor {
     const lease = new Date(Date.now() + CLAIM_LEASE_MS);
     if (existing) {
       if (existing.expiresAt && existing.expiresAt.getTime() > Date.now()) return { kind: 'busy' };
-      // A claim past its lease was left by a request that crashed or ran far too long. Take it over once.
       const taken = await this.prisma.idempotencyRecord.updateMany({
         where: { id: existing.id, statusCode: PENDING, expiresAt: existing.expiresAt },
         data: { expiresAt: lease },
@@ -131,7 +124,6 @@ export class IdempotencyInterceptor implements NestInterceptor {
     }
   }
 
-  /** Replace our pending row with the answer. The lease in the filter keeps a stale owner off a row another request took over. */
   private async settle(claim: Owned, statusCode: number, data: unknown) {
     await this.prisma.idempotencyRecord.updateMany({
       where: { id: claim.id, statusCode: PENDING, expiresAt: claim.lease },

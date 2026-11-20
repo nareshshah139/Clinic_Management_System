@@ -3,10 +3,6 @@ import { WorkflowDocumentEditor } from '@/components/inventory/WorkflowDocumentE
 import { DashboardUserProvider } from '@/components/layout/dashboard-user-context';
 import type { User } from '@/lib/types';
 
-// Replay of verification/state-machines/document-knowledge, following TLC's path in
-// results/code.md one block per model action. Only fetch is stubbed. The create POST is the
-// request the server never answers; like a real fetch, it rejects once its signal aborts.
-
 const DOCUMENTS_URL = '/api/inventory/workspace/documents';
 const payload = { reason: 'Physical verification', date: '2026-10-25', lines: [{ id: 'line', inventoryId: 'batch', name: 'Batch A', unit: 'TABLET', systemStock: 5, physicalStock: 6, quantity: 1 }] };
 const operator = { id: 'operator', branchId: 'branch', role: 'PHARMACIST' } as unknown as User;

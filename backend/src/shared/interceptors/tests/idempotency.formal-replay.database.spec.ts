@@ -40,8 +40,6 @@ databaseTests('Idempotency formal replay: prescription pad saves', () => {
     reason: 'Monthly repeat',
   });
 
-  // PrescriptionBuilder sends one random key per pad draft, kept across retries and presses of Save.
-  // frontend/__tests__/visits/PrescriptionBuilder.pad-key.test.tsx proves the browser side.
   const draftKey = () => `cms:POST:prescriptions:pad:${randomUUID()}`;
 
   const save = (key: string) =>

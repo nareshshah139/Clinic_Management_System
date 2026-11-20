@@ -763,11 +763,9 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const isTeleVideo = (consultationType ?? visitData?.consultationType) === 'TELE_VIDEO';
   const createdPrescriptionIdRef = useRef<string | null>(null);
   const [savedPrescriptionId, setSavedPrescriptionId] = useState<string | null>(null);
-  // The saved prescription record's items, as this builder would send them.
   const recordItemsKey = useRef('[]');
   const [savingFromPreview, setSavingFromPreview] = useState(false);
   const prescriptionSaveInFlight = useRef(false);
-  // One key per pad draft, kept across retries and presses of Save until the server confirms it.
   const padSaveKey = useRef<string | null>(null);
   const skipPostSaveCleanupRef = useRef(false);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -1378,7 +1376,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
           if (Array.isArray(savedItems)) {
             const recordItems = savedItems.map(mapPrevRxItem).filter(Boolean) as PrescriptionItemForm[];
             recordItemsKey.current = JSON.stringify(recordItems.map(toItemPayload));
-            // A completed visit prints what the pharmacy dispenses, never a local draft.
             if (res.status === 'COMPLETED') setItems(recordItems);
             else if (!items.some(item => item.drugName.trim())) hydrateItems(recordItems);
           }
@@ -2692,7 +2689,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     setSavingFromPreview(true);
     const saveRx = async () => {
       try {
-        // Prefer IDs from loaded visit if available
         const visitPatientId: string | undefined = (visitData && typeof visitData === 'object')
           ? ((visitData as any).patientId || (visitData as any)?.patient?.id)
           : undefined;
@@ -2702,7 +2698,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
         const effectivePatientId = (typeof visitPatientId === 'string' && visitPatientId.trim()) ? visitPatientId : patientId;
         const effectiveDoctorId = (typeof visitDoctorId === 'string' && visitDoctorId.trim()) ? visitDoctorId : doctorId;
 
-        // Validate essential IDs
         if (typeof effectivePatientId !== 'string' || !effectivePatientId.trim() || typeof effectiveDoctorId !== 'string' || !effectiveDoctorId.trim()) {
           console.warn('[PrescriptionBuilder] Invalid IDs on create', { patientId: effectivePatientId, doctorId: effectiveDoctorId, visitId });
           toast({
@@ -2713,7 +2708,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
           return;
         }
 
-        // Ensure we have a visit when not in standalone mode
         let ensuredVisitId: string | null = exportVisitId || visitId;
         if (!standalone && !ensuredVisitId && ensureVisitId) ensuredVisitId = await ensureVisitId();
         if (!standalone && !ensuredVisitId) throw new Error('Unable to link the visit. Nothing was saved. Please retry.');
@@ -2788,7 +2782,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
           description: `${validItems.length} medications recorded for the patient.`,
         });
 
-        // Keep saved clinical details and medication items available for subsequent edits.
         return res.id as string;
       } catch (e: any) {
         reportClinicalConflict(e);

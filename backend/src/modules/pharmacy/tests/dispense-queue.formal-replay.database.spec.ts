@@ -8,7 +8,6 @@ import {
   PharmacyDispenseTaskStatusDto,
 } from '../dto/pharmacy-dispense-task.dto';
 
-// Replays of verification/state-machines/dispense-queue/results/before.md, one call per model step.
 const databaseTests = process.env.FORMAL_REPLAY_TEST_DATABASE_URL
   ? describe
   : describe.skip;

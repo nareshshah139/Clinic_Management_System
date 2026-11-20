@@ -72,9 +72,6 @@ afterEach(() => {
   jest.useRealTimers();
 });
 
-// Applies every write the form has sent, in arrival order, then delivers the replies newest first,
-// so a later write's reply lands before an earlier one's, as in the model's counterexamples.
-// Repeats until the form sends nothing more.
 const served = new WeakSet<Held>();
 async function serveHeldWrites(server: ReturnType<typeof visitServer>) {
   for (let round = 0; round < 8; round++) {

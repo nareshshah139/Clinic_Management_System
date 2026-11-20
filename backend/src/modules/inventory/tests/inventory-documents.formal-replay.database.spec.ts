@@ -6,10 +6,6 @@ import { InventoryReplenishmentService } from '../inventory-replenishment.servic
 
 const databaseTests = process.env.FORMAL_REPLAY_TEST_DATABASE_URL ? describe : describe.skip;
 
-/**
- * Replays TLC's shortest path to a broken rule in
- * verification/state-machines/inventory-documents (results/before.md), which the fix closed.
- */
 databaseTests('Inventory documents formal replay', () => {
   let fixture: Awaited<ReturnType<typeof localDatabase>>;
   let prisma: PrismaClient;

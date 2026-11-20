@@ -25,9 +25,6 @@ import type { InventoryItemRequest, InventoryItemRequestStatus, PendingApprovalR
 
 export type DoctorLetterhead = { id: string; url: string; source: 'uploaded' | 'bundled' };
 
-// The inventory document editor and the stock count sheet send no further save until these
-// answer. The server's transaction gives up after 30 s and retries a serialization conflict
-// twice, so a write waits 120 s before the client gives up.
 const INVENTORY_EDITOR_REQUEST = /^\/inventory\/workspace\/(documents(\/by-request)?(\/[^/?#]+(\/(resolve|transition))?)?|reconciliation\/counts\/[^/?#]+)$/;
 
 export class ApiClient {

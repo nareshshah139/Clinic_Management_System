@@ -5,11 +5,6 @@ import { DashboardUserProvider } from '@/components/layout/dashboard-user-contex
 import type { CountDetail } from '@/components/inventory/counts/count-model';
 import type { User } from '@/lib/types';
 
-// Replays of verification/state-machines/count-sheet-save. Each test follows TLC's path in
-// results/code.md, one block per model action. Only fetch is stubbed; the stub keeps the
-// server's count version and refuses a stale PATCH with 409, as saveCountProgress does. A held
-// PATCH rejects once its signal aborts, as a real fetch does.
-
 const COUNT_URL = '/api/inventory/workspace/reconciliation/counts/count-1';
 const OTHER_WINDOW_COUNT = 9;
 

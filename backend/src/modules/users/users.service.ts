@@ -9,7 +9,6 @@ import { readDoctorSignature, signatureDataUrl } from './doctor-signature';
 import { letterheadDataUrl, readDoctorLetterhead } from './doctor-letterhead';
 import { fixedGrants, permissionDeltas, tickedPermissions } from '../../shared/access/permission-grants';
 
-/** Sign-in and every session check read both columns, so a status write keeps isActive in step. */
 const statusColumns = (status: UserStatus) => ({ status, isActive: status === UserStatus.ACTIVE });
 
 @Injectable()
