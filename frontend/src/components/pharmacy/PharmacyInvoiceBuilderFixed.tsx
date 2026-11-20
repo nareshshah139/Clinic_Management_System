@@ -819,6 +819,7 @@ export function PharmacyInvoiceBuilderFixed({
   // Debounced server-side patient autocomplete
   useEffect(() => {
     const q = patientSearchQuery.trim();
+    let current = true;
     const handler = setTimeout(async () => {
       try {
         if (q.length < 2) {
@@ -826,6 +827,7 @@ export function PharmacyInvoiceBuilderFixed({
           return;
         }
         const res = await apiClient.getPatients({ limit: 20, search: q });
+        if (!current) return;
         const data = (res as any)?.data || (res as any)?.patients || [];
         if (Array.isArray(data)) {
           setPatients(data);
@@ -834,7 +836,7 @@ export function PharmacyInvoiceBuilderFixed({
         // ignore errors to avoid noisy UX
       }
     }, 300);
-    return () => clearTimeout(handler);
+    return () => { current = false; clearTimeout(handler); };
   }, [patientSearchQuery]);
 
   const loadInitialData = async () => {
@@ -1115,10 +1117,10 @@ export function PharmacyInvoiceBuilderFixed({
 
     if (existingItemIndex !== -1) {
       // Increase quantity if already exists
-      const updatedItems = [...items];
-      updatedItems[existingItemIndex].quantity += 1;
-      calculateItemTotal(updatedItems[existingItemIndex]);
-      setItems(updatedItems);
+      const bumped = { ...items[existingItemIndex] };
+      bumped.quantity += 1;
+      calculateItemTotal(bumped);
+      setItems(items.map((item, i) => (i === existingItemIndex ? bumped : item)));
     } else {
       // Add new item
       const newItem: InvoiceItem = {
@@ -1151,10 +1153,10 @@ export function PharmacyInvoiceBuilderFixed({
 
     if (existingItemIndex !== -1) {
       // Increase quantity if already exists
-      const updatedItems = [...items];
-      updatedItems[existingItemIndex].quantity += 1;
-      calculateItemTotal(updatedItems[existingItemIndex]);
-      setItems(updatedItems);
+      const bumped = { ...items[existingItemIndex] };
+      bumped.quantity += 1;
+      calculateItemTotal(bumped);
+      setItems(items.map((item, i) => (i === existingItemIndex ? bumped : item)));
     } else {
       // Add new item
       const newItem: InvoiceItem = {
