@@ -118,16 +118,10 @@ databaseTests('Access session replays on PostgreSQL', () => {
     http().patch(`/users/${staffId}/role`).set('Cookie', cookie).send({ role: 'ADMIN' });
 
   describe('ColumnsAgree', () => {
-    it.failing('ColumnsAgree: suspending an account also clears its active flag', async () => {
+    it('ColumnsAgree: suspending an account also clears its active flag', async () => {
       await managerSuspends();
       const row = await staffRow();
       expect([row.status, row.isActive]).toEqual(['SUSPENDED', false]);
-    });
-
-    it('today: suspending an account leaves its active flag set', async () => {
-      await managerSuspends();
-      const row = await staffRow();
-      expect([row.status, row.isActive]).toEqual(['SUSPENDED', true]);
     });
   });
 
@@ -185,18 +179,19 @@ databaseTests('Access session replays on PostgreSQL', () => {
   });
 
   describe('NoResetWhileSuspended', () => {
-    it.failing('NoResetWhileSuspended: a suspended account cannot redeem a reset code', async () => {
-      await managerSuspends();
+    it('NoResetWhileSuspended: a suspended account is issued no reset code and cannot redeem one issued earlier', async () => {
       const code = await managerIssuesResetCode();
+      await managerSuspends();
+      const issue = await http().post(`/auth/users/${staffId}/reset-code`).set('Cookie', await asOwner());
       const res = await youResetPassword(code);
-      expect([res.status, await bcrypt.compare(PASSWORD, (await staffRow()).password)]).toEqual([400, true]);
+      expect([issue.status, res.status, await bcrypt.compare(PASSWORD, (await staffRow()).password)]).toEqual([404, 400, true]);
     });
 
-    it('today: a suspended account is issued a reset code and redeems it', async () => {
-      await managerSuspends();
+    it('NoResetWhileSuspended: a row saved SUSPENDED with isActive still set cannot redeem a code', async () => {
       const code = await managerIssuesResetCode();
+      await prisma.user.update({ where: { id: staffId }, data: { status: 'SUSPENDED', isActive: true } });
       const res = await youResetPassword(code);
-      expect([res.status, await bcrypt.compare(NEW_PASSWORD, (await staffRow()).password)]).toEqual([201, true]);
+      expect([res.status, await bcrypt.compare(PASSWORD, (await staffRow()).password)]).toEqual([400, true]);
     });
   });
 });
