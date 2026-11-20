@@ -77,6 +77,7 @@ export class PatientsService {
     const clauses: Prisma.PatientWhereInput[] = [{ phone: { startsWith: searchTerm } }];
     if (!/^\+?[\d\s\-().]+$/.test(searchTerm)) return clauses;
     const digits = this.normalizePhone(searchTerm);
+    if (!digits) return clauses;
     const prefixes = new Set([digits]);
     const hasCountryCode = digits.startsWith('91') && (digits.length === 12 || searchTerm.startsWith('+'));
     if (hasCountryCode && digits.length > 2) prefixes.add(digits.slice(2));
