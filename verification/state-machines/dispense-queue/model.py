@@ -1,7 +1,7 @@
 SPEC = "DispenseQueue.tla"
 CONSTANTS = {}  # one prescription, one task, one medicine line, one bill; MODE is the only constant
 MODES = {m: {"MODE": f'"{m}"'} for m in (
-    "code", "fixed", "typeProbe", "paidWithoutBill", "reopenFinished",
+    "before", "code", "fixed", "typeProbe", "paidWithoutBill", "reopenFinished",
     "createUnstamped", "checkBeforeLock", "cancelSticky")}
 RULES = {
     "TypeOK": "invariant",
@@ -23,8 +23,9 @@ RULE_TEXT = {
 }
 ALL_HOLD = {r: "holds" for r in RULES}
 EXPECT = {
-    "code": {**ALL_HOLD, "PaidNeedsBill": "breaks", "FinishedStaysFinished": "breaks",
+    "before": {**ALL_HOLD, "PaidNeedsBill": "breaks", "FinishedStaysFinished": "breaks",
              "DispensedStaysDispensed": "breaks", "StatusHasTimestamp": "breaks", "BillShowsDone": "breaks"},
+    "code": ALL_HOLD,
     "fixed": ALL_HOLD,
     "typeProbe": {"TypeOK": "breaks"},
     "paidWithoutBill": {"PaidNeedsBill": "breaks"},
@@ -33,6 +34,5 @@ EXPECT = {
     "checkBeforeLock": {"ReadyMeansReviewed": "breaks"},
     "cancelSticky": {"BillShowsDone": "breaks"},
 }
-CHARTS = ["code", "fixed"]
-REPLAYS = {rule: "backend/src/modules/pharmacy/tests/dispense-queue.formal-replay.database.spec.ts" for rule in (
-    "PaidNeedsBill", "FinishedStaysFinished", "DispensedStaysDispensed", "StatusHasTimestamp", "BillShowsDone")}
+CHARTS = ["before", "code"]
+REPLAYS = {}

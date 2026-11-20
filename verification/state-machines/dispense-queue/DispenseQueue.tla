@@ -12,13 +12,14 @@
    into the check (taken under the lock) and the save, so the checkBeforeLock
    control can let a line review run in between.
 
-   MODE selects today's code, the fixed protocol, or the fixed protocol with
-   one guard removed. *)
+   MODE selects the code before the fix, today's code, the fixed protocol, or
+   the fixed protocol with one guard removed. Today's code is the fixed
+   protocol plus one allowance: repeating a finished status is a no-op. *)
 EXTENDS FiniteSets
 
 CONSTANT MODE
 
-Modes == {"code", "fixed", "typeProbe", "paidWithoutBill", "reopenFinished",
+Modes == {"before", "code", "fixed", "typeProbe", "paidWithoutBill", "reopenFinished",
           "createUnstamped", "checkBeforeLock", "cancelSticky"}
 ASSUME MODE \in Modes
 
@@ -34,7 +35,7 @@ LineAction == {"PENDING", "ACCEPTED", "UNAVAILABLE"}
 VARIABLES task, line, bill, stamped, pending, seen, screen
 vars == <<task, line, bill, stamped, pending, seen, screen>>
 
-Fixed == MODE \notin {"code", "typeProbe"}
+Fixed == MODE \notin {"before", "typeProbe"}
 
 \* Each fixed guard is on in fixed and in every control except the one named for its removal.
 On(guard) ==
@@ -127,12 +128,16 @@ YouReviewLine(a) ==
   /\ UNCHANGED <<bill, pending>>
   /\ Track
 
-\* saveTaskStatus up to its checks. Today the only checks are the DISPENSED refusal
-\* (no DISPENSED in Requestable) and Ready to bill needing reviewed lines.
+\* saveTaskStatus up to its checks. Before the fix the only checks were the DISPENSED
+\* refusal (no DISPENSED in Requestable) and Ready to bill needing reviewed lines.
+\* Today's statusRefusal also lets a request repeat the finished status it already has.
+RepeatFinished(s) == MODE = "code" /\ Synced(task) \in Finished /\ s = Synced(task)
+
 Allowed(s) ==
-  /\ s = "READY_TO_BILL" => line = "ACCEPTED"
-  /\ On("finishedRefused") => Synced(task) \notin Finished
-  /\ (On("paidNeedsBill") /\ s = "PAID") => bill = "posted"
+  \/ RepeatFinished(s)
+  \/ /\ s = "READY_TO_BILL" => line = "ACCEPTED"
+     /\ On("finishedRefused") => Synced(task) \notin Finished
+     /\ (On("paidNeedsBill") /\ s = "PAID") => bill = "posted"
 
 YouRequestStatus(s) ==
   /\ Idle
