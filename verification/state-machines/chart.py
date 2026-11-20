@@ -98,9 +98,11 @@ def render(m, view, mode, jar):
     for (a, b), texts in sorted(arrows.items(), key=lambda kv: (order.index(kv[0][0]), order.index(kv[0][1]))):
         mmd.append(f"  {ids[a]} --> {ids[b]}: {esc(' / '.join(sorted(texts)))}")
     mmd += ["  classDef breaks fill:#fde2dd,stroke:#b3261e,stroke-width:2px",
-            "  classDef stuck fill:#fdf0d5,stroke:#a35a05,stroke-width:2px,stroke-dasharray:5 3"]
-    for cls in ("breaks", "stuck"):
-        hit = [ids[lab] for lab in order if any(c == cls for c, _ in broken.get(lab, ()))]
+            "  classDef stuck fill:#fdf0d5,stroke:#a35a05,stroke-width:2px,stroke-dasharray:5 3",
+            "  classDef breaksAndStuck fill:#fde2dd,stroke:#a35a05,stroke-width:2px,stroke-dasharray:5 3"]
+    kinds = {lab: {c for c, _ in broken.get(lab, ())} for lab in order}
+    for cls, want in (("breaks", {"breaks"}), ("stuck", {"stuck"}), ("breaksAndStuck", {"breaks", "stuck"})):
+        hit = [ids[lab] for lab in order if kinds[lab] == want]
         if hit:
             mmd.append(f"  class {','.join(hit)} {cls}")
     held = [r for r, w in m.EXPECT[mode].items() if w == "holds"]

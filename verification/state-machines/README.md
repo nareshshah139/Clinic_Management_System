@@ -26,7 +26,7 @@ Both accept only tla2tools v1.7.4. `TLA2TOOLS` can stand in for `--jar`. On a sm
 | `*.tla` | The spec. `Next` is a disjunction of named actions. Rules are invariants (safety) and temporal properties (liveness). |
 | `model.py` | Constants, modes, rules, the verdict each mode must get, and the replay test for each rule `code` breaks. |
 | `view.py` | `state(vars)` and `step(action, from, to)`, which name states and arrows in the reader's words for the chart. |
-| `results/<mode>.mmd` | The Mermaid statechart. A state that breaks a rule is red. A state the system can stay in forever is amber and dashed. |
+| `results/<mode>.mmd` | The Mermaid statechart. A state that breaks a safety rule is red. A state the system can stay in forever has a dashed amber border, with an amber fill, or a red fill when it also breaks a safety rule. |
 | `results/<mode>.md` | The rule table and TLC's shortest path to each broken rule. |
 | `README.md` | What the model covers, a model-to-code table, every fairness assumption, and what the model leaves out. |
 
