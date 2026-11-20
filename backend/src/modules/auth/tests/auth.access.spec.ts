@@ -52,6 +52,7 @@ describe('/auth access control', () => {
 
   const db: any = {
     user: {
+      findUnique: jest.fn(async ({ where }) => users[where.id] ?? null),
       findFirst: jest.fn(
         async ({ where }) =>
           Object.values(users).find((user) =>

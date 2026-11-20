@@ -126,37 +126,27 @@ databaseTests('Access session replays on PostgreSQL', () => {
   });
 
   describe('NoAccessWhileSuspended', () => {
-    it.failing('NoAccessWhileSuspended: a session signed in before the suspension is refused', async () => {
+    it('NoAccessWhileSuspended: a session signed in before the suspension is refused', async () => {
       const cookie = await signIn(staffEmail);
+      expect((await youOpenAPage(cookie)).status).toBe(200);
       await managerSuspends();
       expect((await youOpenAPage(cookie)).status).toBe(401);
     });
 
-    it('today: a suspended account keeps using its day-long session', async () => {
+    it('NoAccessWhileSuspended: a row saved SUSPENDED with isActive still set is refused', async () => {
       const cookie = await signIn(staffEmail);
-      const claims = JSON.parse(Buffer.from(cookie.split('.')[1], 'base64url').toString());
-      expect(claims.exp - claims.iat).toBe(86400);
-      await managerSuspends();
-      const res = await youOpenAPage(cookie);
-      expect([res.status, res.body.id]).toEqual([200, staffId]);
-      expect((await http().post('/auth/login').send({ identifier: staffEmail, password: PASSWORD })).status).toBe(403);
+      await prisma.user.update({ where: { id: staffId }, data: { status: 'SUSPENDED', isActive: true } });
+      expect((await youOpenAPage(cookie)).status).toBe(401);
     });
   });
 
   describe('RoleIsCurrent', () => {
-    it.failing('RoleIsCurrent: a demoted admin cannot use a manager action with the old session', async () => {
+    it('RoleIsCurrent: a demoted admin cannot use a manager action with the old session', async () => {
       const cookie = await signIn(staffEmail);
       await managerDemotes();
       const res = await youUseAManagerAction(cookie);
       expect([res.status, (await staffRow()).role]).toEqual([403, 'RECEPTION']);
-    });
-
-    it('today: a demoted admin promotes themselves back with the old session', async () => {
-      const cookie = await signIn(staffEmail);
-      await managerDemotes();
-      expect((await staffRow()).role).toBe('RECEPTION');
-      const res = await youUseAManagerAction(cookie);
-      expect([res.status, (await staffRow()).role]).toEqual([200, 'ADMIN']);
+      expect((await youOpenAPage(cookie)).body).toEqual({ id: staffId, role: 'RECEPTION', branchId });
     });
   });
 
