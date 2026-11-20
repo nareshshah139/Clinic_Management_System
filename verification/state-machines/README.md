@@ -17,7 +17,7 @@ python3 verification/state-machines/verify.py --jar /path/to/tla2tools.jar <fold
 python3 verification/state-machines/chart.py --jar /path/to/tla2tools.jar <folder>    # redraw its charts
 ```
 
-Both accept only tla2tools v1.7.4. `TLA2TOOLS` can stand in for `--jar`. Replay tests run with the backend and frontend suites. The backend ones need `FORMAL_REPLAY_TEST_DATABASE_URL` set to a loopback PostgreSQL URL, and are skipped without it.
+Both accept only tla2tools v1.7.4. `TLA2TOOLS` can stand in for `--jar`. On a small machine, `STATE_MACHINES_JOBS=1` runs one TLC process at a time and `TLC_HEAP=1g` caps its heap. Replay tests run with the backend and frontend suites. The backend ones need `FORMAL_REPLAY_TEST_DATABASE_URL` set to a loopback PostgreSQL URL, and are skipped without it.
 
 ## Files in a model folder
 

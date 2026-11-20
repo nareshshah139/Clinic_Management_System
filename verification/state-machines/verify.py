@@ -102,7 +102,8 @@ def main():
         jobs += list(jobs_for(d, m, jar))
     for p in problems:
         print("STRUCTURE", p)
-    with ThreadPoolExecutor(max_workers=max(1, (os.cpu_count() or 2) - 1)) as pool:
+    jobs_at_once = int(os.environ.get("STATE_MACHINES_JOBS") or max(1, (os.cpu_count() or 2) - 1))
+    with ThreadPoolExecutor(max_workers=jobs_at_once) as pool:
         results = list(pool.map(lambda j: (j, j[4]()), jobs))
     for (d, mode, rule, want, _), run in results:
         ok = run.verdict == want

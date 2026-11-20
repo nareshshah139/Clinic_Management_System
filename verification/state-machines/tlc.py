@@ -59,7 +59,8 @@ def check(spec: Path, constants: dict[str, str], *, jar: str, invariant: str | N
         cfg.write_text(config(constants, [invariant] if invariant else [], [prop] if prop else []))
         for tla in spec.parent.glob("*.tla"):
             (Path(work) / tla.name).write_text(tla.read_text())
-        cmd = ["java", "-XX:+UseParallelGC", "-cp", jar, "tlc2.TLC", "-workers", "1", "-deadlock",
+        heap = [f"-Xmx{os.environ['TLC_HEAP']}"] if os.environ.get("TLC_HEAP") else []
+        cmd = ["java", "-XX:+UseParallelGC", *heap, "-cp", jar, "tlc2.TLC", "-workers", "1", "-deadlock",
                "-config", cfg.name, "-metadir", "meta"]
         if dump_dot:
             cmd += ["-dump", "dot,actionlabels", "graph"]
