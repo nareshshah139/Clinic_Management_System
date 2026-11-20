@@ -70,6 +70,26 @@ describe('AppointmentsCalendar patient search', () => {
     expect(screen.queryByRole('button', { name: /Older Test/ })).not.toBeInTheDocument();
   });
 
+  it('drops an in-flight search once a listed patient is selected', async () => {
+    const pending = deferred<unknown>();
+    getPatients.mockResolvedValueOnce({ data: [patient('p1', 'Meera')] }).mockReturnValueOnce(pending.promise);
+    const { user, input } = await setup();
+
+    await user.type(input, 'me');
+    await act(async () => { jest.advanceTimersByTime(400); });
+    await user.type(input, 'x');
+    await act(async () => { jest.advanceTimersByTime(400); });
+    expect(getPatients).toHaveBeenCalledTimes(2);
+
+    await user.click(screen.getByRole('button', { name: /Meera Test/ }));
+    await act(async () => { pending.resolve({ data: [] }); });
+
+    expect([
+      screen.getByText(/Selected: Meera Test/) !== null,
+      screen.queryByRole('dialog', { name: 'Add New Patient' }),
+    ]).toEqual([true, null]);
+  });
+
   it('still offers quick-create when a settled search has no matches', async () => {
     getPatients.mockResolvedValue({ data: [] });
     const { user, input } = await setup();
@@ -78,6 +98,6 @@ describe('AppointmentsCalendar patient search', () => {
     await act(async () => { jest.advanceTimersByTime(400); });
 
     expect(getPatients).toHaveBeenCalledTimes(1);
-    expect(await screen.findByText('No matching patients found.')).toBeInTheDocument();
+    expect(await screen.findByRole('dialog', { name: 'Add New Patient' })).toBeInTheDocument();
   });
 });
