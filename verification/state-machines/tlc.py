@@ -60,7 +60,8 @@ def check(spec: Path, constants: dict[str, str], *, jar: str, invariant: str | N
         for tla in spec.parent.glob("*.tla"):
             (Path(work) / tla.name).write_text(tla.read_text())
         heap = [f"-Xmx{os.environ['TLC_HEAP']}"] if os.environ.get("TLC_HEAP") else []
-        cmd = ["java", "-XX:+UseParallelGC", *heap, "-cp", jar, "tlc2.TLC", "-workers", "1", "-deadlock",
+        cmd = ["java", "-XX:+UseParallelGC", *heap, f"-Djava.io.tmpdir={work}", "-cp", jar, "tlc2.TLC",
+               "-workers", "1", "-deadlock", "-fp", "1",
                "-config", cfg.name, "-metadir", "meta"]
         if dump_dot:
             cmd += ["-dump", "dot,actionlabels", "graph"]
