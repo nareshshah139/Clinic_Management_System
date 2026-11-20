@@ -1,6 +1,7 @@
 SPEC = "CountSheetSave.tla"
 CONSTANTS = {"MaxEdits": "3"}
 MODES = {
+    "before": {"MODE": '"before"'},
     "code": {"MODE": '"code"'},
     "fixed": {"MODE": '"fixed"'},
     "typeProbe": {"MODE": '"typeProbe"'},
@@ -28,8 +29,9 @@ RULE_TEXT = {
 }
 ALL = list(RULES)
 EXPECT = {
-    "code": {**{r: "holds" for r in ALL}, "SavedMeansSaved": "breaks", "NoDropOnLeave": "breaks",
-             "LeavesSaving": "breaks", "SaveRequestEnds": "breaks"},
+    "before": {**{r: "holds" for r in ALL}, "SavedMeansSaved": "breaks", "NoDropOnLeave": "breaks",
+               "LeavesSaving": "breaks", "SaveRequestEnds": "breaks"},
+    "code": {r: "holds" for r in ALL},
     "fixed": {r: "holds" for r in ALL},
     "typeProbe": {"TypeOK": "breaks"},
     "indicatorLagsEdit": {"SavedMeansSaved": "breaks"},
@@ -38,6 +40,6 @@ EXPECT = {
     "noTimeout": {"SaveRequestEnds": "breaks", "LeavesSaving": "holds"},
     "noSerialise": {"OneSaveAtATime": "breaks"},
 }
-CHARTS = ["code", "fixed"]
+CHARTS = ["before", "code"]
 REPLAY = "frontend/__tests__/formal/count-sheet-save.formal-replay.test.tsx"
 REPLAYS = {r: REPLAY for r, v in EXPECT["code"].items() if v == "breaks"}

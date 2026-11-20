@@ -1,5 +1,5 @@
 ---
-title: "Inventory document outcome (fixed)"
+title: "Inventory document outcome (before)"
 ---
 stateDiagram-v2
   state "Draft saved" as s0
@@ -15,12 +15,12 @@ stateDiagram-v2
   s0 --> s3: you post the stock loss
   s1 --> s3: you save the new draft
   s2 --> s0: the server answers
-  s2 --> s4: TheRequestTimesOut / a request fails / the server answers
-  s2 --> s5: TheRequestTimesOut / a request fails
+  s2 --> s4: a request fails / the server answers
+  s2 --> s5: a request fails
   s2 --> s6: the server answers
   s3 --> s0: the server answers
   s3 --> s2: you reload the page
-  s3 --> s4: TheRequestTimesOut / a request fails / the server answers / you reload the page
+  s3 --> s4: a request fails / the server answers / you reload the page
   s3 --> s6: the server answers
   s4 --> s2: you reload the page
   s4 --> s3: you check saved status
@@ -28,3 +28,4 @@ stateDiagram-v2
   classDef breaks fill:#fde2dd,stroke:#b3261e,stroke-width:2px
   classDef stuck fill:#fdf0d5,stroke:#a35a05,stroke-width:2px,stroke-dasharray:5 3
   classDef breaksAndStuck fill:#fde2dd,stroke:#a35a05,stroke-width:2px,stroke-dasharray:5 3
+  class s3 stuck

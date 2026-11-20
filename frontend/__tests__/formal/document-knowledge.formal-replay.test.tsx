@@ -5,7 +5,7 @@ import type { User } from '@/lib/types';
 
 // Replay of verification/state-machines/document-knowledge, following TLC's path in
 // results/code.md one block per model action. Only fetch is stubbed. The create POST is the
-// request the server never answers.
+// request the server never answers; like a real fetch, it rejects once its signal aborts.
 
 const DOCUMENTS_URL = '/api/inventory/workspace/documents';
 const payload = { reason: 'Physical verification', date: '2026-10-25', lines: [{ id: 'line', inventoryId: 'batch', name: 'Batch A', unit: 'TABLET', systemStock: 5, physicalStock: 6, quantity: 1 }] };
@@ -17,8 +17,9 @@ function silentCreateServer() {
   global.fetch = jest.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     if (url === DOCUMENTS_URL && init?.method === 'POST') {
-      creates.push(init.signal as AbortSignal);
-      return new Promise(() => {});
+      const signal = init.signal as AbortSignal;
+      creates.push(signal);
+      return new Promise((_, reject) => signal.addEventListener('abort', () => reject(new DOMException('The operation was aborted.', 'AbortError'))));
     }
     if (url.includes('/hold-sources')) return Promise.resolve(reply({ rows: [], totalPages: 1 }));
     return Promise.resolve(reply([]));
@@ -73,14 +74,7 @@ afterEach(() => {
   jest.useRealTimers();
 });
 
-it.failing('BusyEnds: ten minutes after a save the server never answers, Check saved status can be used', async () => {
+it('BusyEnds: ten minutes after a save the server never answers, Check saved status can be used', async () => {
   await reloadThenSaveUnanswered();
   expect(screen.getByRole('button', { name: 'Check saved status' })).toBeEnabled();
-});
-
-it('today: BusyEnds path leaves the editor busy, with Check saved status and Back disabled', async () => {
-  const create = await reloadThenSaveUnanswered();
-  expect(screen.getByRole('button', { name: 'Check saved status' })).toBeDisabled();
-  expect(screen.getByRole('button', { name: 'Back to loss & breakage' })).toBeDisabled();
-  expect(create.aborted).toBe(false);
 });
