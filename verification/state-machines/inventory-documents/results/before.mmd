@@ -1,0 +1,36 @@
+---
+title: "Shortbook, purchase order and receipt (before)"
+---
+stateDiagram-v2
+  state "Shortbook open" as s0
+  state "Order drafted" as s1
+  state "Shortbook closed before ordering" as s2
+  state "Order and shortbook closed" as s3
+  state "Order awaiting approval" as s4
+  state "Order closed, shortbook still ordered" as s5
+  state "Order approved" as s6
+  state "Fully received" as s7
+  state "Part received" as s8
+  state "Order approved, receipt reversed" as s9
+  [*] --> s0
+  s0 --> s1: staff make the order from the shortbook
+  s0 --> s2: staff cancel the shortbook / staff reject the shortbook
+  s1 --> s3: staff cancel the rest of the order
+  s1 --> s4: staff submit the order
+  s1 --> s5: staff cancel the order / staff reject the order
+  s4 --> s3: staff cancel the rest of the order
+  s4 --> s5: staff cancel the order / staff reject the order
+  s4 --> s6: staff approve the order
+  s6 --> s3: staff cancel the rest of the order
+  s6 --> s5: staff cancel the order
+  s6 --> s7: staff post the receipt
+  s6 --> s8: staff post the receipt
+  s7 --> s9: staff reverse the receipt
+  s8 --> s3: staff cancel the rest of the order
+  s8 --> s9: staff reverse the receipt
+  s9 --> s3: staff cancel the rest of the order
+  s9 --> s5: staff cancel the order
+  classDef breaks fill:#fde2dd,stroke:#b3261e,stroke-width:2px
+  classDef stuck fill:#fdf0d5,stroke:#a35a05,stroke-width:2px,stroke-dasharray:5 3
+  classDef breaksAndStuck fill:#fde2dd,stroke:#a35a05,stroke-width:2px,stroke-dasharray:5 3
+  class s5 breaks

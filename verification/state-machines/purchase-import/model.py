@@ -1,6 +1,7 @@
 SPEC = "PurchaseImport.tla"
 CONSTANTS = {"Workers": "{w1, w2}"}
 MODES = {
+    "before": {"MODE": '"before"'},
     "code": {"MODE": '"code"'},
     "fixed": {"MODE": '"fixed"'},
     "typeProbe": {"MODE": '"typeProbe"'},
@@ -34,7 +35,8 @@ RULE_TEXT = {
 }
 ALL = list(RULES)
 EXPECT = {
-    "code": {**{r: "holds" for r in ALL}, "SavedStaysSaved": "breaks"},
+    "before": {**{r: "holds" for r in ALL}, "SavedStaysSaved": "breaks"},
+    "code": {r: "holds" for r in ALL},
     "fixed": {r: "holds" for r in ALL},
     "typeProbe": {"TypeOK": "breaks"},
     "noClaim": {"TerminalStaysTerminal": "breaks"},
@@ -45,5 +47,5 @@ EXPECT = {
     "resolveRefusesRunning": {"ResolveAlwaysPossible": "breaks"},
     "noFinalizeOnError": {"RunningSettles": "breaks"},
 }
-CHARTS = ["code", "fixed"]
-REPLAYS = {"SavedStaysSaved": "backend/src/modules/pharmacy/tests/purchase-import.formal-replay.database.spec.ts"}
+CHARTS = ["before", "code"]
+REPLAYS = {}

@@ -1,7 +1,7 @@
 SPEC = "InventoryDocuments.tla"
 CONSTANTS = {"Actors": "{clerk, manager}"}
 MODES = {m: {"MODE": f'"{m}"'} for m in [
-    "code", "fixed", "typeProbe", "noVersionCheck", "noPostedCheck", "convertIgnoresFinal",
+    "before", "code", "fixed", "typeProbe", "noVersionCheck", "noPostedCheck", "convertIgnoresFinal",
     "receiptIgnoresClosedShortbook", "rejectOrderedShortbook", "retryUnbounded"]}
 RULES = {
     "TypeOK": "invariant",
@@ -21,7 +21,8 @@ RULE_TEXT = {
 }
 ALL = list(RULES)
 EXPECT = {
-    "code": {**{r: "holds" for r in ALL}, "ShortbookFollowsOrder": "breaks"},
+    "before": {**{r: "holds" for r in ALL}, "ShortbookFollowsOrder": "breaks"},
+    "code": {r: "holds" for r in ALL},
     "fixed": {r: "holds" for r in ALL},
     "typeProbe": {"TypeOK": "breaks"},
     "noVersionCheck": {"StaleNeverWrites": "breaks"},
@@ -31,5 +32,5 @@ EXPECT = {
     "rejectOrderedShortbook": {"TerminalStaysTerminal": "breaks"},
     "retryUnbounded": {"RequestsFinish": "breaks"},
 }
-CHARTS = ["code", "fixed"]
-REPLAYS = {"ShortbookFollowsOrder": "backend/src/modules/inventory/tests/inventory-documents.formal-replay.database.spec.ts"}
+CHARTS = ["before", "code"]
+REPLAYS = {}

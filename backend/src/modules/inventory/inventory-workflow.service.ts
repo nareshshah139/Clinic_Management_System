@@ -1094,6 +1094,24 @@ export class InventoryWorkflowService {
     }
     if (next === 'POSTED' && doc.kind === 'INWARD_CHALLAN' && doc.sourceId)
       await this.updateOrderReceipt(tx, actor, doc.sourceId);
+    if (
+      ['CANCELLED', 'REJECTED'].includes(next) &&
+      doc.kind === 'PURCHASE_ORDER' &&
+      doc.sourceId
+    ) {
+      const shortbook = await tx.inventoryWorkflowDocument.findFirst({
+        where: { id: doc.sourceId, branchId: actor.branchId, kind: 'SHORTBOOK' },
+      });
+      if (shortbook && ['ORDERED', 'PART_RECEIVED'].includes(shortbook.status)) {
+        const closed = await tx.inventoryWorkflowDocument.update({
+          where: { id: shortbook.id, version: shortbook.version },
+          data: { status: 'CANCELLED', version: { increment: 1 } },
+        });
+        await this.event(tx, closed, actor, `ORDER_${next}`, shortbook.status, {
+          orderId: id,
+        });
+      }
+    }
     if (next === 'POSTED' && doc.kind === 'COUNT')
       await this.recordCount(tx, actor, updated);
     await this.event(tx, updated, actor, dto.action, doc.status, {

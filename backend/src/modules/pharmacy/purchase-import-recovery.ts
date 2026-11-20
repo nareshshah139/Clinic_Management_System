@@ -60,6 +60,7 @@ export class PurchaseImportRecovery {
       if (sourceIds.length > 20 || sourceIds.some(id => typeof id !== 'string' || !id)) throw new BadRequestException('Invalid original document references');
       const documents = await tx.pharmacyPurchaseInvoiceDocument.findMany({ where: { id: { in: sourceIds }, branchId: fence.branchId }, select: { id: true, purchaseInvoiceId: true } });
       if (documents.length !== sourceIds.length) throw new NotFoundException('Original document not found in this branch');
+      if (prior?.purchaseInvoiceId && await tx.pharmacyPurchaseInvoice.findFirst({ where: { id: prior.purchaseInvoiceId, branchId: fence.branchId }, select: { id: true } })) return;
       const invoiceId = prior?.purchaseInvoiceId || input.invoiceId || null;
       const candidates = [...new Set([invoiceId, ...documents.map(d => d.purchaseInvoiceId)].filter(Boolean))] as string[];
       const existing = candidates.length === 1 ? await tx.pharmacyPurchaseInvoice.findFirst({ where: { id: candidates[0], branchId: fence.branchId }, select: { id: true } }) : null;
@@ -131,19 +132,18 @@ export class PurchaseImportRecovery {
           });
           if (newDocuments.length !== new Set(suppliedNewIds).size) throw new NotFoundException('Original document not found in this branch');
           if (prior && ['NO_STOCK_WRITTEN', 'RETRY_REJECTED'].includes(prior.status)) return originalActorId;
-          if (prior?.status === 'INVOICE_SAVED' && (prior.result as { recoveredBy?: string } | null)?.recoveredBy
-            && prior.purchaseInvoiceId && newDocuments.length === 0
-            && await tx.pharmacyPurchaseInvoice.findFirst({ where: { id: prior.purchaseInvoiceId, branchId: actor.branchId }, select: { id: true } })) {
-            return originalActorId;
-          }
+          const savedInvoice = prior?.status === 'INVOICE_SAVED' && prior.purchaseInvoiceId
+            ? await tx.pharmacyPurchaseInvoice.findFirst({ where: { id: prior.purchaseInvoiceId, branchId: actor.branchId }, select: { id: true } })
+            : null;
+          if (savedInvoice && (prior?.result as { recoveredBy?: string } | null)?.recoveredBy && newDocuments.length === 0) return originalActorId;
           const documents = await tx.pharmacyPurchaseInvoiceDocument.findMany({
             where: { id: { in: sourceIds }, branchId: actor.branchId },
             select: { id: true, purchaseInvoiceId: true, fileName: true, mimeType: true, sizeBytes: true },
           });
           const invoiceIds = [...new Set([prior?.purchaseInvoiceId || input.invoiceId, ...documents.map(document => document.purchaseInvoiceId)].filter(Boolean))] as string[];
-          const invoice = invoiceIds.length === 1 ? await tx.pharmacyPurchaseInvoice.findFirst({
+          const invoice = savedInvoice || (invoiceIds.length === 1 ? await tx.pharmacyPurchaseInvoice.findFirst({
             where: { id: invoiceIds[0], branchId: actor.branchId }, select: { id: true },
-          }) : null;
+          }) : null);
           const noHistoricalWrite = (!prior || prior.status === 'RUNNING') && invoiceIds.length === 0 && documents.length === sourceIds.length;
           const status = invoice ? 'INVOICE_SAVED' : noHistoricalWrite ? 'NO_STOCK_WRITTEN' : 'RETRY_REJECTED';
           const recovery = { reason, originalActorId, originalActorAttribution: prior ? 'persisted' : 'supplied',
