@@ -603,6 +603,7 @@ export class PharmacyPrescriptionQueueService {
             doctorName: entry.doctor.name,
             source: 'VISIT',
             status: derivedStatus,
+            ...this.statusTimestampPatch(derivedStatus, new Date()),
             linkedInvoiceIds,
             exceptionCount: 0,
             metadata: {

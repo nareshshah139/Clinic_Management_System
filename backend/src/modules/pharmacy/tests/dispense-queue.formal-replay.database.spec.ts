@@ -200,12 +200,8 @@ databaseTests('Dispense queue formal replay on PostgreSQL', () => {
     return [task.status, task.dispensedAt !== null];
   }
 
-  it.failing('StatusHasTimestamp: a task created as Dispensed records when it was dispensed', async () => {
+  it('StatusHasTimestamp: a task created as Dispensed records when it was dispensed', async () => {
     expect(await billedBeforeOpened()).toEqual(['DISPENSED', true]);
-  });
-
-  it('today: StatusHasTimestamp: a task created as Dispensed has no dispensed time', async () => {
-    expect(await billedBeforeOpened()).toEqual(['DISPENSED', false]);
   });
 
   async function billedThenCancelled() {
