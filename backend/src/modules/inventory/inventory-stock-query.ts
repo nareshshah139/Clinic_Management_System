@@ -130,19 +130,7 @@ const totals = Prisma.sql`jsonb_build_object(
   'landingUnknownBatches', count(*) FILTER (WHERE i."currentStock" > 0 AND (i.meta->>'landingCostPerStockUnit') IS NULL)
 )`;
 
-/**
- * @cc [owner:nareshshah139,label:product] stock-sql-complete-filter-scope
- * Exact stock filters, valuation and counts MUST cover all eligible branch batches before
- * pagination. Missing prices, thresholds and tax values MUST remain distinct from zero.
- * Facets and quality counts MUST continue to describe the entire branch.
- */
-/**
- * @cc [owner:nareshshah139,label:performance] stock-bounded-hydration
- * Only the requested page may load full inventory rows. Fuzzy matching MUST examine all
- * eligible candidates in batches of at most 500 without a result cap. String sorts MUST
- * preserve JavaScript locale ordering; numeric/date sorts and aggregates run in the database.
- */
-export async function readStockPage(
+async function planStock(
   db: StockDatabase,
   branchId: string,
   q: StockQuery,
@@ -203,12 +191,6 @@ export async function readStockPage(
   const page = Math.max(1, Math.floor(Number(q.page) || 1)),
     limit = Math.min(100, Math.max(1, Math.floor(Number(q.limit) || 30)));
   const base = branchItems(branchId);
-  const [summary] = await db.$queryRaw<
-    { facets: Record<string, string[]>; quality: Record<string, number> }[]
-  >(Prisma.sql`${base}
-    SELECT jsonb_build_object(${Prisma.join(facetFields.flatMap((field) => [Prisma.sql`${field}`, Prisma.sql`coalesce(jsonb_agg(DISTINCT ${column(field)}::text) FILTER (WHERE coalesce(${column(field)}::text, '') <> ''), '[]'::jsonb)`]))}) AS facets,
-      jsonb_build_object(${Prisma.join(Object.entries(issues).flatMap(([name, condition]) => [Prisma.sql`${name}`, Prisma.sql`count(*) FILTER (WHERE ${condition})`]))}) AS quality
-    FROM branch_items i`);
   const filters: Prisma.Sql[] = [];
   if (batchView === 'ON_HAND') filters.push(Prisma.sql`i."currentStock" > 0`);
   if (batchView === 'EMPTY') filters.push(Prisma.sql`i."currentStock" = 0`);
@@ -362,13 +344,7 @@ export async function readStockPage(
     }
     filters.push(Prisma.sql`i.id = ANY(${[...matches.keys()]}::text[])`);
   }
-  const [aggregate] = await db.$queryRaw<
-    { total: number; current: any; expired: any }[]
-  >(Prisma.sql`${filtered()}
-    SELECT (SELECT count(*)::int FROM filtered) AS total,
-      (SELECT ${totals} FROM filtered i WHERE i."expiryDate" IS NULL OR i."expiryDate" >= ${expiryStart}) AS current,
-      (SELECT ${totals} FROM filtered i WHERE i."expiryDate" < ${expiryStart}) AS expired`);
-  let ids: string[];
+  const selectIds = async (window: { offset: number; limit: number } | null): Promise<string[]> => {
   if (['name', 'storageLocation', 'relevance'].includes(sortBy)) {
     const values: { id: string; value: string | null; name: string }[] = [];
     let cursor = '';
@@ -401,17 +377,99 @@ export async function readStockPage(
         a.id.localeCompare(b.id)
       );
     });
-    ids = values.slice((page - 1) * limit, page * limit).map((row) => row.id);
+    return (window ? values.slice(window.offset, window.offset + window.limit) : values).map((row) => row.id);
   } else {
     const order = Prisma.raw(
       sortOrder === 'desc' ? 'DESC NULLS FIRST' : 'ASC NULLS LAST',
     );
-    ids = (
+    return (
       await db.$queryRaw<{ id: string }[]>(Prisma.sql`${filtered()}
       SELECT i.id FROM filtered i ORDER BY ${sortBy === 'available' ? available : column(sortBy)} ${order}, i.id ASC
-      LIMIT ${limit} OFFSET ${(page - 1) * limit}`)
+      ${window ? Prisma.sql`LIMIT ${window.limit} OFFSET ${window.offset}` : Prisma.empty}`)
     ).map((row) => row.id);
   }
+  };
+  return {
+    base,
+    filtered,
+    matches,
+    audit,
+    batchView,
+    priceBasis,
+    sortBy,
+    sortOrder,
+    page,
+    limit,
+    now,
+    expiryStart,
+    future,
+    selectIds,
+  };
+}
+
+/**
+ * @cc [owner:nareshshah139,label:performance] stock-all-ids-single-read
+ * The ids of every batch a stock query matches MUST come back in the order the paged list shows
+ * them, from one filtering pass with no pagination, facets, valuation or full-row hydration.
+ * Invalid filters MUST be refused exactly as the paged list refuses them.
+ */
+export async function readStockIds(
+  db: StockDatabase,
+  branchId: string,
+  q: StockQuery,
+  present: (item: any) => any,
+): Promise<string[]> {
+  const { selectIds } = await planStock(db, branchId, q, present);
+  return selectIds(null);
+}
+
+/**
+ * @cc [owner:nareshshah139,label:product] stock-sql-complete-filter-scope
+ * Exact stock filters, valuation and counts MUST cover all eligible branch batches before
+ * pagination. Missing prices, thresholds and tax values MUST remain distinct from zero.
+ * Facets and quality counts MUST continue to describe the entire branch.
+ */
+/**
+ * @cc [owner:nareshshah139,label:performance] stock-bounded-hydration
+ * Only the requested page may load full inventory rows. Fuzzy matching MUST examine all
+ * eligible candidates in batches of at most 500 without a result cap. String sorts MUST
+ * preserve JavaScript locale ordering; numeric/date sorts and aggregates run in the database.
+ */
+export async function readStockPage(
+  db: StockDatabase,
+  branchId: string,
+  q: StockQuery,
+  present: (item: any) => any,
+) {
+  const {
+    base,
+    filtered,
+    matches,
+    audit,
+    batchView,
+    priceBasis,
+    sortBy,
+    sortOrder,
+    page,
+    limit,
+    now,
+    expiryStart,
+    future,
+    selectIds,
+  } = await planStock(db, branchId, q, present);
+  const [summary] = await db.$queryRaw<
+    { facets: Record<string, string[]>; quality: Record<string, number> }[]
+  >(Prisma.sql`${base}
+    SELECT jsonb_build_object(${Prisma.join(facetFields.flatMap((field) => [Prisma.sql`${field}`, Prisma.sql`coalesce(jsonb_agg(DISTINCT ${column(field)}::text) FILTER (WHERE coalesce(${column(field)}::text, '') <> ''), '[]'::jsonb)`]))}) AS facets,
+      jsonb_build_object(${Prisma.join(Object.entries(issues).flatMap(([name, condition]) => [Prisma.sql`${name}`, Prisma.sql`count(*) FILTER (WHERE ${condition})`]))}) AS quality
+    FROM branch_items i`);
+  const [aggregate] = await db.$queryRaw<
+    { total: number; current: any; expired: any }[]
+  >(Prisma.sql`${filtered()}
+    SELECT (SELECT count(*)::int FROM filtered) AS total,
+      (SELECT ${totals} FROM filtered i WHERE i."expiryDate" IS NULL OR i."expiryDate" >= ${expiryStart}) AS current,
+      (SELECT ${totals} FROM filtered i WHERE i."expiryDate" < ${expiryStart}) AS expired`);
+  const ids = await selectIds({ offset: (page - 1) * limit, limit });
   const hydrated = await db.inventoryItem.findMany({
     where: { branchId, id: { in: ids } },
     include: { drugs: presentDrugs, _count: { select: { drugs: true } } },

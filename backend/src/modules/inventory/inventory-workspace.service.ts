@@ -1,5 +1,5 @@
 import { PharmacyPurchaseInvoiceStatus } from '@prisma/client';
-import { readStockPage } from './inventory-stock-query';
+import { readStockIds, readStockPage } from './inventory-stock-query';
 import { saveInventoryItemMetadata } from './inventory-item-metadata';
 import { reconcileInventoryLedger } from './inventory-ledger';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
@@ -138,6 +138,14 @@ export class InventoryWorkspaceService {
     await this.require(actor, 'inventory:item:read');
     return this.prisma.$transaction(
       tx => readStockPage(tx, actor.branchId, q, item => this.present(item)),
+      { isolationLevel: 'RepeatableRead', timeout: 30000 },
+    );
+  }
+
+async stockIds(actor: WorkflowActor, q: Record<string, any> = {}) {
+    await this.require(actor, 'inventory:item:read');
+    return this.prisma.$transaction(
+      tx => readStockIds(tx, actor.branchId, q, item => this.present(item)),
       { isolationLevel: 'RepeatableRead', timeout: 30000 },
     );
   }
@@ -352,11 +360,10 @@ async timeline(actor: WorkflowActor, q: Record<string, any> = {}) {
       const found=new Set((await this.prisma.inventoryItem.findMany({where:{branchId:actor.branchId,id:{in:picked}},select:{id:true}})).map(i=>i.id));
       ids=picked.filter(id=>found.has(id));
     }else{
-      const query=await this.stock(actor,{...input.filters,limit:100,page:1});const rows=[...query.rows];
-      for(let page=2;page<=query.totalPages;page++)rows.push(...(await this.stock(actor,{...input.filters,limit:100,page})).rows);
+      const matching=await this.stockIds(actor,input.filters);
       const holders=await this.workflow.openCountHolders(this.prisma,actor.branchId);
-      const free=rows.filter(i=>!holders.has(i.id));
-      ids=(free.length?free:rows).map(i=>i.id);
+      const free=matching.filter(id=>!holders.has(id));
+      ids=free.length?free:matching;
     }
     if(!ids.length)throw new BadRequestException('No matching batches to count');
     return this.workflow.saveDocument(actor,{kind:'COUNT',reference:`Stock count ${displayDay(clinicDay(new Date()))} · on demand`,requestKey:input.requestKey||randomUUID(),payload:{reason:'On-demand stock count',lines:ids.map(inventoryId=>({inventoryId,quantity:0}))}});
