@@ -90,7 +90,7 @@ def render(m, view, mode, jar):
             broken.setdefault(view.state(st.vars), set()).add((cls, rule))
         paths.append((rule, kind, getattr(m, "RULE_TEXT", {}).get(rule, ""), bug_path(view, run), end))
     title = getattr(view, "TITLE", m.SPEC)
-    mmd = ["---", f"title: {esc(title)} ({mode})", "---", "stateDiagram-v2"]
+    mmd = ["---", f'title: "{esc(title)} ({mode})"', "---", "stateDiagram-v2"]
     for lab in order:
         mmd.append(f'  state "{esc(lab)}" as {ids[lab]}')
     for lab in start_labels:
