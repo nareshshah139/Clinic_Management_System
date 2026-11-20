@@ -114,6 +114,21 @@ it('completes a visit with a complaint and a prescription, without photos, labs 
   expect(apiClient.completeVisit).toHaveBeenCalledWith('v', expect.anything(), expect.anything());
 });
 
+it('stops saving a completed visit, with no autosave and no Save Draft, and exports the saved visit as it is', async () => {
+  (apiClient.get as jest.Mock).mockResolvedValue({ id: 'v', patientId: 'p', status: 'COMPLETED', version: 3, complaints: [], history: {}, plan: {}, exam: {} });
+  await openForm();
+  expect(screen.getByRole('status')).toHaveTextContent('Completed. Changes are not saved.');
+  expect(screen.queryByRole('button', { name: 'Save Draft' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Complete Visit' })).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('Clinical note'), { target: { value: 'Edit after completion' } });
+  await act(async () => { fireEvent.keyDown(document, { key: 's', ctrlKey: true }); });
+  await act(async () => { jest.advanceTimersByTime(30000); });
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Export saved visit' })); });
+  await expect(mockExportResult).resolves.toBe('v');
+  expect((apiClient.updateVisit as jest.Mock).mock.calls).toEqual([]);
+  expect((apiClient.createVisit as jest.Mock).mock.calls).toEqual([]);
+});
+
 it('keeps a vitals tab for a nurse, who has no consultation editor', async () => {
   render(<MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v" userRole="NURSE" />);
   await flush();

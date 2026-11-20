@@ -1,6 +1,7 @@
 SPEC = "VisitFormSave.tla"
 CONSTANTS = {"MaxEdits": "2", "MaxSaves": "2"}
 MODES = {
+    "before": {"MODE": '"before"'},
     "code": {"MODE": '"code"'},
     "fixed": {"MODE": '"fixed"'},
     "typeProbe": {"MODE": '"typeProbe"'},
@@ -27,7 +28,8 @@ RULE_TEXT = {
 }
 ALL = list(RULES)
 EXPECT = {
-    "code": {**{r: "holds" for r in ALL}, "OneVisit": "breaks", "NoSelfConflict": "breaks", "LatchAgrees": "breaks"},
+    "before": {**{r: "holds" for r in ALL}, "OneVisit": "breaks", "NoSelfConflict": "breaks", "LatchAgrees": "breaks"},
+    "code": {r: "holds" for r in ALL},
     "fixed": {r: "holds" for r in ALL},
     "typeProbe": {"TypeOK": "breaks"},
     "rxCreatesAlone": {"OneVisit": "breaks"},
@@ -35,6 +37,6 @@ EXPECT = {
     "saveIgnoresNewerEdits": {"SavedMeansSaved": "breaks"},
     "noRequestTimeout": {"LeavesSaving": "breaks"},
 }
-CHARTS = ["code", "fixed"]
+CHARTS = ["before", "code"]
 REPLAY = "frontend/__tests__/formal/visit-form-save.formal-replay.test.tsx"
 REPLAYS = {r: REPLAY for r, v in EXPECT["code"].items() if v == "breaks"}

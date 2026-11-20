@@ -1,5 +1,5 @@
 ---
-title: "Visit form saving (fixed)"
+title: "Visit form saving (before)"
 ---
 stateDiagram-v2
   state "New visit, not created yet" as s0
@@ -8,26 +8,37 @@ stateDiagram-v2
   state "Shows Saving" as s3
   state "Shows Unsaved changes" as s4
   state "Conflict notice, shows Save failed" as s5
+  state "Two visits created" as s6
+  state "Conflict notice, shows no failure" as s7
   [*] --> s0
   [*] --> s1
   s0 --> s1: the server applies the prescription save
   s0 --> s2: the server applies the prescription save
-  s0 --> s3: the server applies Save Draft
+  s0 --> s3: the server applies Save Draft / the server applies the prescription save
   s0 --> s4: the server applies Save Draft / the server applies the prescription save
   s1 --> s3: Save Draft sends
   s1 --> s4: you edit the visit
   s1 --> s5: the prescription save's reply arrives
+  s1 --> s6: the server applies the prescription save
   s2 --> s3: Save Draft sends / autosave sends
   s2 --> s4: you edit the visit
   s2 --> s5: the prescription save's reply arrives
+  s2 --> s6: the server applies the prescription save
   s3 --> s1: Save Draft's reply arrives / autosave's reply arrives
   s3 --> s2: a save fails / a save times out
   s3 --> s4: you edit the visit
-  s3 --> s5: Save Draft's reply arrives / autosave's reply arrives
+  s3 --> s5: Save Draft's reply arrives / autosave's reply arrives / the prescription save's reply arrives
+  s3 --> s6: the server applies Save Draft / the server applies the prescription save
   s4 --> s2: a save fails / a save times out
   s4 --> s3: Save Draft sends / autosave sends
   s4 --> s5: Save Draft's reply arrives / autosave's reply arrives / the prescription save's reply arrives
+  s4 --> s6: the server applies Save Draft / the server applies the prescription save
   s5 --> s1: you discard the draft and reload
+  s5 --> s6: the server applies Save Draft / the server applies the prescription save
+  s5 --> s7: Save Draft's reply arrives / autosave's reply arrives
+  s7 --> s1: you discard the draft and reload
+  s7 --> s5: Save Draft sends / you edit the visit
   classDef breaks fill:#fde2dd,stroke:#b3261e,stroke-width:2px
   classDef stuck fill:#fdf0d5,stroke:#a35a05,stroke-width:2px,stroke-dasharray:5 3
   classDef breaksAndStuck fill:#fde2dd,stroke:#a35a05,stroke-width:2px,stroke-dasharray:5 3
+  class s5,s6,s7 breaks
