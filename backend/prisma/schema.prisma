@@ -374,6 +374,7 @@ model Appointment {
   // At most one pending (Scheduled or Confirmed) review per visit: a partial unique index Prisma cannot express, made in migration 20261114100000_appointment_review_of_visit.
   @@unique([branchId, doctorId, date, tokenNumber], map: "appointments_doctor_day_token_key")
   @@index([reviewOfVisitId])
+  @@index([branchId, date, status], map: "appointments_branchId_date_status_idx")
   @@map("appointments")
 }
 
@@ -889,6 +890,8 @@ model NewInvoice {
   visit          Visit?           @relation(fields: [visitId], references: [id])
   payments       NewPayment[]
 
+  @@index([branchId, createdAt], map: "new_invoices_branchId_createdAt_idx")
+  @@index([branchId, status], map: "new_invoices_branchId_status_idx")
   @@map("new_invoices")
 }
 
@@ -923,6 +926,8 @@ model NewPayment {
   updatedAt   DateTime    @updatedAt
   invoice     NewInvoice  @relation(fields: [invoiceId], references: [id])
 
+  @@index([invoiceId], map: "new_payments_invoiceId_idx")
+  @@index([reconStatus, createdAt], map: "new_payments_reconStatus_createdAt_idx")
   @@map("new_payments")
 }
 
@@ -1238,6 +1243,9 @@ model AuditLog {
   userAgent String?
   timestamp DateTime @default(now())
 
+  @@index([timestamp], map: "audit_logs_timestamp_idx")
+  @@index([entity, entityId, timestamp], map: "audit_logs_entity_entityId_timestamp_idx")
+  @@index([userId, timestamp], map: "audit_logs_userId_timestamp_idx")
   @@map("audit_logs")
 }
 
