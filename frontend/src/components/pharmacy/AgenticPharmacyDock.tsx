@@ -152,6 +152,7 @@ export function AgenticPharmacyDock() {
   const [loadingThreads, setLoadingThreads] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [threadAction, setThreadAction] = useState<ThreadActionState>(null);
+  const [reviewing, setReviewing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const initializedRef = useRef(false);
@@ -411,6 +412,8 @@ export function AgenticPharmacyDock() {
   };
 
   const applyProposal = async (proposalId: string) => {
+    if (reviewing) return;
+    setReviewing(true);
     try {
       const response = await apiClient.applyPharmacyAgentProposal<{
         proposal?: AgentProposal;
@@ -424,10 +427,14 @@ export function AgenticPharmacyDock() {
         title: "Apply failed",
         description: getErrorMessage(error),
       });
+    } finally {
+      setReviewing(false);
     }
   };
 
   const rejectProposal = async (proposalId: string) => {
+    if (reviewing) return;
+    setReviewing(true);
     try {
       const proposal =
         await apiClient.rejectPharmacyAgentProposal<AgentProposal>(
@@ -442,6 +449,8 @@ export function AgenticPharmacyDock() {
         title: "Reject failed",
         description: getErrorMessage(error),
       });
+    } finally {
+      setReviewing(false);
     }
   };
 
@@ -710,6 +719,7 @@ export function AgenticPharmacyDock() {
                   <ProposalCard
                     key={proposal.id}
                     proposal={proposal}
+                    reviewing={reviewing}
                     onApply={() => void applyProposal(proposal.id)}
                     onReject={() => void rejectProposal(proposal.id)}
                   />
@@ -835,6 +845,7 @@ export function AgenticPharmacyDock() {
                 <ProposalCard
                   key={proposal.id}
                   proposal={proposal}
+                  reviewing={reviewing}
                   onApply={() => void applyProposal(proposal.id)}
                   onReject={() => void rejectProposal(proposal.id)}
                 />
@@ -1074,10 +1085,12 @@ function ThreadListItem({
 
 function ProposalCard({
   proposal,
+  reviewing,
   onApply,
   onReject,
 }: {
   proposal: AgentProposal;
+  reviewing: boolean;
   onApply: () => void;
   onReject: () => void;
 }) {
@@ -1142,7 +1155,7 @@ function ProposalCard({
       </details>
       {pending && (
         <div className="mt-3 grid grid-cols-2 gap-2">
-          <Button size="sm" className="h-8 gap-1" onClick={onApply}>
+          <Button size="sm" className="h-8 gap-1" onClick={onApply} disabled={reviewing}>
             <CheckCircle2 className="h-4 w-4" />
             Apply
           </Button>
@@ -1151,6 +1164,7 @@ function ProposalCard({
             variant="outline"
             className="h-8 gap-1"
             onClick={onReject}
+            disabled={reviewing}
           >
             <XCircle className="h-4 w-4" />
             Reject
