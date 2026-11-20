@@ -60,13 +60,16 @@ Once the bill posts, the queue lists the prescription under Done with nobody act
 2. you open the prescription: Open at the counter
 3. you reset the medicine: Open at the counter
 4. the bill posts: Dispensed
-5. YouRequestStatus: Dispensed
-6. you pause: Dispensed
-7. YouRequestStatus: Dispensed
-8. you mark paid: Billed, but the counter shows Paid
-9. YouRequestStatus: Billed, but the counter shows Paid
-10. an API call cancels: Billed, but the counter shows Cancelled
-From step 10 the system can repeat these steps, or stop here, forever.
+5. you open the prescription: Dispensed
+6. YouRequestStatus: Dispensed
+7. you mark paid: Billed, but the counter shows Paid
+8. YouRequestStatus: Billed, but the counter shows Paid
+9. you pause: Dispensed
+10. YouRequestStatus: Dispensed
+11. an API call cancels: Billed, but the counter shows Cancelled
+12. you accept the medicine: Billed, but the counter shows Cancelled
+13. you mark the medicine unavailable: Billed, but the counter shows Cancelled
+From step 12 the system can repeat these steps, or stop here, forever.
 
 ## Steps the chart hides
 
