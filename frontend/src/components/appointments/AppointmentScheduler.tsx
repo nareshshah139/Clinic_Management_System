@@ -20,6 +20,7 @@ import AppointmentBookingDialog from './AppointmentBookingDialog';
 import PatientQuickCreateDialog from './PatientQuickCreateDialog';
 import { AlertCircle, CheckCircle2, Info, Mail, Phone } from 'lucide-react';
 import DoctorDayCalendar, { type ScopedAppointment } from './DoctorDayCalendar';
+import { useDebouncedPatientSearch } from './useDebouncedPatientSearch';
 import { useOverbookConfirm } from './useOverbookConfirm';
 import { overbookFlag } from '@/lib/overbooking';
 import { AppointmentStatus } from '@cms/shared-types';
@@ -247,20 +248,10 @@ export default function AppointmentScheduler({
     }
   }, [doctorId, date, slotConfig.startHour, slotConfig.endHour, slotConfig.stepMinutes, toast]);
 
-  const searchPatients = useCallback(async (q: string) => {
-    setPatientSearch(q);
-
-    if (!q.trim()) {
-      setPatients([]);
-      setQuickCreateOpen(false);
-      setAutoPromptedForSearch(false);
-      setSearchingPatients(false);
-      return;
-    }
-
+  const runPatientSearch = useCallback(async (q: string, isCurrent: () => boolean) => {
     try {
-      setSearchingPatients(true);
       const res: GetPatientsResponse = await apiClient.getPatients({ search: q, limit: 10 });
+      if (!isCurrent()) return;
       const patientsData = res.data || res.patients || [];
 
       setPatients(patientsData.map((p) => ({
@@ -280,6 +271,7 @@ export default function AppointmentScheduler({
       }
       setSearchingPatients(false);
     } catch (e) {
+      if (!isCurrent()) return;
       const errorMessage = getErrorMessage(e);
       toast({
         variant: "destructive",
@@ -289,6 +281,23 @@ export default function AppointmentScheduler({
       setSearchingPatients(false);
     }
   }, [autoPromptedForSearch, toast]);
+  const { schedule: schedulePatientSearch, cancel: cancelPatientSearch } = useDebouncedPatientSearch(runPatientSearch);
+
+  const searchPatients = useCallback((q: string) => {
+    setPatientSearch(q);
+
+    if (!q.trim()) {
+      cancelPatientSearch();
+      setPatients([]);
+      setQuickCreateOpen(false);
+      setAutoPromptedForSearch(false);
+      setSearchingPatients(false);
+      return;
+    }
+
+    setSearchingPatients(true);
+    schedulePatientSearch(q);
+  }, [cancelPatientSearch, schedulePatientSearch]);
 
   const handleBookingRequest = (slot: string, calendar: AppointmentCalendar) => {
     if (!selectedPatient || selectedPatient.id !== selectedPatientId) {
