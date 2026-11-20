@@ -8,26 +8,28 @@
    An issue is one prescription the doctor means to write. A request is one
    HTTP attempt. The server keeps running an attempt the browser aborted.
 
-   MODE "code" is the code today. "fixed" claims the key before the handler
-   runs and keys each draft instead of each payload. The other modes are
-   fixed with one guard removed. *)
+   MODE "before" is the code before the fix, kept as a regression control.
+   "fixed" claims the key before the handler runs and keys each draft instead
+   of each payload. "code" is the code today, which takes the same branches as
+   "fixed". The other modes are fixed with one guard removed. *)
 EXTENDS Naturals, Sequences, FiniteSets
 
 CONSTANTS Issues, Attempts, MaxReqs, MODE
 
-ASSUME MODE \in {"code", "fixed", "failOpenClaim", "payloadKey", "storeErrors",
-                 "noTimeout", "typeProbe"}
+ASSUME MODE \in {"before", "code", "fixed", "failOpenClaim", "payloadKey",
+                 "storeErrors", "noTimeout", "typeProbe"}
 
 Reqs == 1..MaxReqs
 Ids == 1..MaxReqs
 IssueIds == 1..Issues
 Keys == 1..Issues
 
-\* createQuickPrescription hashes the payload into the key, so every save of
-\* the same prescription shares one key. The fix keys each draft.
-KeyOf(o) == IF MODE \in {"code", "payloadKey"} THEN 1 ELSE o
+\* before: createQuickPrescription hashed the payload into the key, so every
+\* save of the same prescription shared one key. PrescriptionBuilder now keys
+\* each draft.
+KeyOf(o) == IF MODE \in {"before", "payloadKey"} THEN 1 ELSE o
 
-Claims == MODE # "code"
+Claims == MODE # "before"
 HasTimeout == MODE # "noTimeout"
 
 VARIABLES issue, client, attempt, cur, sent, reqIssue, srv, ans, store, saving, made, got
@@ -130,8 +132,9 @@ Answer(r, kind, id) ==
   /\ srv' = [srv EXCEPT ![r] = "ready"]
   /\ ans' = [ans EXCEPT ![r] = [kind |-> kind, id |-> id]]
 
-\* idempotency.interceptor.ts findFirst. code runs the handler on a miss.
-\* fixed inserts a pending row under the unique index in the same step.
+\* idempotency.interceptor.ts claim(). before ran the handler on a miss.
+\* code and fixed insert a pending row under the unique index. A second
+\* insert fails on the index, so the lookup and the claim act as one step.
 ServerLooksUpKey(r) ==
   /\ srv[r] = "arrived"
   /\ LET k == KeyOfReq(r)
@@ -140,7 +143,7 @@ ServerLooksUpKey(r) ==
                Answer(r, e.st, e.id) /\ UNCHANGED store
           [] e.st = "pending" ->
                Answer(r, "busy", 0) /\ UNCHANGED store
-          [] MODE = "code" ->
+          [] MODE = "before" ->
                srv' = [srv EXCEPT ![r] = "running"] /\ UNCHANGED <<ans, store>>
           [] MODE = "failOpenClaim" ->
                srv' = [srv EXCEPT ![r] = "claiming"] /\ UNCHANGED <<ans, store>>
@@ -173,8 +176,8 @@ ServerCreatesPrescription(r) ==
              ELSE saving' = saving \cup {r} /\ UNCHANGED store
   /\ UNCHANGED <<issue, client, attempt, cur, sent, reqIssue, got>>
 
-\* code: the tap stores the response after it is emitted. A unique violation
-\* is swallowed, so the first stored response wins.
+\* before: the tap stored the response after it was emitted. A unique
+\* violation was swallowed, so the first stored response won.
 ServerStoresResponse(r) ==
   /\ r \in saving
   /\ saving' = saving \ {r}
@@ -185,12 +188,12 @@ ServerStoresResponse(r) ==
   /\ UNCHANGED <<issue, client, attempt, cur, sent, reqIssue, srv, ans, made, got>>
 
 \* The handler throws. createPrescriptionPad deletes its automatic visit, so
-\* nothing is left behind. The tap never sees an error.
+\* nothing is left behind. before stored nothing. code deletes the claim.
 ServerFails(r) ==
   /\ srv[r] = "running"
   /\ Answer(r, "err", 0)
   /\ LET k == KeyOfReq(r) IN
-       store' = CASE MODE = "code" -> store
+       store' = CASE MODE = "before" -> store
                   [] MODE = "storeErrors" -> [store EXCEPT ![k] = [st |-> "err", id |-> 0]]
                   [] OTHER -> [store EXCEPT ![k] = [st |-> "empty", id |-> 0]]
   /\ UNCHANGED <<issue, client, attempt, cur, sent, reqIssue, saving, made, got>>

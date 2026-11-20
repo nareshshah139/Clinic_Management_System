@@ -18,9 +18,10 @@ RxStatus    == {"none", "ACTIVE", "CANCELLED"}
 TaskStatus  == {"none", "QUEUED", "READY_TO_BILL", "DISPENSED"}
 BillStatus  == {"none", "CONFIRMED"}
 
-Code == MODE \in {"code", "typeProbe"}
-\* A guard the fix adds is on outside code mode, except in the control that removes it.
-FixGuard(control) == ~Code /\ MODE /= control
+\* "before" is the code before the fix, kept as a regression control.
+Before == MODE \in {"before", "typeProbe"}
+\* A guard the fix adds is on outside "before", except in the control that removes it.
+FixGuard(control) == ~Before /\ MODE /= control
 \* A guard the code already has is on everywhere, except in the control that removes it.
 CodeGuard(control) == MODE /= control
 
@@ -58,9 +59,11 @@ DeskConfirmsOnCall ==
 
 \* PATCH /appointments/:id {status: CHECKED_IN}, sent by the voice check-in.
 \* The server compares the status it read itself, not the one the desk saw.
+\* The code also checks in only a scheduled or confirmed appointment.
 DeskChecksIn ==
   /\ appt /= "CHECKED_IN"
   /\ FixGuard("checkInOverVisit") => appt \notin {"IN_PROGRESS", "COMPLETED"}
+  /\ MODE = "code" => appt \in {"SCHEDULED", "CONFIRMED"}
   /\ appt' = "CHECKED_IN"
   /\ UNCHANGED <<visit, visitDeleted, deletions, rx, task, bill, startedFrom, rxAtBill>>
 

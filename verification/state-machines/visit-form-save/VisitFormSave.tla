@@ -44,7 +44,9 @@ VARIABLES
 vars == <<ed, dirty, ind, timer, vid, cver, auto, man, mw, rx, rw, blocked,
           visits, sver, sed, otherEdited, saves>>
 
-Fixed(guard) == MODE = "fixed" \/ (MODE \notin {"code", "fixed", "typeProbe", guard})
+\* "before" is the code before the fix, kept as a regression control. "code" takes
+\* the fixed branches: the prescription save runs under the Save Draft lock.
+Fixed(guard) == MODE \in {"fixed", "code"} \/ (MODE \notin {"before", "typeProbe", guard})
 
 RxWaitsForSave  == Fixed("rxCreatesAlone")        \* the prescription save holds the Save Draft lock
 RxWaitsForAuto  == Fixed("rxSavesAlone")          \* the prescription save waits for autosave, which skips while it runs
@@ -113,15 +115,19 @@ SaveDraftSends ==
               /\ mw' = [kind |-> IF vid THEN "patch" ELSE "create", ver |-> cver, ed |-> ed, res |-> "out", nv |-> 0]
     /\ UNCHANGED <<ed, dirty, timer, vid, cver, auto, rx, rw, blocked, visits, sver, sed, otherEdited, saves>>
 
-(* Create Prescription. PrescriptionBuilder.create holds only its own lock. *)
+(* Create Prescription. In "before", PrescriptionBuilder.create holds only  *)
+(* its own lock. In "code", holdVisitSave refuses it while Save Draft runs, *)
+(* takes the Save Draft lock and clears the autosave timer, as save() does. *)
 YouCreatePrescription ==
     /\ rx = "none"
     /\ RxWaitsForSave => man = "none"
     /\ rx' = "wait"
-    /\ UNCHANGED <<ed, dirty, ind, timer, vid, cver, auto, man, mw, rw, blocked, visits, sver, sed, otherEdited, saves>>
+    /\ timer' = (timer /\ MODE # "code")
+    /\ UNCHANGED <<ed, dirty, ind, vid, cver, auto, man, mw, rw, blocked, visits, sver, sed, otherEdited, saves>>
 
 (* The prescription save sends. Without a visit id, ensureVisitId creates   *)
-(* the visit with no idempotency key and without looking at Save Draft.     *)
+(* the visit with no idempotency key. In "before" it does not look at Save  *)
+(* Draft or autosave. In "code" it first awaits the autosave in flight.     *)
 (* getClinicalSavePatch throws 409 while a conflict is latched.             *)
 PrescriptionSends ==
     /\ rx = "wait"

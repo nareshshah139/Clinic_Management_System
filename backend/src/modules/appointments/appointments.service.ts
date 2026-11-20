@@ -69,6 +69,28 @@ type WhatsAppTemplateComponent = {
   parameters: { type: 'text'; text: string }[];
 };
 
+const VISIT_STATUSES: AppointmentStatus[] = [AppointmentStatus.IN_PROGRESS, AppointmentStatus.COMPLETED];
+const CHECK_IN_FROM: AppointmentStatus[] = [AppointmentStatus.SCHEDULED, AppointmentStatus.CONFIRMED, AppointmentStatus.NO_SHOW];
+
+/**
+ * @cc [owner:nareshshah139,label:product] visit-owns-appointment-status
+ * Only the visit writes IN_PROGRESS (start) and COMPLETED (complete). A status edit MUST NOT set either,
+ * MUST NOT change an appointment in either, and MUST check in only a scheduled, confirmed or missed appointment.
+ * Model: verification/state-machines/appointment-visit and patient-journey.
+ */
+function assertStatusEdit(from: AppointmentStatus, to: AppointmentStatus) {
+  if (from === to) return;
+  if (VISIT_STATUSES.includes(from)) {
+    throw new BadRequestException(`This appointment is ${from} and its status follows the visit. Change it from the visit.`);
+  }
+  if (VISIT_STATUSES.includes(to)) {
+    throw new BadRequestException('Start the visit to mark the patient in progress, and complete the visit to mark the appointment completed.');
+  }
+  if (to === AppointmentStatus.CHECKED_IN && !CHECK_IN_FROM.includes(from)) {
+    throw new BadRequestException(`Cannot check in an appointment that is ${from}`);
+  }
+}
+
 /**
  * @cc [owner:nareshshah139,label:product] appointment-active-visit-link
  * Appointment detail and schedule reads MUST expose only undeleted visit links.
@@ -493,6 +515,7 @@ export class AppointmentsService {
               current.roomId !== appointment.roomId || current.status !== appointment.status) {
             throw new ConflictException('Appointment changed; refresh and try again');
           }
+          if (changes.status !== undefined) assertStatusEdit(current.status, changes.status);
           const target = calendarOf(changes.status ?? current.status);
           if (target) {
             const leavesCalendar = target !== calendarOf(current.status);
@@ -602,31 +625,25 @@ export class AppointmentsService {
       throw new BadRequestException('Moving appointments into a calendar needs a capacity check; use reschedule');
     }
 
-    // Verify all appointments exist and belong to the branch
-    const appointments = await this.prisma.appointment.findMany({
-      where: {
-        id: { in: appointmentIds },
-        branchId,
-      },
+    return this.prisma.$transaction(async (tx) => {
+      const appointments = await tx.appointment.findMany({
+        where: { id: { in: appointmentIds }, branchId },
+      });
+      if (appointments.length !== appointmentIds.length) {
+        throw new NotFoundException('One or more appointments not found');
+      }
+      if (updateData.status) {
+        for (const appointment of appointments) assertStatusEdit(appointment.status, updateData.status);
+      }
+      const result = await tx.appointment.updateMany({
+        where: { branchId, OR: appointments.map(({ id, status }) => ({ id, status })) },
+        data: updateData,
+      });
+      if (result.count !== appointments.length) {
+        throw new ConflictException('Appointments changed; refresh and try again');
+      }
+      return { updated: result.count, appointmentIds };
     });
-
-    if (appointments.length !== appointmentIds.length) {
-      throw new NotFoundException('One or more appointments not found');
-    }
-
-    // Perform bulk update
-    const result = await this.prisma.appointment.updateMany({
-      where: {
-        id: { in: appointmentIds },
-        branchId,
-      },
-      data: updateData,
-    });
-
-    return {
-      updated: result.count,
-      appointmentIds,
-    };
   }
 
   async remove(id: string, branchId: string, callerUserId?: string) {
