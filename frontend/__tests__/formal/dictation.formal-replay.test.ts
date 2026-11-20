@@ -95,15 +95,16 @@ const settle = async () => {
   for (let i = 0; i < 20; i += 1) await Promise.resolve();
 };
 const step = (fn: () => unknown) => act(async () => { fn(); await settle(); });
-const runEveryTimer = () => step(() => jest.advanceTimersByTime(DICTATION_LIMITS.maxMs * 2));
+const advance = (ms: number) => step(() => jest.advanceTimersByTime(ms));
 const urls = () => fetchMock.mock.calls.map(([url]) => url);
 
 function renderFieldDictation(preference: SpeechToTextPreference) {
   const applyText = jest.fn();
+  const toast = jest.fn();
   const hook = renderHook(() =>
-    useSpeechToTextRecorder({ toast: jest.fn(), fields: { notes: preference }, applyText }),
+    useSpeechToTextRecorder({ toast, fields: { notes: preference }, applyText }),
   );
-  return { ...hook, applyText, press: () => step(() => void hook.result.current.startVoiceInput('notes')) };
+  return { ...hook, applyText, toast, press: () => step(() => void hook.result.current.startVoiceInput('notes')) };
 }
 
 async function startAnotherDictation(): Promise<string> {
@@ -137,31 +138,25 @@ describe('dictation that stops while the live preview is still opening, with a s
     return field;
   }
 
-  it.failing('LeavesFinishing: the field leaves Transcribing once every timer has run', async () => {
+  // The request timeout is the only timer left once stop has sent the upload, so the field must
+  // still show Transcribing just before it and must have left just after.
+  it('LeavesFinishing: the field leaves Transcribing when the upload times out', async () => {
     const field = await stopWhileOpening();
-    await runEveryTimer();
+    expect(urls()).toEqual([LIVE_URL, UPLOAD_URL]);
+    await advance(DICTATION_LIMITS.requestMs - 1);
+    expect(field.result.current.isTranscribing).toBe(true);
+    await advance(1);
     expect(field.result.current.isTranscribing).toBe(false);
+    expect(field.toast).toHaveBeenLastCalledWith(expect.objectContaining({ description: 'Transcription took too long. Please dictate again.' }));
+    expect(field.applyText).not.toHaveBeenCalled();
   });
 
-  it('today: the field still shows Transcribing after every timer has run, waiting on the upload', async () => {
-    const field = await stopWhileOpening();
-    await runEveryTimer();
-    expect({ transcribing: field.result.current.isTranscribing, urls: urls() }).toEqual({
-      transcribing: true,
-      urls: [LIVE_URL, UPLOAD_URL],
-    });
-  });
-
-  it.failing('LockReleased: the next dictation can start once every timer has run', async () => {
+  it('LockReleased: the next dictation can start once the upload times out', async () => {
     await stopWhileOpening();
-    await runEveryTimer();
-    expect(await startAnotherDictation()).toBe('started');
-  });
-
-  it('today: the next dictation is refused as busy after every timer has run', async () => {
-    await stopWhileOpening();
-    await runEveryTimer();
+    await advance(DICTATION_LIMITS.requestMs - 1);
     expect(await startAnotherDictation()).toBe('busy');
+    await advance(1);
+    expect(await startAnotherDictation()).toBe('started');
   });
 });
 

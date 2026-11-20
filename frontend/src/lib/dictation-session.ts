@@ -32,7 +32,8 @@ export class MicUnavailableError extends Error {
   }
 }
 
-export const DICTATION_LIMITS = { maxMs: 600_000, connectMs: 10_000, finishMs: 8_000, tailMs: 300, minRecordedBytes: 1_000 };
+// requestMs outlasts next.config's 300 s proxyTimeout, so it only ends a request nothing will ever answer.
+export const DICTATION_LIMITS = { maxMs: 600_000, connectMs: 10_000, finishMs: 8_000, tailMs: 300, requestMs: 330_000, minRecordedBytes: 1_000 };
 
 type TimerId = unknown;
 type RecorderConstructor = {
@@ -200,6 +201,13 @@ async function openDictationSession(o: DictationOptions, release: () => void): P
     resolveOutcome(result);
   };
 
+  // A transcription request that never answers would otherwise hold the session, and the microphone lock, forever.
+  const limitRequest = (onTimeout: DictationOutcome) =>
+    arm(() => {
+      finish(onTimeout);
+      aborter.abort();
+    }, limits.requestMs);
+
   const upload = async () => {
     if (ended || uploading) return;
     uploading = true;
@@ -211,6 +219,7 @@ async function openDictationSession(o: DictationOptions, release: () => void): P
 
     const formData = new FormData();
     formData.append('file', blob, recordedType === 'audio/mp4' ? 'recording.m4a' : 'recording.webm');
+    limitRequest({ kind: 'error', title: SPEECH_ERROR_TITLE, description: 'Transcription took too long. Please dictate again.' });
     try {
       const response = await deps.fetch('/api/visits/transcribe', {
         method: 'POST',
@@ -248,6 +257,7 @@ async function openDictationSession(o: DictationOptions, release: () => void): P
 
   const finishLive = async (text: string) => {
     if (o.preference === 'full-transcript') return finish({ kind: 'text', text, via: 'live' });
+    limitRequest({ kind: 'text', text, via: 'live' });
     try {
       const response = await deps.fetch('/api/visits/transcribe/speakers', {
         method: 'POST',
