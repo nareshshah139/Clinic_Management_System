@@ -201,9 +201,9 @@ databaseTests('Inventory and queue reads with PostgreSQL', () => {
     fixture.queries.length = 0;
     const expected = {
       pending: ['draft', 'in-review-old', 'pending'],
-      expired: ['cancelled-task', 'expired'],
+      expired: ['expired'],
       partial: ['cancelled-invoice', 'paid-partial', 'partial'],
-      dispensed: ['complete-unknown', 'covered', 'paused-covered'],
+      dispensed: ['cancelled-task', 'complete-unknown', 'covered', 'paused-covered'],
     };
     for (const [status, ids] of Object.entries(expected)) {
       const found: string[] = [];
@@ -280,7 +280,7 @@ databaseTests('Inventory and queue reads with PostgreSQL', () => {
       branchId,
     );
     const ms = performance.now() - start;
-    expect(result.pagination.total).toBe(1002);
+    expect(result.pagination.total).toBe(1001);
     expect(result.data).toHaveLength(10);
     expect(fixture.queries.length).toBeLessThanOrEqual(13);
     const hydration = fixture.events.find(

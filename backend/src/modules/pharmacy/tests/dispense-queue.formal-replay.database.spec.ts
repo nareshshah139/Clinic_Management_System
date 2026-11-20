@@ -119,7 +119,7 @@ databaseTests('Dispense queue formal replay on PostgreSQL', () => {
   const setStatus = (taskId: string, status: PharmacyDispenseTaskStatusDto) =>
     queue.updateTaskStatus(taskId, { status }, branchId, pharmacist).then(
       () => 'saved',
-      () => 'refused',
+      (error: Error) => error.message,
     );
 
   const youMarkTheMedicine = async (id: string, action: PharmacyDispenseLineActionDto) => {
@@ -142,18 +142,10 @@ databaseTests('Dispense queue formal replay on PostgreSQL', () => {
     return { id, task, marked };
   }
 
-  it.failing('PaidNeedsBill: marking a task paid with no bill is refused', async () => {
-    const { task, marked } = await paidWithNoBill();
-    expect([marked, (await storedTask(task)).status]).toEqual(['refused', 'QUEUED']);
-  });
-
-  it('today: PaidNeedsBill: a task with no bill is saved as Paid', async () => {
+  it('PaidNeedsBill: marking a task paid with no bill is refused', async () => {
     const { id, task, marked } = await paidWithNoBill();
-    expect([
-      marked,
-      (await storedTask(task)).status,
-      await db.pharmacyInvoice.count({ where: { prescriptionId: id } }),
-    ]).toEqual(['saved', 'PAID', 0]);
+    expect([marked, (await storedTask(task)).status, (await queue.findOne(id, branchId)).allowedStatuses])
+      .toEqual(['Post the pharmacy bill before marking this prescription paid.', 'QUEUED', ['QUEUED', 'IN_REVIEW', 'PARTIALLY_FILLED', 'PAUSED', 'READY_TO_BILL', 'CANCELLED']]);
   });
 
   async function cancelledThenReopened() {
@@ -164,14 +156,10 @@ databaseTests('Dispense queue formal replay on PostgreSQL', () => {
     return { id, cancelled, reopened };
   }
 
-  it.failing('FinishedStaysFinished: a cancelled task cannot be opened for review again', async () => {
-    const { id } = await cancelledThenReopened();
-    expect(await shown(id)).toBe('CANCELLED');
-  });
-
-  it('today: FinishedStaysFinished: a cancelled task goes back to In Review', async () => {
+  it('FinishedStaysFinished: a cancelled task cannot be opened for review again', async () => {
     const { id, cancelled, reopened } = await cancelledThenReopened();
-    expect([cancelled, reopened, await shown(id)]).toEqual(['saved', 'saved', 'IN_REVIEW']);
+    expect([cancelled, reopened, await shown(id), (await queue.findOne(id, branchId)).allowedStatuses])
+      .toEqual(['saved', 'This prescription is already cancelled. Its status can no longer change.', 'CANCELLED', ['CANCELLED']]);
   });
 
   async function dispensedThenCancelled() {
@@ -186,6 +174,21 @@ databaseTests('Dispense queue formal replay on PostgreSQL', () => {
   it('DispensedStaysDispensed: a dispensed prescription keeps showing Dispensed after a cancel', async () => {
     const { id } = await dispensedThenCancelled();
     expect(await shown(id)).toBe('DISPENSED');
+  });
+
+  it('DispensedStaysDispensed: a dispensed prescription refuses Mark paid and Pause', async () => {
+    const id = await newPrescription();
+    const task = (await youOpenThePrescription(id)).dispenseTaskId!;
+    await theBillPosts(id);
+    const paid = await setStatus(task, PharmacyDispenseTaskStatusDto.PAID);
+    const paused = await setStatus(task, PharmacyDispenseTaskStatusDto.PAUSED);
+    expect([paid, paused, await shown(id), (await queue.findOne(id, branchId)).allowedStatuses])
+      .toEqual([
+        'This prescription is already dispensed. Its status can no longer change.',
+        'This prescription is already dispensed. Its status can no longer change.',
+        'DISPENSED',
+        [],
+      ]);
   });
 
   async function billedBeforeOpened() {

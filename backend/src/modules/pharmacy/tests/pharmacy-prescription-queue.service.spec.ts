@@ -78,6 +78,18 @@ describe('PharmacyPrescriptionQueueService', () => {
     expect(entry.dispenseStatus).not.toBe('DISPENSED');
   });
 
+  it.each([
+    ['a posted partial bill', 'CONFIRMED', ['QUEUED', 'IN_REVIEW', 'PARTIALLY_FILLED', 'PAUSED', 'READY_TO_BILL', 'PAID', 'CANCELLED']],
+    ['only a cancelled bill', 'CANCELLED', ['QUEUED', 'IN_REVIEW', 'PARTIALLY_FILLED', 'PAUSED', 'READY_TO_BILL', 'CANCELLED']],
+  ])('offers Mark paid on a partly billed prescription only with %s', async (_, invoiceStatus, allowed) => {
+    prisma.prescription.findFirst.mockResolvedValue(prescription({
+      pharmacyInvoices: [{ id: 'invoice-1', status: invoiceStatus, items: [{ quantity: 1, drug: { id: 'drug-1', name: 'Azithral 500' } }] }],
+    }));
+    prisma.pharmacyDispenseTask = { findFirst: jest.fn().mockResolvedValue({ id: 'task', status: 'IN_REVIEW', lines: [] }) };
+    const entry = await service.findOne('rx-1', branchId);
+    expect([entry.status, entry.allowedStatuses]).toEqual([PrescriptionQueueStatus.PARTIAL, allowed]);
+  });
+
   it('marks unlinked prescriptions older than 24 hours as expired', async () => {
     prisma.prescription.findFirst.mockResolvedValue(
       prescription({
