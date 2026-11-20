@@ -1,0 +1,46 @@
+---
+title: Prescriptions, refills and template review (code)
+---
+stateDiagram-v2
+  state "Prescription active" as s0
+  state "Version waiting for review" as s1
+  state "Billed past what the doctor allowed" as s2
+  state "Prescription closed" as s3
+  state "Prescription past its valid-until date" as s4
+  state "Refill request waiting for the doctor" as s5
+  state "Version decided" as s6
+  state "Closed, a refill request still waiting" as s7
+  state "Cancelled after it was completed" as s8
+  state "Second reviewer overwrote the decision" as s9
+  state "Version decided with no review record" as s10
+  state "Version reviewed twice" as s11
+  [*] --> s0
+  [*] --> s1
+  s0 --> s2: the pharmacist's bill is posted
+  s0 --> s3: the doctor's 'completed' is saved / the doctor's cancellation is saved
+  s0 --> s4: the valid-until date passes
+  s0 --> s5: the desk's refill request is saved
+  s1 --> s6: a reviewer's approval is saved / a reviewer's rejection is saved
+  s2 --> s0: the doctor's refill approval is saved
+  s2 --> s3: the doctor's 'completed' is saved / the doctor's cancellation is saved
+  s2 --> s7: the doctor's 'completed' is saved
+  s3 --> s8: the doctor's cancellation is saved
+  s4 --> s3: the doctor's 'completed' is saved / the doctor's cancellation is saved
+  s4 --> s7: the doctor's 'completed' is saved
+  s5 --> s0: the doctor's refill approval is saved / the doctor's refill rejection is saved
+  s5 --> s2: the pharmacist's bill is posted
+  s5 --> s3: the doctor's cancellation is saved
+  s5 --> s4: the valid-until date passes
+  s5 --> s7: the doctor's 'completed' is saved
+  s6 --> s9: a reviewer's approval is saved / a reviewer's rejection is saved
+  s6 --> s10: saving the review record fails
+  s6 --> s11: the review record is saved
+  s7 --> s3: the doctor's refill rejection is saved
+  s7 --> s8: the doctor's cancellation is saved
+  s9 --> s10: saving the review record fails / the review record is saved
+  s10 --> s6: a reviewer's approval is saved / a reviewer's rejection is saved
+  s10 --> s9: a reviewer's approval is saved / a reviewer's rejection is saved
+  classDef breaks fill:#fde2dd,stroke:#b3261e,stroke-width:2px
+  classDef stuck fill:#fdf0d5,stroke:#a35a05,stroke-width:2px,stroke-dasharray:5 3
+  class s2,s8,s9,s10,s11 breaks
+  class s7 stuck

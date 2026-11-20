@@ -1,0 +1,22 @@
+---
+title: Prescriptions, refills and template review (fixed)
+---
+stateDiagram-v2
+  state "Prescription active" as s0
+  state "Version waiting for review" as s1
+  state "Prescription closed" as s2
+  state "Prescription past its valid-until date" as s3
+  state "Refill request waiting for the doctor" as s4
+  state "Version decided" as s5
+  [*] --> s0
+  [*] --> s1
+  s0 --> s2: the doctor's 'completed' is saved / the doctor's cancellation is saved
+  s0 --> s3: the valid-until date passes
+  s0 --> s4: the desk's refill request is saved
+  s1 --> s5: a reviewer's approval is saved / a reviewer's rejection is saved
+  s3 --> s2: the doctor's 'completed' is saved / the doctor's cancellation is saved
+  s4 --> s0: the doctor's refill approval is saved / the doctor's refill rejection is saved
+  s4 --> s2: the doctor's 'completed' is saved / the doctor's cancellation is saved
+  s4 --> s3: the valid-until date passes
+  classDef breaks fill:#fde2dd,stroke:#b3261e,stroke-width:2px
+  classDef stuck fill:#fdf0d5,stroke:#a35a05,stroke-width:2px,stroke-dasharray:5 3
