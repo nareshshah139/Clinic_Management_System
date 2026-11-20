@@ -47,6 +47,20 @@ const COLLECTED_AT_COUNTER = new Set<PharmacyPaymentMethod>([
 const POSTED_STATUSES = ['CONFIRMED', 'DISPENSED', 'COMPLETED'];
 const SETTLED_RETURN_STATUSES = ['CANCELLED', 'REJECTED', 'REVERSED'];
 
+/**
+ * @cc [owner:nareshshah139,label:security] invoice-doctor-display-fields
+ * Pharmacy invoices returned by checkout, checkout replay, status changes and `findOne` MUST
+ * expose the doctor only as `id`, `firstName`, `lastName`, `phone` and `email`, and no other
+ * `User` column.
+ */
+const INVOICE_DOCTOR_SELECT = {
+  id: true,
+  firstName: true,
+  lastName: true,
+  phone: true,
+  email: true,
+} as const;
+
 const settlement = (total: number, paid: number) => ({
   paidAmount: paid,
   balanceAmount: money(total - paid),
@@ -248,7 +262,7 @@ export class PharmacyInvoiceService {
       include: {
         items: { include: { drug: true, package: true } },
         patient: true,
-        doctor: true,
+        doctor: { select: INVOICE_DOCTOR_SELECT },
       },
     });
   }
@@ -278,7 +292,7 @@ export class PharmacyInvoiceService {
       include: {
         items: { include: { drug: true, package: true } },
         patient: true,
-        doctor: true,
+        doctor: { select: INVOICE_DOCTOR_SELECT },
       },
     });
     if (existing && existing.checkoutPayloadHash !== payloadHash)
@@ -703,15 +717,7 @@ export class PharmacyInvoiceService {
               pincode: true,
             },
           },
-          doctor: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              phone: true,
-              email: true,
-            },
-          },
+          doctor: { select: INVOICE_DOCTOR_SELECT },
           prescription: {
             select: {
               id: true,
@@ -1449,7 +1455,7 @@ export class PharmacyInvoiceService {
           },
         },
         patient: true,
-        doctor: true,
+        doctor: { select: INVOICE_DOCTOR_SELECT },
       },
     });
 
