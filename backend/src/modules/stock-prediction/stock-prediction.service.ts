@@ -35,6 +35,12 @@ export class StockPredictionService {
   /**
    * Main prediction function - generates stock order predictions for the next month
    */
+  /**
+   * @cc [owner:nareshshah139,label:correctness] out-of-stock-ranks-first
+   * A prediction with `daysUntilStockout` of 0 (already out of stock) is kept as 0, sorts before
+   * every item with a positive value, and counts toward `summary.criticalItems`. Only a drug with
+   * no usage rate has an undefined `daysUntilStockout`, and it sorts last.
+   */
   async generatePredictions(
     request: StockPredictionRequestDto,
   ): Promise<StockPredictionResponseDto> {
@@ -325,7 +331,7 @@ export class StockPredictionService {
       confidence,
       method: PredictionMethod.TIME_SERIES,
       reorderLevel: stats.reorderLevel || undefined,
-      daysUntilStockout: daysUntilStockout || undefined,
+      daysUntilStockout: daysUntilStockout ?? undefined,
       historicalData: stats.historicalData.map((d) => ({
         month: d.month,
         quantity: d.quantity,
@@ -360,7 +366,7 @@ export class StockPredictionService {
       confidence: PredictionConfidence.MEDIUM,
       method: PredictionMethod.SIMILAR_ITEMS,
       reorderLevel: stats.reorderLevel || undefined,
-      daysUntilStockout: daysUntilStockout || undefined,
+      daysUntilStockout: daysUntilStockout ?? undefined,
       historicalData: stats.historicalData.map((d) => ({
         month: d.month,
         quantity: d.quantity,
@@ -418,6 +424,11 @@ export class StockPredictionService {
   /**
    * Generate bulk order suggestion from predictions
    */
+  /**
+   * @cc [owner:nareshshah139,label:correctness] out-of-stock-is-critical
+   * An item with `daysUntilStockout` of 0 gets priority `CRITICAL`; only an undefined value
+   * skips the days-based priorities.
+   */
   async generateBulkOrderSuggestion(
     branchId: string,
     predictions: DrugPredictionDto[],
@@ -440,9 +451,9 @@ export class StockPredictionService {
 
         // Determine priority
         let priority: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
-        if (pred.daysUntilStockout && pred.daysUntilStockout < 7) {
+        if (pred.daysUntilStockout != null && pred.daysUntilStockout < 7) {
           priority = 'CRITICAL';
-        } else if (pred.daysUntilStockout && pred.daysUntilStockout < 15) {
+        } else if (pred.daysUntilStockout != null && pred.daysUntilStockout < 15) {
           priority = 'HIGH';
         } else if (pred.currentStock <= (pred.reorderLevel || 0)) {
           priority = 'MEDIUM';
@@ -520,7 +531,7 @@ export class StockPredictionService {
     );
 
     const criticalItems = predictions.filter(
-      (pred) => pred.daysUntilStockout && pred.daysUntilStockout < 7,
+      (pred) => pred.daysUntilStockout != null && pred.daysUntilStockout < 7,
     ).length;
 
     // Estimate cost (will be refined in bulk order suggestion)

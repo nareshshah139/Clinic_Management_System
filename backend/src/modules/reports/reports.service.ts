@@ -1130,6 +1130,12 @@ export class ReportsService {
    * billing:payment:read, appointments appointments:read, low stock and expiry their inventory
    * alert permissions. A user with no matching grant, or no record, MUST get empty sections.
    */
+  /**
+   * @cc [owner:nareshshah139,label:correctness] alert-counts-cover-all-rows
+   * `counts.overdueInvoices`, `counts.expiryAlerts` and `counts.pendingPayments` MUST count every
+   * row matching the same filter and permission gate as the corresponding list, while each list
+   * stays capped at 10 rows. A section the viewer may not read counts 0.
+   */
   async getSystemAlerts(branchId: string, viewer: { id?: string; role?: string }): Promise<any> {
     const grants = await viewerGrants(this.prisma, viewer);
     const sees = {
@@ -1142,29 +1148,36 @@ export class ReportsService {
     const now = new Date();
     const in30Days = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
-    const [overdueInvoices, lowStockAlerts, expiryAlerts, pendingPaymentsList, upcomingAppointments] = await Promise.all([
+    const overdueWhere = { branchId, status: 'OVERDUE' };
+    const expiryWhere = { branchId, expiryDate: { gt: now, lt: in30Days } };
+    const pendingPaymentWhere = { reconStatus: 'PENDING', invoice: { branchId } };
+
+    const [
+      overdueInvoices, overdueInvoiceCount, lowStockAlerts, expiryAlerts, expiryAlertCount,
+      pendingPaymentsList, pendingPaymentCount, upcomingAppointments,
+    ] = await Promise.all([
       !sees.invoices ? [] : this.prisma.newInvoice.findMany({
-        where: { branchId, status: 'OVERDUE' },
+        where: overdueWhere,
         select: { id: true, invoiceNo: true, total: true, dueDate: true, patient: { select: { id: true, name: true } } },
         orderBy: { dueDate: 'asc' },
         take: 10,
       }),
+      !sees.invoices ? 0 : this.prisma.newInvoice.count({ where: overdueWhere }),
       !sees.lowStock ? { total: 0, items: [] } : readLowStock(this.prisma, branchId, 10),
       !sees.expiry ? [] : this.prisma.inventoryItem.findMany({
-        where: { branchId, expiryDate: { gt: now, lt: in30Days } },
+        where: expiryWhere,
         select: { id: true, name: true, expiryDate: true, currentStock: true },
         orderBy: { expiryDate: 'asc' },
         take: 10,
       }),
+      !sees.expiry ? 0 : this.prisma.inventoryItem.count({ where: expiryWhere }),
       !sees.payments ? [] : this.prisma.newPayment.findMany({
-        where: { 
-          reconStatus: 'PENDING',
-          invoice: { branchId }
-        },
+        where: pendingPaymentWhere,
         select: { id: true, amount: true, mode: true, createdAt: true, invoice: { select: { id: true, invoiceNo: true } } },
         orderBy: { createdAt: 'desc' },
         take: 10,
       }),
+      !sees.payments ? 0 : this.prisma.newPayment.count({ where: pendingPaymentWhere }),
       !sees.appointments ? { total: 0, rows: [] } : readUpcomingAppointments(this.prisma, { branchId }, 10, {
         patient: { select: { id: true, name: true } },
         doctor: { select: { id: true, firstName: true, lastName: true } },
@@ -1173,10 +1186,10 @@ export class ReportsService {
 
     return {
       counts: {
-        overdueInvoices: overdueInvoices.length,
+        overdueInvoices: overdueInvoiceCount,
         lowStockAlerts: lowStockAlerts.total,
-        expiryAlerts: expiryAlerts.length,
-        pendingPayments: pendingPaymentsList.length,
+        expiryAlerts: expiryAlertCount,
+        pendingPayments: pendingPaymentCount,
         upcomingAppointments: upcomingAppointments.total,
       },
       overdueInvoices,

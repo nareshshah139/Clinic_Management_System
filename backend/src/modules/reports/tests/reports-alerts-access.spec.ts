@@ -25,12 +25,13 @@ const STORED: Record<string, { role: string; permissions: string }> = {
 const prisma = {
   user: { findUnique: async ({ where }: any) => STORED[where.id] ?? null },
   role: { findFirst: async () => null },
-  newInvoice: { findMany: async () => [{ id: 'overdue-1', invoiceNo: 'INV-9', total: 500 }] },
+  newInvoice: { findMany: async () => [{ id: 'overdue-1', invoiceNo: 'INV-9', total: 500 }], count: async () => 1 },
   inventoryItem: {
     findMany: async () => [{ id: 'cream', name: 'Synthetic Cream', expiryDate: new Date(Date.now() + 5 * 86400000 - 1000), currentStock: 4 }],
+    count: async () => 1,
   },
   $queryRaw: async () => [{ id: 'gel', name: 'Adapalene Gel', currentStock: 0, heldStock: 0, minStockLevel: 6, reorderLevel: null, total: BigInt(1) }],
-  newPayment: { findMany: async () => [{ id: 'pay-1', amount: 100 }] },
+  newPayment: { findMany: async () => [{ id: 'pay-1', amount: 100 }], count: async () => 1 },
   appointment: {
     findMany: async ({ where }: any) => where.date instanceof Date ? [] : [{ id: 'appt-1', date: new Date(Date.now() + 86400000), slot: '10:00-10:15', status: 'SCHEDULED', visitType: 'OPD', patient: { name: 'Kiran Bhatt' }, doctor: { firstName: 'Priya', lastName: 'Menon' } }],
     count: async () => 1,
