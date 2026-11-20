@@ -165,7 +165,7 @@ describe('status edits through update', () => {
 
   it('does not check capacity for a status change inside the same calendar', async () => {
     const { service, db } = setup({ rows: [row('a', 'CONFIRMED'), row('b', 'CONFIRMED')] });
-    await service.update('a', { status: 'COMPLETED' }, 'branch-1');
+    await service.update('a', { status: 'CHECKED_IN' }, 'branch-1');
     expect(db.appointment.findMany).not.toHaveBeenCalled();
   });
 

@@ -9,6 +9,7 @@ CONSTANTS = {
 }
 MODES = {
     "code": {"MODE": '"code"'},
+    "before": {"MODE": '"before"'},
     "fixed": {"MODE": '"fixed"'},
     "typeProbe": {"MODE": '"typeProbe"'},
     "noRowLock": {"MODE": '"noRowLock"'},
@@ -45,10 +46,12 @@ RULE_TEXT = {
     "DecidedStaysDecided": "Once a template version is approved or rejected, its status does not change.",
     "DecisionRecorded": "An approved or rejected template version has a review record that says so.",
 }
-CODE_BREAKS = {"BillsWithinAllowance", "CompletedStaysCompleted", "StrandedRequestsClose",
-               "OneDecision", "DecidedStaysDecided", "DecisionRecorded"}
+BEFORE_BREAKS = {"BillsWithinAllowance", "CompletedStaysCompleted", "StrandedRequestsClose",
+                 "OneDecision", "DecidedStaysDecided", "DecisionRecorded"}
+CODE_BREAKS = {"BillsWithinAllowance"}
 EXPECT = {
     "code": {r: "breaks" if r in CODE_BREAKS else "holds" for r in RULES},
+    "before": {r: "breaks" if r in BEFORE_BREAKS else "holds" for r in RULES},
     "fixed": {r: "holds" for r in RULES},
     "typeProbe": {"TypeOK": "breaks"},
     "noRowLock": {"AtMostOnePendingRefill": "breaks", "RefillsWithinAllowance": "breaks"},
@@ -59,6 +62,6 @@ EXPECT = {
     "noStatusPredicate": {"OneDecision": "breaks", "DecidedStaysDecided": "breaks", "DecisionRecorded": "holds"},
     "auditOutsideTransaction": {"DecisionRecorded": "breaks", "OneDecision": "holds", "DecidedStaysDecided": "holds"},
 }
-CHARTS = ["code", "fixed"]
+CHARTS = ["before", "code"]
 REPLAY = "backend/src/modules/prescriptions/tests/prescriptions.formal-replay.database.spec.ts"
 REPLAYS = {r: REPLAY for r in CODE_BREAKS}

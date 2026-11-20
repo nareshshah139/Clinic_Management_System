@@ -11,12 +11,14 @@
 
    The two machines share no row, so Init picks one scenario per behaviour and
    each scenario's actions run only in it. MODE picks the code as it is, the
-   fix, or the fix with one guard removed. *)
+   code before the fix ("before"), the fix, or the fix with one guard removed.
+   The code is the fix without the billing allowance check, which the clinic
+   has not decided to enforce. *)
 EXTENDS Naturals, FiniteSets, Sequences
 
 CONSTANTS Reqs, Refills, Reviewers, MaxRefills, MaxBills, Budget, MODE
 
-ASSUME MODE \in {"code", "fixed", "typeProbe", "noRowLock", "noApproveRecheck",
+ASSUME MODE \in {"code", "before", "fixed", "typeProbe", "noRowLock", "noApproveRecheck",
                  "billIgnoresRefills", "cancelAnyStatus", "patchIgnoresStatus",
                  "noStatusPredicate", "auditOutsideTransaction"}
 
@@ -29,12 +31,12 @@ Decisions == {"APPROVED", "REJECTED"}
 
 Locks == MODE # "noRowLock"
 ApproveRechecks == MODE # "noApproveRecheck"
-BillChecksAllowance == MODE \notin {"code", "billIgnoresRefills"}
-CancelOnlyActive == MODE \notin {"code", "cancelAnyStatus"}
+BillChecksAllowance == MODE \notin {"code", "before", "billIgnoresRefills"}
+CancelOnlyActive == MODE \notin {"before", "cancelAnyStatus"}
 PatchChecksStatus == MODE # "patchIgnoresStatus"
-CompleteClosesRequests == MODE # "code"
-DecisionCAS == MODE \notin {"code", "noStatusPredicate"}
-AuditInSameTransaction == MODE \notin {"code", "auditOutsideTransaction"}
+CompleteClosesRequests == MODE # "before"
+DecisionCAS == MODE \notin {"before", "noStatusPredicate"}
+AuditInSameTransaction == MODE \notin {"before", "auditOutsideTransaction"}
 
 VARIABLES focus,
           rxStatus, expired, refill, bills,
@@ -173,8 +175,9 @@ Review(v, k) ==
 ReviewerApproves(v) == Review(v, "APPROVED")
 ReviewerRejects(v) == Review(v, "REJECTED")
 
-(* The status update. The code updates by id alone. The fix updates where the
-   status is still PENDING and inserts the review row in the same transaction. *)
+(* The status update. Before the fix the code updated by id alone. The code
+   now updates where the status is still PENDING and inserts the review row in
+   the same transaction. *)
 ServerSavesDecision(v) ==
   /\ focus = "tpl"
   /\ tpc[v] = "read"

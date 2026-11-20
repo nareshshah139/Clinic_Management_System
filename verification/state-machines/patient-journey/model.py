@@ -12,7 +12,7 @@ CONTROLS = {
     "manualDispense": "DispensedOnlyWhenBilled",
 }
 
-MODES = {m: {"MODE": f'"{m}"'} for m in ["code", "fixed", "typeProbe", *CONTROLS]}
+MODES = {m: {"MODE": f'"{m}"'} for m in ["code", "before", "fixed", "typeProbe", *CONTROLS]}
 
 RULES = {
     "TypeOK": "invariant",
@@ -40,15 +40,15 @@ RULE_TEXT = {
 
 ALL_HOLD = {r: "holds" for r in RULES}
 EXPECT = {
-    "code": {**ALL_HOLD, "CalendarFollowsVisit": "breaks", "CompletedOnlyAfterVisit": "breaks",
-             "BilledPrescriptionStaysActive": "breaks", "PatientLeavesServed": "breaks"},
+    "code": ALL_HOLD,
+    "before": {**ALL_HOLD, "CalendarFollowsVisit": "breaks", "CompletedOnlyAfterVisit": "breaks",
+               "BilledPrescriptionStaysActive": "breaks", "PatientLeavesServed": "breaks"},
     "fixed": ALL_HOLD,
     "typeProbe": {"TypeOK": "breaks"},
     **{mode: {rule: "breaks"} for mode, rule in CONTROLS.items()},
 }
 EXPECT["patchCompletes"]["PatientLeavesServed"] = "breaks"
 
-CHARTS = ["code", "fixed"]
+CHARTS = ["before", "code"]
 
-REPLAY = "backend/src/modules/visits/tests/patient-journey.formal-replay.database.spec.ts"
-REPLAYS = {rule: REPLAY for rule, verdict in EXPECT["code"].items() if verdict == "breaks"}
+REPLAYS = {}

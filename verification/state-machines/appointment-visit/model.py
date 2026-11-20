@@ -2,6 +2,7 @@ SPEC = "AppointmentVisit.tla"
 CONSTANTS = {"MaxEdits": "1"}
 MODES = {
     "code": {"MODE": '"code"'},
+    "before": {"MODE": '"before"'},
     "uiOnly": {"MODE": '"uiOnly"'},
     "fixed": {"MODE": '"fixed"'},
     "patchIgnoresVisit": {"MODE": '"patchIgnoresVisit"'},
@@ -26,8 +27,9 @@ RULE_TEXT = {
 }
 ALL_HOLD = {rule: "holds" for rule in RULES}
 EXPECT = {
-    "code": {**ALL_HOLD, "StatusesAgree": "breaks", "NoResurrection": "breaks",
-             "CompletedVisitFrozen": "breaks", "DisagreementHeals": "breaks"},
+    "code": ALL_HOLD,
+    "before": {**ALL_HOLD, "StatusesAgree": "breaks", "NoResurrection": "breaks",
+               "CompletedVisitFrozen": "breaks", "DisagreementHeals": "breaks"},
     "uiOnly": {"StatusesAgree": "breaks", "NoResurrection": "breaks",
                "CompletedVisitFrozen": "breaks", "DisagreementHeals": "breaks"},
     "fixed": ALL_HOLD,
@@ -39,6 +41,5 @@ EXPECT = {
     "editAfterComplete": {"CompletedVisitFrozen": "breaks", "StatusesAgree": "holds", "NoResurrection": "holds"},
     "typeProbe": {"TypeOK": "breaks"},
 }
-CHARTS = ["code", "fixed"]
-REPLAY = "backend/src/modules/visits/tests/appointment-visit.formal-replay.database.spec.ts"
-REPLAYS = {rule: REPLAY for rule, verdict in EXPECT["code"].items() if verdict == "breaks"}
+CHARTS = ["before", "code"]
+REPLAYS = {}
