@@ -1494,6 +1494,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
 
   // Debounced clinical autocomplete loaders
   useEffect(() => {
+    let current = true;
     const t = setTimeout(async () => {
       try {
         if (!patientId || !diagnosisFieldFocused) return;
@@ -1506,15 +1507,16 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
           const k = (s || '').toLowerCase();
           if (!seen.has(k)) { seen.add(k); merged.push(s); }
         });
-        setDiagOptions(merged.slice(0, 8));
+        if (current) setDiagOptions(merged.slice(0, 8));
       } catch {
-        setDiagOptions(getLocalSuggestions('diagnosis', diagnosis, 8));
+        if (current) setDiagOptions(getLocalSuggestions('diagnosis', diagnosis, 8));
       }
     }, 250);
-    return () => clearTimeout(t);
+    return () => { current = false; clearTimeout(t); };
   }, [diagnosis, diagnosisFieldFocused, patientId, visitId]);
 
   useEffect(() => {
+    let current = true;
     const t = setTimeout(async () => {
       try {
         if (!patientId || !complaintFieldFocused) return;
@@ -1527,12 +1529,12 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
           const k = (s || '').toLowerCase();
           if (!seen.has(k)) { seen.add(k); merged.push(s); }
         });
-        setComplaintOptions(merged.slice(0, 8));
+        if (current) setComplaintOptions(merged.slice(0, 8));
       } catch {
-        setComplaintOptions(getLocalSuggestions('chiefComplaints', chiefComplaints, 8));
+        if (current) setComplaintOptions(getLocalSuggestions('chiefComplaints', chiefComplaints, 8));
       }
     }, 250);
-    return () => clearTimeout(t);
+    return () => { current = false; clearTimeout(t); };
   }, [chiefComplaints, complaintFieldFocused, patientId, visitId]);
 
   // removed doctor's personal notes composition and autocomplete logic
