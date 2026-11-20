@@ -55,7 +55,10 @@ export function CountSheet({ detail, onSigned, onStale }: { detail: CountDetail;
     timer.current = null;
     while (inflight.current) await inflight.current;
     const ids = [...dirty.current].filter((id) => parseCount(entriesRef.current[id].count) !== 'invalid');
-    if (!ids.length) return true;
+    if (!ids.length) {
+      if (dirty.current.size) setSaveState('failed');
+      return !dirty.current.size;
+    }
     ids.forEach((id) => dirty.current.delete(id));
     setSaveState('saving');
     let ok = true;
@@ -81,18 +84,24 @@ export function CountSheet({ detail, onSigned, onStale }: { detail: CountDetail;
     inflight.current = null;
     return ok;
   }, [detail.id, onStale]);
+  const flushRef = useRef(flush);
+  flushRef.current = flush;
 
   useEffect(() => {
     const first = detail.lines.findIndex((line) => line.physicalStock === null);
     inputs.current[first < 0 ? 0 : first]?.focus();
-    return () => {
-      if (timer.current) clearTimeout(timer.current);
-    };
   }, [detail.lines]);
+  useEffect(
+    () => () => {
+      if (timer.current) void flushRef.current();
+    },
+    [],
+  );
 
   const change = (line: CountLine, patch: Partial<Entry>) => {
     setEntries((current) => ({ ...current, [line.id]: { ...current[line.id], ...patch } }));
     dirty.current.add(line.id);
+    setSaveState('saving');
     if (missing.includes(line.id)) setMissing((ids) => ids.filter((id) => id !== line.id));
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => void flush(), SAVE_DELAY_MS);
@@ -261,7 +270,9 @@ export function CountSheet({ detail, onSigned, onStale }: { detail: CountDetail;
               {saveState === 'saving' ? (
                 'Saving…'
               ) : saveState === 'failed' ? (
-                <span className="text-destructive-text">Not saved. Check your connection; your counts stay on this screen.</span>
+                <span className="text-destructive-text">
+                  {invalid.length ? 'Not saved. Fix the highlighted quantity.' : 'Not saved. Check your connection; your counts stay on this screen.'}
+                </span>
               ) : (
                 <span className="inline-flex items-center gap-1">
                   <Check aria-hidden="true" className="size-4" /> Saved

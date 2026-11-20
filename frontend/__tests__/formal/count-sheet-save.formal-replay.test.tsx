@@ -105,15 +105,9 @@ async function typeBadCount() {
   await type('7x');
 }
 
-it.failing('SavedMeansSaved: a count typed a moment ago is not shown as saved', async () => {
+it('SavedMeansSaved: a count typed a moment ago is not shown as saved', async () => {
   await typeBadCount();
   expect(indicator()).toHaveTextContent('Saving…');
-});
-
-it('today: SavedMeansSaved path shows Saved while the typed count was never sent', async () => {
-  await typeBadCount();
-  expect(indicator()).toHaveTextContent('Saved');
-  expect(patchesSent()).toHaveLength(0);
 });
 
 async function typeThenGoBack() {
@@ -123,15 +117,9 @@ async function typeThenGoBack() {
   await settle(10_000);
 }
 
-it.failing('NoDropOnLeave: a count typed just before going back to the list is still sent', async () => {
+it('NoDropOnLeave: a count typed just before going back to the list is still sent', async () => {
   await typeThenGoBack();
   expect(patchesSent().map(([, init]) => JSON.parse(init.body).lines[0].physicalStock)).toEqual([7]);
-});
-
-it('today: NoDropOnLeave path sends nothing after going back to the list', async () => {
-  await typeThenGoBack();
-  expect(screen.queryByRole('textbox', { name: /^Counted quantity of/ })).toBeNull();
-  expect(patchesSent()).toHaveLength(0);
 });
 
 async function staleSaveThenBadCount() {
@@ -160,16 +148,9 @@ async function staleSaveThenBadCount() {
   return server;
 }
 
-it.failing('LeavesSaving: after the server answers, the sheet stops saying Saving even with a bad count on screen', async () => {
+it('LeavesSaving: after the server answers, the sheet stops saying Saving even with a bad count on screen', async () => {
   await staleSaveThenBadCount();
   expect(indicator()).toHaveTextContent('Not saved');
-});
-
-it('today: LeavesSaving path still says Saving two minutes after the server answered', async () => {
-  const server = await staleSaveThenBadCount();
-  expect(indicator()).toHaveTextContent('Saving…');
-  expect(server.patches).toHaveLength(0);
-  expect(patchesSent()).toHaveLength(2);
 });
 
 async function unansweredSaveThenGoBack() {
