@@ -151,20 +151,21 @@ databaseTests('Access session replays on PostgreSQL', () => {
   });
 
   describe('ResetEndsOldSessions', () => {
-    it.failing('ResetEndsOldSessions: a session signed in before a password reset is refused', async () => {
+    it('ResetEndsOldSessions: a session signed in before a password reset is refused', async () => {
       const cookie = await signIn(staffEmail);
       const code = await managerIssuesResetCode();
       expect((await youResetPassword(code)).status).toBe(201);
       expect((await youOpenAPage(cookie)).status).toBe(401);
+      const fresh = await http().post('/auth/login').send({ identifier: staffEmail, password: NEW_PASSWORD });
+      expect((await youOpenAPage(fresh.headers['set-cookie'][0].split(';')[0])).status).toBe(200);
     });
 
-    it('today: a session signed in before a password reset keeps working', async () => {
+    it('ResetEndsOldSessions: a session signed in before a password change is refused', async () => {
       const cookie = await signIn(staffEmail);
-      const code = await managerIssuesResetCode();
-      expect((await youResetPassword(code)).status).toBe(201);
-      expect(await bcrypt.compare(NEW_PASSWORD, (await staffRow()).password)).toBe(true);
-      const res = await youOpenAPage(cookie);
-      expect([res.status, res.body.id]).toEqual([200, staffId]);
+      const res = await http().post(`/users/${staffId}/change-password`).set('Cookie', cookie)
+        .send({ currentPassword: PASSWORD, newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD });
+      expect(res.status).toBe(201);
+      expect((await youOpenAPage(cookie)).status).toBe(401);
     });
   });
 

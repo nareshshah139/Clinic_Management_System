@@ -3,6 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../../shared/database/prisma.service';
 import * as bcrypt from 'bcryptjs';
 import { UserStatus } from '@prisma/client';
+import { passwordStamp } from './strategies/jwt.strategy';
 
 @Injectable()
 export class AuthService {
@@ -83,14 +84,17 @@ export class AuthService {
 
   /**
    * @cc [owner:nareshshah139,label:security] token-claims-minimal
-   * The signed token MUST carry only the user's id (sub), email, role and branchId.
+   * The signed token MUST carry only the user's id (sub), email, role, branchId and pwdStamp, a
+   * short digest of the stored password hash that ends the token when the password changes.
    */
   async login(user: any) {
+    const { password } = await this.prisma.user.findUniqueOrThrow({ where: { id: user.id }, select: { password: true } });
     const payload = {
       email: user.email,
       sub: user.id,
       role: user.role,
       branchId: user.branchId,
+      pwdStamp: passwordStamp(password),
     };
     return {
       access_token: this.jwtService.sign(payload),
