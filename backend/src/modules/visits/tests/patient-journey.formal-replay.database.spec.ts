@@ -124,7 +124,7 @@ databaseTests('Patient journey formal replay with PostgreSQL', () => {
   });
 
   describe('BilledPrescriptionStaysActive', () => {
-    it.failing('BilledPrescriptionStaysActive: a prescription whose medicines were billed cannot be cancelled', async () => {
+    it('BilledPrescriptionStaysActive: a prescription whose medicines were billed cannot be cancelled', async () => {
       const c = await clinic();
       const appointment = await c.book();
       const visit = await c.doctorStartsVisit(appointment.id);
@@ -132,17 +132,6 @@ databaseTests('Patient journey formal replay with PostgreSQL', () => {
       await c.pharmacistBills(prescription.id);
       await c.doctorCancelsPrescription(prescription.id).catch(() => undefined);
       expect([await c.prescriptionStatus(prescription.id), await c.queueTotal()]).toEqual(['ACTIVE', 1]);
-    });
-
-    it('today: the doctor cancels a billed prescription and the sale drops out of the pharmacy queue', async () => {
-      const c = await clinic();
-      const appointment = await c.book();
-      const visit = await c.doctorStartsVisit(appointment.id);
-      const prescription = await c.doctorWritesPrescription(visit.id);
-      const bill = await c.pharmacistBills(prescription.id);
-      expect([bill.status, await c.queueTotal()]).toEqual(['CONFIRMED', 1]);
-      await c.doctorCancelsPrescription(prescription.id);
-      expect([await c.prescriptionStatus(prescription.id), await c.queueTotal()]).toEqual(['CANCELLED', 0]);
     });
   });
 

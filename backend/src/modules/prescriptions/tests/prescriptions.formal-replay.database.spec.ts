@@ -112,12 +112,8 @@ databaseTests('Prescriptions formal model replays (verification/state-machines/p
       return [cancel, await statusOf(rx.id)];
     };
 
-    it.failing('CompletedStaysCompleted: cancelling a completed prescription is refused', async () => {
+    it('CompletedStaysCompleted: cancelling a completed prescription is refused', async () => {
       expect(await replay()).toEqual(['refused', 'COMPLETED']);
-    });
-
-    it('today: a completed prescription becomes cancelled', async () => {
-      expect(await replay()).toEqual(['done', 'CANCELLED']);
     });
   });
 

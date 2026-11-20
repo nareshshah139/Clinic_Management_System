@@ -514,6 +514,16 @@ export class PrescriptionsService {
     return this.prisma.$transaction(async tx => {
       const prescription = await this.lockPrescription(tx, id, branchId);
       if (prescription.status === PrescriptionStatus.CANCELLED) return prescription;
+      if (prescription.status !== PrescriptionStatus.DRAFT && prescription.status !== PrescriptionStatus.ACTIVE) {
+        throw new BadRequestException('Cannot cancel a completed or expired prescription');
+      }
+      const billed = await tx.pharmacyInvoice.findFirst({
+        where: { prescriptionId: id, branchId, status: { in: ['CONFIRMED', 'DISPENSED', 'COMPLETED'] } },
+        select: { id: true },
+      });
+      if (billed) {
+        throw new ConflictException('The pharmacy has billed this prescription, so it cannot be cancelled. Record a sales return at the pharmacy instead.');
+      }
       const now = new Date();
       await tx.prescriptionRefill.updateMany({ where: { prescriptionId: id, status: RefillStatus.PENDING }, data: {
         status: RefillStatus.REJECTED, rejectedAt: now, rejectedBy: actorId ?? null, rejectionReason: 'Prescription cancelled',
