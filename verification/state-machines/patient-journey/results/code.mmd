@@ -1,0 +1,49 @@
+---
+title: A patient's day: desk, doctor, pharmacy (code)
+---
+stateDiagram-v2
+  state "Booked for today" as s0
+  state "Appointment cancelled" as s1
+  state "Calendar says completed, patient never seen" as s2
+  state "Checked in, waiting for the doctor" as s3
+  state "With the doctor" as s4
+  state "Calendar shows something else while the doctor has the visit" as s5
+  state "Medicines billed, then the prescription cancelled" as s6
+  state "Visit completed, medicines billed" as s7
+  state "Visit completed, nothing to bill" as s8
+  state "Visit completed, prescription at the pharmacy" as s9
+  [*] --> s0
+  s0 --> s1: the desk cancels the appointment
+  s0 --> s2: the desk marks the appointment completed
+  s0 --> s3: the desk checks the patient in
+  s0 --> s4: the doctor starts the visit
+  s1 --> s2: the desk marks the appointment completed
+  s1 --> s3: the desk checks the patient in
+  s2 --> s3: the desk checks the patient in
+  s3 --> s1: the desk cancels the appointment
+  s3 --> s2: the desk marks the appointment completed
+  s3 --> s4: the doctor starts the visit
+  s4 --> s3: the doctor deletes the visit
+  s4 --> s5: the desk checks the patient in / the desk marks the appointment completed
+  s4 --> s6: the doctor cancels the prescription
+  s4 --> s7: the doctor completes the visit
+  s4 --> s8: the doctor completes the visit
+  s4 --> s9: the doctor completes the visit
+  s5 --> s1: the doctor deletes the visit
+  s5 --> s3: the doctor deletes the visit
+  s5 --> s6: the doctor cancels the prescription
+  s5 --> s7: the desk marks the appointment completed / the doctor completes the visit
+  s5 --> s8: the desk marks the appointment completed / the doctor completes the visit
+  s5 --> s9: the desk marks the appointment completed / the doctor completes the visit
+  s7 --> s5: the desk checks the patient in
+  s7 --> s6: the doctor cancels the prescription
+  s8 --> s3: the doctor deletes the visit
+  s8 --> s5: the desk checks the patient in
+  s8 --> s9: the doctor writes the prescription
+  s9 --> s5: the desk checks the patient in
+  s9 --> s7: the pharmacist bills the medicines
+  s9 --> s8: the doctor cancels the prescription
+  classDef breaks fill:#fde2dd,stroke:#b3261e,stroke-width:2px
+  classDef stuck fill:#fdf0d5,stroke:#a35a05,stroke-width:2px,stroke-dasharray:5 3
+  class s2,s5,s6 breaks
+  class s2,s3 stuck
