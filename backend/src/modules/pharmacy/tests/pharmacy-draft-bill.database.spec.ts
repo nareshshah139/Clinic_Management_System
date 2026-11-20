@@ -388,6 +388,21 @@ databaseTests('Draft pharmacy bills on PostgreSQL', () => {
     ]).toEqual(['404: Invoice not found', '404: Invoice not found']);
   });
 
+  it('returns only the doctor display fields from checkout, its replay and a status change', async () => {
+    const doctorFields = (invoice: unknown) =>
+      Object.keys((invoice as { doctor?: object | null }).doctor ?? {}).sort();
+    const finish = { ...bill, requestKey: 'doctor-fields' };
+    const draft = await invoices.create(bill, 'branch', 'asha');
+    const visible = ['email', 'firstName', 'id', 'lastName', 'phone'];
+    expect([
+      doctorFields(await invoices.checkout(finish, 'branch', 'asha')),
+      doctorFields(await invoices.checkout(finish, 'branch', 'asha')),
+      doctorFields(
+        await invoices.updateStatus(draft.id, 'PENDING', 'branch', 'asha'),
+      ),
+    ]).toEqual([visible, visible, visible]);
+  });
+
   const cashRegister = async () => {
     const page = await register.list(
       {
