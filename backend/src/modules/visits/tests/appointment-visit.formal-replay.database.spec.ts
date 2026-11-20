@@ -7,7 +7,7 @@ import { AppointmentsService } from '../../appointments/appointments.service';
 import { VisitsService } from '../visits.service';
 
 // Replays of verification/state-machines/appointment-visit. Each rule's steps follow
-// TLC's path in results/code.md, one call per model action. The "screens only" paths
+// TLC's path in results/before.md, one call per model action. The "screens only" paths
 // come from the model's uiOnly mode and use only writes a screen sends.
 const databaseTests = process.env.FORMAL_REPLAY_TEST_DATABASE_URL ? describe : describe.skip;
 

@@ -14,7 +14,7 @@ import { PrescriptionsService } from '../../prescriptions/prescriptions.service'
 import { VisitsService } from '../visits.service';
 
 // Replays of verification/state-machines/patient-journey. Each test walks TLC's path
-// from results/code.md, one call per model action, through the real services.
+// from results/before.md, one call per model action, through the real services.
 const databaseTests = process.env.FORMAL_REPLAY_TEST_DATABASE_URL ? describe : describe.skip;
 
 databaseTests('Patient journey formal replay with PostgreSQL', () => {

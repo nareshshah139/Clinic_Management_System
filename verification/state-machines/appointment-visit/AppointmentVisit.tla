@@ -12,14 +12,15 @@
    from a list read earlier, and the PATCH carries no expected status. That is
    a client read then a server write, so it is two steps.
 
-   MODE picks the variant. "code" is today. "uiOnly" is today restricted to
-   writes a screen sends. "fixed" adds the smallest guards that make every rule
-   hold. The other modes each remove one guard from "fixed". *)
+   MODE picks the variant. "code" is the code as it is now. "before" is the
+   code before the fix, kept as a regression control. "uiOnly" is "before"
+   restricted to writes a screen sends. "fixed" is the design the fix started
+   from. The other modes each remove one guard from "fixed". *)
 EXTENDS Naturals
 
 CONSTANTS MODE, MaxEdits
 
-ASSUME MODE \in {"code", "uiOnly", "fixed", "patchIgnoresVisit", "bulkIgnoresVisit",
+ASSUME MODE \in {"code", "before", "uiOnly", "fixed", "patchIgnoresVisit", "bulkIgnoresVisit",
                  "checkInFromAnyStatus", "editAfterComplete", "typeProbe"}
 ASSUME MaxEdits \in Nat \ {0}
 
@@ -30,6 +31,8 @@ Waiting == {"SCHEDULED", "CONFIRMED"}
 BulkTargets == Statuses \ Waiting
 \* The appointment statuses a check-in may start from in the fixed protocol.
 CheckInFrom == {"SCHEDULED", "CONFIRMED", "NO_SHOW"}
+\* The statuses only the visit writes: starting it and completing it.
+VisitStatuses == {"IN_PROGRESS", "COMPLETED"}
 
 \* visit is the live visit linked to the appointment: Visit.status of the row
 \* with appointmentId = this appointment and deletedAt null, or none.
@@ -37,7 +40,7 @@ VARIABLES appt, visit, notes, signed, checkInPlanned, cancelHeld
 
 vars == <<appt, visit, notes, signed, checkInPlanned, cancelHeld>>
 
-CodeLike == MODE \in {"code", "uiOnly"}
+Before == MODE \in {"before", "uiOnly"}
 ApiReachable == MODE # "uiOnly"
 
 TypeOK ==
@@ -48,21 +51,29 @@ TypeOK ==
   /\ checkInPlanned \in BOOLEAN
   /\ cancelHeld \in BOOLEAN
 
-\* A desk status write (PATCH or bulk) from status f to status t. Today both
-\* accept any jump. The fixed protocol lets the visit own the appointment's
-\* status while a live visit exists, and checks a patient in only from a
-\* waiting or missed appointment.
+\* A desk status write (PATCH or bulk) from status f to status t. Before the
+\* fix both accepted any jump. The fixed protocol lets the visit own the
+\* appointment's status while a live visit exists, and checks a patient in only
+\* from a waiting or missed appointment. The code reads no visit. It refuses to
+\* write or leave a status only the visit writes, which an open or completed
+\* visit always holds, and checks in from the same statuses as "fixed".
 VisitAllows(ignoresVisit) == visit = "none" \/ ignoresVisit
 CheckInAllows(f, t) == t # "CHECKED_IN" \/ f \in CheckInFrom \/ MODE = "checkInFromAnyStatus"
 
+CodeAllows(f, t) == f \notin VisitStatuses /\ t \notin VisitStatuses /\ CheckInAllows(f, t)
+
 PatchAllows(f, t) ==
-  CodeLike \/ (VisitAllows(MODE = "patchIgnoresVisit") /\ CheckInAllows(f, t))
+  CASE Before -> TRUE
+    [] MODE = "code" -> CodeAllows(f, t)
+    [] OTHER -> VisitAllows(MODE = "patchIgnoresVisit") /\ CheckInAllows(f, t)
 
 BulkAllows(f, t) ==
-  CodeLike \/ (VisitAllows(MODE = "bulkIgnoresVisit") /\ CheckInAllows(f, t))
+  CASE Before -> TRUE
+    [] MODE = "code" -> CodeAllows(f, t)
+    [] OTHER -> VisitAllows(MODE = "bulkIgnoresVisit") /\ CheckInAllows(f, t)
 
-\* visits.service.ts update never reads the visit status.
-EditAllowed == visit = "open" \/ (visit = "done" /\ (CodeLike \/ MODE = "editAfterComplete"))
+\* Before the fix, visits.service.ts update never read the visit status.
+EditAllowed == visit = "open" \/ (visit = "done" /\ (Before \/ MODE = "editAfterComplete"))
 
 \* cancelHeld is true while a cancel stands that nobody who saw it has undone.
 \* A deliberate status write by someone looking at the current status sets it
@@ -89,7 +100,8 @@ DoctorStartsVisit ==
   /\ signed' = 0
   /\ UNCHANGED <<checkInPlanned, cancelHeld>>
 
-\* visits.service.ts update: version compare-and-set, no status check.
+\* visits.service.ts update: version compare-and-set, and in "code" a refusal
+\* once the visit is completed.
 DoctorEditsNotes ==
   /\ visit # "none"
   /\ EditAllowed
@@ -135,8 +147,8 @@ DeskPlansCheckIn ==
 
 \* VoiceCommandDialog.tsx run: PATCH status CHECKED_IN with no expected status.
 \* The server compares against its own fresh read, so the write lands on
-\* whatever the appointment is now. The desk saw a waiting appointment, so the
-\* write never counts as undoing a cancel.
+\* whatever the appointment is now unless a guard refuses it. The desk saw a
+\* waiting appointment, so the write never counts as undoing a cancel.
 DeskConfirmsCheckIn ==
   /\ checkInPlanned
   /\ checkInPlanned' = FALSE
@@ -154,8 +166,8 @@ DeskSetsStatus ==
     /\ cancelHeld' = HeldAfterDeliberate(t)
     /\ UNCHANGED <<visit, notes, signed, checkInPlanned>>
 
-\* appointments.service.ts bulkUpdate: updateMany by id with no status
-\* predicate. ADMIN only, no screen sends it.
+\* appointments.service.ts bulkUpdate. ADMIN only, no screen sends it. In
+\* "code" it compare-and-sets each row on the status it read.
 AdminBulkSets ==
   \E t \in BulkTargets :
     /\ ApiReachable
