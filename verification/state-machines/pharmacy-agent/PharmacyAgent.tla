@@ -34,13 +34,16 @@ ApplyLoop == {"mark", "run", "record", "failAct", "failProp", "finish"}
 Busy == ApplyLoop \cup {"rWrite"}
 ReviewerPc == {"idle", "gone"} \cup Busy
 
-\* Each guard is on in "fixed" and off in "code". A negative control turns one off.
-Claim == MODE \notin {"code", "noClaim"}
-RejectCAS == MODE \notin {"code", "rejectNoCAS"}
-SkipRest == MODE \notin {"code", "noSkip"}
-AtomicStage == MODE \notin {"code", "stageEarly"}
-FailOnlyRunning == MODE \notin {"code", "failedOverwrites"}
-Sweeper == MODE \notin {"code", "noSweeper"}
+\* Each guard is on in "fixed" and "code" and off in "before", the code before the fix.
+\* A negative control turns one off.
+Claim == MODE \notin {"before", "noClaim"}
+RejectCAS == MODE \notin {"before", "rejectNoCAS"}
+SkipRest == MODE \notin {"before", "noSkip"}
+AtomicStage == MODE \notin {"before", "stageEarly"}
+FailOnlyRunning == MODE \notin {"before", "failedOverwrites"}
+Sweeper == MODE \notin {"before", "noSweeper"}
+\* "code" logs a failed thread update instead of sending it to the catch.
+TouchLogged == MODE = "code"
 
 SetRun(s) == /\ run' = s
              /\ runEnd' = IF runEnd = "none" /\ s \in {"COMPLETED", "FAILED"} THEN s ELSE runEnd
@@ -94,7 +97,7 @@ SessionTouched ==
   /\ UNCHANGED <<run, runEnd, told, propVars, revVars, restarts>>
 
 TouchFails ==
-  /\ rpc = "touch" /\ rpc' = "catch"
+  /\ rpc = "touch" /\ rpc' = IF TouchLogged THEN "gone" ELSE "catch"
   /\ UNCHANGED <<run, runEnd, told, propVars, revVars, restarts>>
 
 RunMarkedFailed ==

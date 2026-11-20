@@ -143,13 +143,10 @@ databaseTests('Pharmacy agent formal model replays (verification/state-machines/
     };
   }
 
-  it.failing('NoChangesMeansNoChanges: a run that says nothing changed leaves no proposal to apply', async () => {
+  it('NoChangesMeansNoChanges: a run that says nothing changed leaves no proposal to apply', async () => {
     expect(await failedRunStillOffersProposal()).toEqual({ reply: NO_CHANGES_REPLY, run: 'FAILED', pending: [] });
   });
 
-  it('today: NoChangesMeansNoChanges, the failed run says nothing changed and its first proposal waits for review', async () => {
-    expect(await failedRunStillOffersProposal()).toEqual({ reply: NO_CHANGES_REPLY, run: 'FAILED', pending: ['Add Telma and Dolo'] });
-  });
   async function twoApplies() {
     const { user, proposalId, thread, reply } = await answerPosted();
     const first = gate(prisma, 'pharmacyAgentProposalAction.update', { nth: 2 });
@@ -162,16 +159,12 @@ databaseTests('Pharmacy agent formal model replays (verification/state-machines/
     first.release();
     second.release();
     thread.release();
-    await Promise.all([settled(applyA), settled(applyB), settled(reply)]);
-    return { requests };
+    await Promise.all([settled(applyA), settled(reply)]);
+    return { requests, applyB: await outcome(applyB) };
   }
 
-  it.failing('AppliedOnce: a second Apply on the same proposal does not repeat its first action', async () => {
-    expect(await twoApplies()).toEqual({ requests: 1 });
-  });
-
-  it('today: AppliedOnce, two Apply clicks each file the first item request', async () => {
-    expect(await twoApplies()).toEqual({ requests: 2 });
+  it('AppliedOnce: a second Apply on the same proposal does not repeat its first action', async () => {
+    expect(await twoApplies()).toEqual({ requests: 1, applyB: 'BadRequestException' });
   });
 
   async function failureThenRejection() {
@@ -180,27 +173,19 @@ databaseTests('Pharmacy agent formal model replays (verification/state-machines/
       await prisma.inventoryItem.create({
         data: { ...action.input, branchId: user.branchId, type: 'MEDICINE', unit: 'STRIPS', costPrice: 5, sellingPrice: 9 },
       });
-    const applying = gate(prisma, 'pharmacyAgentProposal.update');
-    const applyA = agent(applying.client).applyProposal(proposalId, user as any);
-    await reached(applying, applyA);
-    const rejecting = gate(prisma, 'pharmacyAgentProposal.update');
+    const rejecting = gate(prisma, 'pharmacyAgentProposal.findFirst', { when: 'after' });
     const rejectB = agent(rejecting.client).rejectProposal(proposalId, { reason: 'Not needed' } as any, user as any);
     await reached(rejecting, rejectB);
-    applying.release();
-    const apply = await outcome(applyA);
+    const apply = await outcome(agent(prisma).applyProposal(proposalId, user as any));
     rejecting.release();
-    await settled(rejectB);
+    const reject = await outcome(rejectB);
     thread.release();
     await settled(reply);
-    return { apply, proposal: (await statuses(proposalId)).proposal };
+    return { apply, reject, proposal: (await statuses(proposalId)).proposal };
   }
 
-  it.failing('DecisionIsFinal: a proposal that failed to apply stays failed when a rejection lands after it', async () => {
-    expect(await failureThenRejection()).toEqual({ apply: 'ConflictException', proposal: 'FAILED' });
-  });
-
-  it('today: DecisionIsFinal, the late rejection turns the failed proposal into rejected', async () => {
-    expect(await failureThenRejection()).toEqual({ apply: 'ConflictException', proposal: 'REJECTED' });
+  it('DecisionIsFinal: a proposal that failed to apply stays failed when a rejection read before it lands after it', async () => {
+    expect(await failureThenRejection()).toEqual({ apply: 'ConflictException', reject: 'BadRequestException', proposal: 'FAILED' });
   });
 
   async function rejectionAfterAChange() {
@@ -216,18 +201,9 @@ databaseTests('Pharmacy agent formal model replays (verification/state-machines/
     return seen;
   }
 
-  it.failing('RejectedMeansNotApplied: Reject is refused once an action has changed the pharmacy', async () => {
+  it('RejectedMeansNotApplied: Reject is refused once an action has changed the pharmacy', async () => {
     const seen = await rejectionAfterAChange();
     expect({ reject: seen.reject, requests: seen.requests }).toEqual({ reject: 'BadRequestException', requests: 1 });
-  });
-
-  it('today: RejectedMeansNotApplied, Reject marks an action rejected after it filed its item request', async () => {
-    expect(await rejectionAfterAChange()).toEqual({
-      reject: 'REJECTED',
-      requests: 1,
-      proposal: 'REJECTED',
-      actions: ['REJECTED', 'REJECTED'],
-    });
   });
 
   const statusesAgree = ({ proposal, actions }: { proposal: string; actions: string[] }) =>
@@ -238,12 +214,12 @@ databaseTests('Pharmacy agent formal model replays (verification/state-machines/
 
   async function applyWritesOverRejection() {
     const { user, proposalId, thread, reply } = await answerPosted();
-    const beforeWrite = gate(prisma, 'pharmacyAgentProposalAction.update');
-    const afterWrite = gate(beforeWrite.client, 'pharmacyAgentProposalAction.update', { when: 'after' });
+    const afterRead = gate(prisma, 'pharmacyAgentProposal.findFirst', { when: 'after' });
+    const afterWrite = gate(afterRead.client, 'pharmacyAgentProposalAction.update', { when: 'after' });
     const applyA = agent(afterWrite.client).applyProposal(proposalId, user as any);
-    await reached(beforeWrite, applyA);
+    await reached(afterRead, applyA);
     await settled(agent(prisma).rejectProposal(proposalId, { reason: 'Not needed' } as any, user as any));
-    beforeWrite.release();
+    afterRead.release();
     await reached(afterWrite, applyA);
     const seen = await statuses(proposalId);
     afterWrite.release();
@@ -252,12 +228,8 @@ databaseTests('Pharmacy agent formal model replays (verification/state-machines/
     return seen;
   }
 
-  it.failing('StatusesAgree: an apply that read the proposal before a rejection does not start actions on it', async () => {
+  it('StatusesAgree: an apply that read the proposal before a rejection does not start actions on it', async () => {
     expect(statusesAgree(await applyWritesOverRejection())).toBe(true);
-  });
-
-  it('today: StatusesAgree, a rejected proposal shows its first action being applied', async () => {
-    expect(await applyWritesOverRejection()).toEqual({ proposal: 'REJECTED', actions: ['APPLYING', 'REJECTED'] });
   });
 
   async function threadUpdateFails() {
@@ -269,13 +241,11 @@ databaseTests('Pharmacy agent formal model replays (verification/state-machines/
     };
   }
 
-  it.failing('RunEndsOnce: a completed run stays completed when the thread update after it fails', async () => {
-    expect((await threadUpdateFails()).run).toBe('COMPLETED');
+  it('RunEndsOnce: a completed run stays completed when the thread update after it fails', async () => {
+    expect(await threadUpdateFails()).toEqual({ reply: 'I prepared the new items for your review.', run: 'COMPLETED' });
   });
 
-  it('today: RunEndsOnce, the completed run is rewritten as failed and the agent says nothing changed', async () => {
-    expect(await threadUpdateFails()).toEqual({ reply: NO_CHANGES_REPLY, run: 'FAILED' });
-  });
+  const anHourAgo = () => new Date(Date.now() - 60 * 60_000);
 
   async function restartDuringCodex() {
     const { user, sessionId } = await pharmacy();
@@ -283,51 +253,36 @@ databaseTests('Pharmacy agent formal model replays (verification/state-machines/
     const started = new Promise<void>((resolve) => (codexStarted = resolve));
     void settled(ask(agent(prisma, 'hang', codexStarted), sessionId, user));
     await started;
-    await agent(prisma).onModuleInit();
-    const run = await prisma.pharmacyAgentRun.findFirstOrThrow({ where: { sessionId } });
-    return run.status;
+    const run = () => prisma.pharmacyAgentRun.findFirstOrThrow({ where: { sessionId } });
+    await agent(prisma).sweepAbandonedWork();
+    const live = (await run()).status;
+    await prisma.pharmacyAgentRun.update({ where: { id: (await run()).id }, data: { startedAt: anHourAgo() } });
+    await agent(prisma).sweepAbandonedWork();
+    return { live, abandoned: (await run()).status };
   }
 
-  it.failing('RunLeavesRunning: after a restart kills the request, its run does not stay running', async () => {
-    expect(await restartDuringCodex()).toBe('FAILED');
-  });
-
-  it('today: RunLeavesRunning, the run killed during Codex stays running after the restart', async () => {
-    expect(await restartDuringCodex()).toBe('RUNNING');
+  it('RunLeavesRunning: the sweep fails a run its killed request left running, and only once it is abandoned', async () => {
+    expect(await restartDuringCodex()).toEqual({ live: 'RUNNING', abandoned: 'FAILED' });
   });
 
   async function restartDuringApply() {
-    const { user, sessionId } = await pharmacy();
-    const touch = gate(throwingOn(prisma, 'pharmacyAgentSession.update'), 'pharmacyAgentSession.update');
-    const failedWrite = gate(touch.client, 'pharmacyAgentRun.update', { nth: 2 });
-    const reply = ask(agent(failedWrite.client), sessionId, user);
-    await reached(touch, reply);
-    const [proposal] = (await agent(prisma).listProposals(sessionId, user as any)).data;
-    const beforeWrite = gate(prisma, 'pharmacyAgentProposalAction.update');
-    const afterWrite = gate(beforeWrite.client, 'pharmacyAgentProposalAction.update', { when: 'after' });
-    const applyA = agent(afterWrite.client).applyProposal(proposal.id, user as any);
-    await reached(beforeWrite, applyA);
-    touch.release();
-    await reached(failedWrite, reply);
-    const rejecting = gate(prisma, 'pharmacyAgentProposal.update');
-    const rejectB = agent(rejecting.client).rejectProposal(proposal.id, { reason: 'Not needed' } as any, user as any);
-    await reached(rejecting, rejectB);
-    failedWrite.release();
-    const answer = await reply;
-    beforeWrite.release();
-    await reached(afterWrite, applyA);
-    void settled(applyA);
-    void settled(rejectB);
-    await agent(prisma).onModuleInit();
-    const { actions } = await statuses(proposal.id);
-    return { reply: answer.message.content, applying: actions.filter((s) => s === 'APPLYING').length };
+    const { user, proposalId, thread, reply } = await answerPosted();
+    const afterWrite = gate(prisma, 'pharmacyAgentProposalAction.update', { when: 'after' });
+    void settled(agent(afterWrite.client).applyProposal(proposalId, user as any));
+    await afterWrite.arrived;
+    thread.release();
+    await reply;
+    await agent(prisma).sweepAbandonedWork();
+    const live = await statuses(proposalId);
+    await prisma.pharmacyAgentProposal.update({ where: { id: proposalId }, data: { appliedAt: anHourAgo() } });
+    await agent(prisma).sweepAbandonedWork();
+    return { live, abandoned: await statuses(proposalId) };
   }
 
-  it.failing('ApplyingEnds: after a restart kills an apply, no action stays shown as applying', async () => {
-    expect((await restartDuringApply()).applying).toBe(0);
-  });
-
-  it('today: ApplyingEnds, the action the restart interrupted stays applying', async () => {
-    expect(await restartDuringApply()).toEqual({ reply: NO_CHANGES_REPLY, applying: 1 });
+  it('ApplyingEnds: the sweep closes an apply its killed request left half way, and only once it is abandoned', async () => {
+    expect(await restartDuringApply()).toEqual({
+      live: { proposal: 'PENDING_REVIEW', actions: ['APPLYING', 'PENDING_REVIEW'] },
+      abandoned: { proposal: 'FAILED', actions: ['FAILED', 'SKIPPED'] },
+    });
   });
 });

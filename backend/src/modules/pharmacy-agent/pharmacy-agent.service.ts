@@ -17,6 +17,7 @@ import * as os from 'os';
 import * as path from 'path';
 import sharp from 'sharp';
 import * as XLSX from 'xlsx';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { UserRole } from '@prisma/client';
 import { PrismaService } from '../../shared/database/prisma.service';
 import { PharmacyService } from '../pharmacy/pharmacy.service';
@@ -202,6 +203,8 @@ const ACTION_TARGETS: Record<string, string> = {
   commit_purchase_invoice_stock: 'pharmacy_purchase_invoice',
 };
 
+const PROPOSAL_REVIEWED_ELSEWHERE =
+  'Someone else applied or rejected this proposal first. Reload the thread to see its status.';
 const MAX_ACTIVE_AGENT_THREADS = 12;
 const MAX_HISTORY_AGENT_THREADS = 30;
 const DEFAULT_CODEX_STATUS_CACHE_MS = 60_000;
@@ -224,6 +227,41 @@ export class PharmacyAgentService implements OnModuleInit {
 
   async onModuleInit() {
     await this.ensureAgentPermissions();
+  }
+
+  /**
+   * Closes runs and applies that a crashed or restarted process left behind. Age is the only
+   * sign that no live request owns a row: sendMessage runs Codex at most twice and
+   * spawnWithInput kills each run at the timeout, so five more minutes covers the database
+   * work around them and any Apply.
+   */
+  @Cron(CronExpression.EVERY_5_MINUTES)
+  async sweepAbandonedWork() {
+    const prisma = this.prisma as any;
+    const cutoff = new Date(Date.now() - 2 * this.codexTimeoutMs() - 5 * 60_000);
+    await prisma.pharmacyAgentRun.updateMany({
+      where: { status: 'RUNNING', startedAt: { lt: cutoff } },
+      data: {
+        status: 'FAILED',
+        completedAt: new Date(),
+        error: 'The server stopped before this run finished.',
+      },
+    });
+    await prisma.pharmacyAgentProposal.updateMany({
+      where: { status: 'PENDING_REVIEW', appliedAt: { lt: cutoff } },
+      data: { status: 'FAILED' },
+    });
+    await prisma.pharmacyAgentProposalAction.updateMany({
+      where: { status: 'APPLYING', proposal: { status: { not: 'PENDING_REVIEW' } } },
+      data: {
+        status: 'FAILED',
+        error: 'The server stopped while this change was being applied. Check the record before you try again.',
+      },
+    });
+    await prisma.pharmacyAgentProposalAction.updateMany({
+      where: { status: 'PENDING_REVIEW', proposal: { status: 'FAILED' } },
+      data: { status: 'SKIPPED' },
+    });
   }
 
   async getCodexStatus() {
@@ -492,6 +530,8 @@ export class PharmacyAgentService implements OnModuleInit {
       },
     });
 
+    let result;
+    let proposalCount = 0;
     try {
       const baseContext = await this.buildBaseContext(user.branchId);
       const attachmentSummaries = attachments.map((a: any) =>
@@ -521,65 +561,51 @@ export class PharmacyAgentService implements OnModuleInit {
         });
       }
 
-      const { staged: proposals, questions } = await this.stageProposals({
-        sessionId: session.id,
-        runId: run.id,
-        branchId: user.branchId,
-        userId: user.id,
-        proposals: output.proposals || [],
-      });
-      const followUpQuestion = questions.length ? questions.join('\n\n') : output.followUpQuestion;
-
-      const assistantStructured = {
-        chart: output.chart || null,
-        report: output.report || null,
-        proposals: proposals.map((proposal: any) => proposal.id),
-        needsFollowUp: Boolean(output.needsFollowUp || questions.length),
-        followUpQuestion: followUpQuestion || null,
-      };
-      const assistantMessage = await prisma.pharmacyAgentMessage.create({
-        data: {
+      const { proposals, assistantMessage } = await prisma.$transaction(async (tx: any) => {
+        const { staged, questions } = await this.stageProposals(tx, {
           sessionId: session.id,
+          runId: run.id,
           branchId: user.branchId,
-          role: 'ASSISTANT',
-          content: questions.length
-            ? [proposals.length ? output.answer : '', ...questions].filter(Boolean).join('\n\n')
-            : output.answer ||
-              output.followUpQuestion ||
-              'I reviewed the pharmacy context and prepared the result.',
-          structured: assistantStructured,
-        },
-      });
+          userId: user.id,
+          proposals: output.proposals || [],
+        });
+        const followUpQuestion = questions.length ? questions.join('\n\n') : output.followUpQuestion;
 
-      await prisma.pharmacyAgentRun.update({
-        where: { id: run.id },
-        data: {
-          status: 'COMPLETED',
-          completedAt: new Date(),
-          output: this.redact({
-            ...output,
-            stagedProposalIds: proposals.map((proposal: any) => proposal.id),
-          }),
-        },
-      });
-      await prisma.pharmacyAgentSession.update({
-        where: { id: session.id },
-        data: {
-          title: session.title || this.deriveTitle(dto.message),
-          updatedAt: new Date(),
-        },
-      });
+        const assistantStructured = {
+          chart: output.chart || null,
+          report: output.report || null,
+          proposals: staged.map((proposal: any) => proposal.id),
+          needsFollowUp: Boolean(output.needsFollowUp || questions.length),
+          followUpQuestion: followUpQuestion || null,
+        };
+        const message = await tx.pharmacyAgentMessage.create({
+          data: {
+            sessionId: session.id,
+            branchId: user.branchId,
+            role: 'ASSISTANT',
+            content: questions.length
+              ? [staged.length ? output.answer : '', ...questions].filter(Boolean).join('\n\n')
+              : output.answer ||
+                output.followUpQuestion ||
+                'I reviewed the pharmacy context and prepared the result.',
+            structured: assistantStructured,
+          },
+        });
 
-      await this.audit({
-        branchId: user.branchId,
-        userId: user.id,
-        sessionId: session.id,
-        runId: run.id,
-        eventType: 'MESSAGE_COMPLETED',
-        details: { proposalCount: proposals.length },
+        await tx.pharmacyAgentRun.update({
+          where: { id: run.id },
+          data: {
+            status: 'COMPLETED',
+            completedAt: new Date(),
+            output: this.redact({
+              ...output,
+              stagedProposalIds: staged.map((proposal: any) => proposal.id),
+            }),
+          },
+        });
+        return { proposals: staged, assistantMessage: message };
       });
-
-      return {
+      result = {
         message: this.serializeMessage(assistantMessage),
         proposals: proposals.map((proposal: any) =>
           this.serializeProposal(proposal),
@@ -588,16 +614,18 @@ export class PharmacyAgentService implements OnModuleInit {
         report: output.report || null,
         runId: run.id,
       };
+      proposalCount = proposals.length;
     } catch (error: any) {
       this.logger.error(`Agent run failed: ${error?.message || error}`);
-      await prisma.pharmacyAgentRun.update({
-        where: { id: run.id },
+      const failed = await prisma.pharmacyAgentRun.updateMany({
+        where: { id: run.id, status: 'RUNNING' },
         data: {
           status: 'FAILED',
           completedAt: new Date(),
           error: String(error?.message || error).slice(0, 2000),
         },
       });
+      if (failed.count === 0) throw error;
       const assistantMessage = await prisma.pharmacyAgentMessage.create({
         data: {
           sessionId: session.id,
@@ -616,6 +644,30 @@ export class PharmacyAgentService implements OnModuleInit {
         runId: run.id,
       };
     }
+
+    // The answer is committed. A failed thread rename must not report the run as failed.
+    try {
+      await prisma.pharmacyAgentSession.update({
+        where: { id: session.id },
+        data: {
+          title: session.title || this.deriveTitle(dto.message),
+          updatedAt: new Date(),
+        },
+      });
+    } catch (error) {
+      this.logger.warn(`Failed to update agent thread ${session.id}: ${error}`);
+    }
+
+    await this.audit({
+      branchId: user.branchId,
+      userId: user.id,
+      sessionId: session.id,
+      runId: run.id,
+      eventType: 'MESSAGE_COMPLETED',
+      details: { proposalCount },
+    });
+
+    return result;
   }
 
   async getRun(runId: string, user: AgentUser) {
@@ -652,9 +704,7 @@ export class PharmacyAgentService implements OnModuleInit {
       include: { actions: { orderBy: { createdAt: 'asc' } } },
     });
     if (!proposal) throw new NotFoundException('Proposal not found');
-    if (proposal.status !== 'PENDING_REVIEW') {
-      throw new BadRequestException(`Proposal is ${proposal.status}`);
-    }
+    this.assertAwaitingReview(proposal);
 
     for (const action of proposal.actions) {
       this.assertSupportedAction(action.actionType);
@@ -667,6 +717,14 @@ export class PharmacyAgentService implements OnModuleInit {
       }
       await this.assertExpectedVersion(action, user.branchId);
     }
+
+    const claimedAt = new Date();
+    const claim = await prisma.pharmacyAgentProposal.updateMany({
+      where: { id: proposal.id, status: 'PENDING_REVIEW', appliedAt: null },
+      data: { appliedBy: user.id, appliedAt: claimedAt },
+    });
+    if (claim.count === 0) throw new BadRequestException(PROPOSAL_REVIEWED_ELSEWHERE);
+    const claimed = { id: proposal.id, status: 'PENDING_REVIEW', appliedAt: claimedAt };
 
     const results: any[] = [];
     for (const action of proposal.actions) {
@@ -689,21 +747,24 @@ export class PharmacyAgentService implements OnModuleInit {
             error: String(error?.message || error).slice(0, 1000),
           },
         });
-        await prisma.pharmacyAgentProposal.update({
-          where: { id: proposal.id },
+        await prisma.pharmacyAgentProposalAction.updateMany({
+          where: { proposalId: proposal.id, status: 'PENDING_REVIEW' },
+          data: { status: 'SKIPPED' },
+        });
+        await prisma.pharmacyAgentProposal.updateMany({
+          where: claimed,
           data: { status: 'FAILED' },
         });
         throw error;
       }
     }
 
-    const updated = await prisma.pharmacyAgentProposal.update({
+    await prisma.pharmacyAgentProposal.updateMany({
+      where: claimed,
+      data: { status: 'APPLIED', appliedAt: new Date() },
+    });
+    const updated = await prisma.pharmacyAgentProposal.findUniqueOrThrow({
       where: { id: proposal.id },
-      data: {
-        status: 'APPLIED',
-        appliedBy: user.id,
-        appliedAt: new Date(),
-      },
       include: { actions: { orderBy: { createdAt: 'asc' } } },
     });
 
@@ -730,24 +791,28 @@ export class PharmacyAgentService implements OnModuleInit {
       include: { actions: { orderBy: { createdAt: 'asc' } } },
     });
     if (!proposal) throw new NotFoundException('Proposal not found');
-    if (proposal.status !== 'PENDING_REVIEW') {
-      throw new BadRequestException(`Proposal is ${proposal.status}`);
-    }
+    this.assertAwaitingReview(proposal);
 
-    const updated = await prisma.pharmacyAgentProposal.update({
-      where: { id: proposal.id },
-      data: {
-        status: 'REJECTED',
-        rejectedBy: user.id,
-        rejectedAt: new Date(),
-        rejectionReason: dto.reason || null,
-        actions: {
-          updateMany: {
-            where: { proposalId: proposal.id },
-            data: { status: 'REJECTED' },
-          },
+    const rejected = await prisma.$transaction(async (tx: any) => {
+      const { count } = await tx.pharmacyAgentProposal.updateMany({
+        where: { id: proposal.id, status: 'PENDING_REVIEW', appliedAt: null },
+        data: {
+          status: 'REJECTED',
+          rejectedBy: user.id,
+          rejectedAt: new Date(),
+          rejectionReason: dto.reason || null,
         },
-      },
+      });
+      if (count === 0) return false;
+      await tx.pharmacyAgentProposalAction.updateMany({
+        where: { proposalId: proposal.id },
+        data: { status: 'REJECTED' },
+      });
+      return true;
+    });
+    if (!rejected) throw new BadRequestException(PROPOSAL_REVIEWED_ELSEWHERE);
+    const updated = await prisma.pharmacyAgentProposal.findUniqueOrThrow({
+      where: { id: proposal.id },
       include: { actions: { orderBy: { createdAt: 'asc' } } },
     });
 
@@ -770,6 +835,18 @@ export class PharmacyAgentService implements OnModuleInit {
     });
     if (!session) throw new NotFoundException('Agent session not found');
     return session;
+  }
+
+  // appliedAt on a proposal still awaiting review marks an Apply in progress.
+  private assertAwaitingReview(proposal: any) {
+    if (proposal.status !== 'PENDING_REVIEW') {
+      throw new BadRequestException(`Proposal is ${proposal.status}`);
+    }
+    if (proposal.appliedAt) {
+      throw new BadRequestException(
+        'This proposal is already being applied. Reload the thread to see the result.',
+      );
+    }
   }
 
   private assertSessionWritable(session: any) {
@@ -1145,9 +1222,7 @@ export class PharmacyAgentService implements OnModuleInit {
 
     const prompt = this.buildCodexPrompt(input);
     const codex = process.env.PHARMACY_AGENT_CODEX_PATH || 'codex';
-    const timeoutMs = Number(
-      process.env.PHARMACY_AGENT_CODEX_TIMEOUT_MS || 60000,
-    );
+    const timeoutMs = this.codexTimeoutMs();
     const args = [
       'exec',
       '--ephemeral',
@@ -1224,6 +1299,10 @@ export class PharmacyAgentService implements OnModuleInit {
     ].join('\n');
   }
 
+  private codexTimeoutMs() {
+    return Number(process.env.PHARMACY_AGENT_CODEX_TIMEOUT_MS || 60000);
+  }
+
   private async spawnWithInput(
     command: string,
     args: string[],
@@ -1287,14 +1366,13 @@ export class PharmacyAgentService implements OnModuleInit {
     return codexOAuthEnv();
   }
 
-  private async stageProposals(input: {
+  private async stageProposals(client: any, input: {
     sessionId: string;
     runId: string;
     branchId: string;
     userId: string;
     proposals: CodexProposal[];
   }) {
-    const prisma = this.prisma as any;
     const staged: any[] = [];
     const questions: string[] = [];
     for (const rawProposal of (input.proposals || []).slice(0, 5)) {
@@ -1308,7 +1386,7 @@ export class PharmacyAgentService implements OnModuleInit {
         return [{ ...action, input: named.input }];
       });
       if (actions.length === 0) continue;
-      const proposal = await prisma.pharmacyAgentProposal.create({
+      const proposal = await client.pharmacyAgentProposal.create({
         data: {
           sessionId: input.sessionId,
           runId: input.runId,
