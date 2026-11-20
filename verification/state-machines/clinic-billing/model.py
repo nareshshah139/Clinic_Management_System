@@ -8,7 +8,7 @@ CONSTANTS = {
     "Confirmers": "{c1, c2}",
 }
 MODES = {m: {"MODE": f'"{m}"'} for m in (
-    "code", "fixed", "staleBalance", "editBelowReceived", "unlinkedRefund",
+    "before", "code", "fixed", "staleBalance", "editBelowReceived", "unlinkedRefund",
     "confirmWithoutCAS", "noReconciler", "typeProbe")}
 RULES = {
     "TypeOK": "invariant",
@@ -28,9 +28,13 @@ RULE_TEXT = {
 }
 ALL = list(RULES)
 EXPECT = {
-    "code": {r: "holds" for r in ALL} | {
+    "before": {r: "holds" for r in ALL} | {
         "BalanceMatches": "breaks",
         "ReceivedWithinTotal": "breaks",
+        "RefundsWithinPayment": "breaks",
+        "GatewayPaymentSettles": "breaks",
+    },
+    "code": {r: "holds" for r in ALL} | {
         "RefundsWithinPayment": "breaks",
         "GatewayPaymentSettles": "breaks",
     },
@@ -42,7 +46,7 @@ EXPECT = {
     "noReconciler": {"GatewayPaymentSettles": "breaks"},
     "typeProbe": {"TypeOK": "breaks"},
 }
-CHARTS = ["code", "fixed"]
+CHARTS = ["before", "code"]
 REPLAYS = {
     r: "backend/src/modules/billing/tests/clinic-billing.formal-replay.database.spec.ts"
     for r, v in EXPECT["code"].items() if v == "breaks"
