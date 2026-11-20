@@ -1494,6 +1494,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
 
   // Debounced clinical autocomplete loaders
   useEffect(() => {
+    let current = true;
     const t = setTimeout(async () => {
       try {
         if (!patientId || !diagnosisFieldFocused) return;
@@ -1506,15 +1507,16 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
           const k = (s || '').toLowerCase();
           if (!seen.has(k)) { seen.add(k); merged.push(s); }
         });
-        setDiagOptions(merged.slice(0, 8));
+        if (current) setDiagOptions(merged.slice(0, 8));
       } catch {
-        setDiagOptions(getLocalSuggestions('diagnosis', diagnosis, 8));
+        if (current) setDiagOptions(getLocalSuggestions('diagnosis', diagnosis, 8));
       }
     }, 250);
-    return () => clearTimeout(t);
+    return () => { current = false; clearTimeout(t); };
   }, [diagnosis, diagnosisFieldFocused, patientId, visitId]);
 
   useEffect(() => {
+    let current = true;
     const t = setTimeout(async () => {
       try {
         if (!patientId || !complaintFieldFocused) return;
@@ -1527,12 +1529,12 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
           const k = (s || '').toLowerCase();
           if (!seen.has(k)) { seen.add(k); merged.push(s); }
         });
-        setComplaintOptions(merged.slice(0, 8));
+        if (current) setComplaintOptions(merged.slice(0, 8));
       } catch {
-        setComplaintOptions(getLocalSuggestions('chiefComplaints', chiefComplaints, 8));
+        if (current) setComplaintOptions(getLocalSuggestions('chiefComplaints', chiefComplaints, 8));
       }
     }, 250);
-    return () => clearTimeout(t);
+    return () => { current = false; clearTimeout(t); };
   }, [chiefComplaints, complaintFieldFocused, patientId, visitId]);
 
   // removed doctor's personal notes composition and autocomplete logic
@@ -1543,13 +1545,15 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     const row = activeSearchRow;
     const q = (rowDrugQueries[row] || '').trim();
     let current = true;
-    setRowDrugResults(prev => ({ ...prev, [row]: [] }));
     setRowLoadingDrugs(prev => ({ ...prev, [row]: q.length >= 2 }));
-    if (q.length < 2) return;
+    if (q.length < 2) {
+      setRowDrugResults(prev => ({ ...prev, [row]: [] }));
+      return;
+    }
 
     const t = setTimeout(async () => {
       try {
-        const results = await apiClient.get<any[]>('/prescriptions/drugs/autocomplete', { q, limit: 30 });
+        const results = await apiClient.get<any[]>('/prescriptions/drugs/autocomplete', { q, limit: 10 });
         if (current) setRowDrugResults(prev => ({ ...prev, [row]: results.slice(0, 10) }));
       } catch {
         if (current) setRowDrugResults(prev => ({ ...prev, [row]: [] }));
@@ -1574,8 +1578,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
         width: Math.max(500, rect.width)
       });
     }
-    
-    pushRecent('drugQueries', q);
   };
 
   // Highlight matching text in search results
@@ -7204,7 +7206,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
           {!rowLoadingDrugs[activeSearchRow] && (!rowDrugResults[activeSearchRow] || rowDrugResults[activeSearchRow].length === 0) && (
             <div className="px-3 py-2 text-xs text-muted-foreground">No results found</div>
           )}
-          {!rowLoadingDrugs[activeSearchRow] && rowDrugResults[activeSearchRow] && rowDrugResults[activeSearchRow].length > 0 && (
+          {rowDrugResults[activeSearchRow] && rowDrugResults[activeSearchRow].length > 0 && (
             <>
               {rowDrugResults[activeSearchRow].map((d: any, index: number) => (
                 <div 

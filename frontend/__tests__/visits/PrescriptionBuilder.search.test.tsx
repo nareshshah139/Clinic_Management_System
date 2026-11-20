@@ -78,7 +78,7 @@ describe.each([false, true])('prescription medicine search (template=%s)', templ
     fireEvent.change(input, { target: { value: 'missing' } });
     await tick();
     expect(get.mock.calls.filter(([url]) => url.includes('/autocomplete'))).toEqual([
-      ['/prescriptions/drugs/autocomplete', { q: 'missing', limit: 30 }],
+      ['/prescriptions/drugs/autocomplete', { q: 'missing', limit: template ? 30 : 10 }],
     ]);
   });
 

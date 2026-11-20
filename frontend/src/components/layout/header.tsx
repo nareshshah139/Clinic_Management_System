@@ -99,13 +99,19 @@ export function Header() {
     };
     void load();
 
-    // Optional light polling to keep fresh
+    // Optional light polling to keep fresh, paused in background tabs
     const interval = setInterval(() => {
+      if (document.visibilityState === 'hidden') return;
       void load();
     }, 60_000);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') void load();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
     return () => {
       mounted = false;
       clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
     };
   }, [loading, user]);
 
