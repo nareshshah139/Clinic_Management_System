@@ -8,6 +8,7 @@ const entry = (id = 'rx-1') => ({
   prescriptionId: id, status: 'pending', createdAt: new Date().toISOString(), pendingHours: 0,
   isOverTwoHours: false, linkedInvoiceIds: [], patient: { id, name: `Patient ${id}` }, doctor: { id: 'd', name: 'Doctor' },
   medications: [{ drugName: 'Medicine A', prescribedQuantity: 2, dispensedQuantity: 0, coverageStatus: 'not_started' }],
+  allowedStatuses: ['QUEUED', 'IN_REVIEW', 'PARTIALLY_FILLED', 'PAUSED', 'READY_TO_BILL', 'CANCELLED'],
 });
 const stock = (quantity: number) => ({ items: [{
   drugName: 'Medicine A', inventoryItemId: 'inv-a', stockName: 'Medicine A', stockStatus: 'IN_STOCK',
@@ -121,7 +122,7 @@ it('starts review through explicit pull when staff select a prescription without
 it('refreshes invoice coverage after checkout without creating a task during refresh', async () => {
   render(<PharmacyCounterCockpit {...props} />);
   await screen.findByText('10 available');
-  get.mockImplementation(async url => url.endsWith('/stock-check') ? stock(8) : { data: [{ ...entry(), status: 'dispensed', dispenseStatus: 'DISPENSED', linkedInvoiceIds: ['paid-invoice'] }], pagination: { total: 1 } });
+  get.mockImplementation(async url => url.endsWith('/stock-check') ? stock(8) : { data: [{ ...entry(), status: 'dispensed', dispenseStatus: 'DISPENSED', linkedInvoiceIds: ['paid-invoice'], allowedStatuses: [] }], pagination: { total: 1 } });
   act(() => window.dispatchEvent(new CustomEvent('pharmacy-invoices-refresh')));
   await screen.findByText('8 available');
   expect(screen.getByRole('button', { name: /Patient rx-1/ })).toHaveTextContent('Dispensed');
