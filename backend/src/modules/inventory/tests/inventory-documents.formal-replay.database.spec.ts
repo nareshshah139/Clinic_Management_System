@@ -31,7 +31,7 @@ databaseTests('Inventory documents formal replay', () => {
 
   afterAll(async () => { await fixture?.cleanup(); });
 
-  async function orderThenCancel() {
+  async function orderThenClose(action: 'CANCEL' | 'REJECT') {
     const item = await prisma.inventoryItem.create({ data: {
       branchId: clerk.branchId, name: 'Shortbook item', type: 'SUPPLY', costPrice: 1, sellingPrice: 1, unit: 'PIECES', currentStock: 1, heldStock: 0,
     } });
@@ -40,29 +40,21 @@ databaseTests('Inventory documents formal replay', () => {
       payload: { date: new Date().toISOString().slice(0, 10), lines: [{ id: 'need-line', inventoryId: item.id, name: 'Shortbook item', unit: 'PIECES', quantity: 2 }] },
     } });
     const order = await workflow.transition(clerk, shortbook.id, { version: 1, action: 'CREATE_PO' } as any);
-    await workflow.transition(clerk, order.id, { version: order.version, action: 'CANCEL' } as any);
+    await workflow.transition(clerk, order.id, { version: order.version, action } as any);
     const after = await prisma.inventoryWorkflowDocument.findUniqueOrThrow({ where: { id: shortbook.id } });
-    const cancelledOrder = await prisma.inventoryWorkflowDocument.findUniqueOrThrow({ where: { id: order.id } });
-    return { shortbook: after, order: cancelledOrder };
+    const closedOrder = await prisma.inventoryWorkflowDocument.findUniqueOrThrow({ where: { id: order.id } });
+    return { shortbook: after, order: closedOrder };
   }
 
-  it.failing('ShortbookFollowsOrder: cancelling the order made from a shortbook closes the shortbook', async () => {
-    const { shortbook, order } = await orderThenCancel();
+  it('ShortbookFollowsOrder: cancelling the order made from a shortbook closes the shortbook', async () => {
+    const { shortbook, order } = await orderThenClose('CANCEL');
     expect(order.status).toBe('CANCELLED');
     expect(shortbook.status).toBe('CANCELLED');
   });
 
-  it('today: cancelling the order leaves its shortbook ordered with no way to close it', async () => {
-    const { shortbook, order } = await orderThenCancel();
-    expect(order.status).toBe('CANCELLED');
-    expect(shortbook.status).toBe('ORDERED');
-    await expect(workflow.transition(clerk, shortbook.id, { version: shortbook.version, action: 'CANCEL' } as any))
-      .rejects.toThrow('Posted documents need a linked reversal');
-    await expect(workflow.transition(clerk, shortbook.id, { version: shortbook.version, action: 'REJECT' } as any))
-      .rejects.toThrow('Only proposals awaiting review can be rejected');
-    await expect(replenishment.cancelRemaining(clerk, order.id, { version: order.version, reason: 'Supplier out of stock' }))
-      .rejects.toThrow('This order has no open remainder');
-    const reordered = await workflow.transition(clerk, shortbook.id, { version: shortbook.version, action: 'CREATE_PO' } as any);
-    expect(reordered).toMatchObject({ id: order.id, status: 'CANCELLED' });
+  it('ShortbookFollowsOrder: rejecting the order made from a shortbook closes the shortbook', async () => {
+    const { shortbook, order } = await orderThenClose('REJECT');
+    expect(order.status).toBe('REJECTED');
+    expect(shortbook.status).toBe('CANCELLED');
   });
 });
