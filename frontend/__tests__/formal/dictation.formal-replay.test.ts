@@ -186,17 +186,9 @@ describe('a live transcript piece that fails and then completes', () => {
     return field;
   }
 
-  it.failing('ItemFailureSticks: the failed piece sends the dictation to the recording upload', async () => {
+  it('ItemFailureSticks: the failed piece sends the dictation to the recording upload', async () => {
     const field = await failThenComplete();
     expect(field.applyText.mock.calls).toEqual([['notes', 'Recorded words']]);
-  });
-
-  it('today: the completed event overwrites the failure and the live text is inserted', async () => {
-    const field = await failThenComplete();
-    expect({ inserted: field.applyText.mock.calls, urls: urls() }).toEqual({
-      inserted: [['notes', 'Live words']],
-      urls: [LIVE_URL],
-    });
   });
 });
 
