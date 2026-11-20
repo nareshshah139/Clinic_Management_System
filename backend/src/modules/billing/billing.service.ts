@@ -283,6 +283,13 @@ export class BillingService {
     return invoice;
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:calculation;concurrency] invoice-edit-balance
+   * An edit that changes the total MUST write the new total first, so the bill's row stays locked
+   * until commit, and MUST compute the balance from the received amount that write returned. A
+   * payment or refund racing the edit then waits, and its amount is never lost. An edit MUST NOT
+   * set the total below what the bill has received.
+   */
   async updateInvoice(id: string, updateInvoiceDto: UpdateInvoiceDto, branchId: string) {
     const invoice = await this.findInvoiceById(id, branchId);
 
