@@ -6,41 +6,14 @@ stateDiagram-v2
   state "Signed in" as s1
   state "Signed out, account suspended" as s2
   state "Suspended, browser still holds a session" as s3
-  state "The API lets a demoted user act as admin" as s4
-  state "The API serves a session from before the reset" as s5
-  state "A suspended account resets its password" as s6
-  state "The API serves a suspended account" as s7
   [*] --> s0
   s0 --> s1: you sign in
   s0 --> s2: a manager suspends you
   s1 --> s0: the session expires
   s1 --> s3: a manager suspends you
-  s1 --> s4: you use a manager action
-  s1 --> s5: you open a page / you use a manager action
   s2 --> s0: a manager reactivates you
-  s2 --> s6: you reset your password
   s3 --> s1: a manager reactivates you
   s3 --> s2: the session expires
-  s3 --> s6: you reset your password
-  s3 --> s7: you open a page / you use a manager action
-  s4 --> s0: the session expires
-  s4 --> s1: a manager gives you a reset code / a manager promotes you / time passes / you open a page / you reset your password
-  s4 --> s3: a manager suspends you
-  s4 --> s5: you open a page
-  s5 --> s0: the session expires
-  s5 --> s1: a manager demotes you / a manager gives you a reset code / a manager promotes you / time passes / you use a manager action
-  s5 --> s3: a manager suspends you
-  s5 --> s4: you use a manager action
-  s6 --> s0: a manager reactivates you
-  s6 --> s1: a manager reactivates you
-  s6 --> s2: a manager demotes you / a manager gives you a reset code / a manager promotes you / the session expires / you open a page / you use a manager action
-  s6 --> s3: a manager demotes you / a manager gives you a reset code / a manager promotes you / time passes / you use a manager action
-  s6 --> s7: you open a page / you use a manager action
-  s7 --> s1: a manager reactivates you
-  s7 --> s2: the session expires
-  s7 --> s3: a manager demotes you / a manager gives you a reset code / a manager promotes you / time passes / you use a manager action
-  s7 --> s6: you reset your password
   classDef breaks fill:#fde2dd,stroke:#b3261e,stroke-width:2px
   classDef stuck fill:#fdf0d5,stroke:#a35a05,stroke-width:2px,stroke-dasharray:5 3
   classDef breaksAndStuck fill:#fde2dd,stroke:#a35a05,stroke-width:2px,stroke-dasharray:5 3
-  class s2,s4,s5,s6,s7 breaks
