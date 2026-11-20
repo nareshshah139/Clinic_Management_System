@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import MedicalVisitForm from '@/components/visits/MedicalVisitForm';
+import { Toaster } from '@/components/ui/toaster';
 
 // The real visit form and prescription builder, with fetch stubbed as a stateful API that keeps
 // the prescription record the pharmacy reads. Like VisitsService.update, it refuses every
@@ -25,7 +26,7 @@ const doxycycline = { drugName: 'Doxycycline 100', dosage: 1, dosageUnit: 'TABLE
 const MINOCYCLINE = 'Minocycline 50';
 const COMPLETED_REFUSAL = 'This visit is completed, so its notes can no longer be changed.';
 
-function clinicServer(initialStatus: 'COMPLETED' | 'IN_PROGRESS') {
+function clinicServer(initialStatus: 'COMPLETED' | 'IN_PROGRESS', prescriptionRefusal?: string) {
   const server = { status: initialStatus, version: 4, record: [doxycycline] as Array<{ drugName: string }>, writes: [] as string[] };
   const reply = (code: number, body: unknown) => ({ ok: code < 400, status: code, headers: { get: (name: string) => (name.toLowerCase() === 'content-type' ? 'application/json' : null) }, json: async () => body, text: async () => JSON.stringify(body) });
   const visit = () => ({
@@ -47,6 +48,7 @@ function clinicServer(initialStatus: 'COMPLETED' | 'IN_PROGRESS') {
     const body = init?.body ? JSON.parse(String(init.body)) : {};
     if (url === '/api/visits/v1') { server.version += 1; return reply(200, visit()); }
     if (url === '/api/prescriptions/rx1') {
+      if (prescriptionRefusal) return reply(409, { message: prescriptionRefusal });
       server.record = body.items;
       server.version += 1;
       return reply(200, { id: 'rx1', items: server.record, visit: visit() });
@@ -80,7 +82,7 @@ async function printPrescription() {
   return printed[0];
 }
 
-it.failing('completing a visit saves a changed medicine into the prescription record, and the printout matches the record', async () => {
+it('completing a visit saves a changed medicine into the prescription record, and the printout matches the record', async () => {
   const server = clinicServer('IN_PROGRESS');
   render(<MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v1" userRole="DOCTOR" />);
   await screen.findByDisplayValue(doxycycline.drugName, {}, { timeout: 20_000 });
@@ -99,7 +101,7 @@ it.failing('completing a visit saves a changed medicine into the prescription re
   expect(page).not.toContain(doxycycline.drugName);
 });
 
-it.failing('prints the saved prescription record of a completed visit, not a stale local draft', async () => {
+it('prints the saved prescription record of a completed visit, not a stale local draft', async () => {
   const server = clinicServer('COMPLETED');
   localStorage.setItem('rxDraft:p:v1', JSON.stringify({
     dosageSchemaVersion: 1,
@@ -114,5 +116,30 @@ it.failing('prints the saved prescription record of a completed visit, not a sta
   expect(server.record.map((item) => item.drugName)).toEqual([doxycycline.drugName]);
   expect(page).toContain(doxycycline.drugName);
   expect(page).not.toContain(MINOCYCLINE);
-  expect(server.writes).toEqual(['POST /api/prescriptions/rx1/print-events']);
+});
+
+const completeVisit = async () => {
+  await act(async () => { fireEvent.click(screen.getAllByRole('button', { name: 'Complete Visit' })[0]); });
+};
+
+it('completes a visit without writing a prescription whose medicines are unchanged', async () => {
+  const server = clinicServer('IN_PROGRESS');
+  render(<MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v1" userRole="DOCTOR" />);
+  await screen.findByDisplayValue(doxycycline.drugName, {}, { timeout: 20_000 });
+  await completeVisit();
+  await waitFor(() => expect(server.status).toBe('COMPLETED'), { timeout: 10_000 });
+  expect(server.writes).toEqual(['PATCH /api/visits/v1', 'POST /api/visits/v1/complete']);
+});
+
+it('leaves the visit open and says why when the changed prescription cannot be saved', async () => {
+  const INVOICED = 'This prescription has a pharmacy invoice and its medicines cannot be changed. Start a new visit for a new prescription.';
+  const server = clinicServer('IN_PROGRESS', INVOICED);
+  render(<><MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v1" userRole="DOCTOR" /><Toaster /></>);
+  fireEvent.change(await screen.findByDisplayValue(doxycycline.drugName, {}, { timeout: 20_000 }), { target: { value: MINOCYCLINE } });
+  await completeVisit();
+  expect(await screen.findByText(INVOICED, {}, { timeout: 10_000 })).toBeInTheDocument();
+  expect(screen.getByText('Visit not completed')).toBeInTheDocument();
+  expect(server.status).toBe('IN_PROGRESS');
+  expect(server.record.map((item) => item.drugName)).toEqual([doxycycline.drugName]);
+  expect(server.writes).toEqual(['PATCH /api/visits/v1', 'PATCH /api/prescriptions/rx1']);
 });

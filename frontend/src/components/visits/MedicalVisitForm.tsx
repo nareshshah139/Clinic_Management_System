@@ -897,6 +897,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
 
   const latestPayload = useRef(buildPayload);
   latestPayload.current = buildPayload;
+  const syncPrescriptionRef = useRef<(savedVisitId: string) => Promise<void>>(null);
   const manualSaveInFlight = useRef(false);
   const autoSaveRunner = useRef<() => Promise<void>>(async () => {});
   const latestDraftWriter = useRef(persistDraftToStorage);
@@ -1414,6 +1415,11 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
     }
   };
 
+  /**
+   * @cc [owner:nareshshah139,label:product] completion-saves-prescription
+   * Completing a visit MUST first save prescription items that differ from the saved
+   * prescription record, inside this save lock. If that save fails, the visit MUST NOT complete.
+   */
   const save = async (complete = false, requireLatest = false) => {
     if (visitStatus === 'COMPLETED') {
       toast({ variant: 'warning', title: 'Visit completed', description: 'A completed visit cannot be changed.' });
@@ -1482,6 +1488,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
         if ((complete || requireLatest) && newerChanges) throw new Error('New changes were entered while saving. Please save again before completing or exporting.');
         let reviewOutcome: ReviewBooking | undefined;
         if (complete) {
+          await syncPrescriptionRef.current?.((visit as VisitDetails).id);
           const completePayload: Record<string, unknown> = { version: visitVersionRef.current };
           if (reviewDate) completePayload.followUpDate = reviewDate;
           const completeId = (visit as VisitDetails).id;
@@ -1540,7 +1547,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
         setSaveStatus('error');
         toast({
           variant: 'destructive',
-          title: 'Unable to save visit',
+          title: complete ? 'Visit not completed' : 'Unable to save visit',
           description: getErrorMessage(e) || 'Please try again.',
         });
         return false;
@@ -2026,6 +2033,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
                       }}
                       holdVisitSave={holdVisitSave}
                       visitCompleted={visitStatus === 'COMPLETED'}
+                      syncPrescriptionRef={syncPrescriptionRef}
                       onBeforeExport={async () => {
                         const savedId = await save(false, true);
                         if (!savedId) {

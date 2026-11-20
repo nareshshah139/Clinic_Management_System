@@ -2,7 +2,7 @@
 import { displayUtcDate, displayClinicDate, displayClinicDateTime } from '@/lib/date-display';
 import { Spinner } from "@/components/ui/spinner";
 import { TELE_VIDEO_DISCLAIMER, TELE_VIDEO_CONSENT_REQUIRED, type ConsultationType } from '@/lib/tele-consultation';
-import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useDeferredValue, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { createPortal, flushSync } from 'react-dom';
 import type { VisitDetails } from '@/lib/types';
 import { encounterTime } from '@/lib/patient-history';
@@ -128,6 +128,38 @@ interface PrescriptionItemForm extends RegimenRow {
   pulseRegimen?: string;
 }
 
+const toItemPayload = (it: PrescriptionItemForm) => ({
+  drugName: it.drugName,
+  drugId: it.drugId || undefined,
+  inventoryItemId: it.inventoryItemId || undefined,
+  genericName: it.genericName || undefined,
+  brandName: it.brandName || undefined,
+  dosage: it.dosage === '' || it.dosage == null ? undefined : Number(it.dosage),
+  dosageUnit: it.dosageUnit,
+  frequency: it.frequency,
+  dosePattern: it.dosePattern || undefined,
+  notes: it.notes || undefined,
+  duration: Number(it.duration),
+  durationUnit: it.durationUnit,
+  instructions: it.instructions || undefined,
+  route: it.route || undefined,
+  timing: it.timing || undefined,
+  quantity: it.quantity ? Number(it.quantity) : undefined,
+  isGeneric: it.isGeneric ?? true,
+  applicationSite: it.applicationSite || undefined,
+  applicationAmount: it.applicationAmount || undefined,
+  dayPart: it.dayPart || undefined,
+  leaveOn: typeof it.leaveOn === 'boolean' ? it.leaveOn : undefined,
+  washOffAfterMinutes: it.washOffAfterMinutes !== '' ? Number(it.washOffAfterMinutes) : undefined,
+  taperSchedule: it.taperSchedule || undefined,
+  weightMgPerKgPerDay: it.weightMgPerKgPerDay !== '' ? Number(it.weightMgPerKgPerDay) : undefined,
+  calculatedDailyDoseMg: it.calculatedDailyDoseMg !== '' ? Number(it.calculatedDailyDoseMg) : undefined,
+  pregnancyWarning: typeof it.pregnancyWarning === 'boolean' ? it.pregnancyWarning : undefined,
+  photosensitivityWarning: typeof it.photosensitivityWarning === 'boolean' ? it.photosensitivityWarning : undefined,
+  foodInstructions: it.foodInstructions || undefined,
+  pulseRegimen: it.pulseRegimen || undefined,
+});
+
 interface Props {
   consultationType?: ConsultationType;
   teleVideoConsent?: boolean;
@@ -162,6 +194,7 @@ interface Props {
   ensureVisitId?: () => Promise<string>;
   holdVisitSave?: <T>(write: () => Promise<T>) => Promise<T | undefined>;
   visitCompleted?: boolean;
+  syncPrescriptionRef?: React.Ref<(savedVisitId: string) => Promise<void>>;
   onChangeChiefComplaints?: (value: string) => void;
   onChangeContentOffset?: (x: number, y: number) => void;
   designAids?: {
@@ -291,7 +324,7 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
  * and the disclaimer above the signature, even when the signature is hidden.
  * Switching to In-person MUST remove both from regenerated preview and exports.
  */
-function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, visitId, doctorId, doctorName, userRole = 'DOCTOR', onCreated, onClinicalDataChange, getClinicalSavePatch, onVisitSaved, onClinicalConflict, shouldPersistDraft, initialVisitSnapshot, onBeforeExport, holdVisitSave, visitCompleted = false, onPreview, reviewDate, printBgUrl, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, contentOffsetXPx, contentOffsetYPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason, includeSections: includeSectionsProp, onChangeIncludeSections, ensureVisitId, onChangeChiefComplaints, onChangeContentOffset, designAids, paperPreset, grayscale, bleedSafe, frames, onChangeFrames, patient, onSummaryChange, vitalsExtra, investigationResults, toolbarTarget, applyExtraVitals }: Props) {
+function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, visitId, doctorId, doctorName, userRole = 'DOCTOR', onCreated, onClinicalDataChange, getClinicalSavePatch, onVisitSaved, onClinicalConflict, shouldPersistDraft, initialVisitSnapshot, onBeforeExport, holdVisitSave, visitCompleted = false, syncPrescriptionRef, onPreview, reviewDate, printBgUrl, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, contentOffsetXPx, contentOffsetYPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason, includeSections: includeSectionsProp, onChangeIncludeSections, ensureVisitId, onChangeChiefComplaints, onChangeContentOffset, designAids, paperPreset, grayscale, bleedSafe, frames, onChangeFrames, patient, onSummaryChange, vitalsExtra, investigationResults, toolbarTarget, applyExtraVitals }: Props) {
   const visitVersionRef = useRef<number | undefined>(undefined);
   const initialVisitSnapshotRef = useRef(initialVisitSnapshot);
   const dirtyClinicalFields = useRef(new Set<string>());
@@ -730,6 +763,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const isTeleVideo = (consultationType ?? visitData?.consultationType) === 'TELE_VIDEO';
   const createdPrescriptionIdRef = useRef<string | null>(null);
   const [savedPrescriptionId, setSavedPrescriptionId] = useState<string | null>(null);
+  // The saved prescription record's items, as this builder would send them.
+  const recordItemsKey = useRef('[]');
   const [savingFromPreview, setSavingFromPreview] = useState(false);
   const prescriptionSaveInFlight = useRef(false);
   // One key per pad draft, kept across retries and presses of Save until the server confirms it.
@@ -1340,8 +1375,12 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
         if (res?.prescription?.id) {
           setSavedPrescriptionId(res.prescription.id);
           const savedItems = typeof res.prescription.items === 'string' ? JSON.parse(res.prescription.items) : res.prescription.items;
-          if (Array.isArray(savedItems) && !items.some(item => item.drugName.trim())) {
-            hydrateItems(savedItems.map(mapPrevRxItem).filter(Boolean) as PrescriptionItemForm[]);
+          if (Array.isArray(savedItems)) {
+            const recordItems = savedItems.map(mapPrevRxItem).filter(Boolean) as PrescriptionItemForm[];
+            recordItemsKey.current = JSON.stringify(recordItems.map(toItemPayload));
+            // A completed visit prints what the pharmacy dispenses, never a local draft.
+            if (res.status === 'COMPLETED') setItems(recordItems);
+            else if (!items.some(item => item.drugName.trim())) hydrateItems(recordItems);
           }
           if (!followUpInstructions && res.prescription.instructions) hydrateFollowUpInstructions(res.prescription.instructions);
         }
@@ -2553,37 +2592,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     { label: '4w', duration: 4, unit: 'WEEKS' },
   ];
 
-  const prescriptionItemsPayload = useMemo(() => validItems.map(it => ({
-          drugName: it.drugName,
-          drugId: it.drugId || undefined,
-          inventoryItemId: it.inventoryItemId || undefined,
-          genericName: it.genericName || undefined,
-          brandName: it.brandName || undefined,
-          dosage: it.dosage === '' || it.dosage == null ? undefined : Number(it.dosage),
-          dosageUnit: it.dosageUnit,
-          frequency: it.frequency,
-          dosePattern: it.dosePattern || undefined,
-          notes: it.notes || undefined,
-          duration: Number(it.duration),
-          durationUnit: it.durationUnit,
-          instructions: it.instructions || undefined,
-          route: it.route || undefined,
-          timing: it.timing || undefined,
-          quantity: it.quantity ? Number(it.quantity) : undefined,
-          isGeneric: it.isGeneric ?? true,
-          applicationSite: it.applicationSite || undefined,
-          applicationAmount: it.applicationAmount || undefined,
-          dayPart: it.dayPart || undefined,
-          leaveOn: typeof it.leaveOn === 'boolean' ? it.leaveOn : undefined,
-          washOffAfterMinutes: it.washOffAfterMinutes !== '' ? Number(it.washOffAfterMinutes) : undefined,
-          taperSchedule: it.taperSchedule || undefined,
-          weightMgPerKgPerDay: it.weightMgPerKgPerDay !== '' ? Number(it.weightMgPerKgPerDay) : undefined,
-          calculatedDailyDoseMg: it.calculatedDailyDoseMg !== '' ? Number(it.calculatedDailyDoseMg) : undefined,
-          pregnancyWarning: typeof it.pregnancyWarning === 'boolean' ? it.pregnancyWarning : undefined,
-          photosensitivityWarning: typeof it.photosensitivityWarning === 'boolean' ? it.photosensitivityWarning : undefined,
-          foodInstructions: it.foodInstructions || undefined,
-          pulseRegimen: it.pulseRegimen || undefined,
-        })), [validItems]);
+  const prescriptionItemsPayload = useMemo(() => validItems.map(toItemPayload), [validItems]);
 
   /**
    * @cc [owner:nareshshah139,label:product] edited-clinical-patch
@@ -2657,7 +2666,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     return true;
   }, [onClinicalConflict]);
 
-  const create = useCallback(async (fromPreview = false, exportVisitId?: string) => {
+  const create = useCallback(async (fromPreview = false, exportVisitId?: string, forVisitCompletion = false) => {
     if (prescriptionSaveInFlight.current) return;
     if (consultationType === 'TELE_VIDEO' && !teleVideoConsent) {
       toast({ variant: 'destructive', title: 'Patient consent required', description: TELE_VIDEO_CONSENT_REQUIRED });
@@ -2751,6 +2760,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
         if (!res?.id) throw new Error('The server did not confirm the saved prescription. Your draft is still available; please retry.');
         if (!existingId) track('prescription_created', { mode: standalone ? 'quick' : 'visit' });
         createdPrescriptionIdRef.current = res.id;
+        recordItemsKey.current = JSON.stringify(payload.items);
         padSaveKey.current = null;
         setSavedPrescriptionId(res?.id || null);
         if (res.visit) {
@@ -2782,6 +2792,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
         return res.id as string;
       } catch (e: any) {
         reportClinicalConflict(e);
+        if (forVisitCompletion) throw e;
         const { title, description, variant } = mapCreateErrorToToast(e);
         toast({
           variant: variant || 'destructive',
@@ -2791,7 +2802,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       }
     };
     try {
-      return await (holdVisitSave ? holdVisitSave(saveRx) : saveRx());
+      return await (holdVisitSave && !forVisitCompletion ? holdVisitSave(saveRx) : saveRx());
     } finally {
       prescriptionSaveInFlight.current = false;
       setSavingFromPreview(false);
@@ -2834,6 +2845,13 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       setSavingForExport(false);
     }
   }, [visitCompleted, savedPrescriptionId, reportClinicalConflict, visitId, standalone, onBeforeExport, onVisitSaved, ensureVisitId, clinicalData, validItems.length, create, toast]);
+
+  useImperativeHandle(syncPrescriptionRef, () => async (savedVisitId: string) => {
+    if (JSON.stringify(prescriptionItemsPayload) === recordItemsKey.current) return;
+    if (!await create(true, savedVisitId, true)) {
+      throw new Error('The prescription could not be saved, so the visit was not completed. A prescription needs at least one medicine.');
+    }
+  });
 
   const applyTemplateToBuilder = (tpl: any) => {
     const nowTs = Date.now();
