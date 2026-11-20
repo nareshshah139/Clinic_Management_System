@@ -1,0 +1,45 @@
+---
+title: "Stock count sheet autosave (before)"
+---
+stateDiagram-v2
+  state "Shows Saved, all sent" as s0
+  state "Sheet closed" as s1
+  state "Shows Saved, bad count typed" as s2
+  state "Shows Saved, count waiting" as s3
+  state "Sheet closed, a count was lost" as s4
+  state "Shows Saving, request out" as s5
+  state "Shows Not saved" as s6
+  state "Shows Saving, bad count typed" as s7
+  state "Shows Saving, count waiting" as s8
+  [*] --> s0
+  s0 --> s1: you go back to the list
+  s0 --> s2: you type a count
+  s0 --> s3: you type a count
+  s2 --> s1: you go back to the list
+  s2 --> s3: you type a count
+  s3 --> s2: you type a count
+  s3 --> s4: you go back to the list
+  s3 --> s5: the sheet saves
+  s5 --> s0: the server answers / the sheet reloads
+  s5 --> s1: you go back to the list
+  s5 --> s4: you go back to the list
+  s5 --> s6: the save fails
+  s5 --> s7: the server answers
+  s5 --> s8: the server answers
+  s6 --> s0: the sheet reloads
+  s6 --> s1: you go back to the list
+  s6 --> s4: you go back to the list
+  s6 --> s5: the sheet saves
+  s7 --> s0: the sheet reloads
+  s7 --> s1: you go back to the list
+  s7 --> s8: you type a count
+  s8 --> s0: the sheet reloads
+  s8 --> s1: you go back to the list
+  s8 --> s4: you go back to the list
+  s8 --> s5: the sheet saves
+  s8 --> s7: you type a count
+  classDef breaks fill:#fde2dd,stroke:#b3261e,stroke-width:2px
+  classDef stuck fill:#fdf0d5,stroke:#a35a05,stroke-width:2px,stroke-dasharray:5 3
+  classDef breaksAndStuck fill:#fde2dd,stroke:#a35a05,stroke-width:2px,stroke-dasharray:5 3
+  class s2,s4 breaks
+  class s1,s7 stuck

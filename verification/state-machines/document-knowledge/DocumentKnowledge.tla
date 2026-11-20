@@ -6,6 +6,8 @@
 (* `k` is DocumentKnowledge.state. `envelope` is pendingRecovery and its    *)
 (* sessionStorage copy. `pc` is the await the tab is parked on, which is    *)
 (* also the `lock` ref: the tab is busy whenever pc is not idle or load.    *)
+(* MODE "code" is the editor with its client timeout. "before" is the       *)
+(* editor before the fix, kept as a regression control.                     *)
 (***************************************************************************)
 EXTENDS Naturals, FiniteSets
 
@@ -43,7 +45,7 @@ VARIABLES
 vars == <<k, op, refSaved, envelope, expected, shown, shownPosted, pc, carried, err,
           orphans, docs, sver, posted, sposted, posts, reloads, otherDone, doubleSubmit>>
 
-Fixed(guard) == MODE = "fixed" \/ (MODE \notin {"code", "fixed", "typeProbe", guard})
+Fixed(guard) == MODE \in {"fixed", "code"} \/ (MODE \notin {"code", "fixed", "before", "typeProbe", guard})
 
 HasTimeout   == Fixed("noTimeout")                 \* every request is aborted after a timeout
 Fences       == MODE # "noFence"                   \* Check saved status settles with POST /resolve

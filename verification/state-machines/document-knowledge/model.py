@@ -1,6 +1,7 @@
 SPEC = "DocumentKnowledge.tla"
 CONSTANTS = {"MaxPosts": "2"}
 MODES = {
+    "before": {"MODE": '"before"'},
     "code": {"MODE": '"code"'},
     "fixed": {"MODE": '"fixed"'},
     "typeProbe": {"MODE": '"typeProbe"'},
@@ -31,7 +32,8 @@ RULE_TEXT = {
 }
 ALL = list(RULES)
 EXPECT = {
-    "code": {**{r: "holds" for r in ALL}, "BusyEnds": "breaks"},
+    "before": {**{r: "holds" for r in ALL}, "BusyEnds": "breaks"},
+    "code": {r: "holds" for r in ALL},
     "fixed": {r: "holds" for r in ALL},
     "typeProbe": {"TypeOK": "breaks"},
     "noTimeout": {"BusyEnds": "breaks", "BusyEndsIfAnswered": "holds"},
@@ -41,6 +43,6 @@ EXPECT = {
     "unlockOnSuccessOnly": {"BusyEndsIfAnswered": "breaks"},
     "freshKeyOnReplay": {"OneDocument": "breaks"},
 }
-CHARTS = ["code", "fixed"]
+CHARTS = ["before", "code"]
 REPLAY = "frontend/__tests__/formal/document-knowledge.formal-replay.test.tsx"
 REPLAYS = {r: REPLAY for r, v in EXPECT["code"].items() if v == "breaks"}

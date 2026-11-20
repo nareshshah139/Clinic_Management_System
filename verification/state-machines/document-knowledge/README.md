@@ -1,6 +1,6 @@
 # Inventory document outcome
 
-The inventory document editor saves and posts stock documents such as a stock loss. It must never claim an outcome it has not confirmed. If a save or stock action is interrupted, the editor says Outcome not confirmed, blocks every write, and offers Check saved status. This model checks that design and the one gap it leaves.
+The inventory document editor saves and posts stock documents such as a stock loss. It must never claim an outcome it has not confirmed. If a save or stock action is interrupted, the editor says Outcome not confirmed, blocks every write, and offers Check saved status. This model checks that design and the one gap it left, which a client timeout now closes.
 
 `DocumentKnowledge.tla` models one tab, one stock-loss document that is either new or a saved draft, the server, and one other user who saves the same draft. Writes the tab stopped waiting for stay in `orphans` and may still reach the server.
 
@@ -25,25 +25,30 @@ The inventory document editor saves and posts stock documents such as a stock lo
 | `YouCheckSavedStatus` | `checkSavedStatus`, `WorkflowDocumentEditor.tsx:470-525`. A request reference is looked up by key and the create is replayed with the same key on 404. A saved reference is read. An unsettled save or transition is fenced with POST `/resolve` before the editor shows the outcome. |
 | `YouReloadThePage` | remount, `initialise`, `WorkflowDocumentEditor.tsx:176-312`. A stored envelope comes back as `loading` then `unconfirmed`, or as `unconfirmed` straight away for a create that never got an id. |
 | `TheRequestFails` | a dropped connection or a 5xx. The write may still reach the server later. |
-| `TheRequestTimesOut` | does not exist in the code. `api.ts:170-172` gives no timeout to inventory requests. `fixed` adds one. |
+| `TheRequestTimesOut` | every request the editor sends aborts after a client timeout, `api.ts:31`, `178`: 120 s for a write, 30 s for a read. The abort runs the catch block. |
 | `AnOldRequestLands` | an orphaned write reaches the server |
 | `AnotherUserSaves` | someone else saves the same draft |
 
 ## Rules and what TLC says
 
-| Rule | code | Replay |
-| --- | --- | --- |
-| `TypeOK` | holds | |
-| `PostedOnce` | holds | |
-| `OneDocument` | holds | |
-| `KnownMeansSettled` | holds | |
-| `NoSubmitWhileUnknown` | holds | |
-| `BusyEndsIfAnswered` | holds | |
-| `BusyEnds` | breaks | `today:` and `.failing` pass |
+| Rule | before | code | Replay |
+| --- | --- | --- | --- |
+| `TypeOK` | holds | holds | |
+| `PostedOnce` | holds | holds | |
+| `OneDocument` | holds | holds | |
+| `KnownMeansSettled` | holds | holds | |
+| `NoSubmitWhileUnknown` | holds | holds | |
+| `BusyEndsIfAnswered` | holds | holds | |
+| `BusyEnds` | breaks | holds | passes |
 
-This is a well-built machine. Every safety rule holds in `code` mode, across reloads, lost replies, late requests and a second user. The editor shows a confirmed outcome only when no earlier write can still change the document, because Check saved status fences an unsettled operation with `/resolve` and the server compares versions.
+`before` is the editor at commit `be2b934`, kept as a regression control. This is a well-built machine. Every safety rule holds in both modes, across reloads, lost replies, late requests and a second user. The editor shows a confirmed outcome only when no earlier write can still change the document, because Check saved status fences an unsettled operation with `/resolve` and the server compares versions.
 
-`BusyEnds` breaks. No inventory request has a client timeout. If the server never answers a save or stock action, `perform` awaits it forever and holds `lock`. Check saved status returns early on `lock` (`WorkflowDocumentEditor.tsx:471`) and is rendered disabled while `busy` (`680`). Back is disabled too (`652`). Only a page reload frees the editor. The replay in `frontend/__tests__/formal/document-knowledge.formal-replay.test.tsx` renders the real editor, stubs only `fetch`, follows TLC's path (reload, then save the new draft with no answer), and checks ten minutes later.
+`BusyEnds` broke before the fix. No inventory request had a client timeout. If the server never answered a save or stock action, `perform` awaited it forever and held `lock`. Check saved status returns early on `lock` (`WorkflowDocumentEditor.tsx:471`) and is rendered disabled while `busy` (`680`). Back is disabled too (`652`). Only a page reload freed the editor. The replay in `frontend/__tests__/formal/document-knowledge.formal-replay.test.tsx` renders the real editor, stubs only `fetch`, follows TLC's path (reload, then save the new draft with no answer), and checks ten minutes later that Check saved status works. The stubbed create rejects when its signal aborts, as a real fetch does.
+
+## The fix
+
+- `api.ts:31`, `178`. Every request the editor sends while it holds `lock` gets a client timeout: create, save, transition and resolve on `/inventory/workspace/documents`, the read of one document, and the lookup by request key. A write gets 120 s, because the server runs it in a 30 s transaction retried at most twice on a serialization conflict, `inventory-workflow.service.ts:171-182`. A read gets 30 s and retries twice, as every GET does. The abort ends in the existing catch block (`WorkflowDocumentEditor.tsx:581-608`). A timed-out create keeps Outcome not confirmed. A timed-out save or stock action re-reads the document and stays unconfirmed unless the version moved. `finally` releases `lock`, so Check saved status works. `code` takes the same branches as `fixed`.
+- The timeout is scoped to these routes and the count sheet's. The document list, the credit note, OCR imports and purchase posting are left as they were.
 
 ## Fixed mode and negative controls
 
@@ -51,7 +56,7 @@ This is a well-built machine. Every safety rule holds in `code` mode, across rel
 
 | Mode | Mistake it reproduces | Breaks |
 | --- | --- | --- |
-| `noTimeout` | no client timeout, as today | `BusyEnds` |
+| `noTimeout` | no client timeout, as before the fix | `BusyEnds` |
 | `noFence` | Check saved status shows the read-back without POST `/resolve` | `KnownMeansSettled` |
 | `mutateWhileUnknown` | the write buttons work while the outcome is unconfirmed | `NoSubmitWhileUnknown` |
 | `transitionTrustsClient` | the transition checks neither the version nor the DRAFT status | `PostedOnce` |

@@ -5,6 +5,8 @@
 (* window that can save the same count. `ind` is saveState. `dirty`,        *)
 (* `timer`, `flights` and `ver` are the dirty set, the debounce timer, the  *)
 (* inflight promise and the version ref.                                    *)
+(* MODE "code" is the sheet as fixed. "before" is the sheet before the fix, *)
+(* kept as a regression control.                                            *)
 (***************************************************************************)
 EXTENDS Naturals, Sequences
 
@@ -36,14 +38,14 @@ VARIABLES
 vars == <<screen, valid, edits, dirty, sent, timer, ind, flights, ver, mver,
           stored, sver, reload, otherDone, mounted, dropped>>
 
-Fixed(guard) == MODE = "fixed" \/ (MODE # "fixed" /\ MODE # "code" /\ MODE # guard /\ MODE # "typeProbe")
+Fixed(guard) == MODE \in {"fixed", "code"} \/ (MODE \notin {"fixed", "code", "before", "typeProbe", guard})
 
-\* guards fixed adds, each removed by the negative control of the same name
+\* guards fixed and code have and before lacks, each removed by the negative control of the same name
 MarksEdit     == Fixed("indicatorLagsEdit")     \* change() shows Saving until the edit is saved
 FlushOnLeave  == Fixed("dropTimerOnLeave")      \* the unmount cleanup flushes instead of clearing the timer
 NothingToSend == Fixed("savingWithInvalid")     \* a flush with only invalid entries says Not saved
 HasTimeout    == Fixed("noTimeout")             \* the PATCH is aborted after a timeout
-Serialised    == MODE # "noSerialise"           \* flush waits for the request in flight (code has this)
+Serialised    == MODE # "noSerialise"           \* flush waits for the request in flight (every code version has this)
 
 TypeOK ==
     /\ screen \in Values /\ valid \in BOOLEAN /\ edits \in 0..MaxEdits
@@ -65,7 +67,7 @@ Init ==
 Drop(s, i) == [j \in 1..(Len(s) - 1) |-> IF j < i THEN s[j] ELSE s[j + 1]]
 
 (* The pharmacist types a count, valid or not. change() marks the line dirty *)
-(* and re-arms the debounce timer. It does not touch saveState.             *)
+(* and re-arms the debounce timer. Where MarksEdit, it also shows Saving.   *)
 YouTypeACount ==
     /\ mounted /\ edits < MaxEdits
     /\ edits' = edits + 1 /\ screen' = edits + 1
@@ -106,7 +108,7 @@ ServerAnswers(i) ==
     /\ flights' = Drop(flights, i)
     /\ UNCHANGED <<screen, valid, edits, sent, timer, mver, otherDone, mounted, dropped>>
 
-(* The request fails: a 5xx, a dropped connection, or, where fixed adds one, *)
+(* The request fails: a 5xx, a dropped connection, or, where one exists,   *)
 (* the client timeout. The server may have saved it before the reply was    *)
 (* lost. The line goes back in dirty and the sheet says Not saved.          *)
 TheSaveFails(i) ==
@@ -152,13 +154,16 @@ AnotherWindowSaves ==
     /\ otherDone' = TRUE /\ stored' = Other /\ sver' = sver + 1
     /\ UNCHANGED <<screen, valid, edits, dirty, sent, timer, ind, flights, ver, mver, reload, mounted, dropped>>
 
-(* The pharmacist goes back to the list. The unmount cleanup clears the     *)
-(* debounce timer, so a count typed in the last 600 ms is never sent.       *)
+(* The pharmacist goes back to the list. Before the fix the unmount cleanup *)
+(* cleared the debounce timer, so a count typed in the last 600 ms was      *)
+(* never sent. `fixed` flushes every valid dirty line. The code flushes     *)
+(* only when the debounce timer is armed, so the timer stays armed.         *)
 YouLeaveTheSheet ==
     /\ mounted
     /\ mounted' = FALSE
     /\ IF FlushOnLeave
-         THEN /\ timer' = (dirty /\ valid) /\ UNCHANGED dropped
+         THEN /\ timer' = IF MODE = "code" THEN timer ELSE (dirty /\ valid)
+              /\ UNCHANGED dropped
          ELSE /\ timer' = FALSE /\ dropped' = (dropped \/ (dirty /\ valid /\ ~sent))
     /\ UNCHANGED <<screen, valid, edits, dirty, sent, ind, flights, ver, mver, stored, sver, reload, otherDone>>
 
