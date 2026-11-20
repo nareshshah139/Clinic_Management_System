@@ -36,7 +36,8 @@ it('rejects same-name products with different identities instead of taking the f
 it('sums sibling batches even when only one name matches the search query', async () => {
   const d = { id: 'd', name: 'Old product label', branchId: 'clinic', isActive: true };
   const batch = { id: 'a', name: 'New cream label', unit: 'TUBES', packSize: 10, status: 'ACTIVE', currentStock: 5, drugs: [d] };
-  const prisma: any = { inventoryItem: { findMany: jest.fn().mockResolvedValue([batch, { ...batch, id: 'b', name: 'Old product label', currentStock: 7 }]) } };
+  const rows = [batch, { ...batch, id: 'b', name: 'Old product label', currentStock: 7 }];
+  const prisma: any = { $queryRaw: jest.fn().mockResolvedValue(rows), inventoryItem: { findMany: jest.fn().mockResolvedValue(rows) } };
   expect((await searchClinicInventory(prisma, 'New cream label', 'clinic'))[0].totalStock).toBe(12);
 });
 
@@ -64,7 +65,7 @@ it('finds an old prescription line by the name the item had before it was standa
 it('offers the standard name when the picker query is part of the recorded name with its code', async () => {
   const flutas = { id: 'flutas', name: 'Tab. Flutas 150 mg', unit: 'STRIPS', packSize: 10, packUnit: 'tablets', status: 'ACTIVE', currentStock: 30, drugs: [], metadata: JSON.stringify({ nameNormalization: { version: 1, aliases: ['13 74 | Flutas 150Mg(Pc)'] } }) };
   const fifty = { ...flutas, id: 'flutas-50', name: 'Tab. Flutas 50 mg', metadata: null };
-  const prisma: any = { inventoryItem: { findMany: jest.fn().mockResolvedValue([flutas, fifty]) } };
+  const prisma: any = { $queryRaw: jest.fn().mockResolvedValue([flutas, fifty]), inventoryItem: { findMany: jest.fn().mockResolvedValue([flutas, fifty]) } };
   const names = async (query: string) => (await searchClinicInventory(prisma, query, 'clinic')).map((row: any) => row.name);
   expect(await Promise.all(['13 74 | Flutas', '74 |', '| Flutas', 'Tab. Flutas 150', 'Flutas'].map(names))).toEqual([
     ['Tab. Flutas 150 mg'],
