@@ -1,0 +1,24 @@
+---
+title: "Purchase import attempt (fixed)"
+---
+stateDiagram-v2
+  state "No import yet" as s0
+  state "Import running" as s1
+  state "Matched an existing bill" as s2
+  state "Stopped, no stock" as s3
+  state "Draft bill saved" as s4
+  state "Import running, worker gone" as s5
+  state "Stock added from the bill" as s6
+  [*] --> s0
+  s0 --> s1: the upload registers the import
+  s0 --> s2: a manager recovers it with another bill's original open
+  s0 --> s3: a manager recovers the import / the pharmacist stops the import
+  s1 --> s2: a manager recovers it with another bill's original open / the worker records the outcome
+  s1 --> s3: a manager recovers the import / the pharmacist stops the import / the worker records the outcome
+  s1 --> s4: the worker saves the draft bill
+  s1 --> s5: the worker process dies
+  s4 --> s6: the pharmacist presses Add to stock / the worker adds stock
+  s5 --> s2: a manager recovers it with another bill's original open
+  s5 --> s3: a manager recovers the import / the pharmacist stops the import
+  classDef breaks fill:#fde2dd,stroke:#b3261e,stroke-width:2px
+  classDef stuck fill:#fdf0d5,stroke:#a35a05,stroke-width:2px,stroke-dasharray:5 3
