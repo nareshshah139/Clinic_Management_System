@@ -161,6 +161,7 @@ interface Props {
   onChangeIncludeSections?: (next: Record<string, boolean>) => void;
   ensureVisitId?: () => Promise<string>;
   holdVisitSave?: <T>(write: () => Promise<T>) => Promise<T | undefined>;
+  visitCompleted?: boolean;
   onChangeChiefComplaints?: (value: string) => void;
   onChangeContentOffset?: (x: number, y: number) => void;
   designAids?: {
@@ -290,7 +291,7 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
  * and the disclaimer above the signature, even when the signature is hidden.
  * Switching to In-person MUST remove both from regenerated preview and exports.
  */
-function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, visitId, doctorId, doctorName, userRole = 'DOCTOR', onCreated, onClinicalDataChange, getClinicalSavePatch, onVisitSaved, onClinicalConflict, shouldPersistDraft, initialVisitSnapshot, onBeforeExport, holdVisitSave, onPreview, reviewDate, printBgUrl, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, contentOffsetXPx, contentOffsetYPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason, includeSections: includeSectionsProp, onChangeIncludeSections, ensureVisitId, onChangeChiefComplaints, onChangeContentOffset, designAids, paperPreset, grayscale, bleedSafe, frames, onChangeFrames, patient, onSummaryChange, vitalsExtra, investigationResults, toolbarTarget, applyExtraVitals }: Props) {
+function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, visitId, doctorId, doctorName, userRole = 'DOCTOR', onCreated, onClinicalDataChange, getClinicalSavePatch, onVisitSaved, onClinicalConflict, shouldPersistDraft, initialVisitSnapshot, onBeforeExport, holdVisitSave, visitCompleted = false, onPreview, reviewDate, printBgUrl, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, contentOffsetXPx, contentOffsetYPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason, includeSections: includeSectionsProp, onChangeIncludeSections, ensureVisitId, onChangeChiefComplaints, onChangeContentOffset, designAids, paperPreset, grayscale, bleedSafe, frames, onChangeFrames, patient, onSummaryChange, vitalsExtra, investigationResults, toolbarTarget, applyExtraVitals }: Props) {
   const visitVersionRef = useRef<number | undefined>(undefined);
   const initialVisitSnapshotRef = useRef(initialVisitSnapshot);
   const dirtyClinicalFields = useRef(new Set<string>());
@@ -2800,6 +2801,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const exportSaveInFlight = useRef(false);
   const [savingForExport, setSavingForExport] = useState(false);
   const saveBeforeExport = useCallback(async () => {
+    if (visitCompleted) return { prescriptionId: savedPrescriptionId || undefined, documentId: savedPrescriptionId || visitId };
     if (exportSaveInFlight.current || prescriptionSaveInFlight.current) return null;
     exportSaveInFlight.current = true;
     setSavingForExport(true);
@@ -2831,7 +2833,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       exportSaveInFlight.current = false;
       setSavingForExport(false);
     }
-  }, [reportClinicalConflict, visitId, standalone, onBeforeExport, onVisitSaved, ensureVisitId, clinicalData, validItems.length, create, toast]);
+  }, [visitCompleted, savedPrescriptionId, reportClinicalConflict, visitId, standalone, onBeforeExport, onVisitSaved, ensureVisitId, clinicalData, validItems.length, create, toast]);
 
   const applyTemplateToBuilder = (tpl: any) => {
     const nowTs = Date.now();
@@ -4610,7 +4612,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       undo: () => { medicines.undo(); filledFields.undo(); },
     };
   };
-  const { busy: voiceFillBusy } = useVoiceBarForm({
+  const { busy: voiceFillBusy } = useVoiceBarForm(visitCompleted ? null : {
     form: 'visit-consultation',
     label: 'Visit notes',
     hint: 'Say or type the visit notes',
@@ -4661,7 +4663,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       {confirmDialog}
       <div className="space-y-6">
         <div className="space-y-4">
-          {(() => {
+          {!visitCompleted && (() => {
             const templatesBar = hydrated && showTemplatesBar && templatesReady && allTemplates.length > 0 ? (
               <div className="flex flex-wrap items-center gap-2">
                 <div className="w-56">
@@ -4754,6 +4756,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
             return toolbarTarget ? createPortal(toolbar, toolbarTarget) : toolbar;
           })()}
 
+            <fieldset disabled={visitCompleted} className="min-w-0 space-y-4">
             {/* Basic Information */}
             {/* Moved to bottom of builder; removed Doctor's Personal Notes field */}
 
@@ -5751,6 +5754,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 )}
               </div>
             </div>
+            </fieldset>
 
             <div data-rx-actions className="sticky -bottom-4 z-20 flex items-center justify-between gap-3 border-t bg-background pb-4 pt-2 md:-bottom-6 md:pb-6">
               <div className="text-sm text-muted-foreground">Total items: {validItems.length} • Total qty: {totalQuantity}</div>
@@ -5786,9 +5790,11 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 >
                   {translatingPreview ? 'Preparing…' : 'Print Preview'}
                 </Button>
-                <Button onClick={() => void create()} disabled={!canCreate || savingFromPreview || savingForExport}>
-                  {(visitId || standalone || ensureVisitId) ? 'Create Prescription' : 'Save visit first'}
-                </Button>
+                {!visitCompleted && (
+                  <Button onClick={() => void create()} disabled={!canCreate || savingFromPreview || savingForExport}>
+                    {(visitId || standalone || ensureVisitId) ? 'Create Prescription' : 'Save visit first'}
+                  </Button>
+                )}
                 {!standalone && validItems.length > 0 && (
                   <Button
                     variant="outline"
@@ -6384,7 +6390,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                         }}>Download PDF</Button>
                       </span>
                     </TooltipTrigger>
-                    <TooltipContent><p>Saves the latest visit details before exporting</p></TooltipContent>
+                    <TooltipContent><p>{visitCompleted ? 'Exports the saved prescription' : 'Saves the latest visit details before exporting'}</p></TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
                 <Button size="sm" variant="ghost" className="ml-auto" onClick={() => setPreviewOpen(false)}>Close</Button>
@@ -6593,7 +6599,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   </div>
                 </div>
                 <div className="pt-2 grid grid-cols-2 gap-2">
-                  {(
+                  {!visitCompleted && (
                     <Button
                       className="col-span-2 bg-success hover:bg-success/90 text-white"
                       disabled={!canCreate || savingFromPreview || savingForExport}
@@ -6679,7 +6685,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                           </Button>
                         </span>
                       </TooltipTrigger>
-                      <TooltipContent><p>Saves the latest visit details before exporting</p></TooltipContent>
+                      <TooltipContent><p>{visitCompleted ? 'Exports the saved prescription' : 'Saves the latest visit details before exporting'}</p></TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
                   <Button variant="ghost" className="col-span-2" onClick={() => document.body.classList.toggle('high-contrast')}>High contrast</Button>

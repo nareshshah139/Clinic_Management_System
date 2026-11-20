@@ -6,7 +6,7 @@ jest.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: jest.fn() }) }
 let mockPhotoVersion: ((version: number) => void) | undefined;
 let mockRxSaved: ((visit: { version: number }) => void) | undefined;
 let mockExportResult: Promise<string> | undefined;
-jest.mock('@/components/visits/PrescriptionBuilder', () => function Editor({ onClinicalDataChange, onBeforeExport, onVisitSaved, vitalsExtra, onSummaryChange }: any) { mockRxSaved = onVisitSaved; return <>{vitalsExtra}<button onClick={() => onSummaryChange({ complaint: true, diagnosis: false, plan: false, medicines: 1, vitals: false })}>Record complaint and one medicine</button><button onClick={() => { mockExportResult = onBeforeExport(); }}>Export saved visit</button><button onClick={() => onClinicalDataChange({ vitals: { systolicBP: 110 } })}>Set editor blood pressure</button><input aria-label="Clinical note" onChange={e => onClinicalDataChange({ history: { pastHistory: e.target.value } })} /></>; });
+jest.mock('@/components/visits/PrescriptionBuilder', () => function Editor({ onClinicalDataChange, onBeforeExport, onVisitSaved, vitalsExtra, onSummaryChange, visitCompleted }: any) { mockRxSaved = onVisitSaved; return <>{vitalsExtra}<p>Prescription editing: {visitCompleted ? 'read only' : 'editable'}</p><button onClick={() => onSummaryChange({ complaint: true, diagnosis: false, plan: false, medicines: 1, vitals: false })}>Record complaint and one medicine</button><button onClick={() => { mockExportResult = onBeforeExport(); }}>Export saved visit</button><button onClick={() => onClinicalDataChange({ vitals: { systolicBP: 110 } })}>Set editor blood pressure</button><input aria-label="Clinical note" onChange={e => onClinicalDataChange({ history: { pastHistory: e.target.value } })} /></>; });
 jest.mock('@/components/visits/VisitPhotos', () => function Photos({ onVisitVersion }: any) { mockPhotoVersion = onVisitVersion; return null; });
 jest.mock('@/components/tours/DoctorTour', () => ({ DoctorTour: () => null }));
 const flush = async () => { await act(async () => { await Promise.resolve(); }); };
@@ -114,17 +114,16 @@ it('completes a visit with a complaint and a prescription, without photos, labs 
   expect(apiClient.completeVisit).toHaveBeenCalledWith('v', expect.anything(), expect.anything());
 });
 
-it('stops saving a completed visit, with no autosave and no Save Draft, and exports the saved visit as it is', async () => {
+it('stops saving a completed visit, with no autosave and no Save Draft, and makes the prescription read only', async () => {
   (apiClient.get as jest.Mock).mockResolvedValue({ id: 'v', patientId: 'p', status: 'COMPLETED', version: 3, complaints: [], history: {}, plan: {}, exam: {} });
   await openForm();
   expect(screen.getByRole('status')).toHaveTextContent('Completed. Changes are not saved.');
   expect(screen.queryByRole('button', { name: 'Save Draft' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Complete Visit' })).not.toBeInTheDocument();
+  expect(screen.getByText(/^Prescription editing:/)).toHaveTextContent('Prescription editing: read only');
   fireEvent.change(screen.getByLabelText('Clinical note'), { target: { value: 'Edit after completion' } });
   await act(async () => { fireEvent.keyDown(document, { key: 's', ctrlKey: true }); });
   await act(async () => { jest.advanceTimersByTime(30000); });
-  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Export saved visit' })); });
-  await expect(mockExportResult).resolves.toBe('v');
   expect((apiClient.updateVisit as jest.Mock).mock.calls).toEqual([]);
   expect((apiClient.createVisit as jest.Mock).mock.calls).toEqual([]);
 });

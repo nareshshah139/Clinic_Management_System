@@ -2025,8 +2025,8 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
                         latestDraftWriter.current();
                       }}
                       holdVisitSave={holdVisitSave}
+                      visitCompleted={visitStatus === 'COMPLETED'}
                       onBeforeExport={async () => {
-                        if (visitStatus === 'COMPLETED' && visitId) return visitId;
                         const savedId = await save(false, true);
                         if (!savedId) {
                           throw new Error('The latest visit details could not be saved. Please retry before exporting.');

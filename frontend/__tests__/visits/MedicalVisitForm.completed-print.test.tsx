@@ -88,7 +88,7 @@ const press = async (dialog: HTMLElement, name: string) => {
   await act(async () => { fireEvent.click(button); });
 };
 
-it.failing('prints, downloads, emails and sends by WhatsApp the saved prescription of a completed visit without writing to it', async () => {
+it('prints, downloads, emails and sends by WhatsApp the saved prescription of a completed visit without writing to it', async () => {
   const calls = clinicServer('COMPLETED');
   const dialog = await openSavedPrescriptionPreview();
 
@@ -115,7 +115,7 @@ it.failing('prints, downloads, emails and sends by WhatsApp the saved prescripti
   ]);
 });
 
-it.failing('offers no prescription editing on a completed visit', async () => {
+it('offers no prescription editing on a completed visit', async () => {
   clinicServer('COMPLETED');
   const dialog = await openSavedPrescriptionPreview();
   expect(within(dialog).queryByRole('button', { name: 'Save Prescription' })).toBeNull();
