@@ -1,0 +1,32 @@
+---
+title: "Prescription pad save with an idempotency key (code)"
+---
+stateDiagram-v2
+  state "Doctor writing" as s0
+  state "Saving" as s1
+  state "Save failed or timed out" as s2
+  state "Saved" as s3
+  state "Saved, an old prescription shown as new" as s4
+  state "Saving, two prescriptions for one save" as s5
+  state "Save failed or timed out, two prescriptions for one save" as s6
+  state "Saved, two prescriptions for one save" as s7
+  state "Saved, two prescriptions for one save and an old prescription shown as new" as s8
+  [*] --> s0
+  s0 --> s1: the doctor saves a new prescription
+  s1 --> s2: the save times out after 30 seconds / the screen shows the server's answer
+  s1 --> s3: the screen shows the server's answer
+  s1 --> s4: the screen shows the server's answer
+  s1 --> s5: the server creates a visit and prescription
+  s2 --> s1: the doctor presses save again / the doctor saves a new prescription
+  s2 --> s6: the server creates a visit and prescription
+  s3 --> s1: the doctor saves a new prescription
+  s3 --> s7: the server creates a visit and prescription
+  s4 --> s8: the server creates a visit and prescription
+  s5 --> s6: the save times out after 30 seconds / the screen shows the server's answer
+  s5 --> s7: the screen shows the server's answer
+  s5 --> s8: the screen shows the server's answer
+  s6 --> s5: the doctor presses save again / the doctor saves a new prescription
+  s7 --> s5: the doctor saves a new prescription
+  classDef breaks fill:#fde2dd,stroke:#b3261e,stroke-width:2px
+  classDef stuck fill:#fdf0d5,stroke:#a35a05,stroke-width:2px,stroke-dasharray:5 3
+  class s4,s5 breaks
