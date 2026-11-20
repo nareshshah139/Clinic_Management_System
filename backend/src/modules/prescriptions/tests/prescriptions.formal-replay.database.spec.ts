@@ -125,15 +125,9 @@ databaseTests('Prescriptions formal model replays (verification/state-machines/p
       return { rx, refill };
     };
 
-    it.failing('StrandedRequestsClose: the waiting request is closed once the prescription is completed', async () => {
+    it('StrandedRequestsClose: the waiting request is closed once the prescription is completed', async () => {
       const { refill } = await replay();
       expect(await refillStatus(refill.id)).toBe('REJECTED');
-    });
-
-    it('today: the request stays PENDING and no doctor can approve it', async () => {
-      const { refill } = await replay();
-      const approve = await outcome(prescriptions().approveRefill({ refillId: refill.id } as any, branchId, doctorId));
-      expect([approve, await refillStatus(refill.id)]).toEqual(['refused', 'PENDING']);
     });
   });
 

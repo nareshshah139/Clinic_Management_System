@@ -489,6 +489,11 @@ export class PrescriptionsService {
       if (input.validUntil !== undefined) data.validUntil = input.validUntil ? new Date(input.validUntil) : null;
       if (input.metadata !== undefined) data.metadata = input.metadata === null ? null : JSON.stringify(input.metadata);
       if (input.status !== undefined) data.status = input.status;
+      if (input.status === PrescriptionStatus.COMPLETED) {
+        await tx.prescriptionRefill.updateMany({ where: { prescriptionId: id, status: RefillStatus.PENDING }, data: {
+          status: RefillStatus.REJECTED, rejectedAt: new Date(), rejectedBy: actorId ?? null, rejectionReason: 'Prescription completed',
+        } });
+      }
       if (input.maxRefills !== undefined) {
         data.maxRefills = this.refillLimit(input.maxRefills);
         const reserved = prescription.refills.filter(r => r.status === RefillStatus.PENDING || r.status === RefillStatus.APPROVED || r.status === RefillStatus.COMPLETED).length;
