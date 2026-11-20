@@ -1545,13 +1545,15 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     const row = activeSearchRow;
     const q = (rowDrugQueries[row] || '').trim();
     let current = true;
-    setRowDrugResults(prev => ({ ...prev, [row]: [] }));
     setRowLoadingDrugs(prev => ({ ...prev, [row]: q.length >= 2 }));
-    if (q.length < 2) return;
+    if (q.length < 2) {
+      setRowDrugResults(prev => ({ ...prev, [row]: [] }));
+      return;
+    }
 
     const t = setTimeout(async () => {
       try {
-        const results = await apiClient.get<any[]>('/prescriptions/drugs/autocomplete', { q, limit: 30 });
+        const results = await apiClient.get<any[]>('/prescriptions/drugs/autocomplete', { q, limit: 10 });
         if (current) setRowDrugResults(prev => ({ ...prev, [row]: results.slice(0, 10) }));
       } catch {
         if (current) setRowDrugResults(prev => ({ ...prev, [row]: [] }));
@@ -1576,8 +1578,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
         width: Math.max(500, rect.width)
       });
     }
-    
-    pushRecent('drugQueries', q);
   };
 
   // Highlight matching text in search results
@@ -7206,7 +7206,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
           {!rowLoadingDrugs[activeSearchRow] && (!rowDrugResults[activeSearchRow] || rowDrugResults[activeSearchRow].length === 0) && (
             <div className="px-3 py-2 text-xs text-muted-foreground">No results found</div>
           )}
-          {!rowLoadingDrugs[activeSearchRow] && rowDrugResults[activeSearchRow] && rowDrugResults[activeSearchRow].length > 0 && (
+          {rowDrugResults[activeSearchRow] && rowDrugResults[activeSearchRow].length > 0 && (
             <>
               {rowDrugResults[activeSearchRow].map((d: any, index: number) => (
                 <div 
