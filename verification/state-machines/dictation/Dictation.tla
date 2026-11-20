@@ -17,15 +17,16 @@
    The server, OpenAI and the browser's permission prompt answer whenever they
    like, or never. Only timers carry fairness.
 
-   MODE "code" is the code today. "fixed" adds a timeout on the upload and
-   speaker-split requests, ignores a completed event for a failed item, and
-   ignores a stale microphone denial in useAudioRecorder. Every other mode is
-   "fixed" with one guard removed. *)
+   MODE "before" is the code before the fix, kept as a regression control.
+   "fixed" adds a timeout on the upload and speaker-split requests, ignores a
+   completed event for a failed item, and ignores a stale microphone denial in
+   useAudioRecorder. "code" is the code today, which takes the same branches
+   as "fixed". Every other mode is "fixed" with one guard removed. *)
 EXTENDS Naturals
 
 CONSTANTS MODE
 
-ASSUME MODE \in {"code", "fixed", "typeProbe", "noRequestTimeout", "noMaxTimer",
+ASSUME MODE \in {"before", "code", "fixed", "typeProbe", "noRequestTimeout", "noMaxTimer",
                  "noFillTimeout", "noReleaseOnFinish", "noStopCapture",
                  "noLeaveLiveOnSettle", "completedOverwritesFailure",
                  "staleDenialClears"}
@@ -35,9 +36,9 @@ Outcomes == {"none", "live", "recorded", "empty", "error", "cancelled"}
 Texts == {"live", "recorded"}
 Attempts == {1, 2}
 
-RequestTimeout == MODE \notin {"code", "noRequestTimeout"}
-FailedItemSticks == MODE \notin {"code", "completedOverwritesFailure"}
-StaleDenialIgnored == MODE \notin {"code", "staleDenialClears"}
+RequestTimeout == MODE \notin {"before", "noRequestTimeout"}
+FailedItemSticks == MODE \notin {"before", "completedOverwritesFailure"}
+StaleDenialIgnored == MODE \notin {"before", "staleDenialClears"}
 FillTimeout == MODE # "noFillTimeout"
 MaxTimer == MODE # "noMaxTimer"
 
@@ -199,7 +200,7 @@ FinishTimerFires == Open /\ ds.tFinish /\ SessionStep(Demote([ds EXCEPT !.tFinis
 
 MaxTimerFires == Open /\ ds.tMax /\ SessionStep(Stop(ds))
 
-\* fixed only: the abort that ends a stalled upload or speaker split.
+\* limitRequest: the abort that ends a stalled upload or speaker split. Never enabled in "before".
 RequestTimerFires ==
   /\ Open /\ ds.tReq
   /\ SessionStep(Finish(ds, IF ds.upload = "inflight" THEN "error" ELSE "live"))

@@ -130,6 +130,7 @@ export function useAudioRecorder({ toast, onRecorded }: UseAudioRecorderOptions)
         if (recorder.state !== 'inactive') recorder.stop();
       }, MAX_RECORDING_MS);
     } catch (error) {
+      if (session !== sessionRef.current) return;
       release();
       if (mountedRef.current) {
         setRecording(null);

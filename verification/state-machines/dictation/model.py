@@ -1,6 +1,7 @@
 SPEC = "Dictation.tla"
 CONSTANTS = {}
 MODES = {
+    "before": {"MODE": '"before"'},
     "code": {"MODE": '"code"'},
     "fixed": {"MODE": '"fixed"'},
     "typeProbe": {"MODE": '"typeProbe"'},
@@ -41,8 +42,9 @@ RULE_TEXT = {
 }
 ALL = list(RULES)
 EXPECT = {
-    "code": {**{r: "holds" for r in ALL}, "ItemFailureSticks": "breaks", "ClipShownWhileRecording": "breaks",
+    "before": {**{r: "holds" for r in ALL}, "ItemFailureSticks": "breaks", "ClipShownWhileRecording": "breaks",
              "LeavesFinishing": "breaks", "LockReleased": "breaks"},
+    "code": {r: "holds" for r in ALL},
     "fixed": {r: "holds" for r in ALL},
     "typeProbe": {"TypeOK": "breaks"},
     "noRequestTimeout": {"LeavesFinishing": "breaks", "LockReleased": "breaks"},
@@ -54,11 +56,5 @@ EXPECT = {
     "completedOverwritesFailure": {"ItemFailureSticks": "breaks"},
     "staleDenialClears": {"ClipShownWhileRecording": "breaks"},
 }
-CHARTS = ["code", "fixed"]
-_REPLAY = "frontend/__tests__/formal/dictation.formal-replay.test.ts"
-REPLAYS = {
-    "ItemFailureSticks": _REPLAY,
-    "ClipShownWhileRecording": _REPLAY,
-    "LeavesFinishing": _REPLAY,
-    "LockReleased": _REPLAY,
-}
+CHARTS = ["before", "code"]
+REPLAYS = {}
