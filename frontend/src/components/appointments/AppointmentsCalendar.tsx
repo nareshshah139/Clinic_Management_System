@@ -576,7 +576,7 @@ export default function AppointmentsCalendar({
               <Badge variant="secondary">
                 Selected: {patientName(selectedPatient)} — {selectedPatient.phone}
               </Badge>
-              <Button variant="outline" size="sm" onClick={() => { setSelectedPatientId(''); setSelectedPatient(null); setPatientSearch(''); setPatients([]); setQuickCreateOpen(false); }}>Clear</Button>
+              <Button variant="outline" size="sm" onClick={() => { cancelPatientSearch(); setSelectedPatientId(''); setSelectedPatient(null); setPatientSearch(''); setPatients([]); setQuickCreateOpen(false); }}>Clear</Button>
             </div>
           )}
 
@@ -595,6 +595,7 @@ export default function AppointmentsCalendar({
                     type="button"
                     className="w-full px-3 py-2 text-left text-sm hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                     onClick={() => {
+                      cancelPatientSearch();
                       setPatientSearch(`${p.firstName} ${p.lastName} — ${p.phone}`);
                       setSelectedPatientId(p.id);
                       setSelectedPatient(p);
@@ -704,6 +705,7 @@ export default function AppointmentsCalendar({
         }}
         initialName={patientSearch}
         onPatientCreated={(patient) => {
+          cancelPatientSearch();
           setSelectedPatientId(patient.id);
           setSelectedPatient(patient);
           setPatientSearch(`${patientName(patient)} — ${patient.phone ?? ''}`.trim());

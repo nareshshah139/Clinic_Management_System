@@ -699,6 +699,7 @@ export default function AppointmentScheduler({
                     variant="outline"
                     size="sm"
                     onClick={() => {
+                      cancelPatientSearch();
                       setSelectedPatientId('');
                       setSelectedPatient(null);
                       setPatientSearch('');
@@ -726,6 +727,7 @@ export default function AppointmentScheduler({
                     key={p.id}
                     className="px-3 py-2 text-sm hover:bg-accent cursor-pointer"
                     onClick={() => {
+                      cancelPatientSearch();
                       setPatientSearch(`${formatPatientName(p)} — ${p.phone}`);
                       setSelectedPatientId(p.id);
                       setSelectedPatient(p);
@@ -838,6 +840,7 @@ export default function AppointmentScheduler({
         }}
         initialName={patientSearch}
         onPatientCreated={(patient) => {
+          cancelPatientSearch();
           setSelectedPatient(patient);
           setSelectedPatientId(patient.id);
           setPatientSearch(`${formatPatientName(patient)}${patient.phone ? ` — ${patient.phone}` : ''}`);
