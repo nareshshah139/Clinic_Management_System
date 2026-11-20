@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { PharmacyPrescriptionQueueService } from '../../pharmacy/pharmacy-prescription-queue.service';
 import { PrescriptionQueueStatus } from '../../pharmacy/dto/pharmacy-prescription-queue.dto';
+import { InventoryService } from '../inventory.service';
 import { InventoryWorkspaceService } from '../inventory-workspace.service';
 import { localDatabase } from '../../../shared/testing/local-database';
 
@@ -865,5 +866,152 @@ databaseTests('Inventory and queue reads with PostgreSQL', () => {
       { distance: number }[]
     >`SELECT 'cream'::text <->> 'cream'::text AS distance`;
     expect(row.distance).toBe(0);
+  });
+
+  it('lists each distinct category, manufacturer and storage location of one branch without blanks', async () => {
+    const lists = await db.branch.create({
+      data: { name: 'Dropdown list branch', address: 'test' },
+    });
+    const row = (n: number, extra: Record<string, unknown>) => ({
+      id: `list-${n}`,
+      branchId: lists.id,
+      name: `List batch ${n}`,
+      type: 'MEDICINE' as const,
+      unit: 'PIECES' as const,
+      costPrice: 1,
+      sellingPrice: 2,
+      currentStock: 1,
+      ...extra,
+    });
+    await db.inventoryItem.createMany({
+      data: [
+        row(1, { category: 'Tablet', manufacturer: 'Zed Labs', storageLocation: 'Shelf B' }),
+        row(2, { category: 'Cream', manufacturer: 'Acme', storageLocation: 'Shelf A' }),
+        row(3, { category: 'Tablet', manufacturer: 'Zed Labs', storageLocation: 'Shelf B' }),
+        row(4, { category: '', manufacturer: '', storageLocation: '' }),
+        row(5, {}),
+        ...Array.from({ length: 300 }, (_, n) =>
+          row(100 + n, { category: 'Syrup', manufacturer: 'Acme', storageLocation: 'Cold room' }),
+        ),
+        {
+          ...row(900, { category: 'Elsewhere', manufacturer: 'Other branch', storageLocation: 'Vault' }),
+          branchId: branchId,
+        },
+      ],
+    });
+    const inventory = new InventoryService(db as any);
+    fixture.queries.length = 0;
+    expect(await inventory.getCategories(lists.id)).toEqual(['Cream', 'Syrup', 'Tablet']);
+    expect(fixture.queries).toHaveLength(1);
+    expect(fixture.queries[0]).toMatch(/GROUP BY/);
+    expect(await inventory.getManufacturers(lists.id)).toEqual(['Acme', 'Zed Labs']);
+    expect(await inventory.getStorageLocations(lists.id)).toEqual([
+      'Cold room',
+      'Shelf A',
+      'Shelf B',
+    ]);
+    expect(await inventory.getCategories('no-such-branch')).toEqual([]);
+  });
+
+  describe('on-demand stock count scope', () => {
+    let countBranch: string;
+    let counts: InventoryWorkspaceService;
+    let held = new Set<string>();
+    const saved: any[] = [];
+    const idOf = (n: number) => `count-${String(n).padStart(3, '0')}`;
+    const countActor = () => ({ id: doctorId, branchId: countBranch }) as any;
+    const lineIds = (doc: any) => doc.payload.lines.map((line: any) => line.inventoryId);
+    beforeAll(async () => {
+      countBranch = (
+        await db.branch.create({ data: { name: 'Count scope branch', address: 'test' } })
+      ).id;
+      await db.inventoryItem.createMany({
+        data: Array.from({ length: 230 }, (_, n) => ({
+          id: idOf(n),
+          branchId: countBranch,
+          name: `Count batch ${String(n).padStart(3, '0')}`,
+          type: 'MEDICINE' as const,
+          unit: 'PIECES' as const,
+          costPrice: 1,
+          sellingPrice: 2,
+          category: n % 2 === 0 ? 'Cream' : 'Tablet',
+          currentStock: n % 3 === 0 ? 0 : (n % 5) + 1,
+        })),
+      });
+      counts = new InventoryWorkspaceService(
+        db as any,
+        {
+          permissions: async () => new Set(['inventory:item:read']),
+          authorize: async () => undefined,
+          openCountHolders: async () => held,
+          saveDocument: async (_actor: unknown, dto: any) => {
+            saved.push(dto);
+            return dto;
+          },
+        } as any,
+        {} as any,
+      );
+    });
+    beforeEach(() => {
+      held = new Set();
+      saved.length = 0;
+    });
+
+    it('counts every batch matching the filters across more than one page of 100', async () => {
+      const doc = await counts.createCount(countActor(), { filters: { category: 'Cream' } });
+      const ids = lineIds(doc);
+      expect(ids).toHaveLength(115);
+      expect(ids.slice(0, 3)).toEqual([idOf(0), idOf(2), idOf(4)]);
+      expect(ids.slice(-2)).toEqual([idOf(226), idOf(228)]);
+      expect(doc.payload.lines[0]).toEqual({ inventoryId: idOf(0), quantity: 0 });
+    });
+
+    it('applies every stock filter to the counted batches', async () => {
+      const ids = lineIds(
+        await counts.createCount(countActor(), { filters: { category: 'Cream', batchView: 'ON_HAND' } }),
+      );
+      expect(ids).toHaveLength(76);
+      expect(ids.slice(0, 4)).toEqual([idOf(2), idOf(4), idOf(8), idOf(10)]);
+      expect(ids.slice(-2)).toEqual([idOf(224), idOf(226)]);
+    });
+
+    it('keeps the stock list order for the chosen sort', async () => {
+      const doc = await counts.createCount(countActor(), {
+        filters: { category: 'Cream', batchView: 'ON_HAND', sortBy: 'currentStock', sortOrder: 'desc' },
+      });
+      const ids = lineIds(doc);
+      expect(ids).toHaveLength(76);
+      expect(ids.slice(0, 3)).toEqual([idOf(4), idOf(14), idOf(34)]);
+    });
+
+    it('leaves out batches on an undecided count unless nothing else matches', async () => {
+      held = new Set([idOf(2), idOf(4)]);
+      const some = lineIds(
+        await counts.createCount(countActor(), { filters: { category: 'Cream', batchView: 'ON_HAND' } }),
+      );
+      expect(some).toHaveLength(74);
+      expect(some.slice(0, 2)).toEqual([idOf(8), idOf(10)]);
+      held = new Set(
+        Array.from({ length: 230 }, (_, n) => idOf(n)).filter((id) => Number(id.slice(-3)) % 2 === 0),
+      );
+      const all = lineIds(await counts.createCount(countActor(), { filters: { category: 'Cream' } }));
+      expect(all).toHaveLength(115);
+      expect(all.slice(0, 3)).toEqual([idOf(0), idOf(2), idOf(4)]);
+    });
+
+    it('counts picked batches as picked and ignores other branches', async () => {
+      const doc = await counts.createCount(countActor(), {
+        itemIds: [idOf(3), idOf(3), 'list-1', '', 7, idOf(0)],
+        filters: { category: 'Cream' },
+      });
+      expect(lineIds(doc)).toEqual([idOf(3), idOf(0)]);
+    });
+
+    it('refuses a count when no batch matches', async () => {
+      await expect(
+        counts.createCount(countActor(), { filters: { category: 'Nothing' } }),
+      ).rejects.toThrow('No matching batches to count');
+      expect(saved).toEqual([]);
+    });
   });
 });

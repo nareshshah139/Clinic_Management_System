@@ -1059,23 +1059,27 @@ export class InventoryService {
   }
   // Additional Utility Methods
   async getCategories(branchId: string) {
-    const categories = await this.prisma.inventoryItem.findMany({
-      where: { branchId },
-      select: { category: true },
-      distinct: ['category'],
-    });
+    return this.distinctValues(branchId, 'category');
+  }
 
-    return categories.map(cat => cat.category).filter(Boolean);
+  /**
+   * @cc [owner:nareshshah139,label:performance] inventory-distinct-lists-in-database
+   * Category, manufacturer and storage-location lists MUST return each non-empty value of the
+   * authenticated branch once, sorted ascending, with the database collapsing duplicates so batch
+   * rows are never streamed to the application.
+   */
+  private async distinctValues(branchId: string, field: 'category' | 'manufacturer' | 'storageLocation') {
+    const groups = await this.prisma.inventoryItem.groupBy({ by: [field], where: { branchId } });
+    const values: string[] = [];
+    for (const group of groups) {
+      const value = group[field];
+      if (value) values.push(value);
+    }
+    return values.sort();
   }
 
   async getManufacturers(branchId: string) {
-    const manufacturers = await this.prisma.inventoryItem.findMany({
-      where: { branchId },
-      select: { manufacturer: true },
-      distinct: ['manufacturer'],
-    });
-
-    return manufacturers.map(man => man.manufacturer).filter(Boolean);
+    return this.distinctValues(branchId, 'manufacturer');
   }
 
   async getSuppliers(branchId: string) {
@@ -1088,13 +1092,7 @@ export class InventoryService {
   }
 
   async getStorageLocations(branchId: string) {
-    const locations = await this.prisma.inventoryItem.findMany({
-      where: { branchId },
-      select: { storageLocation: true },
-      distinct: ['storageLocation'],
-    });
-
-    return locations.map(loc => loc.storageLocation).filter(Boolean);
+    return this.distinctValues(branchId, 'storageLocation');
   }
 
   async getInventoryDashboard(branchId: string) {
