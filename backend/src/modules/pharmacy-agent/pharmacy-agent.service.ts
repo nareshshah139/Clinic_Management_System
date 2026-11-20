@@ -202,6 +202,8 @@ const ACTION_TARGETS: Record<string, string> = {
   commit_purchase_invoice_stock: 'pharmacy_purchase_invoice',
 };
 
+const PROPOSAL_REVIEWED_ELSEWHERE =
+  'Someone else applied or rejected this proposal first. Reload the thread to see its status.';
 const MAX_ACTIVE_AGENT_THREADS = 12;
 const MAX_HISTORY_AGENT_THREADS = 30;
 const DEFAULT_CODEX_STATUS_CACHE_MS = 60_000;
@@ -652,9 +654,7 @@ export class PharmacyAgentService implements OnModuleInit {
       include: { actions: { orderBy: { createdAt: 'asc' } } },
     });
     if (!proposal) throw new NotFoundException('Proposal not found');
-    if (proposal.status !== 'PENDING_REVIEW') {
-      throw new BadRequestException(`Proposal is ${proposal.status}`);
-    }
+    this.assertAwaitingReview(proposal);
 
     for (const action of proposal.actions) {
       this.assertSupportedAction(action.actionType);
@@ -667,6 +667,14 @@ export class PharmacyAgentService implements OnModuleInit {
       }
       await this.assertExpectedVersion(action, user.branchId);
     }
+
+    const claimedAt = new Date();
+    const claim = await prisma.pharmacyAgentProposal.updateMany({
+      where: { id: proposal.id, status: 'PENDING_REVIEW', appliedAt: null },
+      data: { appliedBy: user.id, appliedAt: claimedAt },
+    });
+    if (claim.count === 0) throw new BadRequestException(PROPOSAL_REVIEWED_ELSEWHERE);
+    const claimed = { id: proposal.id, status: 'PENDING_REVIEW', appliedAt: claimedAt };
 
     const results: any[] = [];
     for (const action of proposal.actions) {
@@ -689,21 +697,24 @@ export class PharmacyAgentService implements OnModuleInit {
             error: String(error?.message || error).slice(0, 1000),
           },
         });
-        await prisma.pharmacyAgentProposal.update({
-          where: { id: proposal.id },
+        await prisma.pharmacyAgentProposalAction.updateMany({
+          where: { proposalId: proposal.id, status: 'PENDING_REVIEW' },
+          data: { status: 'SKIPPED' },
+        });
+        await prisma.pharmacyAgentProposal.updateMany({
+          where: claimed,
           data: { status: 'FAILED' },
         });
         throw error;
       }
     }
 
-    const updated = await prisma.pharmacyAgentProposal.update({
+    await prisma.pharmacyAgentProposal.updateMany({
+      where: claimed,
+      data: { status: 'APPLIED', appliedAt: new Date() },
+    });
+    const updated = await prisma.pharmacyAgentProposal.findUniqueOrThrow({
       where: { id: proposal.id },
-      data: {
-        status: 'APPLIED',
-        appliedBy: user.id,
-        appliedAt: new Date(),
-      },
       include: { actions: { orderBy: { createdAt: 'asc' } } },
     });
 
@@ -730,24 +741,28 @@ export class PharmacyAgentService implements OnModuleInit {
       include: { actions: { orderBy: { createdAt: 'asc' } } },
     });
     if (!proposal) throw new NotFoundException('Proposal not found');
-    if (proposal.status !== 'PENDING_REVIEW') {
-      throw new BadRequestException(`Proposal is ${proposal.status}`);
-    }
+    this.assertAwaitingReview(proposal);
 
-    const updated = await prisma.pharmacyAgentProposal.update({
-      where: { id: proposal.id },
-      data: {
-        status: 'REJECTED',
-        rejectedBy: user.id,
-        rejectedAt: new Date(),
-        rejectionReason: dto.reason || null,
-        actions: {
-          updateMany: {
-            where: { proposalId: proposal.id },
-            data: { status: 'REJECTED' },
-          },
+    const rejected = await prisma.$transaction(async (tx: any) => {
+      const { count } = await tx.pharmacyAgentProposal.updateMany({
+        where: { id: proposal.id, status: 'PENDING_REVIEW', appliedAt: null },
+        data: {
+          status: 'REJECTED',
+          rejectedBy: user.id,
+          rejectedAt: new Date(),
+          rejectionReason: dto.reason || null,
         },
-      },
+      });
+      if (count === 0) return false;
+      await tx.pharmacyAgentProposalAction.updateMany({
+        where: { proposalId: proposal.id },
+        data: { status: 'REJECTED' },
+      });
+      return true;
+    });
+    if (!rejected) throw new BadRequestException(PROPOSAL_REVIEWED_ELSEWHERE);
+    const updated = await prisma.pharmacyAgentProposal.findUniqueOrThrow({
+      where: { id: proposal.id },
       include: { actions: { orderBy: { createdAt: 'asc' } } },
     });
 
@@ -770,6 +785,18 @@ export class PharmacyAgentService implements OnModuleInit {
     });
     if (!session) throw new NotFoundException('Agent session not found');
     return session;
+  }
+
+  // appliedAt on a proposal still awaiting review marks an Apply in progress.
+  private assertAwaitingReview(proposal: any) {
+    if (proposal.status !== 'PENDING_REVIEW') {
+      throw new BadRequestException(`Proposal is ${proposal.status}`);
+    }
+    if (proposal.appliedAt) {
+      throw new BadRequestException(
+        'This proposal is already being applied. Reload the thread to see the result.',
+      );
+    }
   }
 
   private assertSessionWritable(session: any) {
