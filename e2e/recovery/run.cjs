@@ -627,7 +627,7 @@ async function cleanup() {
     await owned.admin?.$disconnect();
   });
   await attempt(async () => {
-    fs.rmSync(temp, { recursive: true, force: true });
+    fs.rmSync(temp, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   });
   if (errors.length) throw Error(errors.join("; "));
 }
