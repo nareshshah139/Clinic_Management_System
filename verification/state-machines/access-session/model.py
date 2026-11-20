@@ -1,6 +1,7 @@
 SPEC = "AccessSession.tla"
 CONSTANTS = {"Lifetime": "2"}
 MODES = {
+    "before": {"MODE": '"before"'},
     "code": {"MODE": '"code"'},
     "fixed": {"MODE": '"fixed"'},
     "noAccountCheck": {"MODE": '"noAccountCheck"'},
@@ -32,7 +33,7 @@ RULE_TEXT = {
     "AccessEnds": "Once an account is suspended, the API stops answering its session unless a manager reactivates it first.",
 }
 EXPECT = {
-    "code": {
+    "before": {
         "TypeOK": "holds",
         "ColumnsAgree": "breaks",
         "NoAccessWhileSuspended": "breaks",
@@ -42,6 +43,7 @@ EXPECT = {
         "SessionsEnd": "holds",
         "AccessEnds": "holds",
     },
+    "code": {rule: "holds" for rule in RULES},
     "fixed": {rule: "holds" for rule in RULES},
     "noAccountCheck": {"NoAccessWhileSuspended": "breaks", "AccessEnds": "holds"},
     "roleFromToken": {"RoleIsCurrent": "breaks"},
@@ -51,12 +53,5 @@ EXPECT = {
     "codeNoExpiry": {"SessionsEnd": "breaks", "AccessEnds": "breaks"},
     "typeProbe": {"TypeOK": "breaks"},
 }
-CHARTS = ["code", "fixed"]
-_REPLAY = "backend/src/modules/auth/tests/access-session.formal-replay.database.spec.ts"
-REPLAYS = {
-    "ColumnsAgree": _REPLAY,
-    "NoAccessWhileSuspended": _REPLAY,
-    "RoleIsCurrent": _REPLAY,
-    "ResetEndsOldSessions": _REPLAY,
-    "NoResetWhileSuspended": _REPLAY,
-}
+CHARTS = ["before", "code"]
+REPLAYS = {}

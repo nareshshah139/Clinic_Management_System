@@ -118,85 +118,71 @@ databaseTests('Access session replays on PostgreSQL', () => {
     http().patch(`/users/${staffId}/role`).set('Cookie', cookie).send({ role: 'ADMIN' });
 
   describe('ColumnsAgree', () => {
-    it.failing('ColumnsAgree: suspending an account also clears its active flag', async () => {
+    it('ColumnsAgree: suspending an account also clears its active flag', async () => {
       await managerSuspends();
       const row = await staffRow();
       expect([row.status, row.isActive]).toEqual(['SUSPENDED', false]);
     });
-
-    it('today: suspending an account leaves its active flag set', async () => {
-      await managerSuspends();
-      const row = await staffRow();
-      expect([row.status, row.isActive]).toEqual(['SUSPENDED', true]);
-    });
   });
 
   describe('NoAccessWhileSuspended', () => {
-    it.failing('NoAccessWhileSuspended: a session signed in before the suspension is refused', async () => {
+    it('NoAccessWhileSuspended: a session signed in before the suspension is refused', async () => {
       const cookie = await signIn(staffEmail);
+      expect((await youOpenAPage(cookie)).status).toBe(200);
       await managerSuspends();
       expect((await youOpenAPage(cookie)).status).toBe(401);
     });
 
-    it('today: a suspended account keeps using its day-long session', async () => {
+    it('NoAccessWhileSuspended: a row saved SUSPENDED with isActive still set is refused', async () => {
       const cookie = await signIn(staffEmail);
-      const claims = JSON.parse(Buffer.from(cookie.split('.')[1], 'base64url').toString());
-      expect(claims.exp - claims.iat).toBe(86400);
-      await managerSuspends();
-      const res = await youOpenAPage(cookie);
-      expect([res.status, res.body.id]).toEqual([200, staffId]);
-      expect((await http().post('/auth/login').send({ identifier: staffEmail, password: PASSWORD })).status).toBe(403);
+      await prisma.user.update({ where: { id: staffId }, data: { status: 'SUSPENDED', isActive: true } });
+      expect((await youOpenAPage(cookie)).status).toBe(401);
     });
   });
 
   describe('RoleIsCurrent', () => {
-    it.failing('RoleIsCurrent: a demoted admin cannot use a manager action with the old session', async () => {
+    it('RoleIsCurrent: a demoted admin cannot use a manager action with the old session', async () => {
       const cookie = await signIn(staffEmail);
       await managerDemotes();
       const res = await youUseAManagerAction(cookie);
       expect([res.status, (await staffRow()).role]).toEqual([403, 'RECEPTION']);
-    });
-
-    it('today: a demoted admin promotes themselves back with the old session', async () => {
-      const cookie = await signIn(staffEmail);
-      await managerDemotes();
-      expect((await staffRow()).role).toBe('RECEPTION');
-      const res = await youUseAManagerAction(cookie);
-      expect([res.status, (await staffRow()).role]).toEqual([200, 'ADMIN']);
+      expect((await youOpenAPage(cookie)).body).toEqual({ id: staffId, role: 'RECEPTION', branchId });
     });
   });
 
   describe('ResetEndsOldSessions', () => {
-    it.failing('ResetEndsOldSessions: a session signed in before a password reset is refused', async () => {
+    it('ResetEndsOldSessions: a session signed in before a password reset is refused', async () => {
       const cookie = await signIn(staffEmail);
       const code = await managerIssuesResetCode();
       expect((await youResetPassword(code)).status).toBe(201);
       expect((await youOpenAPage(cookie)).status).toBe(401);
+      const fresh = await http().post('/auth/login').send({ identifier: staffEmail, password: NEW_PASSWORD });
+      expect((await youOpenAPage(fresh.headers['set-cookie'][0].split(';')[0])).status).toBe(200);
     });
 
-    it('today: a session signed in before a password reset keeps working', async () => {
+    it('ResetEndsOldSessions: a session signed in before a password change is refused', async () => {
       const cookie = await signIn(staffEmail);
-      const code = await managerIssuesResetCode();
-      expect((await youResetPassword(code)).status).toBe(201);
-      expect(await bcrypt.compare(NEW_PASSWORD, (await staffRow()).password)).toBe(true);
-      const res = await youOpenAPage(cookie);
-      expect([res.status, res.body.id]).toEqual([200, staffId]);
+      const res = await http().post(`/users/${staffId}/change-password`).set('Cookie', cookie)
+        .send({ currentPassword: PASSWORD, newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD });
+      expect(res.status).toBe(201);
+      expect((await youOpenAPage(cookie)).status).toBe(401);
     });
   });
 
   describe('NoResetWhileSuspended', () => {
-    it.failing('NoResetWhileSuspended: a suspended account cannot redeem a reset code', async () => {
-      await managerSuspends();
+    it('NoResetWhileSuspended: a suspended account is issued no reset code and cannot redeem one issued earlier', async () => {
       const code = await managerIssuesResetCode();
+      await managerSuspends();
+      const issue = await http().post(`/auth/users/${staffId}/reset-code`).set('Cookie', await asOwner());
       const res = await youResetPassword(code);
-      expect([res.status, await bcrypt.compare(PASSWORD, (await staffRow()).password)]).toEqual([400, true]);
+      expect([issue.status, res.status, await bcrypt.compare(PASSWORD, (await staffRow()).password)]).toEqual([404, 400, true]);
     });
 
-    it('today: a suspended account is issued a reset code and redeems it', async () => {
-      await managerSuspends();
+    it('NoResetWhileSuspended: a row saved SUSPENDED with isActive still set cannot redeem a code', async () => {
       const code = await managerIssuesResetCode();
+      await prisma.user.update({ where: { id: staffId }, data: { status: 'SUSPENDED', isActive: true } });
       const res = await youResetPassword(code);
-      expect([res.status, await bcrypt.compare(NEW_PASSWORD, (await staffRow()).password)]).toEqual([201, true]);
+      expect([res.status, await bcrypt.compare(PASSWORD, (await staffRow()).password)]).toEqual([400, true]);
     });
   });
 });

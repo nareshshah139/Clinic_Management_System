@@ -4,10 +4,11 @@
    The account lives in two columns of User: status (ACTIVE or SUSPENDED here;
    INACTIVE and PENDING behave like SUSPENDED everywhere) and isActive. Sign-in
    requires both. The session is a signed JWT carrying the role at sign-in and
-   an expiry. The model adds a password stamp to each token, the number of
-   password resets the account had when the token was signed, so a rule can
-   ask whether a session predates the latest reset. Today's tokens carry no
-   such claim, so in code mode nothing reads the stamp.
+   an expiry. Each token carries a password stamp, here the number of password
+   resets the account had when the token was signed, so a rule can ask whether
+   a session predates the latest reset. The code's stamp is the pwdStamp claim,
+   a digest of the stored password hash. Before the fix tokens carried no such
+   claim, so in before mode nothing reads the stamp.
 
    Actors: you (the staff member) sign in, call a staff route, call a manager
    route and redeem a reset code. A manager suspends and reactivates you,
@@ -20,7 +21,7 @@ EXTENDS Naturals
 
 CONSTANTS Lifetime, MODE
 
-Modes == {"code", "fixed", "noAccountCheck", "roleFromToken", "noPasswordStamp",
+Modes == {"before", "code", "fixed", "noAccountCheck", "roleFromToken", "noPasswordStamp",
           "statusOnly", "noExpiry", "codeNoExpiry", "typeProbe"}
 
 ASSUME Lifetime \in Nat \ {0}
@@ -40,9 +41,10 @@ VARIABLES status, isActive, role, stamp, resetCode, token, last
 vars == <<status, isActive, role, stamp, resetCode, token, last>>
 
 -----------------------------------------------------------------------------
-(* Which guards run. code and codeNoExpiry are today; every other mode except
-   typeProbe is fixed, minus at most one guard. *)
-FixedLike == MODE \notin {"code", "codeNoExpiry", "typeProbe"}
+(* Which guards run. before and codeNoExpiry are the code before the fix. code
+   is the code after it: fixed, with the reset guards of ResetAllowed. Every
+   other mode except typeProbe is fixed, minus at most one guard. *)
+FixedLike == MODE \notin {"before", "codeNoExpiry", "typeProbe"}
 ChecksAccount == FixedLike /\ MODE # "noAccountCheck"
 RoleFromStore == FixedLike /\ MODE # "roleFromToken"
 ChecksStamp == FixedLike /\ MODE # "noPasswordStamp"
@@ -50,6 +52,10 @@ SyncsColumns == FixedLike /\ MODE # "statusOnly"
 Expires == MODE \notin {"noExpiry", "codeNoExpiry"}
 
 Usable == status = "ACTIVE" /\ isActive
+
+\* Issuing and redeeming a reset code. The code checks both columns, as sign-in
+\* does; fixed and before check isActive only.
+ResetAllowed == IF MODE = "code" THEN Usable ELSE isActive
 
 \* passport-jwt verifies the signature and exp claim.
 TokenWorks == token.held /\ token.age < Lifetime
@@ -97,7 +103,8 @@ YouCallManagerRoute ==
   /\ last' = Snap("managerRoute", Accepts("managerRoute"))
   /\ UNCHANGED <<status, isActive, role, stamp, resetCode, token>>
 
-\* PATCH /users/:id/status: updateUserStatus writes status only.
+\* PATCH /users/:id/status: updateUserStatus writes isActive with status, or
+\* status only before the fix.
 ManagerSuspends ==
   /\ status = "ACTIVE"
   /\ status' = IF MODE = "typeProbe" THEN "DELETED" ELSE "SUSPENDED"
@@ -125,19 +132,19 @@ ManagerPromotes ==
   /\ last' = NoCall
   /\ UNCHANGED <<status, isActive, stamp, resetCode, token>>
 
-\* POST /auth/users/:id/reset-code: issueResetCode finds the target by isActive.
+\* POST /auth/users/:id/reset-code: issueResetCode finds a usable target.
 ManagerIssuesResetCode ==
-  /\ isActive
+  /\ ResetAllowed
   /\ ~resetCode
   /\ resetCode' = TRUE
   /\ last' = NoCall
   /\ UNCHANGED <<status, isActive, role, stamp, token>>
 
-\* POST /auth/reset-password: resetPassword matches the code and isActive.
+\* POST /auth/reset-password: resetPassword matches the code on a usable account.
 \* stamp < MaxResets bounds the model, not the code.
 YouResetPassword ==
   /\ resetCode
-  /\ isActive
+  /\ ResetAllowed
   /\ stamp < MaxResets
   /\ stamp' = stamp + 1
   /\ resetCode' = FALSE

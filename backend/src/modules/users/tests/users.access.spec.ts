@@ -224,14 +224,14 @@ describe('/users access control', () => {
     it('saves the status sent with an edit', async () => {
       const res = await send('patch', '/users/target', 'admin', { firstName: 'Tara', status: 'INACTIVE' }).expect(200);
       expect(res.body).toMatchObject({ id: 'target', firstName: 'Tara', status: 'INACTIVE' });
-      expect(db.user.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'target' }, data: { firstName: 'Tara', status: 'INACTIVE' } }));
+      expect(db.user.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'target' }, data: { firstName: 'Tara', status: 'INACTIVE', isActive: false } }));
     });
 
     it('creates a user with the chosen status, and ACTIVE when none is sent', async () => {
       const body = { firstName: 'New', lastName: 'Person', email: 'new@example.test', password: 'Password1!', role: 'NURSE' };
       await send('post', '/users', 'admin', { ...body, status: 'PENDING' }).expect(201);
       await send('post', '/users', 'admin', body).expect(201);
-      expect(db.user.create.mock.calls.map(([{ data }]: any) => data.status)).toEqual(['PENDING', 'ACTIVE']);
+      expect(db.user.create.mock.calls.map(([{ data }]: any) => [data.status, data.isActive])).toEqual([['PENDING', false], ['ACTIVE', true]]);
     });
 
     it.each([

@@ -6,8 +6,8 @@ import { userGrants } from '../access/permission-grants';
 
 /**
  * @cc [owner:nareshshah139,label:security] permission-gate
- * OWNER (from the token) and ADMIN or DOCTOR (from the stored user role, not the token) MUST
- * pass every Permissions() requirement. Other users MUST hold every string requirement and one
+ * OWNER (from request.user, which JwtStrategy reads from the stored user) and ADMIN or DOCTOR
+ * (from the stored user role) MUST pass every Permissions() requirement. Other users MUST hold every string requirement and one
  * entry of every alternative group in their role and saved user grants minus their revoked grants,
  * and a revoked permission MUST be refused even when a broader held grant covers it. A stored
  * PHARMACIST always holds pharmacy:* and inventory:*. A missing user, id or record, malformed
