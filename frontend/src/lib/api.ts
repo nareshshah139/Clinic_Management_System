@@ -25,6 +25,11 @@ import type { InventoryItemRequest, InventoryItemRequestStatus, PendingApprovalR
 
 export type DoctorLetterhead = { id: string; url: string; source: 'uploaded' | 'bundled' };
 
+// The inventory document editor and the stock count sheet send no further save until these
+// answer. The server's transaction gives up after 30 s and retries a serialization conflict
+// twice, so a write waits 120 s before the client gives up.
+const INVENTORY_EDITOR_REQUEST = /^\/inventory\/workspace\/(documents(\/by-request)?(\/[^/?#]+(\/(resolve|transition))?)?|reconciliation\/counts\/[^/?#]+)$/;
+
 export class ApiClient {
   private baseURL: string;
   private token: string | null = null;
@@ -169,7 +174,8 @@ export class ApiClient {
       const controller = new AbortController();
       const timeoutMs = extra?.timeoutMs && extra.timeoutMs > 0 ? extra.timeoutMs :
         ['POST', 'PATCH', 'PUT'].includes(method) &&
-          /^\/(patients|visits|prescriptions)(\/[^/?#]+)?(\/complete)?([?#]|$)/.test(endpoint) ? 30000 : undefined;
+          /^\/(patients|visits|prescriptions)(\/[^/?#]+)?(\/complete)?([?#]|$)/.test(endpoint) ? 30000 :
+        INVENTORY_EDITOR_REQUEST.test(endpoint) ? (isSafeMethod ? 30000 : 120000) : undefined;
       let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
       if (timeoutMs) {
         timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);

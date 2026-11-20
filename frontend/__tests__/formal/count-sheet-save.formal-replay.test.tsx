@@ -7,7 +7,8 @@ import type { User } from '@/lib/types';
 
 // Replays of verification/state-machines/count-sheet-save. Each test follows TLC's path in
 // results/code.md, one block per model action. Only fetch is stubbed; the stub keeps the
-// server's count version and refuses a stale PATCH with 409, as saveCountProgress does.
+// server's count version and refuses a stale PATCH with 409, as saveCountProgress does. A held
+// PATCH rejects once its signal aborts, as a real fetch does.
 
 const COUNT_URL = '/api/inventory/workspace/reconciliation/counts/count-1';
 const OTHER_WINDOW_COUNT = 9;
@@ -36,8 +37,10 @@ function countServer() {
     if (url === COUNT_URL && init?.method === 'PATCH') {
       const body = JSON.parse(String(init.body));
       if (!server.holdPatches) return Promise.resolve(answerPatch(body));
-      return new Promise((resolve) => {
-        server.patches.push({ body, signal: init.signal as AbortSignal, release: () => resolve(answerPatch(body)) });
+      return new Promise((resolve, reject) => {
+        const signal = init.signal as AbortSignal;
+        signal.addEventListener('abort', () => reject(new DOMException('The operation was aborted.', 'AbortError')));
+        server.patches.push({ body, signal, release: () => resolve(answerPatch(body)) });
       });
     }
     if (url === COUNT_URL) {
@@ -184,13 +187,7 @@ async function unansweredSaveThenGoBack() {
   return server.patches[0];
 }
 
-it.failing('SaveRequestEnds: a save the server never answers is given up within ten minutes', async () => {
+it('SaveRequestEnds: a save the server never answers is given up within ten minutes', async () => {
   const hung = await unansweredSaveThenGoBack();
   expect(hung.signal.aborted).toBe(true);
-});
-
-it('today: SaveRequestEnds path leaves the save waiting after ten minutes', async () => {
-  const hung = await unansweredSaveThenGoBack();
-  expect(hung.signal.aborted).toBe(false);
-  expect(patchesSent()).toHaveLength(1);
 });
