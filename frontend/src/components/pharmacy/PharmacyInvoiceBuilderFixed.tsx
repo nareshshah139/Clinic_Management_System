@@ -338,7 +338,6 @@ export function PharmacyInvoiceBuilderFixed({
   const [patients, setPatients] = useState<Patient[]>([]);
   const patientsAllRef = useRef<Patient[]>([]);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
-  const [drugs, setDrugs] = useState<Drug[]>([]);
   const [packages, setPackages] = useState<PharmacyPackage[]>([]);
   const [searchResults, setSearchResults] = useState<Drug[]>([]);
   const [items, setItems] = useState<InvoiceItem[]>(() => (draft ? savedLines(draft) : []));
@@ -842,20 +841,16 @@ export function PharmacyInvoiceBuilderFixed({
   const loadInitialData = async () => {
     const contextVersion = billingContextVersion.current;
     try {
-      const [patientsRes, doctorsRes, drugsRes, packagesRes] =
+      const [patientsRes, doctorsRes, packagesRes] =
         await Promise.all([
           apiClient.getPatients({ limit: 100 }),
           apiClient.getUsers({ role: 'DOCTOR', limit: 50 }),
-          apiClient.get('/drugs', { limit: 100, isActive: true }),
           apiClient.get('/pharmacy/packages', { limit: 100, isActive: true }),
         ]);
 
       const patientsData =
         (patientsRes as any)?.data || (patientsRes as any)?.patients || [];
       const doctorsData = (doctorsRes as any)?.users || [];
-      const drugsData = Array.isArray((drugsRes as any)?.data)
-        ? (drugsRes as any).data
-        : [];
       const packagesData = Array.isArray((packagesRes as any)?.packages)
         ? (packagesRes as any).packages
         : Array.isArray((packagesRes as any)?.data)
@@ -865,7 +860,6 @@ export function PharmacyInvoiceBuilderFixed({
       setPatients(patientsData);
       patientsAllRef.current = patientsData;
       setDoctors(doctorsData);
-      setDrugs(drugsData);
       setPackages(packagesData);
 
       if (contextVersion !== billingContextVersion.current) return;
