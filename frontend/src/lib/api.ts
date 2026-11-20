@@ -994,8 +994,7 @@ export class ApiClient {
     data: Record<string, unknown>,
     opts?: { idempotencyKey?: string; timeoutMs?: number }
   ) {
-    const base = JSON.stringify(data || {});
-    const autoKey = `cms:POST:prescriptions:pad:${this.djb2Hash(base)}`;
+    const autoKey = `cms:POST:prescriptions:pad:${this.newOperationKey()}`;
     return this.post('/prescriptions/pad', data, { idempotencyKey: opts?.idempotencyKey || autoKey, timeoutMs: opts?.timeoutMs });
   }
 

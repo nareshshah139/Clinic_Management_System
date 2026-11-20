@@ -1,6 +1,7 @@
 SPEC = "Idempotency.tla"
 CONSTANTS = {"Issues": "2", "Attempts": "2", "MaxReqs": "4"}
 MODES = {
+    "before": {"MODE": '"before"'},
     "code": {"MODE": '"code"'},
     "fixed": {"MODE": '"fixed"'},
     "failOpenClaim": {"MODE": '"failOpenClaim"'},
@@ -24,10 +25,17 @@ RULE_TEXT = {
     "BrowserLeavesSaving": "The save indicator always stops, even when the server never answers.",
 }
 EXPECT = {
-    "code": {
+    "before": {
         "TypeOK": "holds",
         "OnePrescriptionPerIssue": "breaks",
         "NoStaleReplay": "breaks",
+        "NoFailureStored": "holds",
+        "BrowserLeavesSaving": "holds",
+    },
+    "code": {
+        "TypeOK": "holds",
+        "OnePrescriptionPerIssue": "holds",
+        "NoStaleReplay": "holds",
         "NoFailureStored": "holds",
         "BrowserLeavesSaving": "holds",
     },
@@ -44,8 +52,5 @@ EXPECT = {
     "noTimeout": {"BrowserLeavesSaving": "breaks"},
     "typeProbe": {"TypeOK": "breaks"},
 }
-CHARTS = ["code", "fixed"]
-REPLAYS = {
-    "OnePrescriptionPerIssue": "backend/src/shared/interceptors/tests/idempotency.formal-replay.database.spec.ts",
-    "NoStaleReplay": "backend/src/shared/interceptors/tests/idempotency.formal-replay.database.spec.ts",
-}
+CHARTS = ["before", "code"]
+REPLAYS = {}
