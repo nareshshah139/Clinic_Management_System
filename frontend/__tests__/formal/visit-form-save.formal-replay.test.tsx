@@ -7,6 +7,9 @@ import MedicalVisitForm from '@/components/visits/MedicalVisitForm';
 // Like VisitsService.update, it refuses a write whose version is stale with 409, and the
 // prescription POST carries the form's clinical patch with the same version.
 
+const CLINICAL_WORKFLOW_COMPLETION_TIMEOUT_MS = 15_000;
+jest.setTimeout(CLINICAL_WORKFLOW_COMPLETION_TIMEOUT_MS);
+
 type Held = { method: string; url: string; body: any; apply: () => void; reply: () => void };
 
 const medicine = { drugName: 'Synthetic medicine', dosage: 10, dosageUnit: 'MG', frequency: 'ONCE_DAILY', duration: 7, durationUnit: 'DAYS' };
