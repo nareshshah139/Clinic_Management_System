@@ -977,7 +977,7 @@ describe('InventoryController (Integration)', () => {
     it('should return categories', async () => {
       const mockCategories = ['Pain Relief', 'Antibiotics', 'Vitamins'];
 
-      mockPrismaService.inventoryItem.findMany.mockResolvedValue(
+      mockPrismaService.inventoryItem.groupBy.mockResolvedValue(
         mockCategories.map(cat => ({ category: cat }))
       );
 
@@ -985,7 +985,7 @@ describe('InventoryController (Integration)', () => {
         .get('/inventory/categories')
         .expect(200);
 
-      expect(response.body).toEqual(mockCategories);
+      expect(response.body).toEqual([...mockCategories].sort());
     });
   });
 
@@ -993,7 +993,7 @@ describe('InventoryController (Integration)', () => {
     it('should return manufacturers', async () => {
       const mockManufacturers = ['ABC Pharma', 'XYZ Labs', 'DEF Medical'];
 
-      mockPrismaService.inventoryItem.findMany.mockResolvedValue(
+      mockPrismaService.inventoryItem.groupBy.mockResolvedValue(
         mockManufacturers.map(man => ({ manufacturer: man }))
       );
 
@@ -1001,7 +1001,7 @@ describe('InventoryController (Integration)', () => {
         .get('/inventory/manufacturers')
         .expect(200);
 
-      expect(response.body).toEqual(mockManufacturers);
+      expect(response.body).toEqual([...mockManufacturers].sort());
     });
   });
 
@@ -1026,7 +1026,7 @@ describe('InventoryController (Integration)', () => {
     it('should return storage locations', async () => {
       const mockLocations = ['Store A', 'Store B', 'Cold Storage'];
 
-      mockPrismaService.inventoryItem.findMany.mockResolvedValue(
+      mockPrismaService.inventoryItem.groupBy.mockResolvedValue(
         mockLocations.map(loc => ({ storageLocation: loc }))
       );
 
@@ -1034,7 +1034,7 @@ describe('InventoryController (Integration)', () => {
         .get('/inventory/storage-locations')
         .expect(200);
 
-      expect(response.body).toEqual(mockLocations);
+      expect(response.body).toEqual([...mockLocations].sort());
     });
   });
 

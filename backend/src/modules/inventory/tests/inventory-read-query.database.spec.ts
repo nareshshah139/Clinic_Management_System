@@ -900,9 +900,12 @@ databaseTests('Inventory and queue reads with PostgreSQL', () => {
       ],
     });
     const inventory = new InventoryService(db as any);
-    expect([...(await inventory.getCategories(lists.id))].sort()).toEqual(['Cream', 'Syrup', 'Tablet']);
-    expect([...(await inventory.getManufacturers(lists.id))].sort()).toEqual(['Acme', 'Zed Labs']);
-    expect([...(await inventory.getStorageLocations(lists.id))].sort()).toEqual([
+    fixture.queries.length = 0;
+    expect(await inventory.getCategories(lists.id)).toEqual(['Cream', 'Syrup', 'Tablet']);
+    expect(fixture.queries).toHaveLength(1);
+    expect(fixture.queries[0]).toMatch(/GROUP BY/);
+    expect(await inventory.getManufacturers(lists.id)).toEqual(['Acme', 'Zed Labs']);
+    expect(await inventory.getStorageLocations(lists.id)).toEqual([
       'Cold room',
       'Shelf A',
       'Shelf B',
