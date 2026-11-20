@@ -159,6 +159,7 @@ interface Props {
   includeSections?: Record<string, boolean>;
   onChangeIncludeSections?: (next: Record<string, boolean>) => void;
   ensureVisitId?: () => Promise<string>;
+  holdVisitSave?: <T>(write: () => Promise<T>) => Promise<T | undefined>;
   onChangeChiefComplaints?: (value: string) => void;
   onChangeContentOffset?: (x: number, y: number) => void;
   designAids?: {
@@ -288,7 +289,7 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
  * and the disclaimer above the signature, even when the signature is hidden.
  * Switching to In-person MUST remove both from regenerated preview and exports.
  */
-function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, visitId, doctorId, doctorName, userRole = 'DOCTOR', onCreated, onClinicalDataChange, getClinicalSavePatch, onVisitSaved, onClinicalConflict, shouldPersistDraft, initialVisitSnapshot, onBeforeExport, onPreview, reviewDate, printBgUrl, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, contentOffsetXPx, contentOffsetYPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason, includeSections: includeSectionsProp, onChangeIncludeSections, ensureVisitId, onChangeChiefComplaints, onChangeContentOffset, designAids, paperPreset, grayscale, bleedSafe, frames, onChangeFrames, patient, onSummaryChange, vitalsExtra, investigationResults, toolbarTarget, applyExtraVitals }: Props) {
+function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, visitId, doctorId, doctorName, userRole = 'DOCTOR', onCreated, onClinicalDataChange, getClinicalSavePatch, onVisitSaved, onClinicalConflict, shouldPersistDraft, initialVisitSnapshot, onBeforeExport, holdVisitSave, onPreview, reviewDate, printBgUrl, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, contentOffsetXPx, contentOffsetYPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason, includeSections: includeSectionsProp, onChangeIncludeSections, ensureVisitId, onChangeChiefComplaints, onChangeContentOffset, designAids, paperPreset, grayscale, bleedSafe, frames, onChangeFrames, patient, onSummaryChange, vitalsExtra, investigationResults, toolbarTarget, applyExtraVitals }: Props) {
   const visitVersionRef = useRef<number | undefined>(undefined);
   const initialVisitSnapshotRef = useRef(initialVisitSnapshot);
   const dirtyClinicalFields = useRef(new Set<string>());
@@ -2676,113 +2677,118 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     }
     prescriptionSaveInFlight.current = true;
     setSavingFromPreview(true);
-    try {
-      // Prefer IDs from loaded visit if available
-      const visitPatientId: string | undefined = (visitData && typeof visitData === 'object')
-        ? ((visitData as any).patientId || (visitData as any)?.patient?.id)
-        : undefined;
-      const visitDoctorId: string | undefined = (visitData && typeof visitData === 'object')
-        ? ((visitData as any).doctorId || (visitData as any)?.doctor?.id)
-        : undefined;
-      const effectivePatientId = (typeof visitPatientId === 'string' && visitPatientId.trim()) ? visitPatientId : patientId;
-      const effectiveDoctorId = (typeof visitDoctorId === 'string' && visitDoctorId.trim()) ? visitDoctorId : doctorId;
+    const saveRx = async () => {
+      try {
+        // Prefer IDs from loaded visit if available
+        const visitPatientId: string | undefined = (visitData && typeof visitData === 'object')
+          ? ((visitData as any).patientId || (visitData as any)?.patient?.id)
+          : undefined;
+        const visitDoctorId: string | undefined = (visitData && typeof visitData === 'object')
+          ? ((visitData as any).doctorId || (visitData as any)?.doctor?.id)
+          : undefined;
+        const effectivePatientId = (typeof visitPatientId === 'string' && visitPatientId.trim()) ? visitPatientId : patientId;
+        const effectiveDoctorId = (typeof visitDoctorId === 'string' && visitDoctorId.trim()) ? visitDoctorId : doctorId;
 
-      // Validate essential IDs
-      if (typeof effectivePatientId !== 'string' || !effectivePatientId.trim() || typeof effectiveDoctorId !== 'string' || !effectiveDoctorId.trim()) {
-        console.warn('[PrescriptionBuilder] Invalid IDs on create', { patientId: effectivePatientId, doctorId: effectiveDoctorId, visitId });
+        // Validate essential IDs
+        if (typeof effectivePatientId !== 'string' || !effectivePatientId.trim() || typeof effectiveDoctorId !== 'string' || !effectiveDoctorId.trim()) {
+          console.warn('[PrescriptionBuilder] Invalid IDs on create', { patientId: effectivePatientId, doctorId: effectiveDoctorId, visitId });
+          toast({
+            variant: 'destructive',
+            title: 'Invalid IDs',
+            description: 'Patient or Doctor ID is missing. Please correct and try again.',
+          });
+          return;
+        }
+
+        // Ensure we have a visit when not in standalone mode
+        let ensuredVisitId: string | null = exportVisitId || visitId;
+        if (!standalone && !ensuredVisitId && ensureVisitId) ensuredVisitId = await ensureVisitId();
+        if (!standalone && !ensuredVisitId) throw new Error('Unable to link the visit. Nothing was saved. Please retry.');
+
+        const payload = {
+          clinicalData: getClinicalSavePatch?.() ?? { ...clinicalData, version: visitVersionRef.current },
+          patientId: effectivePatientId,
+          visitId: standalone ? undefined : (ensuredVisitId || visitId || undefined),
+          doctorId: effectiveDoctorId,
+          items: prescriptionItemsPayload,
+          diagnosis: clinicalField('diagnosis', diagnosis),
+          language,
+
+          followUpInstructions: clinicalField('followUpInstructions', followUpInstructions),
+          procedureMetrics: Object.keys(procedureMetrics).length ? procedureMetrics : undefined,
+          metadata: {
+            chiefComplaints: clinicalField('chiefComplaints', chiefComplaints),
+            histories: {
+              pastHistory: clinicalField('pastHistory', pastHistory),
+              personalHistory,
+              medicationHistory: clinicalField('medicationHistory', medicationHistory),
+              menstrualHistory: clinicalField('menstrualHistory', menstrualHistory),
+            },
+            familyHistory: {
+              dm: clinicalField('familyHistoryDM', familyHistoryDM),
+              htn: clinicalField('familyHistoryHTN', familyHistoryHTN),
+              thyroid: clinicalField('familyHistoryThyroid', familyHistoryThyroid),
+              others: clinicalField('familyHistoryOthers', familyHistoryOthers),
+            },
+            investigations: clinicalField('investigations', investigations),
+            procedures: clinicalField('procedures', procedures),
+            procedurePlanned: clinicalField('procedurePlanned', procedurePlanned),
+          },
+        };
+        const existingId = createdPrescriptionIdRef.current || savedPrescriptionId || visitData?.prescription?.id || visitData?.prescriptionId;
+        const res: any = existingId
+          ? await apiClient.updatePrescription(existingId, payload)
+          : standalone
+          ? await apiClient.createQuickPrescription({ ...payload, reason: standaloneReason })
+          : await apiClient.createPrescription(payload);
+        if (!res?.id) throw new Error('The server did not confirm the saved prescription. Your draft is still available; please retry.');
+        if (!existingId) track('prescription_created', { mode: standalone ? 'quick' : 'visit' });
+        createdPrescriptionIdRef.current = res.id;
+        setSavedPrescriptionId(res?.id || null);
+        if (res.visit) {
+          visitVersionRef.current = acknowledgedVisitVersion(visitVersionRef.current, res.visit.version);
+          onVisitSaved?.(res.visit);
+        }
+        onCreated?.(res?.id);
+
+        const skipCleanup = skipPostSaveCleanupRef.current;
+        skipPostSaveCleanupRef.current = false;
+
+        if (!skipCleanup && !standalone && !fromPreview) {
+          setConfirmPharmacy({
+            open: true,
+            prescriptionId: res?.id || '',
+            summary: {
+              medicationsCount: validItems.length,
+            },
+          });
+        }
+
         toast({
-          variant: 'destructive',
-          title: 'Invalid IDs',
-          description: 'Patient or Doctor ID is missing. Please correct and try again.',
+          variant: 'success',
+          title: existingId ? 'Prescription updated' : 'Prescription created',
+          description: `${validItems.length} medications recorded for the patient.`,
         });
-        return;
-      }
 
-      // Ensure we have a visit when not in standalone mode
-      let ensuredVisitId: string | null = exportVisitId || visitId;
-      if (!standalone && !ensuredVisitId && ensureVisitId) ensuredVisitId = await ensureVisitId();
-      if (!standalone && !ensuredVisitId) throw new Error('Unable to link the visit. Nothing was saved. Please retry.');
-
-      const payload = {
-        clinicalData: getClinicalSavePatch?.() ?? { ...clinicalData, version: visitVersionRef.current },
-        patientId: effectivePatientId,
-        visitId: standalone ? undefined : (ensuredVisitId || visitId || undefined),
-        doctorId: effectiveDoctorId,
-        items: prescriptionItemsPayload,
-        diagnosis: clinicalField('diagnosis', diagnosis),
-        language,
-
-        followUpInstructions: clinicalField('followUpInstructions', followUpInstructions),
-        procedureMetrics: Object.keys(procedureMetrics).length ? procedureMetrics : undefined,
-        metadata: {
-          chiefComplaints: clinicalField('chiefComplaints', chiefComplaints),
-          histories: {
-            pastHistory: clinicalField('pastHistory', pastHistory),
-            personalHistory,
-            medicationHistory: clinicalField('medicationHistory', medicationHistory),
-            menstrualHistory: clinicalField('menstrualHistory', menstrualHistory),
-          },
-          familyHistory: {
-            dm: clinicalField('familyHistoryDM', familyHistoryDM),
-            htn: clinicalField('familyHistoryHTN', familyHistoryHTN),
-            thyroid: clinicalField('familyHistoryThyroid', familyHistoryThyroid),
-            others: clinicalField('familyHistoryOthers', familyHistoryOthers),
-          },
-          investigations: clinicalField('investigations', investigations),
-          procedures: clinicalField('procedures', procedures),
-          procedurePlanned: clinicalField('procedurePlanned', procedurePlanned),
-        },
-      };
-      const existingId = createdPrescriptionIdRef.current || savedPrescriptionId || visitData?.prescription?.id || visitData?.prescriptionId;
-      const res: any = existingId
-        ? await apiClient.updatePrescription(existingId, payload)
-        : standalone
-        ? await apiClient.createQuickPrescription({ ...payload, reason: standaloneReason })
-        : await apiClient.createPrescription(payload);
-      if (!res?.id) throw new Error('The server did not confirm the saved prescription. Your draft is still available; please retry.');
-      if (!existingId) track('prescription_created', { mode: standalone ? 'quick' : 'visit' });
-      createdPrescriptionIdRef.current = res.id;
-      setSavedPrescriptionId(res?.id || null);
-      if (res.visit) {
-        visitVersionRef.current = acknowledgedVisitVersion(visitVersionRef.current, res.visit.version);
-        onVisitSaved?.(res.visit);
-      }
-      onCreated?.(res?.id);
-
-      const skipCleanup = skipPostSaveCleanupRef.current;
-      skipPostSaveCleanupRef.current = false;
-
-      if (!skipCleanup && !standalone && !fromPreview) {
-        setConfirmPharmacy({
-          open: true,
-          prescriptionId: res?.id || '',
-          summary: {
-            medicationsCount: validItems.length,
-          },
+        // Keep saved clinical details and medication items available for subsequent edits.
+        return res.id as string;
+      } catch (e: any) {
+        reportClinicalConflict(e);
+        const { title, description, variant } = mapCreateErrorToToast(e);
+        toast({
+          variant: variant || 'destructive',
+          title,
+          description,
         });
       }
-
-      toast({
-        variant: 'success',
-        title: existingId ? 'Prescription updated' : 'Prescription created',
-        description: `${validItems.length} medications recorded for the patient.`,
-      });
-
-      // Keep saved clinical details and medication items available for subsequent edits.
-      return res.id as string;
-    } catch (e: any) {
-      reportClinicalConflict(e);
-      const { title, description, variant } = mapCreateErrorToToast(e);
-      toast({
-        variant: variant || 'destructive',
-        title,
-        description,
-      });
+    };
+    try {
+      return await (holdVisitSave ? holdVisitSave(saveRx) : saveRx());
     } finally {
       prescriptionSaveInFlight.current = false;
       setSavingFromPreview(false);
     }
-  }, [reportClinicalConflict, getClinicalSavePatch, onVisitSaved, consultationType, teleVideoConsent, savedPrescriptionId, prescriptionItemsPayload, clinicalData, ensureVisitId, standalone, standaloneReason, validItems, visitData, canCreate, patientId, visitId, doctorId, items, diagnosis, language, reviewDate, followUpInstructions, procedureMetrics, chiefComplaints, pastHistory, personalHistory, medicationHistory, menstrualHistory, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, investigations, procedures, procedurePlanned, onCreated]);
+  }, [holdVisitSave, reportClinicalConflict, getClinicalSavePatch, onVisitSaved, consultationType, teleVideoConsent, savedPrescriptionId, prescriptionItemsPayload, clinicalData, ensureVisitId, standalone, standaloneReason, validItems, visitData, canCreate, patientId, visitId, doctorId, items, diagnosis, language, reviewDate, followUpInstructions, procedureMetrics, chiefComplaints, pastHistory, personalHistory, medicationHistory, menstrualHistory, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, investigations, procedures, procedurePlanned, onCreated]);
 
   const exportSaveInFlight = useRef(false);
   const [savingForExport, setSavingForExport] = useState(false);

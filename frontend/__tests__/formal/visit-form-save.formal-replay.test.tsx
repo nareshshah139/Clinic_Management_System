@@ -69,31 +69,36 @@ afterEach(() => {
   jest.useRealTimers();
 });
 
-async function saveDraftAndPrescriptionOnANewVisit() {
+// Applies every write the form has sent, in arrival order, then delivers the replies newest first,
+// so a later write's reply lands before an earlier one's, as in the model's counterexamples.
+// Repeats until the form sends nothing more.
+const served = new WeakSet<Held>();
+async function serveHeldWrites(server: ReturnType<typeof visitServer>) {
+  for (let round = 0; round < 8; round++) {
+    await settle();
+    const pending = server.held.filter((h) => !served.has(h));
+    pending.forEach((h) => { h.apply(); served.add(h); });
+    for (const h of pending.reverse()) { h.reply(); await settle(); }
+  }
+}
+
+it('OneVisit: Save Draft and Create Prescription on a new visit create one visit', async () => {
   const server = visitServer(false);
   localStorage.setItem('rxDraft:p:standalone', JSON.stringify({ items: [medicine] }));
   render(<MedicalVisitForm patientId="p" doctorId="d" userRole="DOCTOR" />);
   await settle();
   fireEvent.click(screen.getByRole('button', { name: 'Save Draft' }));
   await settle();
-  expect(held(server, 'POST', '/api/visits')).toHaveLength(1);
   fireEvent.click(screen.getByRole('button', { name: 'Create Prescription' }));
   await settle();
-  const [saveDraft, prescription] = held(server, 'POST', '/api/visits');
-  expect(prescription).toBeDefined();
-  saveDraft.apply();
-  prescription.apply();
-  return server;
-}
-
-it.failing('OneVisit: Save Draft and Create Prescription on a new visit create one visit', async () => {
-  const server = await saveDraftAndPrescriptionOnANewVisit();
+  server.held.forEach((h) => { h.apply(); served.add(h); });
   expect(server.visits).toEqual(['v1']);
-});
-
-it('today: OneVisit path creates two visits for one consultation', async () => {
-  const server = await saveDraftAndPrescriptionOnANewVisit();
-  expect(server.visits).toEqual(['v1', 'v2']);
+  server.held.forEach((h) => h.reply());
+  await serveHeldWrites(server);
+  fireEvent.click(screen.getByRole('button', { name: 'Create Prescription' }));
+  await serveHeldWrites(server);
+  expect(server.visits).toEqual(['v1']);
+  expect(held(server, 'POST', '/api/prescriptions').map((h) => h.body.visitId)).toEqual(['v1']);
 });
 
 async function autosaveRacesThePrescription() {
@@ -110,41 +115,19 @@ async function autosaveRacesThePrescription() {
   expect(autosave.body.version).toBe(1);
   expect(indicator()).toHaveTextContent('Auto-saving…');
   fireEvent.click(screen.getByRole('button', { name: 'Create Prescription' }));
-  await settle();
-  const [prescription] = held(server, 'POST', '/api/prescriptions');
-  expect(prescription.body.clinicalData.version).toBe(1);
-  autosave.apply();
-  prescription.apply();
-  prescription.reply();
-  await settle();
-  return { server, autosave };
+  await serveHeldWrites(server);
+  return server;
 }
 
-it.failing('NoSelfConflict: an autosave and a prescription save from the same form do not raise a conflict', async () => {
-  await autosaveRacesThePrescription();
+it('NoSelfConflict: an autosave and a prescription save from the same form do not raise a conflict', async () => {
+  const server = await autosaveRacesThePrescription();
   expect(screen.queryByText(/Autosave is paused/)).toBeNull();
+  expect(held(server, 'POST', '/api/prescriptions').map((h) => h.body.clinicalData.version)).toEqual([2]);
+  expect(server.version).toBe(3);
 });
 
-it('today: NoSelfConflict path pauses autosave as if someone else changed the visit', async () => {
-  const { server } = await autosaveRacesThePrescription();
-  expect(server.version).toBe(2);
-  expect(screen.getByText(/Autosave is paused/)).toBeInTheDocument();
-  expect(indicator()).toHaveTextContent('Save failed');
-});
-
-async function staleAutosaveReplyAfterTheConflict() {
-  const { autosave } = await autosaveRacesThePrescription();
-  autosave.reply();
-  await settle();
-}
-
-it.failing('LatchAgrees: while the conflict notice shows, the indicator says Save failed', async () => {
-  await staleAutosaveReplyAfterTheConflict();
-  expect(indicator()).toHaveTextContent('Save failed');
-});
-
-it('today: LatchAgrees path shows Saved beside the conflict notice', async () => {
-  await staleAutosaveReplyAfterTheConflict();
-  expect(screen.getByText(/Autosave is paused/)).toBeInTheDocument();
-  expect(indicator()).toHaveTextContent(/^Saved/);
+it('LatchAgrees: the indicator agrees with the conflict notice', async () => {
+  await autosaveRacesThePrescription();
+  const latched = screen.queryByText(/Autosave is paused/) !== null;
+  expect(indicator()).toHaveTextContent(latched ? 'Save failed' : /^Saved/);
 });
