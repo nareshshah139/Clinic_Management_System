@@ -22,6 +22,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AlertCircle, CalendarDays, ChevronDown, ChevronRight, ChevronUp, FlaskConical, Languages, Mic, MicOff, MoreHorizontal, Pill, Plus, RotateCcw, Sparkles, Trash2, Wand2, X } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuLabel } from '@/components/ui/dropdown-menu';
 import { apiClient } from '@/lib/api';
+import { newRequestId } from '@/lib/api-diagnostics';
 import { track } from '@/lib/analytics';
 import { ManageClinicInvestigations, hasInvestigation, mergeInvestigationOptions, sameInvestigation, tidyInvestigationName, useClinicInvestigations, type ClinicInvestigation } from './ClinicInvestigations';
 import { handleUnauthorizedRedirect } from '@/lib/authRedirect';
@@ -729,6 +730,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const [savedPrescriptionId, setSavedPrescriptionId] = useState<string | null>(null);
   const [savingFromPreview, setSavingFromPreview] = useState(false);
   const prescriptionSaveInFlight = useRef(false);
+  // One key per pad draft, kept across retries and presses of Save until the server confirms it.
+  const padSaveKey = useRef<string | null>(null);
   const skipPostSaveCleanupRef = useRef(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [autoPreview, setAutoPreview] = useState(false);
@@ -2737,11 +2740,15 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       const res: any = existingId
         ? await apiClient.updatePrescription(existingId, payload)
         : standalone
-        ? await apiClient.createQuickPrescription({ ...payload, reason: standaloneReason })
+        ? await apiClient.createQuickPrescription(
+            { ...payload, reason: standaloneReason },
+            { idempotencyKey: (padSaveKey.current ??= `cms:POST:prescriptions:pad:${newRequestId()}`) },
+          )
         : await apiClient.createPrescription(payload);
       if (!res?.id) throw new Error('The server did not confirm the saved prescription. Your draft is still available; please retry.');
       if (!existingId) track('prescription_created', { mode: standalone ? 'quick' : 'visit' });
       createdPrescriptionIdRef.current = res.id;
+      padSaveKey.current = null;
       setSavedPrescriptionId(res?.id || null);
       if (res.visit) {
         visitVersionRef.current = acknowledgedVisitVersion(visitVersionRef.current, res.visit.version);

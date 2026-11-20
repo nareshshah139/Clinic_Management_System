@@ -40,9 +40,9 @@ databaseTests('Idempotency formal replay: prescription pad saves', () => {
     reason: 'Monthly repeat',
   });
 
-  // createQuickPrescription in frontend/src/lib/api.ts derives the key from the payload alone,
-  // so every save of the same pad sends this same key.
-  const padKey = () => `cms:POST:prescriptions:pad:${patientId}`;
+  // PrescriptionBuilder sends one random key per pad draft, kept across retries and presses of Save.
+  // frontend/__tests__/visits/PrescriptionBuilder.pad-key.test.tsx proves the browser side.
+  const draftKey = () => `cms:POST:prescriptions:pad:${randomUUID()}`;
 
   const save = (key: string) =>
     request(app.getHttpServer()).post('/prescriptions/pad').set('Idempotency-Key', key).send(pad());
@@ -51,15 +51,6 @@ databaseTests('Idempotency formal replay: prescription pad saves', () => {
     visits: await prisma.visit.count({ where: { patientId } }),
     prescriptions: await prisma.prescription.count({ where: { visit: { patientId } } }),
   });
-
-  const storedResponse = async (key: string) => {
-    for (let i = 0; i < 100; i++) {
-      const row = await prisma.idempotencyRecord.findFirst({ where: { key } });
-      if (row) return JSON.parse(row.responseBody) as { id: string };
-      await new Promise((resolve) => setTimeout(resolve, 20));
-    }
-    throw new Error('the first response was never stored');
-  };
 
   beforeAll(async () => {
     Logger.overrideLogger(false);
@@ -115,7 +106,7 @@ databaseTests('Idempotency formal replay: prescription pad saves', () => {
   });
 
   it('OnePrescriptionPerIssue: a retry during a slow save creates no second visit or prescription', async () => {
-    const key = padKey();
+    const key = draftKey();
     const first = save(key).then((res) => res);
     await store.arrived;
     expect(await counts()).toEqual({ visits: 1, prescriptions: 1 });
@@ -128,26 +119,12 @@ databaseTests('Idempotency formal replay: prescription pad saves', () => {
     expect(await counts()).toEqual({ visits: 1, prescriptions: 1 });
   });
 
-  async function saveSamePadTwice() {
+  it('NoStaleReplay: saving the same prescription again later creates a new prescription', async () => {
     store.release();
-    const key = padKey();
-    const first = await save(key);
-    expect(first.status).toBe(201);
-    await storedResponse(key);
-    const second = await save(key);
-    return { first: first.body as { id: string }, second };
-  }
-
-  it.failing('NoStaleReplay: saving the same prescription again later creates a new prescription', async () => {
-    const { first, second } = await saveSamePadTwice();
-    expect(second.body.id).not.toBe(first.id);
+    const first = await save(draftKey());
+    const second = await save(draftKey());
+    expect([first.status, second.status]).toEqual([201, 201]);
+    expect(second.body.id).not.toBe(first.body.id);
     expect(await counts()).toEqual({ visits: 2, prescriptions: 2 });
-  });
-
-  it('today: saving the same prescription again later answers with the earlier prescription', async () => {
-    const { first, second } = await saveSamePadTwice();
-    expect(second.status).toBe(201);
-    expect(second.body.id).toBe(first.id);
-    expect(await counts()).toEqual({ visits: 1, prescriptions: 1 });
   });
 });
