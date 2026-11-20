@@ -8,13 +8,15 @@
    Serializable transaction that may abort on a conflict and is retried at most
    twice. The order wants 2 units. The challan carries 1 or 2.
 
-   MODE "code" is the code today. "fixed" adds the one change the model asks
-   for. Every other mode is "fixed" with one guard removed. *)
+   MODE "before" is the code before the fix, kept as a regression control.
+   "code" is the code today, which closes the shortbook when its order is
+   cancelled or rejected and so takes the same branches as "fixed". Every other
+   mode is "fixed" with one guard removed. *)
 EXTENDS Naturals
 
 CONSTANTS Actors, MODE
 
-ASSUME MODE \in {"code", "fixed", "typeProbe", "noVersionCheck", "noPostedCheck",
+ASSUME MODE \in {"before", "code", "fixed", "typeProbe", "noVersionCheck", "noPostedCheck",
                  "convertIgnoresFinal", "receiptIgnoresClosedShortbook",
                  "rejectOrderedShortbook", "retryUnbounded"}
 
@@ -49,7 +51,7 @@ VARIABLES st, ver, req, rqty, posts, final, staleWrote
 
 vars == <<st, ver, req, rqty, posts, final, staleWrote>>
 
-FixClose == MODE # "code"
+FixClose == MODE # "before"
 
 Init ==
   /\ st = [d \in Docs |-> IF d = "po" THEN "ABSENT" ELSE "DRAFT"]
@@ -63,7 +65,7 @@ Init ==
 Refused == [ok |-> FALSE, st |-> st, w |-> {}, post |-> 0]
 Done(nst, w, p) == [ok |-> TRUE, st |-> nst, w |-> w, post |-> p]
 
-\* Closing an order closes its shortbook request (fixed and the controls only).
+\* Closing an order closes its shortbook request (every mode but before).
 CloseShortbook(nst) ==
   IF FixClose /\ st["sb"] \in {"ORDERED", "PART_RECEIVED"}
     THEN [nst EXCEPT !["sb"] = "CANCELLED"]

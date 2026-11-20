@@ -8,7 +8,7 @@ const databaseTests = process.env.FORMAL_REPLAY_TEST_DATABASE_URL ? describe : d
 
 /**
  * Replays TLC's shortest path to a broken rule in
- * verification/state-machines/inventory-documents (results/code.md).
+ * verification/state-machines/inventory-documents (results/before.md), which the fix closed.
  */
 databaseTests('Inventory documents formal replay', () => {
   let fixture: Awaited<ReturnType<typeof localDatabase>>;
