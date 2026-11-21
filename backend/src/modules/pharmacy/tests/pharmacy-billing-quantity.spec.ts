@@ -18,7 +18,7 @@ const stockCheck = async (lines: Line[]) => {
     expiryDate: new Date('2099-01-01'), stockStatus: 'IN_STOCK', drugs: [],
   });
   const prisma: any = {
-    $queryRaw: jest.fn().mockResolvedValue([{ id: 'rx-1' }]),
+    $queryRaw: jest.fn(async (sql: any) => (Array.isArray(sql) && sql.join('').includes('inventory_items') ? [] : [{ id: 'rx-1' }])),
     prescription: {
       findFirst: jest.fn().mockResolvedValue({
         id: 'rx-1', createdAt: new Date(), updatedAt: new Date(), items: JSON.stringify(lines),

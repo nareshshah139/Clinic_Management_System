@@ -2,6 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import {
   checkedProductQuery,
   matchProductSearch,
+  type ProductSearchMatch,
 } from '../../shared/search/product-search';
 import { inventoryNameAliases } from '../inventory/inventory-names';
 import { strengthMissing } from '../inventory/medicine-names';
@@ -72,23 +73,34 @@ export async function searchClinicInventory(
   if (!branchId) throw new BadRequestException('Branch context is required');
   const q = checkedProductQuery(raw);
   if (!q) return [];
-  const items = await prisma.inventoryItem.findMany({
-    where: { branchId, status: 'ACTIVE' },
-    include: inventoryIdentityInclude,
-    orderBy: { id: 'asc' },
-  });
-  const groups = new Map<string, any>();
+  // Linked drugs follow table order, as Prisma's include lists them: matched text and corrections
+  // name the first of equally good matches.
+  const items: InventorySearchRow[] = await prisma.$queryRaw`
+    SELECT i.id, i.name, i."brandName", i."genericName", i.barcode, i.sku, i."itemCode",
+      i."packUnit", i.strength, i.metadata, i.unit::text AS unit, i."packSize",
+      i.status::text AS status, i."expiryDate", i."currentStock", i."heldStock",
+      coalesce((
+        SELECT json_agg(json_build_object('id', d.id, 'name', d.name,
+          'composition1', d.composition1, 'composition2', d.composition2) ORDER BY d.ctid)
+        FROM "_DrugToInventoryItem" link JOIN drugs d ON d.id = link."A"
+        WHERE link."B" = i.id
+      ), '[]'::json) AS drugs
+    FROM inventory_items i
+    WHERE i."branchId" = ${branchId} AND i.status = 'ACTIVE'
+    ORDER BY i.id`;
+  const groups = new Map<
+    string,
+    { item: InventorySearchRow; totalStock: number; searchMatch: ProductSearchMatch | null }
+  >();
   for (const item of items) {
-    const aliases = inventoryKnownNames(item).slice(1);
     const match = matchProductSearch(q, {
-      names: [item.name, item.brandName, ...item.drugs.map((d: any) => d.name)].filter(Boolean),
-      aliases,
+      names: [item.name, item.brandName, ...item.drugs.map((d) => d.name)].filter(
+        (name): name is string => !!name,
+      ),
+      aliases: inventoryKnownNames(item).slice(1),
       ingredients: [
         item.genericName || '',
-        ...item.drugs.flatMap((d: any) => [
-          d.composition1 || '',
-          d.composition2 || '',
-        ]),
+        ...item.drugs.flatMap((d) => [d.composition1 || '', d.composition2 || '']),
       ],
       codes: [item.id, item.barcode, item.sku, item.itemCode],
       details: [item.packUnit, item.strength],
@@ -105,6 +117,29 @@ export async function searchClinicInventory(
         previous.searchMatch = match;
       continue;
     }
+    groups.set(key, { item, totalStock: quantity, searchMatch: match });
+  }
+  const ranked = [...groups.values()]
+    .filter((group) => group.searchMatch)
+    .sort(
+      (a, b) =>
+        b.searchMatch!.score - a.searchMatch!.score ||
+        a.item.name.localeCompare(b.item.name) ||
+        a.item.id.localeCompare(b.item.id),
+    )
+    .slice(0, Math.min(50, Math.max(1, limit)));
+  if (!ranked.length) return [];
+  const full = new Map<string, any>(
+    (
+      await prisma.inventoryItem.findMany({
+        where: { id: { in: ranked.map((group) => group.item.id) } },
+        include: inventoryIdentityInclude,
+      })
+    ).map((item: any) => [item.id, item]),
+  );
+  return ranked.flatMap(({ item: { id }, totalStock, searchMatch }) => {
+    const item = full.get(id);
+    if (!item) return [];
     const drug =
       item.drugs.length === 1 &&
       item.drugs[0].branchId === branchId &&
@@ -112,43 +147,56 @@ export async function searchClinicInventory(
       !item.drugs[0].isDiscontinued
         ? item.drugs[0]
         : null;
-    groups.set(key, {
-      id: drug?.id,
-      inventoryItemId: item.id,
-      name: item.name,
-      genericName:
-        item.genericName ||
-        [drug?.composition1, drug?.composition2].filter(Boolean).join(' + ') ||
-        null,
-      price: item.sellingPrice,
-      gstRate: item.gstRate,
-      manufacturerName: item.manufacturer || drug?.manufacturerName || '',
-      manufacturer: item.manufacturer || drug?.manufacturerName || '',
-      dosageForm: drug?.dosageForm || item.form || null,
-      form: drug?.dosageForm || item.form || null,
-      strengthMissing: strengthMissing(item),
-      knownNames: aliases,
-      packSizeLabel:
-        drug?.packSizeLabel ||
-        `${item.packSize || 1} ${item.packUnit || item.unit}`,
-      unit: item.unit,
-      packSize: item.packSize,
-      packUnit: item.packUnit,
-      totalStock: quantity,
-      brandNames: [],
-      searchMatch: match,
-    });
-  }
-  return [...groups.values()]
-    .filter((row) => row.searchMatch)
-    .sort(
-      (a, b) =>
-        b.searchMatch.score - a.searchMatch.score ||
-        a.name.localeCompare(b.name) ||
-        a.inventoryItemId.localeCompare(b.inventoryItemId),
-    )
-    .slice(0, Math.min(50, Math.max(1, limit)));
+    return [
+      {
+        id: drug?.id,
+        inventoryItemId: item.id,
+        name: item.name,
+        genericName:
+          item.genericName ||
+          [drug?.composition1, drug?.composition2].filter(Boolean).join(' + ') ||
+          null,
+        price: item.sellingPrice,
+        gstRate: item.gstRate,
+        manufacturerName: item.manufacturer || drug?.manufacturerName || '',
+        manufacturer: item.manufacturer || drug?.manufacturerName || '',
+        dosageForm: drug?.dosageForm || item.form || null,
+        form: drug?.dosageForm || item.form || null,
+        strengthMissing: strengthMissing(item),
+        knownNames: inventoryKnownNames(item).slice(1),
+        packSizeLabel:
+          drug?.packSizeLabel ||
+          `${item.packSize || 1} ${item.packUnit || item.unit}`,
+        unit: item.unit,
+        packSize: item.packSize,
+        packUnit: item.packUnit,
+        totalStock,
+        brandNames: [],
+        searchMatch,
+      },
+    ];
+  });
 }
+
+type InventorySearchRow = {
+  id: string;
+  name: string;
+  brandName: string | null;
+  genericName: string | null;
+  barcode: string | null;
+  sku: string | null;
+  itemCode: string | null;
+  packUnit: string | null;
+  strength: string | null;
+  metadata: string | null;
+  unit: string;
+  packSize: number | null;
+  status: string;
+  expiryDate: Date | null;
+  currentStock: number;
+  heldStock: number;
+  drugs: { id: string; name: string; composition1: string | null; composition2: string | null }[];
+};
 
 /**
  * @cc [owner:nareshshah139,label:product] prescription-stock-stable-identity
