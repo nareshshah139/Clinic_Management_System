@@ -192,12 +192,12 @@ export const DOSE_PATTERN_OPTIONS = [
 ] as const;
 
 /**
- * @cc [owner:nareshshah139,label:safety;target] unknown-dose-text-never-becomes-a-frequency
+ * @cc [owner:nareshshah139,label:safety] unknown-dose-text-never-becomes-a-frequency
  * Known codes (od, qd, hs, bd, bid, tid, qid, qNh, prn and the spelled-out forms) MUST map to their
  * exact frequency regardless of case and outer spacing, and blank or all-zero input MUST return null.
- * Text that is neither a known code nor an N-N-N slot pattern (tds, sos, q3h, every 5 hours, 1.5-0-1)
- * MUST return null so the doctor picks the frequency. This is a target obligation, not a pass claim:
- * any unknown text containing digits is counted as slots (q3h gives ONCE_DAILY).
+ * Text that is neither a known code nor a slot pattern of three or more whole numbers joined by
+ * dashes (tds, sos, q3h, every 5 hours, 1.5-0-1, 1-0) MUST return null so the doctor picks the
+ * frequency.
  */
 export function inferFrequencyFromDosePattern(pattern: string): FrequencyOption | null {
   const raw = (pattern || '').trim().toLowerCase();
@@ -227,21 +227,26 @@ export function inferFrequencyFromDosePattern(pattern: string): FrequencyOption 
   };
   if (map[raw]) return map[raw];
 
-  const tokens = raw.split(/[^0-9]+/).filter(Boolean);
-  if (tokens.length > 0) {
-    const doses = tokens
-      .map((t) => Number(t))
-      .filter((n) => !Number.isNaN(n) && Number.isFinite(n));
-    if (doses.length > 0) {
-      const total = doses.reduce((a, b) => a + (b > 0 ? 1 : 0), 0);
-      if (total <= 0) return null;
-      if (total === 1) return 'ONCE_DAILY';
-      if (total === 2) return 'TWICE_DAILY';
-      if (total === 3) return 'THREE_TIMES_DAILY';
-      return 'FOUR_TIMES_DAILY';
-    }
-  }
-  return null;
+  if (!/^\d+(?:\s*-\s*\d+){2,}$/.test(raw)) return null;
+  const slots = raw.split('-').filter((t) => Number(t) > 0).length;
+  if (slots === 0) return null;
+  if (slots === 1) return 'ONCE_DAILY';
+  if (slots === 2) return 'TWICE_DAILY';
+  if (slots === 3) return 'THREE_TIMES_DAILY';
+  return 'FOUR_TIMES_DAILY';
+}
+
+/**
+ * @cc [owner:nareshshah139,label:safety] stored-frequency-never-defaults
+ * A stored medicine row's frequency MUST stay as its known option (any case and spacing), else come
+ * from its dose pattern, else stay as its own non-blank text. With none of these it MUST be blank so
+ * the doctor picks it, never ONCE_DAILY.
+ */
+export function frequencyForStoredItem(raw: unknown, pattern?: string): string {
+  const upper = typeof raw === 'string' ? raw.trim().toUpperCase().replace(/\s+/g, '_') : '';
+  if (upper && getAllFrequencyOptions().includes(upper)) return upper;
+  const inferred = pattern ? inferFrequencyFromDosePattern(pattern) : null;
+  return inferred ?? upper;
 }
 
 /**
