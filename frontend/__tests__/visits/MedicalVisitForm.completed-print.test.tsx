@@ -21,7 +21,6 @@ jest.mock('pagedjs', () => ({
 }));
 
 const medicine = { drugName: 'Doxycycline 100', dosage: 1, dosageUnit: 'TABLET', frequency: 'ONCE_DAILY', duration: 30, durationUnit: 'DAYS' };
-const COMPLETED_REFUSAL = 'This visit is completed, so its notes can no longer be changed.';
 
 function clinicServer(status: 'COMPLETED' | 'IN_PROGRESS') {
   const calls: string[] = [];
@@ -40,8 +39,6 @@ function clinicServer(status: 'COMPLETED' | 'IN_PROGRESS') {
     if (method === 'GET') return url === '/api/visits/v1' ? reply(200, visit) : reply(200, []);
     if (url === '/api/prescriptions/interactions/preview') return reply(200, { interactions: [] });
     calls.push(`${method} ${url}`);
-    const clinicalWrite = url === '/api/visits/v1' || url === '/api/prescriptions' || url === '/api/prescriptions/rx1';
-    if (clinicalWrite && status === 'COMPLETED') return reply(400, { message: COMPLETED_REFUSAL });
     if (url === '/api/visits/v1') return reply(200, { ...visit, version: visit.version + 1 });
     if (url === '/api/prescriptions/rx1') return reply(200, { id: 'rx1' });
     return reply(201, {});
@@ -83,7 +80,7 @@ const press = async (dialog: HTMLElement, name: string) => {
   await act(async () => { fireEvent.click(button); });
 };
 
-it('prints, downloads, emails and sends by WhatsApp the saved prescription of a completed visit without writing to it', async () => {
+it('prints, downloads, emails and sends by WhatsApp the saved prescription of a locked completed visit without writing to it', async () => {
   const calls = clinicServer('COMPLETED');
   const dialog = await openSavedPrescriptionPreview();
 
@@ -110,12 +107,21 @@ it('prints, downloads, emails and sends by WhatsApp the saved prescription of a 
   ]);
 });
 
-it('offers no prescription editing on a completed visit', async () => {
+it('offers no prescription editing on a locked completed visit', async () => {
   clinicServer('COMPLETED');
   const dialog = await openSavedPrescriptionPreview();
   expect(within(dialog).queryByRole('button', { name: 'Save Prescription' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Create Prescription', hidden: true })).toBeNull();
   expect(screen.getByDisplayValue(medicine.drugName)).toBeDisabled();
+});
+
+it('unlocks prescription editing on a completed visit after Edit visit', async () => {
+  clinicServer('COMPLETED');
+  render(<MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v1" userRole="DOCTOR" />);
+  expect(await screen.findByDisplayValue(medicine.drugName, {}, { timeout: 20_000 })).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Edit visit' }));
+  expect(screen.getByDisplayValue(medicine.drugName)).toBeEnabled();
+  expect(screen.getByRole('button', { name: 'Create Prescription', hidden: true })).toBeEnabled();
 });
 
 it('still saves the visit and the prescription before printing an open visit', async () => {

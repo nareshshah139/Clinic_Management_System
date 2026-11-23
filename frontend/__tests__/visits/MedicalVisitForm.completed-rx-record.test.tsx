@@ -19,7 +19,6 @@ jest.mock('pagedjs', () => ({
 
 const doxycycline = { drugName: 'Doxycycline 100', dosage: 1, dosageUnit: 'TABLET', frequency: 'ONCE_DAILY', duration: 30, durationUnit: 'DAYS' };
 const MINOCYCLINE = 'Minocycline 50';
-const COMPLETED_REFUSAL = 'This visit is completed, so its notes can no longer be changed.';
 
 function clinicServer(initialStatus: 'COMPLETED' | 'IN_PROGRESS', { prescriptionRefusal = '', saved = true } = {}) {
   const server = { status: initialStatus, version: 4, saved, record: [doxycycline] as Array<{ drugName: string }>, writes: [] as string[] };
@@ -38,8 +37,6 @@ function clinicServer(initialStatus: 'COMPLETED' | 'IN_PROGRESS', { prescription
     if (method === 'GET') return url === '/api/visits/v1' ? reply(200, visit()) : reply(200, []);
     if (url === '/api/prescriptions/interactions/preview') return reply(200, { interactions: [] });
     server.writes.push(`${method} ${url}`);
-    const clinicalWrite = url === '/api/visits/v1' || url === '/api/prescriptions' || url === '/api/prescriptions/rx1' || url === '/api/visits/v1/complete';
-    if (clinicalWrite && server.status === 'COMPLETED') return reply(400, { message: COMPLETED_REFUSAL });
     const body = init?.body ? JSON.parse(String(init.body)) : {};
     if (url === '/api/visits/v1') { server.version += 1; return reply(200, visit()); }
     if (url === '/api/prescriptions/rx1' || url === '/api/prescriptions') {
@@ -49,7 +46,10 @@ function clinicServer(initialStatus: 'COMPLETED' | 'IN_PROGRESS', { prescription
       server.version += 1;
       return reply(200, { id: 'rx1', items: server.record, visit: visit() });
     }
-    if (url === '/api/visits/v1/complete') { server.status = 'COMPLETED'; server.version += 1; return reply(200, visit()); }
+    if (url === '/api/visits/v1/complete') {
+      if (server.status !== 'COMPLETED') { server.status = 'COMPLETED'; server.version += 1; }
+      return reply(200, visit());
+    }
     return reply(201, {});
   }) as unknown as typeof fetch;
   return server;
@@ -97,6 +97,66 @@ it('completing a visit saves a changed medicine into the prescription record, an
   expect(page).not.toContain(doxycycline.drugName);
 });
 
+const lockedMedicine = async () => {
+  const field = await screen.findByDisplayValue(doxycycline.drugName, {}, { timeout: 20_000 });
+  expect(field).toBeDisabled();
+  expect(screen.queryByRole('button', { name: 'Save Draft' })).toBeNull();
+  return field;
+};
+
+it('edits a completed visit through Edit visit, saves the visit, the prescription record and completion in order, and locks it again', async () => {
+  const server = clinicServer('COMPLETED');
+  render(<MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v1" userRole="DOCTOR" />);
+  await lockedMedicine();
+  expect(screen.getByText('Completed. Read only.')).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Edit visit' }));
+  expect(screen.getByText(/^Editing a completed visit\./)).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Save Draft' })).toBeEnabled();
+  fireEvent.change(screen.getByDisplayValue(doxycycline.drugName), { target: { value: MINOCYCLINE } });
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save changes' })); });
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Edit visit' })).toBeInTheDocument(), { timeout: 10_000 });
+
+  expect(server.writes).toEqual(['PATCH /api/visits/v1', 'PATCH /api/prescriptions/rx1', 'POST /api/visits/v1/complete']);
+  expect(server.status).toBe('COMPLETED');
+  expect(server.record.map((item) => item.drugName)).toEqual([MINOCYCLINE]);
+  expect(screen.getByDisplayValue(MINOCYCLINE)).toBeDisabled();
+  expect(screen.getByText('Completed. Read only.')).toBeInTheDocument();
+
+  const page = await printPrescription();
+  expect(page).toContain(MINOCYCLINE);
+  expect(page).not.toContain(doxycycline.drugName);
+  expect(server.writes).toEqual(['PATCH /api/visits/v1', 'PATCH /api/prescriptions/rx1', 'POST /api/visits/v1/complete']);
+});
+
+it('prints a completed visit being edited only after saving the visit and the prescription record', async () => {
+  const server = clinicServer('COMPLETED');
+  render(<MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v1" userRole="DOCTOR" />);
+  await lockedMedicine();
+  fireEvent.click(screen.getByRole('button', { name: 'Edit visit' }));
+  fireEvent.change(screen.getByDisplayValue(doxycycline.drugName), { target: { value: MINOCYCLINE } });
+
+  const page = await printPrescription();
+  expect(server.writes).toEqual(['PATCH /api/visits/v1', 'PATCH /api/prescriptions/rx1']);
+  expect(server.record.map((item) => item.drugName)).toEqual([MINOCYCLINE]);
+  expect(page).toContain(MINOCYCLINE);
+  expect(page).not.toContain(doxycycline.drugName);
+  expect(server.status).toBe('COMPLETED');
+});
+
+it('opens a completed visit locked again after it is reloaded mid-edit', async () => {
+  clinicServer('COMPLETED');
+  const { unmount } = render(<MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v1" userRole="DOCTOR" />);
+  await lockedMedicine();
+  fireEvent.click(screen.getByRole('button', { name: 'Edit visit' }));
+  expect(screen.getByRole('button', { name: 'Save changes' })).toBeInTheDocument();
+  unmount();
+  render(<MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v1" userRole="DOCTOR" />);
+  await lockedMedicine();
+  expect(screen.getByRole('button', { name: 'Edit visit' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Save changes' })).toBeNull();
+});
+
 it('prints the saved prescription record of a completed visit, not a stale local draft', async () => {
   const server = clinicServer('COMPLETED');
   localStorage.setItem('rxDraft:p:v1', JSON.stringify({
@@ -112,6 +172,7 @@ it('prints the saved prescription record of a completed visit, not a stale local
   expect(server.record.map((item) => item.drugName)).toEqual([doxycycline.drugName]);
   expect(page).toContain(doxycycline.drugName);
   expect(page).not.toContain(MINOCYCLINE);
+  expect(server.writes).toEqual([]);
 });
 
 const completeVisit = async () => {

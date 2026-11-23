@@ -1,16 +1,16 @@
 # Appointment and its visit, before mode
 
-TLC explored 156 states and 2060 steps. The chart has 8 states and 27 arrows.
+TLC explored 130 states and 1733 steps. The chart has 7 states and 21 arrows.
 
 | Rule | Kind | Result |
 | --- | --- | --- |
 | TypeOK | invariant | holds |
 | StatusesAgree | invariant | breaks |
 | NoResurrection | invariant | breaks |
-| CompletedVisitFrozen | invariant | breaks |
+| EditKeepsCompletion | property | holds |
 | DisagreementHeals | property | breaks |
 
-Holds: TypeOK.
+Holds: TypeOK, EditKeepsCompletion.
 
 ## StatusesAgree breaks
 
@@ -28,15 +28,6 @@ A cancelled appointment stays cancelled until someone looking at it as cancelled
 2. the doctor starts the visit: Visit open
 3. the desk edits the status: Visit open, appointment shows otherwise
 4. the doctor completes the visit: Cancelled appointment back in use
-
-## CompletedVisitFrozen breaks
-
-A completed visit's clinical notes stay as they were when the doctor completed it.
-
-1. Waiting, no visit
-2. the doctor starts the visit: Visit open
-3. the doctor completes the visit: Visit completed
-4. the doctor edits the notes: Completed visit's notes changed
 
 ## DisagreementHeals breaks
 

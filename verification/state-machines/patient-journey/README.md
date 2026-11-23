@@ -101,8 +101,8 @@ Paths are under `backend/src/modules/` unless they start with `frontend/`.
 | `DeskCancels` | receptionist | `appointments/appointments.service.ts:649` `remove`, filter at `:654`. Sent by `frontend/src/components/appointments/DoctorDayCalendar.tsx:323` |
 | `DoctorStartsVisit` | doctor | `visits/visits.service.ts:129` row lock, `:132` refuses `CANCELLED` and `COMPLETED`, `:187` writes `IN_PROGRESS` |
 | `DoctorWritesPrescription` | doctor | `prescriptions/prescriptions.service.ts:83` live visit, `:99` one per visit, `:165` pulls into the queue, which creates the task `QUEUED` |
-| `DoctorCompletesVisit` | doctor | `visits/visits.service.ts:580` `complete`, `:602` writes the appointment `COMPLETED` by id |
-| `DoctorDeletesVisit` | doctor | `visits/visits.service.ts:620` `remove`, `:624` refuses a visit with a prescription, `:641` moves the appointment to `CHECKED_IN` |
+| `DoctorCompletesVisit` | doctor | `visits/visits.service.ts:578` `complete`, `:600` writes the appointment `COMPLETED` by id |
+| `DoctorDeletesVisit` | doctor | `visits/visits.service.ts:618` `remove`, `:622` refuses a visit with a prescription, `:639` moves the appointment to `CHECKED_IN` |
 | `DoctorCancelsPrescription` | doctor | `prescriptions/prescriptions.service.ts:518` `cancelPrescription`, `:522` refuses a completed or expired prescription, `:525` refuses a billed one |
 | `PharmacistReviews` | pharmacist | `pharmacy/pharmacy-prescription-queue.service.ts:561` `lockDispenseTask`, `:555` requires an active prescription on a live visit |
 | `PharmacistBills` | pharmacist | `pharmacy/pharmacy-invoice.service.ts:142` `checkout`, `:1404` and `:1496` `requireEligiblePrescription`, `:1530` refuses an inactive prescription |

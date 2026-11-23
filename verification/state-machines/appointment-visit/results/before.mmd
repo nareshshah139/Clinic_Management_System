@@ -8,8 +8,7 @@ stateDiagram-v2
   state "Cancelled appointment back in use" as s3
   state "Visit completed" as s4
   state "Visit open, appointment shows otherwise" as s5
-  state "Completed visit's notes changed" as s6
-  state "Visit completed, appointment shows otherwise" as s7
+  state "Visit completed, appointment shows otherwise" as s6
   [*] --> s0
   s0 --> s1: an admin bulk-updates the status / the desk cancels / the desk edits the status
   s0 --> s2: the doctor starts the visit
@@ -21,10 +20,8 @@ stateDiagram-v2
   s3 --> s1: an admin bulk-updates the status / the desk cancels / the desk edits the status
   s3 --> s5: an admin bulk-updates the status / the desk cancels / the desk edits the status
   s3 --> s6: an admin bulk-updates the status / the desk cancels / the desk edits the status
-  s3 --> s7: an admin bulk-updates the status / the desk cancels / the desk edits the status
   s4 --> s0: the visit is deleted
-  s4 --> s6: the doctor edits the notes
-  s4 --> s7: an admin bulk-updates the status / the desk confirms the voice check-in / the desk edits the status
+  s4 --> s6: an admin bulk-updates the status / the desk confirms the voice check-in / the desk edits the status
   s5 --> s0: the visit is deleted
   s5 --> s1: the visit is deleted
   s5 --> s2: an admin bulk-updates the status / the desk edits the status
@@ -33,13 +30,9 @@ stateDiagram-v2
   s6 --> s0: the visit is deleted
   s6 --> s1: the visit is deleted
   s6 --> s3: the desk confirms the voice check-in
-  s7 --> s0: the visit is deleted
-  s7 --> s1: the visit is deleted
-  s7 --> s3: the desk confirms the voice check-in
-  s7 --> s4: an admin bulk-updates the status / the desk edits the status
-  s7 --> s6: the doctor edits the notes
+  s6 --> s4: an admin bulk-updates the status / the desk edits the status
   classDef breaks fill:#fde2dd,stroke:#b3261e,stroke-width:2px
   classDef stuck fill:#fdf0d5,stroke:#a35a05,stroke-width:2px,stroke-dasharray:5 3
   classDef breaksAndStuck fill:#fde2dd,stroke:#a35a05,stroke-width:2px,stroke-dasharray:5 3
-  class s3,s6 breaks
+  class s3 breaks
   class s5 breaksAndStuck

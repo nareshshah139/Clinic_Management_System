@@ -5,8 +5,6 @@ def state(v):
     appt, visit = v["appt"], v["visit"]
     if v["cancelHeld"] and appt != "CANCELLED":
         return "Cancelled appointment back in use"
-    if visit == "done" and v["notes"] != v["signed"]:
-        return "Completed visit's notes changed"
     if visit == "open":
         return "Visit open" if appt == "IN_PROGRESS" else "Visit open, appointment shows otherwise"
     if visit == "done":

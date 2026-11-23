@@ -276,6 +276,10 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
   }, [visitId, onVisitIdChange]);
   const [currentVisitNumber, setCurrentVisitNumber] = useState(visitNumber);
   const [visitStatus, setVisitStatus] = useState<VisitStatus | 'draft'>('draft');
+  // A completed visit opens locked. Edit visit unlocks it until Save changes, a reload or leaving.
+  const [amending, setAmending] = useState(false);
+  const editMode = visitStatus !== 'COMPLETED' ? 'open' : amending ? 'amending' : 'locked';
+  const canEdit = editMode !== 'locked';
   
   const [activeTab, setActiveTab] = useState(() => {
     const permissions: string[] = ROLE_PERMISSIONS[userRole as keyof typeof ROLE_PERMISSIONS] || [];
@@ -935,7 +939,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
    * blocked until explicit reconciliation under visit-save-version. 408, 425 and 429 may retry.
    */
   const runAutoSave = useCallback(async () => {
-    if (!visitId || visitStatus === 'COMPLETED' || !hasUnsavedChangesRef.current || manualSaveInFlight.current || automaticSaveBlocked.current) {
+    if (!visitId || !canEdit || !hasUnsavedChangesRef.current || manualSaveInFlight.current || automaticSaveBlocked.current) {
       return;
     }
 
@@ -1022,7 +1026,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
         }
       }
     })();
-  }, [blockAutomaticSave, buildPayload, clearAutoSaveTimer, editSignature, persistDraftToStorage, toast, visitId, visitStatus]);
+  }, [blockAutomaticSave, buildPayload, clearAutoSaveTimer, editSignature, persistDraftToStorage, toast, visitId, canEdit]);
 
   autoSaveRunner.current = runAutoSave;
 
@@ -1157,6 +1161,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
         }
         if (visitVersionRef.current === undefined && !automaticSaveBlocked.current) visitVersionRef.current = res.version;
         if (res.status) setVisitStatus(res.status);
+        setAmending(false);
         if (!latestDraftStateRef.current.consultationType) {
           setConsultationType(res?.consultationType === 'TELE_VIDEO' ? 'TELE_VIDEO' : 'IN_PERSON');
           setTeleVideoConsent(res?.consultationType === 'TELE_VIDEO' && !!res.teleVideoConsentById && !!res.teleVideoConsentAt);
@@ -1300,6 +1305,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
     };
   }, [clearAutoSaveTimer, persistDraftToStorage]);
 
+  const saveShortcut = useRef<(complete: boolean) => void>(() => {});
   useEffect(() => {
     if (typeof window === 'undefined') {
       return;
@@ -1322,9 +1328,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
       const isComplete = (e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 's';
       if (isSave || isComplete) {
         e.preventDefault();
-        if (!saving) {
-          void save(isComplete);
-        }
+        saveShortcut.current(isComplete);
       }
     };
     document.addEventListener('keydown', handleKeyDown);
@@ -1421,8 +1425,8 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
    * prescription record, inside this save lock. If that save fails, the visit MUST NOT complete.
    */
   const save = async (complete = false, requireLatest = false) => {
-    if (visitStatus === 'COMPLETED') {
-      toast({ variant: 'warning', title: 'Visit completed', description: 'A completed visit cannot be changed.' });
+    if (!canEdit) {
+      toast({ variant: 'warning', title: 'Visit completed', description: 'Choose Edit visit to change a completed visit.' });
       return;
     }
     if (consentMissing) {
@@ -1498,6 +1502,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
           reviewOutcome = (completedVisit as { reviewAppointment?: ReviewBooking }).reviewAppointment;
           track('visit_completed', { follow_up_set: Boolean(reviewDate) });
           setVisitStatus(completedVisit.status);
+          setAmending(false);
           acknowledgeMutationVersion(completedVisit.version);
           if (typeof window !== 'undefined' && draftStorageKey) {
             try {
@@ -1517,11 +1522,11 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
         const review = complete ? reviewBookingMessage(reviewOutcome, reviewDate) : null;
         toast({
           variant: review?.tone ?? 'success',
-          title: complete ? 'Visit completed' : newerChanges ? 'Earlier changes saved' : 'Visit saved',
+          title: complete ? (editMode === 'amending' ? 'Changes saved' : 'Visit completed') : newerChanges ? 'Earlier changes saved' : 'Visit saved',
           description: review
             ? review.text
             : complete
-              ? 'All documentation has been marked complete.'
+              ? (editMode === 'amending' ? 'The completed visit and its prescription record are up to date.' : 'All documentation has been marked complete.')
               : newerChanges ? 'New edits are still waiting to save.' : 'Your draft was saved safely.',
           ...(review?.linkDate
             ? {
@@ -1547,13 +1552,14 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
         setSaveStatus('error');
         toast({
           variant: 'destructive',
-          title: complete ? 'Visit not completed' : 'Unable to save visit',
+          title: complete ? (editMode === 'amending' ? 'Changes not saved' : 'Visit not completed') : 'Unable to save visit',
           description: getErrorMessage(e) || 'Please try again.',
         });
         return false;
       }
     });
   };
+  saveShortcut.current = (complete) => { if (!saving) void save(complete); };
 
   /**
    * @cc [owner:nareshshah139,label:product] discard-conflicting-draft
@@ -1752,7 +1758,8 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <span className="text-xs text-muted-foreground" role="status" aria-live="polite">
-              {visitStatus === 'COMPLETED' ? 'Completed. Changes are not saved.' : <>
+              {editMode === 'locked' ? 'Completed. Read only.' : <>
+              {editMode === 'amending' && 'Editing a completed visit. '}
               {saveStatus === 'saving' && 'Saving…'}
               {saveStatus === 'autosaving' && 'Auto-saving…'}
               {saveStatus === 'unsaved' && 'Unsaved changes'}
@@ -1772,14 +1779,16 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
                 {visitActions}
               </DropdownMenuContent>
             </DropdownMenu>
-            {visitStatus !== 'COMPLETED' && (
+            {canEdit ? (
               <Button variant="outline" size="sm" onClick={() => void save(false)} disabled={saving}>
                 {saving ? 'Saving...' : 'Save Draft'}
               </Button>
+            ) : (
+              <Button variant="outline" size="sm" onClick={() => setAmending(true)}>Edit visit</Button>
             )}
-            {hasPermission('all') && visitStatus !== 'COMPLETED' && (
+            {hasPermission('all') && canEdit && (
               <Button size="sm" onClick={() => void save(true)} disabled={saving || !canComplete} aria-describedby={!canComplete ? 'visit-completion-help' : undefined}>
-                {saving ? 'Completing...' : 'Complete Visit'}
+                {editMode === 'amending' ? (saving ? 'Saving...' : 'Save changes') : saving ? 'Completing...' : 'Complete Visit'}
               </Button>
             )}
           </div>
@@ -1982,7 +1991,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
                 </div>
 
                 <div className="flex justify-end">
-                  <Button onClick={() => void save(false)} disabled={saving || visitStatus === 'COMPLETED'}>
+                  <Button onClick={() => void save(false)} disabled={saving || !canEdit}>
                     Save vitals
                   </Button>
                 </div>
@@ -2032,7 +2041,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
                         latestDraftWriter.current();
                       }}
                       holdVisitSave={holdVisitSave}
-                      visitCompleted={visitStatus === 'COMPLETED'}
+                      readOnly={!canEdit}
                       syncPrescriptionRef={syncPrescriptionRef}
                       onBeforeExport={async () => {
                         const savedId = await save(false, true);
