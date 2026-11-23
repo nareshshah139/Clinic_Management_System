@@ -14,12 +14,12 @@ function countServer() {
   const server = { version: 1, stock: null as number | null, holdPatches: false, patches: [] as Pending[], gets: 0 };
   const detail = (): CountDetail => ({
     id: 'count-1', reference: 'Stock count 06/11/2026 · Anil Deshmukh', day: '2026-11-06', origin: 'CYCLE', assignedTo: { id: 'anil', name: 'Anil Deshmukh' },
-    signedBy: null, signedAt: null, decidedBy: null, decidedAt: null, items: 1, counted: server.stock === null ? 0 : 1, differences: 0, netUnits: 0, netValue: 0,
+    signedBy: null, signedAt: null, decidedBy: null, decidedAt: null, items: 1, counted: server.stock === null ? 0 : 1, differences: 0, netUnits: 0, netValue: 0, shortUnits: 0, shortValue: 0, extraUnits: 0, extraValue: 0,
     state: 'ASSIGNED', version: server.version, reason: 'Stock reconciliation cycle', signOffNote: '', decisionReason: '', selfApproval: false,
     lines: [{ id: 'a', inventoryId: 'item-a', name: 'Isotroin 10', batchNumber: 'B-a', expiryDate: '2027-06-30T00:00:00.000Z', unit: 'STRIPS', location: 'Rack A2',
       currentStock: 10, systemStock: 10, physicalStock: server.stock, difference: null, unitCost: 12.5, value: null, note: '', retype: false, history: null }],
     events: [], can: { count: true, decide: false, decideOwn: false }, approvers: [],
-  } as CountDetail);
+  });
   const reply = (status: number, body: unknown) => ({ ok: status < 400, status, headers: { get: (name: string) => (name.toLowerCase() === 'content-type' ? 'application/json' : null) }, json: async () => body, text: async () => JSON.stringify(body) });
   const answerPatch = (body: Pending['body']) => {
     if (body.version !== server.version) return reply(409, { message: 'This count changed in another window. Reload to see the latest counts.' });
