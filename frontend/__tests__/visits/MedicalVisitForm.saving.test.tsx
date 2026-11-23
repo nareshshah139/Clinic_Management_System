@@ -6,7 +6,7 @@ jest.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: jest.fn() }) }
 let mockPhotoVersion: ((version: number) => void) | undefined;
 let mockRxSaved: ((visit: { version: number }) => void) | undefined;
 let mockExportResult: Promise<string> | undefined;
-jest.mock('@/components/visits/PrescriptionBuilder', () => function Editor({ onClinicalDataChange, onBeforeExport, onVisitSaved, vitalsExtra, onSummaryChange, visitCompleted }: any) { mockRxSaved = onVisitSaved; return <>{vitalsExtra}<p>Prescription editing: {visitCompleted ? 'read only' : 'editable'}</p><button onClick={() => onSummaryChange({ complaint: true, diagnosis: false, plan: false, medicines: 1, vitals: false })}>Record complaint and one medicine</button><button onClick={() => { mockExportResult = onBeforeExport(); }}>Export saved visit</button><button onClick={() => onClinicalDataChange({ vitals: { systolicBP: 110 } })}>Set editor blood pressure</button><input aria-label="Clinical note" onChange={e => onClinicalDataChange({ history: { pastHistory: e.target.value } })} /></>; });
+jest.mock('@/components/visits/PrescriptionBuilder', () => function Editor({ onClinicalDataChange, onBeforeExport, onVisitSaved, vitalsExtra, onSummaryChange, readOnly }: any) { mockRxSaved = onVisitSaved; return <>{vitalsExtra}<p>Prescription editing: {readOnly ? 'read only' : 'editable'}</p><button onClick={() => onSummaryChange({ complaint: true, diagnosis: false, plan: false, medicines: 1, vitals: false })}>Record complaint and one medicine</button><button onClick={() => { mockExportResult = onBeforeExport(); }}>Export saved visit</button><button onClick={() => onClinicalDataChange({ vitals: { systolicBP: 110 } })}>Set editor blood pressure</button><input aria-label="Clinical note" onChange={e => onClinicalDataChange({ history: { pastHistory: e.target.value } })} /></>; });
 jest.mock('@/components/visits/VisitPhotos', () => function Photos({ onVisitVersion }: any) { mockPhotoVersion = onVisitVersion; return null; });
 jest.mock('@/components/tours/DoctorTour', () => ({ DoctorTour: () => null }));
 const flush = async () => { await act(async () => { await Promise.resolve(); }); };
@@ -114,10 +114,11 @@ it('completes a visit with a complaint and a prescription, without photos, labs 
   expect(apiClient.completeVisit).toHaveBeenCalledWith('v', expect.anything(), expect.anything());
 });
 
-it('stops saving a completed visit, with no autosave and no Save Draft, and makes the prescription read only', async () => {
+it('opens a completed visit locked, with no autosave and no Save Draft, and makes the prescription read only', async () => {
   (apiClient.get as jest.Mock).mockResolvedValue({ id: 'v', patientId: 'p', status: 'COMPLETED', version: 3, complaints: [], history: {}, plan: {}, exam: {} });
   await openForm();
-  expect(screen.getByRole('status')).toHaveTextContent('Completed. Changes are not saved.');
+  expect(screen.getByRole('status')).toHaveTextContent('Completed. Read only.');
+  expect(screen.getByRole('button', { name: 'Edit visit' })).toBeEnabled();
   expect(screen.queryByRole('button', { name: 'Save Draft' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Complete Visit' })).not.toBeInTheDocument();
   expect(screen.getByText(/^Prescription editing:/)).toHaveTextContent('Prescription editing: read only');
@@ -126,6 +127,34 @@ it('stops saving a completed visit, with no autosave and no Save Draft, and make
   await act(async () => { jest.advanceTimersByTime(30000); });
   expect((apiClient.updateVisit as jest.Mock).mock.calls).toEqual([]);
   expect((apiClient.createVisit as jest.Mock).mock.calls).toEqual([]);
+});
+
+it('edits a completed visit after Edit visit, autosaving like an open visit, and locks it again after Save changes', async () => {
+  (apiClient.get as jest.Mock).mockResolvedValue({ id: 'v', patientId: 'p', status: 'COMPLETED', version: 3, complaints: [], history: {}, plan: {}, exam: {} });
+  (apiClient.updateVisit as jest.Mock).mockResolvedValue({ id: 'v', status: 'COMPLETED', version: 4 });
+  (apiClient.completeVisit as jest.Mock).mockResolvedValue({ id: 'v', status: 'COMPLETED', version: 4 });
+  await openForm();
+  fireEvent.click(screen.getByRole('button', { name: 'Edit visit' }));
+  expect(screen.getByRole('status')).toHaveTextContent('Editing a completed visit.');
+  expect(screen.getByText(/^Prescription editing:/)).toHaveTextContent('Prescription editing: editable');
+  expect(screen.getByRole('button', { name: 'Save Draft' })).toBeEnabled();
+
+  fireEvent.change(screen.getByLabelText('Clinical note'), { target: { value: 'Corrected after completion' } });
+  await act(async () => { jest.advanceTimersByTime(8100); });
+  expect((apiClient.updateVisit as jest.Mock).mock.calls.map(([id, body]) => [id, body.history])).toEqual([['v', { pastHistory: 'Corrected after completion' }]]);
+
+  fireEvent.click(screen.getByRole('button', { name: 'Record complaint and one medicine' }));
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save changes' })); });
+  expect((apiClient.completeVisit as jest.Mock).mock.calls.map(([id]) => id)).toEqual(['v']);
+  expect(screen.getByRole('status')).toHaveTextContent('Completed. Read only.');
+  expect(screen.getByText(/^Prescription editing:/)).toHaveTextContent('Prescription editing: read only');
+  expect(screen.getByRole('button', { name: 'Edit visit' })).toBeEnabled();
+
+  const saves = (apiClient.updateVisit as jest.Mock).mock.calls.length;
+  await act(async () => { fireEvent.keyDown(document, { key: 's', ctrlKey: true }); });
+  fireEvent.change(screen.getByLabelText('Clinical note'), { target: { value: 'Typed after locking' } });
+  await act(async () => { jest.advanceTimersByTime(30000); });
+  expect((apiClient.updateVisit as jest.Mock).mock.calls.length).toBe(saves);
 });
 
 it('keeps a vitals tab for a nurse, who has no consultation editor', async () => {
