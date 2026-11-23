@@ -42,13 +42,13 @@ const store = {
   failReads: false,
   failWrites: false,
   idempotencyRecord: {
-    findFirst: jest.fn(async ({ where }: { where: Scope }) => {
+    findFirst: jest.fn(async ({ where }: { where: Scope }): Promise<StoredRecord | null> => {
       await Promise.resolve();
       if (store.failReads) throw new Error('idempotency store unavailable');
       const row = store.records.get(scopeOf(where));
       return row ? { ...row } : null;
     }),
-    create: jest.fn(async ({ data }: { data: Omit<StoredRecord, 'id'> }) => {
+    create: jest.fn(async ({ data }: { data: Omit<StoredRecord, 'id'> }): Promise<StoredRecord> => {
       await Promise.resolve();
       if (store.failWrites) throw new Error('idempotency store unavailable');
       if (store.records.has(scopeOf(data)))
@@ -60,7 +60,7 @@ const store = {
       return { ...row };
     }),
     updateMany: jest.fn(
-      async ({ where, data }: { where: RowFilter; data: Partial<StoredRecord> }) => {
+      async ({ where, data }: { where: RowFilter; data: Partial<StoredRecord> }): Promise<{ count: number }> => {
         await Promise.resolve();
         if (store.failWrites) throw new Error('idempotency store unavailable');
         const rows = store.matching(where);
@@ -68,7 +68,7 @@ const store = {
         return { count: rows.length };
       },
     ),
-    deleteMany: jest.fn(async ({ where }: { where: RowFilter }) => {
+    deleteMany: jest.fn(async ({ where }: { where: RowFilter }): Promise<{ count: number }> => {
       await Promise.resolve();
       if (store.failWrites) throw new Error('idempotency store unavailable');
       const rows = store.matching(where);
@@ -76,7 +76,7 @@ const store = {
       return { count: rows.length };
     }),
   },
-  matching(where: RowFilter) {
+  matching(where: RowFilter): StoredRecord[] {
     return [...store.records.values()].filter(
       (row) =>
         row.id === where.id &&
