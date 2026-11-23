@@ -1,12 +1,15 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { createHash, randomInt } from 'crypto';
 import * as bcrypt from 'bcrypt';
+import { UserStatus } from '@prisma/client';
 import { PrismaService } from '../../shared/database/prisma.service';
 
 export const RESET_CODE_TTL_MS = 24 * 60 * 60 * 1000;
 /** No 0/O, 1/I/L, so a code read aloud or handwritten is unambiguous. */
 const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const ROLE_RANK: Record<string, number> = { OWNER: 3, ADMIN: 2, DOCTOR: 1 };
+
+const USABLE = { status: UserStatus.ACTIVE, isActive: true } as const;
 
 const hashCode = (code: string) => createHash('sha256').update(code).digest('hex');
 
@@ -29,7 +32,7 @@ export class PasswordResetService {
 
   async issueResetCode(actor: { id: string; branchId: string; role: string }, userId: string) {
     const target = await this.prisma.user.findFirst({
-      where: { id: userId, branchId: actor.branchId, isActive: true },
+      where: { id: userId, branchId: actor.branchId, ...USABLE },
       select: { id: true, role: true },
     });
     if (!target) throw new NotFoundException('User not found');
@@ -44,7 +47,7 @@ export class PasswordResetService {
   /** For the server operator when no manager can sign in (e.g. the only owner is locked out). */
   async issueResetCodeAsOperator(email: string) {
     const target = await this.prisma.user.findFirst({
-      where: { email: { equals: email.trim(), mode: 'insensitive' }, isActive: true },
+      where: { email: { equals: email.trim(), mode: 'insensitive' }, ...USABLE },
       select: { id: true },
     });
     if (!target) throw new NotFoundException(`No active user with email ${email}`);
@@ -56,7 +59,7 @@ export class PasswordResetService {
     const hashed = await bcrypt.hash(password, 10);
     // Matching on the unexpired code hash and clearing it in one write makes the code single-use.
     const { count } = await this.prisma.user.updateMany({
-      where: { resetToken: hashCode(normalizeResetCode(code)), resetTokenExpiry: { gt: new Date() }, isActive: true },
+      where: { resetToken: hashCode(normalizeResetCode(code)), resetTokenExpiry: { gt: new Date() }, ...USABLE },
       data: { password: hashed, resetToken: null, resetTokenExpiry: null },
     });
     if (count !== 1) throw new BadRequestException('This reset code is invalid or has expired. Ask an admin for a new one.');

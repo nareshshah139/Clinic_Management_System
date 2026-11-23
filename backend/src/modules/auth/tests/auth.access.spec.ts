@@ -14,7 +14,7 @@ import { exec } from 'child_process';
 import { AuthController } from '../auth.controller';
 import { AuthService } from '../auth.service';
 import { PasswordResetService } from '../password-reset.service';
-import { JwtStrategy } from '../strategies/jwt.strategy';
+import { JwtStrategy, passwordStamp } from '../strategies/jwt.strategy';
 import { PrismaService } from '../../../shared/database/prisma.service';
 import { JwtAuthGuard } from '../../../shared/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../shared/guards/roles.guard';
@@ -52,6 +52,8 @@ describe('/auth access control', () => {
 
   const db: any = {
     user: {
+      findUnique: jest.fn(async ({ where }) => users[where.id] ?? null),
+      findUniqueOrThrow: jest.fn(async ({ where }) => users[where.id]),
       findFirst: jest.fn(
         async ({ where }) =>
           Object.values(users).find((user) =>
@@ -72,7 +74,7 @@ describe('/auth access control', () => {
     },
   };
   const as = (id: string) => ({
-    Authorization: `Bearer ${jwt.sign({ sub: id, role: users[id].role, branchId: 'branch', email: users[id].email })}`,
+    Authorization: `Bearer ${jwt.sign({ sub: id, role: users[id].role, branchId: 'branch', email: users[id].email, pwdStamp: passwordStamp(users[id].password) })}`,
   });
   const jobsDir = () => path.join(root, 'backups', '.jobs');
 

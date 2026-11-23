@@ -1,8 +1,16 @@
-import { Injectable, NestInterceptor, ExecutionContext, CallHandler } from '@nestjs/common';
+import { Injectable, NestInterceptor, ExecutionContext, CallHandler, HttpException } from '@nestjs/common';
 import type { Request, Response } from 'express';
-import { Observable, of } from 'rxjs';
-import { tap, map } from 'rxjs/operators';
+import { from, Observable, of, throwError } from 'rxjs';
+import { catchError, concatMap, mergeMap } from 'rxjs/operators';
 import { PrismaService } from '../database/prisma.service';
+
+const PENDING = 0;
+const CLAIM_LEASE_MS = 2 * 60_000;
+const STILL_RUNNING = 'This save is still in progress. Wait a few seconds, then save again.';
+
+type Scope = { key: string; userId: string; resourceType: string; resourceId: string; method: string };
+type Owned = { kind: 'owned'; id: string; lease: Date };
+type Claim = Owned | { kind: 'busy' } | { kind: 'done'; statusCode: number; body: unknown };
 
 /**
  * @cc [owner:nareshshah139,label:integrity] idempotent-write-replay
@@ -30,10 +38,10 @@ export class IdempotencyInterceptor implements NestInterceptor {
    * run and return its normal response, and a later retry runs the handler again.
    */
   /**
-   * @cc [owner:nareshshah139,label:integrity;target] idempotency-concurrent-first-requests
-   * Two overlapping first requests with one key MUST run the handler once. Today both miss the store
-   * before either response is saved, so a client retry during a slow save can write twice.
-   * This is a target obligation, not a pass claim.
+   * @cc [owner:nareshshah139,label:integrity] idempotency-concurrent-first-requests
+   * Two overlapping first requests with one key MUST run the handler once. The key is claimed before
+   * the handler runs, a request that finds the claim answers 425 so the browser retries, and the
+   * answer is stored before the response leaves. A claim left by a crashed process expires.
    */
   /**
    * @cc [owner:nareshshah139,label:security;target] idempotency-anonymous-keys-unscoped
@@ -59,69 +67,73 @@ export class IdempotencyInterceptor implements NestInterceptor {
     const userObj: any = (req as any).user || {};
     const userId: string | null = userObj?.userId || userObj?.id || null;
     const segments = (req.path || '/').split('/').filter(Boolean);
-    const resourceType = segments[0] || 'unknown';
-    const resourceId = (req.params && (req.params as any).id) || segments[1] || '-';
+    const scope: Scope = {
+      key: rawKey,
+      userId: userId || '',
+      resourceType: segments[0] || 'unknown',
+      resourceId: (req.params && (req.params as any).id) || segments[1] || '-',
+      method,
+    };
 
-    // Return cached response if found
-    return new Observable((subscriber) => {
-      (async () => {
-        try {
-          const existing = await this.prisma.idempotencyRecord.findFirst({
-            where: {
-              key: rawKey,
-              userId: userId || '',
-              resourceType,
-              resourceId,
-              method,
-            },
-          });
-          if (existing) {
-            try {
-              if (existing.statusCode && typeof res?.status === 'function') {
-                res.status(existing.statusCode);
-              }
-              const body = existing.responseBody ? JSON.parse(existing.responseBody) : undefined;
-              subscriber.next(body);
-              subscriber.complete();
-              return;
-            } catch {
-              // fall through to normal handler if parsing fails
-            }
-          }
-        } catch {
-          // On DB error, proceed without idempotency to avoid blocking request
+    return from(this.claim(scope)).pipe(
+      catchError(() => of(null)),
+      mergeMap((claim) => {
+        if (!claim) return next.handle();
+        if (claim.kind === 'busy') {
+          return throwError(() => new HttpException({ statusCode: 425, message: STILL_RUNNING }, 425));
         }
-
-        // No existing record; proceed and persist the response for future duplicates
-        const stream = next.handle().pipe(
-          tap(async (data) => {
-            try {
-              const toStore = {
-                key: rawKey,
-                userId: userId || '',
-                resourceType,
-                resourceId,
-                method,
-                statusCode: (res && typeof res.statusCode === 'number') ? res.statusCode : (method === 'POST' ? 201 : 200),
-                responseBody: JSON.stringify(data ?? null),
-                // Optional TTL support - not enforced here, but available for cleanup jobs
-                expiresAt: null as Date | null,
-              };
-              await this.prisma.idempotencyRecord.create({ data: toStore });
-            } catch {
-              // Swallow errors - idempotency should not break main flow
-            }
+        if (claim.kind === 'done') {
+          if (claim.statusCode && typeof res?.status === 'function') res.status(claim.statusCode);
+          return of(claim.body);
+        }
+        return next.handle().pipe(
+          concatMap(async (data) => {
+            const statusCode = res && typeof res.statusCode === 'number' ? res.statusCode : method === 'POST' ? 201 : 200;
+            await this.settle(claim, statusCode, data).catch(() => this.release(claim)).catch(() => undefined);
+            return data;
           }),
+          catchError((error) => from(this.release(claim).catch(() => undefined)).pipe(mergeMap(() => throwError(() => error)))),
         );
+      }),
+    );
+  }
 
-        stream.subscribe({
-          next: (val) => subscriber.next(val),
-          error: (err) => subscriber.error(err),
-          complete: () => subscriber.complete(),
-        });
-      })();
+  private async claim(scope: Scope): Promise<Claim> {
+    const existing = await this.prisma.idempotencyRecord.findFirst({ where: scope });
+    if (existing && existing.statusCode !== PENDING) {
+      const body = existing.responseBody ? JSON.parse(existing.responseBody) : undefined;
+      return { kind: 'done', statusCode: existing.statusCode, body };
+    }
+    const lease = new Date(Date.now() + CLAIM_LEASE_MS);
+    if (existing) {
+      if (existing.expiresAt && existing.expiresAt.getTime() > Date.now()) return { kind: 'busy' };
+      const taken = await this.prisma.idempotencyRecord.updateMany({
+        where: { id: existing.id, statusCode: PENDING, expiresAt: existing.expiresAt },
+        data: { expiresAt: lease },
+      });
+      return taken.count === 1 ? { kind: 'owned', id: existing.id, lease } : { kind: 'busy' };
+    }
+    try {
+      const row = await this.prisma.idempotencyRecord.create({
+        data: { ...scope, statusCode: PENDING, responseBody: '', expiresAt: lease },
+      });
+      return { kind: 'owned', id: row.id, lease };
+    } catch (error) {
+      if ((error as { code?: string })?.code === 'P2002') return { kind: 'busy' };
+      throw error;
+    }
+  }
+
+  private async settle(claim: Owned, statusCode: number, data: unknown) {
+    await this.prisma.idempotencyRecord.updateMany({
+      where: { id: claim.id, statusCode: PENDING, expiresAt: claim.lease },
+      data: { statusCode, responseBody: JSON.stringify(data ?? null), expiresAt: null },
+    });
+  }
+
+  private async release(claim: Owned) {
+    await this.prisma.idempotencyRecord.deleteMany({
+      where: { id: claim.id, statusCode: PENDING, expiresAt: claim.lease },
     });
   }
 }
-
-

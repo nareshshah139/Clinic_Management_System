@@ -283,6 +283,13 @@ export class BillingService {
     return invoice;
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:calculation;concurrency] invoice-edit-balance
+   * An edit that changes the total MUST write the new total first, so the bill's row stays locked
+   * until commit, and MUST compute the balance from the received amount that write returned. A
+   * payment or refund racing the edit then waits, and its amount is never lost. An edit MUST NOT
+   * set the total below what the bill has received.
+   */
   async updateInvoice(id: string, updateInvoiceDto: UpdateInvoiceDto, branchId: string) {
     const invoice = await this.findInvoiceById(id, branchId);
 
@@ -302,27 +309,31 @@ export class BillingService {
     if (updateInvoiceDto.discount !== undefined) {
       updateData.discount = updateInvoiceDto.discount;
     }
+    let total: number | undefined;
     if (replaceItems || updateInvoiceDto.discount !== undefined) {
       const items = replaceItems ? updateInvoiceDto.items! : invoice.items;
-      const { totalAmount } = this.calculateInvoiceTotals(items, updateInvoiceDto.discount ?? invoice.discount ?? 0);
-      updateData.total = totalAmount;
-      updateData.balance = Math.max(totalAmount - invoice.received, 0);
+      total = this.calculateInvoiceTotals(items, updateInvoiceDto.discount ?? invoice.discount ?? 0).totalAmount;
+      updateData.total = total;
     }
     if (replaceItems) {
       updateData.items = { create: await this.buildInvoiceItems(updateInvoiceDto.items!, branchId) };
     }
 
+    const include = {
+      patient: { select: { id: true, name: true, phone: true } },
+      items: true,
+      payments: true,
+    } as const;
     return this.prisma.$transaction(async (tx) => {
       if (replaceItems) await tx.newInvoiceItem.deleteMany({ where: { invoiceId: id } });
-      return tx.newInvoice.update({
-        where: { id },
-        data: updateData,
-        include: {
-          patient: { select: { id: true, name: true, phone: true } },
-          items: true,
-          payments: true,
-        },
-      });
+      const updated = await tx.newInvoice.update({ where: { id }, data: updateData, include });
+      if (total === undefined) return updated;
+      if (updated.received > total) {
+        throw new BadRequestException(
+          `Bill ${invoice.invoiceNo} has already received ${RUPEES.format(updated.received)}, so its total cannot go below that. Refund the difference first, then change the bill.`,
+        );
+      }
+      return tx.newInvoice.update({ where: { id }, data: { balance: total - updated.received }, include });
     });
   }
 

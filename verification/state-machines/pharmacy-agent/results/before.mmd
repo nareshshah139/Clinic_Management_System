@@ -1,0 +1,51 @@
+---
+title: "Pharmacy agent run and proposal review (before)"
+---
+stateDiagram-v2
+  state "Asking the agent" as s0
+  state "Agent says nothing changed, proposal still open" as s1
+  state "Finished" as s2
+  state "Proposal waiting for review" as s3
+  state "Run left running" as s4
+  state "A decided proposal changes its decision" as s5
+  state "Apply abandoned half way" as s6
+  state "Completed run marked failed" as s7
+  state "Rejected after a change was made" as s8
+  state "Being applied" as s9
+  state "Proposal and its actions disagree" as s10
+  state "Same change made twice" as s11
+  [*] --> s0
+  s0 --> s1: the agent says nothing changed
+  s0 --> s2: the agent says nothing changed
+  s0 --> s3: the agent posts its answer
+  s0 --> s4: saving the failure fails / the server restarts
+  s1 --> s5: the proposal shows applied / the proposal shows failed
+  s1 --> s6: the proposal shows failed / the server restarts
+  s2 --> s7: the agent says nothing changed
+  s2 --> s8: the rejection is saved
+  s3 --> s2: the rejection is saved
+  s3 --> s7: the agent says nothing changed
+  s3 --> s8: the rejection is saved
+  s3 --> s9: a reviewer clicks Apply
+  s6 --> s2: the rejection is saved
+  s6 --> s9: a reviewer clicks Apply
+  s7 --> s5: the proposal shows applied / the proposal shows failed
+  s7 --> s6: the proposal shows failed / the server restarts
+  s8 --> s5: the proposal shows applied / the proposal shows failed
+  s8 --> s6: the server restarts
+  s9 --> s2: the proposal shows applied / the proposal shows failed / the server restarts
+  s9 --> s3: the server restarts
+  s9 --> s5: the proposal shows applied / the proposal shows failed
+  s9 --> s6: the proposal shows failed / the server restarts
+  s9 --> s7: the agent says nothing changed
+  s9 --> s8: an action changes pharmacy records / the rejection is saved
+  s9 --> s10: an action starts / the action shows failed / the proposal shows applied / the proposal shows failed
+  s9 --> s11: an action changes pharmacy records
+  s10 --> s5: the proposal shows failed / the rejection is saved
+  s10 --> s6: the server restarts
+  s11 --> s6: the server restarts
+  classDef breaks fill:#fde2dd,stroke:#b3261e,stroke-width:2px
+  classDef stuck fill:#fdf0d5,stroke:#a35a05,stroke-width:2px,stroke-dasharray:5 3
+  classDef breaksAndStuck fill:#fde2dd,stroke:#a35a05,stroke-width:2px,stroke-dasharray:5 3
+  class s1,s5,s7,s8,s10,s11 breaks
+  class s4,s6 stuck

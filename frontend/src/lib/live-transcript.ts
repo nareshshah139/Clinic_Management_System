@@ -79,7 +79,7 @@ export function reduceTranscript(t: LiveTranscript, e: LiveEvent, stopSent: bool
         item.state === 'partial' ? { ...item, text: item.text + e.delta } : item,
       );
     case 'completed':
-      return withItem(t, e.itemId, () => ({ text: e.transcript, state: 'final' }));
+      return withItem(t, e.itemId, (item) => (item.state === 'failed' ? item : { text: e.transcript, state: 'final' }));
     case 'failed':
       return withItem(t, e.itemId, (item) => (item.state === 'final' ? item : { ...item, state: 'failed' }));
     case 'fatal':

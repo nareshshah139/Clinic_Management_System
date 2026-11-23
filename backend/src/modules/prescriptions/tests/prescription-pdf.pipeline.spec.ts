@@ -60,7 +60,17 @@ describe('Prescription -> saved readback -> PDF pipeline', () => {
     layoutVariant: { updateMany: async () => ({ count: 0 }) },
     idempotencyRecord: {
       findFirst: async ({ where }: any) => cache.find(row => Object.entries(where).every(([k, v]) => row[k] === v)),
-      create: async ({ data }: any) => { cache.push(data); return data; },
+      create: async ({ data }: any) => { const row = { id: `idem-${cache.length + 1}`, ...data }; cache.push(row); return row; },
+      updateMany: async ({ where, data }: any) => {
+        const rows = cache.filter(row => Object.entries(where).every(([k, v]) => row[k] === v));
+        rows.forEach(row => Object.assign(row, data));
+        return { count: rows.length };
+      },
+      deleteMany: async ({ where }: any) => {
+        const rows = cache.filter(row => Object.entries(where).every(([k, v]) => row[k] === v));
+        rows.forEach(row => cache.splice(cache.indexOf(row), 1));
+        return { count: rows.length };
+      },
     },
   });
 

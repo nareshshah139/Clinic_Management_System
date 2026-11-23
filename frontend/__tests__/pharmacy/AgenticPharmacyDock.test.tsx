@@ -132,3 +132,53 @@ describe('AgenticPharmacyDock chat input shortcuts', () => {
     expect(parentKeyDown).not.toHaveBeenCalled();
   });
 });
+
+describe('AgenticPharmacyDock proposal review', () => {
+  const proposal = {
+    id: 'proposal-1',
+    title: 'Add Telma 40',
+    summary: 'One new stock line',
+    riskLevel: 'LOW',
+    status: 'PENDING_REVIEW',
+    actions: [{ id: 'action-1', actionType: 'create_inventory_item', targetType: 'inventory_item', permissionRequired: null }],
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    api.getPharmacyAgentStatus.mockResolvedValue({ configured: true });
+    api.listPharmacyAgentSessions.mockResolvedValue({ data: [sessionListItem] });
+    api.getPharmacyAgentSession.mockResolvedValue({ ...sessionDetail, proposals: [proposal] });
+  });
+
+  it('sends one review while an Apply is in flight, however often the buttons are clicked', async () => {
+    let finishApply!: (value: unknown) => void;
+    api.applyPharmacyAgentProposal.mockReturnValue(new Promise((resolve) => (finishApply = resolve)) as any);
+    render(<AgenticPharmacyDock />);
+    const [apply] = await screen.findAllByRole('button', { name: /Apply/ });
+    const [reject] = screen.getAllByRole('button', { name: /Reject/ });
+
+    fireEvent.click(apply);
+    fireEvent.click(apply);
+    fireEvent.click(reject);
+
+    expect(api.applyPharmacyAgentProposal).toHaveBeenCalledTimes(1);
+    expect(api.rejectPharmacyAgentProposal).not.toHaveBeenCalled();
+    expect(apply).toBeDisabled();
+    expect(reject).toBeDisabled();
+
+    finishApply({ proposal: { ...proposal, status: 'APPLIED' } });
+    await waitFor(() => expect(screen.queryAllByRole('button', { name: /Apply/ })).toHaveLength(0));
+  });
+
+  it('lets the pharmacist try again after a refused Apply', async () => {
+    api.applyPharmacyAgentProposal.mockRejectedValue(new Error('Proposal is FAILED'));
+    render(<AgenticPharmacyDock />);
+    const [apply] = await screen.findAllByRole('button', { name: /Apply/ });
+
+    fireEvent.click(apply);
+    await waitFor(() => expect(apply).not.toBeDisabled());
+    fireEvent.click(apply);
+
+    await waitFor(() => expect(api.applyPharmacyAgentProposal).toHaveBeenCalledTimes(2));
+  });
+});

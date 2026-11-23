@@ -60,8 +60,10 @@ type QueueEntry = {
   isOverTwoHours: boolean;
   medications: QueueMedication[];
   linkedInvoiceIds: string[];
+  billPosted: boolean;
   status: PrescriptionQueueStatus;
   dispenseStatus?: string;
+  allowedStatuses?: string[];
   source?: string;
   assignedToId?: string | null;
   statusReasonType?: string | null;
@@ -202,6 +204,12 @@ type DispenseTaskLine = {
   reasonNote?: string | null;
   warnings?: unknown;
 };
+
+const FINISHED_TASK_STATUSES: string[] = [
+  PharmacyDispenseTaskStatusDto.PAID,
+  PharmacyDispenseTaskStatusDto.DISPENSED,
+  PharmacyDispenseTaskStatusDto.CANCELLED,
+];
 
 type DispenseTask = {
   id: string;
@@ -428,7 +436,15 @@ export class PharmacyPrescriptionQueueService {
       throw new NotFoundException('Dispense task not found in this branch');
     }
 
-    const currentTask = await this.currentReviewTask(task, branchId);
+    const entry = task.prescriptionId ? await this.findOne(task.prescriptionId, branchId) : null;
+    const refusal = this.statusRefusal(
+      entry ? this.syncedTaskStatus(task.status, entry.status) : task.status,
+      entry?.billPosted ?? false,
+      body.status,
+    );
+    if (refusal) throw new BadRequestException(refusal);
+
+    const currentTask = entry ? this.reviewTask(task, entry) : task;
     if (
       body.status === PharmacyDispenseTaskStatusDto.READY_TO_BILL &&
       (!currentTask.lines?.length ||
@@ -603,6 +619,7 @@ export class PharmacyPrescriptionQueueService {
             doctorName: entry.doctor.name,
             source: 'VISIT',
             status: derivedStatus,
+            ...this.statusTimestampPatch(derivedStatus, new Date()),
             linkedInvoiceIds,
             exceptionCount: 0,
             metadata: {
@@ -720,8 +737,10 @@ export class PharmacyPrescriptionQueueService {
       isOverTwoHours: false,
       medications: [],
       linkedInvoiceIds: [],
+      billPosted: false,
       status: this.queueStatusFromTask(task.status, PrescriptionQueueStatus.PENDING),
       dispenseStatus: task.status,
+      allowedStatuses: this.allowedStatuses(task.status, false),
       source: task.source,
       assignedToId: task.assignedToId,
       statusReasonType: task.statusReasonType,
@@ -730,7 +749,10 @@ export class PharmacyPrescriptionQueueService {
   }
 
   private mergeTask(entry: QueueEntry, task?: DispenseTask | null): QueueEntry {
-    if (!task) return { ...entry, medications: entry.medications.map(line => ({ ...line, action: 'pending' })), dispenseStatus: this.taskStatusFromQueue(entry.status), source: 'VISIT' };
+    if (!task) {
+      const initial = this.taskStatusFromQueue(entry.status);
+      return { ...entry, medications: entry.medications.map(line => ({ ...line, action: 'pending' })), dispenseStatus: initial, allowedStatuses: this.allowedStatuses(initial, entry.billPosted), source: 'VISIT' };
+    }
     const synced = this.syncedTaskStatus(task.status, entry.status);
     const queueStatus = this.queueStatusFromTask(synced, entry.status);
     const blocked = entry.dispensingEligible === false && queueStatus !== PrescriptionQueueStatus.DISPENSED;
@@ -744,6 +766,7 @@ export class PharmacyPrescriptionQueueService {
       dispenseTaskId: task.id,
       status: blocked ? PrescriptionQueueStatus.EXPIRED : queueStatus,
       dispenseStatus: reviewStatus,
+      allowedStatuses: this.allowedStatuses(synced, entry.billPosted),
       source: task.source,
       assignedToId: task.assignedToId,
       statusReasonType: task.statusReasonType,
@@ -891,17 +914,16 @@ export class PharmacyPrescriptionQueueService {
     currentStatus: string,
     derivedStatus: PrescriptionQueueStatus,
   ): string {
-    if (
-      [
-        PharmacyDispenseTaskStatusDto.CANCELLED,
-        PharmacyDispenseTaskStatusDto.PAID,
-      ].includes(currentStatus as PharmacyDispenseTaskStatusDto)
-    ) {
+    if (currentStatus === PharmacyDispenseTaskStatusDto.PAID) {
       return currentStatus;
     }
 
     if (derivedStatus === PrescriptionQueueStatus.DISPENSED) {
       return PharmacyDispenseTaskStatusDto.DISPENSED;
+    }
+
+    if (currentStatus === PharmacyDispenseTaskStatusDto.CANCELLED) {
+      return currentStatus;
     }
 
     // Historical manual task states do not constitute a posted sale.
@@ -994,14 +1016,29 @@ export class PharmacyPrescriptionQueueService {
     return {};
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product] task-finished-status-final
+   * A task whose synced status is PAID, DISPENSED or CANCELLED MUST refuse every status change,
+   * and repeating that status MUST be a no-op. PAID MUST be refused unless a posted bill exists for
+   * the prescription. The counter MUST offer only statuses in allowedStatuses, computed by this rule.
+   */
+  private statusRefusal(current: string, billPosted: boolean, requested: string): string | null {
+    if (FINISHED_TASK_STATUSES.includes(current)) {
+      return requested === current ? null : `This prescription is already ${current.toLowerCase()}. Its status can no longer change.`;
+    }
+    if (requested === PharmacyDispenseTaskStatusDto.PAID && !billPosted) {
+      return 'Post the pharmacy bill before marking this prescription paid.';
+    }
+    return null;
+  }
+
+  private allowedStatuses(current: string, billPosted: boolean): string[] {
+    return Object.values(PharmacyDispenseTaskStatusDto).filter(status =>
+      status !== PharmacyDispenseTaskStatusDto.DISPENSED && !this.statusRefusal(current, billPosted, status));
+  }
+
   private nextStatusAfterLineReview(task: DispenseTask): string {
-    if (
-      [
-        PharmacyDispenseTaskStatusDto.CANCELLED,
-        PharmacyDispenseTaskStatusDto.PAID,
-        PharmacyDispenseTaskStatusDto.DISPENSED,
-      ].includes(task.status as PharmacyDispenseTaskStatusDto)
-    ) {
+    if (FINISHED_TASK_STATUSES.includes(task.status)) {
       return task.status;
     }
 
@@ -1174,6 +1211,7 @@ export class PharmacyPrescriptionQueueService {
       isOverTwoHours: pendingHours > this.warningAfterHours,
       medications,
       linkedInvoiceIds: invoiceIds,
+      billPosted: activeInvoices.length > 0,
       status,
     };
   }

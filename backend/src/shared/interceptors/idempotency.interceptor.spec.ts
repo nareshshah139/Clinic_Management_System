@@ -19,52 +19,70 @@ import request from 'supertest';
 import { PrismaService } from '../database/prisma.service';
 import { IdempotencyInterceptor } from './idempotency.interceptor';
 
-type StoredRecord = {
+type Scope = {
   key: string;
   userId: string;
   resourceType: string;
   resourceId: string;
   method: string;
+};
+type StoredRecord = Scope & {
+  id: string;
   statusCode: number;
   responseBody: string;
+  expiresAt: Date | null;
 };
+type RowFilter = { id: string; statusCode: number; expiresAt: Date | null };
 
-const scopeOf = (r: Omit<StoredRecord, 'statusCode' | 'responseBody'>) =>
+const scopeOf = (r: Scope) =>
   [r.key, r.userId, r.resourceType, r.resourceId, r.method].join('|');
 
-type FakeStore = {
-  records: Map<string, StoredRecord>;
-  failReads: boolean;
-  failWrites: boolean;
-  idempotencyRecord: {
-    findFirst: jest.Mock<
-      Promise<StoredRecord | null>,
-      [{ where: StoredRecord }]
-    >;
-    create: jest.Mock<Promise<StoredRecord>, [{ data: StoredRecord }]>;
-  };
-};
-
-const store: FakeStore = {
+const store = {
   records: new Map<string, StoredRecord>(),
   failReads: false,
   failWrites: false,
   idempotencyRecord: {
-    findFirst: jest.fn(async ({ where }: { where: StoredRecord }) => {
+    findFirst: jest.fn(async ({ where }: { where: Scope }): Promise<StoredRecord | null> => {
       await Promise.resolve();
       if (store.failReads) throw new Error('idempotency store unavailable');
-      return store.records.get(scopeOf(where)) ?? null;
+      const row = store.records.get(scopeOf(where));
+      return row ? { ...row } : null;
     }),
-    create: jest.fn(async ({ data }: { data: StoredRecord }) => {
+    create: jest.fn(async ({ data }: { data: Omit<StoredRecord, 'id'> }): Promise<StoredRecord> => {
       await Promise.resolve();
       if (store.failWrites) throw new Error('idempotency store unavailable');
       if (store.records.has(scopeOf(data)))
         throw Object.assign(new Error('Unique constraint failed'), {
           code: 'P2002',
         });
-      store.records.set(scopeOf(data), data);
-      return data;
+      const row = { ...data, id: `row-${store.records.size + 1}` };
+      store.records.set(scopeOf(data), row);
+      return { ...row };
     }),
+    updateMany: jest.fn(
+      async ({ where, data }: { where: RowFilter; data: Partial<StoredRecord> }): Promise<{ count: number }> => {
+        await Promise.resolve();
+        if (store.failWrites) throw new Error('idempotency store unavailable');
+        const rows = store.matching(where);
+        for (const row of rows) Object.assign(row, data);
+        return { count: rows.length };
+      },
+    ),
+    deleteMany: jest.fn(async ({ where }: { where: RowFilter }): Promise<{ count: number }> => {
+      await Promise.resolve();
+      if (store.failWrites) throw new Error('idempotency store unavailable');
+      const rows = store.matching(where);
+      for (const row of rows) store.records.delete(scopeOf(row));
+      return { count: rows.length };
+    }),
+  },
+  matching(where: RowFilter): StoredRecord[] {
+    return [...store.records.values()].filter(
+      (row) =>
+        row.id === where.id &&
+        row.statusCode === where.statusCode &&
+        row.expiresAt?.getTime() === where.expiresAt?.getTime(),
+    );
   },
 };
 
@@ -343,27 +361,59 @@ describe('IdempotencyInterceptor over HTTP', () => {
     expect(calls.create).toBe(2);
   });
 
-  // Target idempotency-concurrent-first-requests: both requests miss the store before either response is saved.
-  it.failing(
-    'runs the handler once when two first requests with one key overlap',
-    async () => {
-      slowGate = new Promise<void>((resolve) => {
-        releaseSlow = resolve;
-      });
-      const send = () =>
-        http()
-          .post('/visits/slow/now')
-          .set('x-user', 'doctor-1')
-          .set('Idempotency-Key', 'k9')
-          .then((res) => res);
-      const pending = [send(), send()];
-      await new Promise((resolve) => setTimeout(resolve, 50));
-      releaseSlow();
-      const [a, b] = await Promise.all(pending);
-      expect(b.body).toEqual(a.body);
-      expect(calls.slow).toBe(1);
-    },
-  );
+  it('runs the handler once when two first requests with one key overlap, and answers the second with 425', async () => {
+    slowGate = new Promise<void>((resolve) => {
+      releaseSlow = resolve;
+    });
+    const send = () =>
+      http()
+        .post('/visits/slow/now')
+        .set('x-user', 'doctor-1')
+        .set('Idempotency-Key', 'k9')
+        .then((res) => res);
+    const first = send();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const second = await send();
+    releaseSlow();
+    const [a, retry] = [await first, await send()];
+    expect([a.status, a.body]).toEqual([201, { slow: 1 }]);
+    expect([second.status, second.body.message]).toEqual([
+      425,
+      'This save is still in progress. Wait a few seconds, then save again.',
+    ]);
+    expect([retry.status, retry.body]).toEqual([201, { slow: 1 }]);
+    expect(calls.slow).toBe(1);
+  });
+
+  it('lets a retry take over a claim that a crashed request left past its lease', async () => {
+    store.records.set(
+      scopeOf({ key: 'k13', userId: 'doctor-1', resourceType: 'visits', resourceId: '-', method: 'POST' }),
+      {
+        id: 'abandoned',
+        key: 'k13',
+        userId: 'doctor-1',
+        resourceType: 'visits',
+        resourceId: '-',
+        method: 'POST',
+        statusCode: 0,
+        responseBody: '',
+        expiresAt: new Date(Date.now() - 1000),
+      },
+    );
+    const retry = await http()
+      .post('/visits')
+      .set('x-user', 'doctor-1')
+      .set('Idempotency-Key', 'k13')
+      .send({ note: 'after crash' });
+    const repeat = await http()
+      .post('/visits')
+      .set('x-user', 'doctor-1')
+      .set('Idempotency-Key', 'k13')
+      .send({ note: 'after crash' });
+    expect([retry.status, retry.body]).toEqual([201, { id: 'visit-1', note: 'after crash' }]);
+    expect([repeat.status, repeat.body]).toEqual([201, { id: 'visit-1', note: 'after crash' }]);
+    expect(calls.create).toBe(1);
+  });
 
   // Target idempotency-anonymous-keys-unscoped: requests without a user all share the empty user id.
   it.failing(

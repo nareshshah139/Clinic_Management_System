@@ -185,6 +185,25 @@ databaseTests('Visit and prescription lifecycle against PostgreSQL', () => {
     expect(result.appointment?.status).toBe('COMPLETED');
   });
 
+  it('lets a doctor edit a completed visit and its prescription, keeping the visit and its appointment completed', async () => {
+    const appointment = await db.appointment.create({ data: { patientId: patient.id, doctorId: doctor.id, branchId, date: new Date(), slot: '12:00', status: 'IN_PROGRESS' } });
+    const v = await visit({ appointmentId: appointment.id, diagnosis: '[{"diagnosis":"Acne vulgaris"}]' });
+    const item = { drugName: 'Doxycycline 100', dosageUnit: 'TABLET', frequency: 'ONCE_DAILY', duration: 30, durationUnit: 'DAYS' };
+    const p = await prescriptions.createPrescription({ patientId: patient.id, doctorId: doctor.id, visitId: v.id, items: [item] } as any, branchId);
+    const completed = await visits.complete(v.id, {}, branchId);
+    expect(completed).toMatchObject({ status: 'COMPLETED', version: 2 });
+
+    await visits.update(v.id, { version: 2, notes: 'Reviewed after completion' }, branchId);
+    await prescriptions.updatePrescription(p.id, { items: [{ ...item, drugName: 'Minocycline 50' }], diagnosis: 'Rosacea', clinicalData: { version: 3 } } as any, branchId);
+    await expect(visits.update(v.id, { version: 2, notes: 'Stale' }, branchId)).rejects.toThrow('Visit changed');
+
+    const saved = await db.visit.findUniqueOrThrow({ where: { id: v.id } });
+    expect({ status: saved.status, completedAt: saved.completedAt, version: saved.version, notes: JSON.parse(saved.plan!).notes, diagnosis: JSON.parse(saved.diagnosis!).map((d: { diagnosis: string }) => d.diagnosis) })
+      .toEqual({ status: 'COMPLETED', completedAt: completed.completedAt, version: 4, notes: 'Reviewed after completion', diagnosis: ['Rosacea'] });
+    expect((await db.appointment.findUniqueOrThrow({ where: { id: appointment.id } })).status).toBe('COMPLETED');
+    expect(JSON.parse((await db.prescription.findUniqueOrThrow({ where: { id: p.id } })).items as string).map((i: { drugName: string }) => i.drugName)).toEqual(['Minocycline 50']);
+  });
+
   it('hides deleted visits from every normal read while preserving clinical audit data', async () => {
     const old = await visit({ history: '{"personalHistory":"Keep older active"}', createdAt: new Date('2020-01-01') });
     const v = await visit({ history: '{"personalHistory":"Deleted snapshot"}', plan: '{"notes":"Preserve"}' });

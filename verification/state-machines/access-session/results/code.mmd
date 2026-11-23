@@ -1,0 +1,19 @@
+---
+title: "Staff account and session (code)"
+---
+stateDiagram-v2
+  state "Signed out" as s0
+  state "Signed in" as s1
+  state "Signed out, account suspended" as s2
+  state "Suspended, browser still holds a session" as s3
+  [*] --> s0
+  s0 --> s1: you sign in
+  s0 --> s2: a manager suspends you
+  s1 --> s0: the session expires
+  s1 --> s3: a manager suspends you
+  s2 --> s0: a manager reactivates you
+  s3 --> s1: a manager reactivates you
+  s3 --> s2: the session expires
+  classDef breaks fill:#fde2dd,stroke:#b3261e,stroke-width:2px
+  classDef stuck fill:#fdf0d5,stroke:#a35a05,stroke-width:2px,stroke-dasharray:5 3
+  classDef breaksAndStuck fill:#fde2dd,stroke:#a35a05,stroke-width:2px,stroke-dasharray:5 3

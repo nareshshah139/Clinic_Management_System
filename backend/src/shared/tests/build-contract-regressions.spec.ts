@@ -16,8 +16,8 @@ describe('Backend build contract regressions', () => {
     const previous = process.env.JWT_SECRET;
     delete process.env.JWT_SECRET;
     try {
-      expect(() => new JwtStrategy(new ConfigService({}))).toThrow('JWT_SECRET');
-      expect(() => new JwtStrategy(new ConfigService({ JWT_SECRET: 'synthetic-test-secret' }))).not.toThrow();
+      expect(() => new JwtStrategy(new ConfigService({}), {} as PrismaService)).toThrow('JWT_SECRET');
+      expect(() => new JwtStrategy(new ConfigService({ JWT_SECRET: 'synthetic-test-secret' }), {} as PrismaService)).not.toThrow();
     } finally {
       if (previous === undefined) delete process.env.JWT_SECRET;
       else process.env.JWT_SECRET = previous;

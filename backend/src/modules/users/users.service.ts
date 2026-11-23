@@ -9,6 +9,8 @@ import { readDoctorSignature, signatureDataUrl } from './doctor-signature';
 import { letterheadDataUrl, readDoctorLetterhead } from './doctor-letterhead';
 import { fixedGrants, permissionDeltas, tickedPermissions } from '../../shared/access/permission-grants';
 
+const statusColumns = (status: UserStatus) => ({ status, isActive: status === UserStatus.ACTIVE });
+
 @Injectable()
 export class UsersService {
   constructor(
@@ -117,7 +119,7 @@ export class UsersService {
         ...createUserDto,
         password: hashedPassword,
         branchId: createUserDto.branchId || branchId,
-        status: createUserDto.status ?? UserStatus.ACTIVE,
+        ...statusColumns(createUserDto.status ?? UserStatus.ACTIVE),
         ...(createUserDto.permissions
           ? await this.permissionColumns(createUserDto.role, createUserDto.permissions)
           : { permissions: null }),
@@ -237,7 +239,7 @@ export class UsersService {
       }
     }
 
-    const updateData: any = { ...updateUserDto };
+    const updateData: any = { ...updateUserDto, ...(updateUserDto.status && statusColumns(updateUserDto.status)) };
     
     if (updateUserDto.permissions) {
       Object.assign(updateData, await this.permissionColumns(updateUserDto.role ?? existingUser.role, updateUserDto.permissions));
@@ -342,7 +344,7 @@ export class UsersService {
 
     const updatedUser = await this.prisma.user.update({
       where: { id },
-      data: { status: userStatusDto.status },
+      data: statusColumns(userStatusDto.status),
       include: {
         branch: true,
       },

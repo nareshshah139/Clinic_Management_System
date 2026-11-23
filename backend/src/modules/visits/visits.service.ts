@@ -466,6 +466,12 @@ export class VisitsService {
    * Omitted fields MUST remain unchanged; explicit empty or null values clear
    * the supplied field. A concurrent or stale version save MUST fail with 409.
    */
+  /**
+   * @cc [owner:nareshshah139,label:product] completed-visit-amend
+   * A doctor MAY edit a completed visit's clinical record, from the visit form and from
+   * prescription saves. The edit MUST keep the visit COMPLETED with its completedAt and
+   * MUST NOT change its appointment. Model: verification/state-machines/appointment-visit.
+   */
   async update(id: string, updateVisitDto: UpdateVisitDto, branchId: string, actorId?: string) {
     const visit = await this.findOne(id, branchId);
     if (updateVisitDto.version !== undefined && updateVisitDto.version !== visit.version) {

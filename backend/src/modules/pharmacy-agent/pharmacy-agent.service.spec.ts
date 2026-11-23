@@ -421,8 +421,8 @@ describe('Pharmacy proposal action authorization', () => {
     const action = { id:'action-1',actionType:'update_inventory_item',targetType:'inventory_item',targetId:item.id,expectedVersion:item.updatedAt,permissionRequired:'inventory:item:read',input:{storageLocation:'Shelf B'} };
     const proposal = {id:'proposal-1',branchId:'branch-1',sessionId:'session-1',status:'PENDING_REVIEW',actions:[action]};
     const prisma = {
-      pharmacyAgentProposal:{findFirst:jest.fn().mockResolvedValue(proposal),update:jest.fn(async ({data})=>({...proposal,...data}))},
-      pharmacyAgentProposalAction:{update:jest.fn().mockResolvedValue({})},
+      pharmacyAgentProposal:{findFirst:jest.fn().mockResolvedValue(proposal),updateMany:jest.fn(async ({data})=>{Object.assign(proposal,data);return {count:1};}),findUniqueOrThrow:jest.fn(async ()=>proposal)},
+      pharmacyAgentProposalAction:{update:jest.fn().mockResolvedValue({}),updateMany:jest.fn().mockResolvedValue({count:0})},
       pharmacyAgentAuditEvent:{create:jest.fn().mockResolvedValue({})},
       inventoryItem:{findFirst:jest.fn().mockResolvedValue(item)},
       user:{findUnique:jest.fn().mockResolvedValue({role,permissions:JSON.stringify(stored)})},
@@ -502,17 +502,24 @@ describe('PharmacyAgentService medicines it proposes to add', () => {
       }),
       findFirst: jest.fn(async ({ where }) => rows[name].find((r) => r.id === where.id) ?? null),
       update: jest.fn(async ({ where, data }) => Object.assign(rows[name].find((r) => r.id === where.id) ?? {}, data)),
+      updateMany: jest.fn(async ({ where, data }) => {
+        const row = rows[name].find((r) => r.id === where.id);
+        if (row) Object.assign(row, data);
+        return { count: row ? 1 : 0 };
+      }),
+      findUniqueOrThrow: jest.fn(async ({ where }) => rows[name].find((r) => r.id === where.id)),
     });
     const prisma: any = {
       pharmacyAgentSession: { findFirst: jest.fn().mockResolvedValue({ id: 'session-1', status: 'ACTIVE', title: 'Stock' }), update: jest.fn() },
       pharmacyAgentMessage: table('messages'),
-      pharmacyAgentRun: { create: jest.fn().mockResolvedValue({ id: 'run-1' }), update: jest.fn() },
+      pharmacyAgentRun: { create: jest.fn().mockResolvedValue({ id: 'run-1' }), update: jest.fn(), updateMany: jest.fn() },
       pharmacyAgentProposal: table('proposals'),
-      pharmacyAgentProposalAction: { update: jest.fn() },
+      pharmacyAgentProposalAction: { update: jest.fn(), updateMany: jest.fn() },
       pharmacyAgentAuditEvent: { create: jest.fn() },
       inventoryItemRequest: { findMany: jest.fn().mockResolvedValue([]) },
       inventoryItem: { findMany: jest.fn().mockResolvedValue([]) },
     };
+    prisma.$transaction = (work: (tx: any) => unknown) => work(prisma);
     const inventory = {
       createInventoryItem: jest.fn(async (dto: any) => ({ id: 'item-telma', ...dto })),
       assertItemIdentifiersFree: jest.fn(),

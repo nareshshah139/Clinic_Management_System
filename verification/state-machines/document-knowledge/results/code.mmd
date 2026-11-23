@@ -1,0 +1,30 @@
+---
+title: "Inventory document outcome (code)"
+---
+stateDiagram-v2
+  state "Draft saved" as s0
+  state "New draft, not saved" as s1
+  state "Checking saved record" as s2
+  state "Outcome not confirmed, waiting" as s3
+  state "Outcome not confirmed" as s4
+  state "Saved record unavailable" as s5
+  state "Stock loss posted" as s6
+  [*] --> s0
+  [*] --> s1
+  s0 --> s2: you reload the page
+  s0 --> s3: you post the stock loss
+  s1 --> s3: you save the new draft
+  s2 --> s0: the server answers
+  s2 --> s4: TheRequestTimesOut / a request fails / the server answers
+  s2 --> s5: TheRequestTimesOut / a request fails
+  s2 --> s6: the server answers
+  s3 --> s0: the server answers
+  s3 --> s2: you reload the page
+  s3 --> s4: TheRequestTimesOut / a request fails / the server answers / you reload the page
+  s3 --> s6: the server answers
+  s4 --> s2: you reload the page
+  s4 --> s3: you check saved status
+  s6 --> s2: you reload the page
+  classDef breaks fill:#fde2dd,stroke:#b3261e,stroke-width:2px
+  classDef stuck fill:#fdf0d5,stroke:#a35a05,stroke-width:2px,stroke-dasharray:5 3
+  classDef breaksAndStuck fill:#fde2dd,stroke:#a35a05,stroke-width:2px,stroke-dasharray:5 3

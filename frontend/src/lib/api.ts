@@ -25,6 +25,8 @@ import type { InventoryItemRequest, InventoryItemRequestStatus, PendingApprovalR
 
 export type DoctorLetterhead = { id: string; url: string; source: 'uploaded' | 'bundled' };
 
+const INVENTORY_EDITOR_REQUEST = /^\/inventory\/workspace\/(documents(\/by-request)?(\/[^/?#]+(\/(resolve|transition))?)?|reconciliation\/counts\/[^/?#]+)$/;
+
 export class ApiClient {
   private baseURL: string;
   private token: string | null = null;
@@ -169,7 +171,8 @@ export class ApiClient {
       const controller = new AbortController();
       const timeoutMs = extra?.timeoutMs && extra.timeoutMs > 0 ? extra.timeoutMs :
         ['POST', 'PATCH', 'PUT'].includes(method) &&
-          /^\/(patients|visits|prescriptions)(\/[^/?#]+)?(\/complete)?([?#]|$)/.test(endpoint) ? 30000 : undefined;
+          /^\/(patients|visits|prescriptions)(\/[^/?#]+)?(\/complete)?([?#]|$)/.test(endpoint) ? 30000 :
+        INVENTORY_EDITOR_REQUEST.test(endpoint) ? (isSafeMethod ? 30000 : 120000) : undefined;
       let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
       if (timeoutMs) {
         timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
@@ -994,8 +997,7 @@ export class ApiClient {
     data: Record<string, unknown>,
     opts?: { idempotencyKey?: string; timeoutMs?: number }
   ) {
-    const base = JSON.stringify(data || {});
-    const autoKey = `cms:POST:prescriptions:pad:${this.djb2Hash(base)}`;
+    const autoKey = `cms:POST:prescriptions:pad:${this.newOperationKey()}`;
     return this.post('/prescriptions/pad', data, { idempotencyKey: opts?.idempotencyKey || autoKey, timeoutMs: opts?.timeoutMs });
   }
 

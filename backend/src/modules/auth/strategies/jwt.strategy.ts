@@ -1,8 +1,14 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
 import type { Request } from 'express';
+import { createHash } from 'crypto';
+import { UserStatus } from '@prisma/client';
+import { PrismaService } from '../../../shared/database/prisma.service';
+
+export const passwordStamp = (passwordHash: string) =>
+  createHash('sha256').update(passwordHash).digest('base64url').slice(0, 16);
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -10,7 +16,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
    * @cc [owner:nareshshah139,label:security] jwt-secret-required
    * Startup MUST fail when JWT_SECRET is absent; token verification MUST never use a fallback key.
    */
-  constructor(private configService: ConfigService) {
+  constructor(
+    private configService: ConfigService,
+    private readonly prisma: PrismaService,
+  ) {
     const cookieExtractor = (req: Request): string | null => {
       const raw = req?.headers?.cookie;
       if (!raw) return null;
@@ -28,14 +37,18 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  async validate(payload: any) {
+  async validate(payload: { sub: string; pwdStamp?: string }) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: payload.sub },
+      select: { id: true, email: true, role: true, branchId: true, status: true, isActive: true, password: true },
+    });
+    if (
+      !user || user.status !== UserStatus.ACTIVE || !user.isActive ||
+      payload.pwdStamp !== passwordStamp(user.password)
+    ) {
+      throw new UnauthorizedException('Your session has ended. Please sign in again.');
+    }
     // Expose both id and userId for compatibility across controllers
-    return {
-      id: payload.sub,
-      userId: payload.sub,
-      email: payload.email,
-      role: payload.role,
-      branchId: payload.branchId,
-    };
+    return { id: user.id, userId: user.id, email: user.email, role: user.role, branchId: user.branchId };
   }
 }

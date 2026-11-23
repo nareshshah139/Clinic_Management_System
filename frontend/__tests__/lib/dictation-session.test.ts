@@ -1,4 +1,4 @@
-import { MicUnavailableError, startDictationSession, type DictationSession, type DictationView } from '@/lib/dictation-session';
+import { DICTATION_LIMITS, MicUnavailableError, startDictationSession, type DictationSession, type DictationView } from '@/lib/dictation-session';
 import { handleUnauthorizedRedirect } from '@/lib/authRedirect';
 import type { SpeechToTextPreference } from '@/lib/speech-to-text';
 
@@ -66,8 +66,11 @@ function fakeRecorder(bytes: number) {
   };
 }
 
-type Reply = { status: number; body?: unknown } | Error;
-const respond = (reply: Reply) => {
+type Reply = { status: number; body?: unknown } | Error | 'never';
+const respond = (reply: Reply, signal?: AbortSignal | null) => {
+  if (reply === 'never') {
+    return new Promise((_, reject) => signal?.addEventListener('abort', () => reject(new DOMException('The operation was aborted.', 'AbortError'))));
+  }
   if (reply instanceof Error) return Promise.reject(reply);
   const { status, body } = reply;
   return Promise.resolve({
@@ -109,7 +112,7 @@ function harness(o: {
     fetch: ((url: string, init: RequestInit) => {
       const body = init.body instanceof FormData ? init.body.get('file') : JSON.parse(String(init.body));
       calls.push({ url, body });
-      return respond(replies[url]);
+      return respond(replies[url], init.signal);
     }) as unknown as typeof fetch,
     setTimeout: (fn: () => void, ms: number) => {
       const id = nextId++;
@@ -246,6 +249,18 @@ describe('startDictationSession over live transcription', () => {
 
     await expect(session.outcome).resolves.toEqual({ kind: 'text', text: 'Itching for a week.', via: 'live' });
     expect(h.urls()).toEqual(['/api/visits/transcribe/live', '/api/visits/transcribe/speakers']);
+  });
+
+  it('falls back to the full live text when the speaker split never answers', async () => {
+    const h = harness({ speakers: 'never' });
+    const session = await startListening(h, 'patient-preferred');
+    session.stop();
+    await h.advance(TAIL_MS);
+    h.dc.emit({ type: 'input_audio_buffer.committed', item_id: 'a' });
+    h.dc.emit({ type: COMPLETED, item_id: 'a', transcript: 'Itching for a week.' });
+    await h.advance(DICTATION_LIMITS.requestMs);
+
+    await expect(session.outcome).resolves.toEqual({ kind: 'text', text: 'Itching for a week.', via: 'live' });
   });
 
   it('rejects with MicUnavailableError when the microphone is denied', async () => {

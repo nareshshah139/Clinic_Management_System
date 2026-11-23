@@ -1,0 +1,23 @@
+---
+title: "Pharmacy agent run and proposal review (code)"
+---
+stateDiagram-v2
+  state "Asking the agent" as s0
+  state "Finished" as s1
+  state "Proposal waiting for review" as s2
+  state "Run left running" as s3
+  state "Being applied" as s4
+  state "Apply abandoned half way" as s5
+  [*] --> s0
+  s0 --> s1: the agent says nothing changed
+  s0 --> s2: the agent posts its answer
+  s0 --> s3: saving the failure fails / the server restarts
+  s2 --> s1: a reviewer clicks Reject
+  s2 --> s4: a reviewer clicks Apply
+  s3 --> s1: the sweeper closes the stale run
+  s4 --> s1: the proposal shows applied / the proposal shows failed
+  s4 --> s5: the server restarts
+  s5 --> s1: the sweeper closes the abandoned apply
+  classDef breaks fill:#fde2dd,stroke:#b3261e,stroke-width:2px
+  classDef stuck fill:#fdf0d5,stroke:#a35a05,stroke-width:2px,stroke-dasharray:5 3
+  classDef breaksAndStuck fill:#fde2dd,stroke:#a35a05,stroke-width:2px,stroke-dasharray:5 3

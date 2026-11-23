@@ -19,6 +19,7 @@ describe('AuthService sign-in', () => {
               : user.phone === where.phone,
           ) ?? null,
       ),
+      findUniqueOrThrow: jest.fn(async ({ where }) => users.find((user) => user.id === where.id)),
     },
   };
   const failure = async (identifier: string, password = PASSWORD) => {
@@ -108,7 +109,7 @@ describe('AuthService sign-in', () => {
     },
   );
 
-  it('issues a token that carries only the user id, email, role and branch', async () => {
+  it('issues a token that carries only the user id, email, role, branch and a password stamp', async () => {
     const user = await service.validateUser('active@example.test', PASSWORD);
     const { access_token, user: returned } = await service.login(user);
     const { iat: _iat, ...claims } = jwt.verify(access_token);
@@ -117,6 +118,7 @@ describe('AuthService sign-in', () => {
       email: 'Active@Example.test',
       role: 'DOCTOR',
       branchId: 'branch',
+      pwdStamp: expect.stringMatching(/^[\w-]{16}$/),
     });
     expect(returned).not.toHaveProperty('password');
   });

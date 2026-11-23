@@ -1,0 +1,28 @@
+---
+title: "A patient's day: desk, doctor, pharmacy (code)"
+---
+stateDiagram-v2
+  state "Booked for today" as s0
+  state "Appointment cancelled" as s1
+  state "Checked in, waiting for the doctor" as s2
+  state "With the doctor" as s3
+  state "Visit completed, medicines billed" as s4
+  state "Visit completed, nothing to bill" as s5
+  state "Visit completed, prescription at the pharmacy" as s6
+  [*] --> s0
+  s0 --> s1: the desk cancels the appointment
+  s0 --> s2: the desk checks the patient in
+  s0 --> s3: the doctor starts the visit
+  s2 --> s1: the desk cancels the appointment
+  s2 --> s3: the doctor starts the visit
+  s3 --> s2: the doctor deletes the visit
+  s3 --> s4: the doctor completes the visit
+  s3 --> s5: the doctor completes the visit
+  s3 --> s6: the doctor completes the visit
+  s5 --> s2: the doctor deletes the visit
+  s5 --> s6: the doctor writes the prescription
+  s6 --> s4: the pharmacist bills the medicines
+  s6 --> s5: the doctor cancels the prescription
+  classDef breaks fill:#fde2dd,stroke:#b3261e,stroke-width:2px
+  classDef stuck fill:#fdf0d5,stroke:#a35a05,stroke-width:2px,stroke-dasharray:5 3
+  classDef breaksAndStuck fill:#fde2dd,stroke:#a35a05,stroke-width:2px,stroke-dasharray:5 3
