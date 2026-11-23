@@ -467,9 +467,10 @@ export class VisitsService {
    * the supplied field. A concurrent or stale version save MUST fail with 409.
    */
   /**
-   * @cc [owner:nareshshah139,label:product] completed-visit-frozen
-   * A completed visit MUST refuse every change to its clinical record, from the visit
-   * form and from prescription saves. Model: verification/state-machines/appointment-visit.
+   * @cc [owner:nareshshah139,label:product] completed-visit-amend
+   * A doctor MAY edit a completed visit's clinical record, from the visit form and from
+   * prescription saves. The edit MUST keep the visit COMPLETED with its completedAt and
+   * MUST NOT change its appointment. Model: verification/state-machines/appointment-visit.
    */
   async update(id: string, updateVisitDto: UpdateVisitDto, branchId: string, actorId?: string) {
     const visit = await this.findOne(id, branchId);
@@ -526,9 +527,6 @@ export class VisitsService {
     // record is safer than issuing an empty Prisma update that fails vaguely.
     if (Object.keys(updateData).length === 0) {
       return this.findOne(id, branchId);
-    }
-    if (visit.status === 'COMPLETED') {
-      throw new BadRequestException('This visit is completed, so its notes can no longer be changed.');
     }
 
     const updatedVisit = await this.prisma.visit.update({
