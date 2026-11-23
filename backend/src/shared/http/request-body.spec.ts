@@ -256,8 +256,9 @@ describe('Configured save request bodies', () => {
     expect(response.body.errorCode).toBe('payload_too_large');
     expect(handlerCalls).toBe(0);
     expect(documents.size).toBe(0);
-    expect(lines).toHaveLength(1);
-    expect(JSON.parse(lines[0])).toMatchObject({
+    const own = lines.filter((line) => JSON.parse(line).requestId === reference);
+    expect(own).toHaveLength(1);
+    expect(JSON.parse(own[0])).toMatchObject({
       requestId: reference,
       event: 'http.request_completed',
       route: '/patients/:id',
@@ -268,9 +269,9 @@ describe('Configured save request bodies', () => {
       bodyLimitBytes: 5242880,
       bodyDeclaredBytes: 5242881,
     });
-    expect(lines[0]).not.toContain('synthetic-id');
-    expect(lines[0]).not.toContain('secret');
-    expect(lines[0]).not.toContain('xxxx');
+    expect(own[0]).not.toContain('synthetic-id');
+    expect(own[0]).not.toContain('secret');
+    expect(own[0]).not.toContain('xxxx');
   });
 
   it.each([false, true])(

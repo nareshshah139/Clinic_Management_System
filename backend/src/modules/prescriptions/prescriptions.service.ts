@@ -1364,6 +1364,11 @@ export class PrescriptionsService {
    * only when showSignature is true; otherwise leave space to sign by hand.
    */
   /**
+   * @cc [owner:nareshshah139,label:security] prescription-pdf-doctor-minimal
+   * PDF generation MUST load only the prescribing doctor's id and name, never the doctor's
+   * credential or account columns.
+   */
+  /**
    * @cc [owner:nareshshah139,label:product] tele-video-prescription-output
    * PDF downloads and shared PDFs MUST show the tele-video label beside the date
    * and the clinic disclaimer above the signature only for tele-video visits.
@@ -1376,7 +1381,7 @@ export class PrescriptionsService {
   ): Promise<{ pdfBuffer: Buffer; fileName: string }> {
     const prescription = await this.prisma.prescription.findFirst({
       where: { id: prescriptionId, visit: { deletedAt: null, patient: { branchId } } },
-      include: { visit: { include: { patient: true, doctor: true } } },
+      include: { visit: { include: { patient: true, doctor: { select: { id: true, firstName: true, lastName: true } } } } },
     });
     if (!prescription) throw new NotFoundException('Prescription not found');
     const signature = body?.showSignature === true

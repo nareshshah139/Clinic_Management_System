@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useMemo } from 'react';
+import { useDebouncedPatientSearch } from './useDebouncedPatientSearch';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
@@ -269,20 +270,10 @@ export default function AppointmentsCalendar({
     }
   };
 
-  const searchPatients = async (q: string) => {
-    setPatientSearch(q);
-
-    if (!q.trim()) {
-      setPatients([]);
-      setQuickCreateOpen(false);
-      setAutoPromptedForSearch(false);
-      setSearchingPatients(false);
-      return;
-    }
-
+  const runPatientSearch = async (q: string, isCurrent: () => boolean) => {
     try {
-      setSearchingPatients(true);
       const res: any = await apiClient.getPatients({ search: q, limit: 10 });
+      if (!isCurrent()) return;
       const matches = (res.data || res.patients || []).map((p: any) => ({
         ...p,
         firstName: p.firstName || p.name?.split(' ')[0] || '',
@@ -299,9 +290,27 @@ export default function AppointmentsCalendar({
       }
       setSearchingPatients(false);
     } catch (error) {
+      if (!isCurrent()) return;
       console.error('Failed to search patients', error);
       setSearchingPatients(false);
     }
+  };
+  const { schedule: schedulePatientSearch, cancel: cancelPatientSearch } = useDebouncedPatientSearch(runPatientSearch);
+
+  const searchPatients = (q: string) => {
+    setPatientSearch(q);
+
+    if (!q.trim()) {
+      cancelPatientSearch();
+      setPatients([]);
+      setQuickCreateOpen(false);
+      setAutoPromptedForSearch(false);
+      setSearchingPatients(false);
+      return;
+    }
+
+    setSearchingPatients(true);
+    schedulePatientSearch(q);
   };
 
   const handleBookingRequest = (slot: string, calendar: AppointmentCalendar) => {
@@ -567,7 +576,7 @@ export default function AppointmentsCalendar({
               <Badge variant="secondary">
                 Selected: {patientName(selectedPatient)} — {selectedPatient.phone}
               </Badge>
-              <Button variant="outline" size="sm" onClick={() => { setSelectedPatientId(''); setSelectedPatient(null); setPatientSearch(''); setPatients([]); setQuickCreateOpen(false); }}>Clear</Button>
+              <Button variant="outline" size="sm" onClick={() => { cancelPatientSearch(); setSelectedPatientId(''); setSelectedPatient(null); setPatientSearch(''); setPatients([]); setQuickCreateOpen(false); }}>Clear</Button>
             </div>
           )}
 
@@ -586,6 +595,7 @@ export default function AppointmentsCalendar({
                     type="button"
                     className="w-full px-3 py-2 text-left text-sm hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                     onClick={() => {
+                      cancelPatientSearch();
                       setPatientSearch(`${p.firstName} ${p.lastName} — ${p.phone}`);
                       setSelectedPatientId(p.id);
                       setSelectedPatient(p);
@@ -695,6 +705,7 @@ export default function AppointmentsCalendar({
         }}
         initialName={patientSearch}
         onPatientCreated={(patient) => {
+          cancelPatientSearch();
           setSelectedPatientId(patient.id);
           setSelectedPatient(patient);
           setPatientSearch(`${patientName(patient)} — ${patient.phone ?? ''}`.trim());

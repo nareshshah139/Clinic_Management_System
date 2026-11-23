@@ -3,14 +3,13 @@ import { PrescriptionsController } from '../prescriptions.controller';
 
 const drug = { id: 'drug', isActive: true, isDiscontinued: false, name: 'Tyrodin Cream', branchId: 'clinic', manufacturerName: 'Manufacturer', dosageForm: 'CREAM', packSizeLabel: '20g', composition1: 'Ingredient A', composition2: 'Ingredient B' };
 const item = { id: 'inventory', name: 'Tyrodin Cream', branchId: 'clinic', currentStock: 12, heldStock: 2, status: 'ACTIVE', unit: 'TUBES', packSize: 20, packUnit: 'g', sellingPrice: 100, drugs: [drug] };
-function database(rows = [item]) { return { inventoryItem: { findMany: jest.fn().mockResolvedValue(rows) }, drug: { findMany: jest.fn() }, $queryRaw: jest.fn() }; }
+function database(rows: any[] = [item]) { return { inventoryItem: { findMany: jest.fn().mockResolvedValue(rows) }, drug: { findMany: jest.fn() }, $queryRaw: jest.fn().mockResolvedValue(rows) }; }
 
 it('uses clinic inventory, carries its stable ID, and excludes held stock', async () => {
   const db = database();
   expect((await searchPrescriptionDrugs(db as any, 'Tyrodin', 30, 'clinic'))[0]).toMatchObject({ id: 'drug', inventoryItemId: 'inventory', totalStock: 10, genericName: 'Ingredient A + Ingredient B', form: 'CREAM', manufacturer: 'Manufacturer' });
-  expect(db.inventoryItem.findMany.mock.calls[0][0].where).toEqual({ branchId: 'clinic', status: 'ACTIVE' });
+  expect(db.$queryRaw.mock.calls[0].slice(1)).toEqual(['clinic']);
   expect(db.drug.findMany).not.toHaveBeenCalled();
-  expect(db.$queryRaw).not.toHaveBeenCalled();
 });
 it('ranks before limiting and keeps duplicate products separate for review', async () => {
   const db = database([{ ...item, id: 'fuzzy', name: 'Tyrobin Cream', drugs: [{ ...drug, id: 'fuzzy', name: 'Tyrobin Cream' }] }, item]);
@@ -31,7 +30,7 @@ it('handles blank queries and rejects invalid scope/input', async () => {
   expect(await searchPrescriptionDrugs(db as any, ' ', 30, 'clinic')).toEqual([]);
   await expect(searchPrescriptionDrugs(db as any, 'tyrodin', 30, '')).rejects.toThrow('Branch context');
   await expect(searchPrescriptionDrugs(db as any, 'x'.repeat(201), 30, 'clinic')).rejects.toThrow('200 characters');
-  expect(db.inventoryItem.findMany).not.toHaveBeenCalled();
+  expect(db.$queryRaw).not.toHaveBeenCalled();
 });
 it('passes the authenticated branch to the prescription service', async () => {
   const service = { autocompleteDrugs: jest.fn().mockResolvedValue([]) };

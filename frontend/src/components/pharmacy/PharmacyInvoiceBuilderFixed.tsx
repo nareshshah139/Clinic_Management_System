@@ -338,7 +338,6 @@ export function PharmacyInvoiceBuilderFixed({
   const [patients, setPatients] = useState<Patient[]>([]);
   const patientsAllRef = useRef<Patient[]>([]);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
-  const [drugs, setDrugs] = useState<Drug[]>([]);
   const [packages, setPackages] = useState<PharmacyPackage[]>([]);
   const [searchResults, setSearchResults] = useState<Drug[]>([]);
   const [items, setItems] = useState<InvoiceItem[]>(() => (draft ? savedLines(draft) : []));
@@ -819,6 +818,7 @@ export function PharmacyInvoiceBuilderFixed({
   // Debounced server-side patient autocomplete
   useEffect(() => {
     const q = patientSearchQuery.trim();
+    let current = true;
     const handler = setTimeout(async () => {
       try {
         if (q.length < 2) {
@@ -826,6 +826,7 @@ export function PharmacyInvoiceBuilderFixed({
           return;
         }
         const res = await apiClient.getPatients({ limit: 20, search: q });
+        if (!current) return;
         const data = (res as any)?.data || (res as any)?.patients || [];
         if (Array.isArray(data)) {
           setPatients(data);
@@ -834,26 +835,22 @@ export function PharmacyInvoiceBuilderFixed({
         // ignore errors to avoid noisy UX
       }
     }, 300);
-    return () => clearTimeout(handler);
+    return () => { current = false; clearTimeout(handler); };
   }, [patientSearchQuery]);
 
   const loadInitialData = async () => {
     const contextVersion = billingContextVersion.current;
     try {
-      const [patientsRes, doctorsRes, drugsRes, packagesRes] =
+      const [patientsRes, doctorsRes, packagesRes] =
         await Promise.all([
           apiClient.getPatients({ limit: 100 }),
           apiClient.getUsers({ role: 'DOCTOR', limit: 50 }),
-          apiClient.get('/drugs', { limit: 100, isActive: true }),
           apiClient.get('/pharmacy/packages', { limit: 100, isActive: true }),
         ]);
 
       const patientsData =
         (patientsRes as any)?.data || (patientsRes as any)?.patients || [];
       const doctorsData = (doctorsRes as any)?.users || [];
-      const drugsData = Array.isArray((drugsRes as any)?.data)
-        ? (drugsRes as any).data
-        : [];
       const packagesData = Array.isArray((packagesRes as any)?.packages)
         ? (packagesRes as any).packages
         : Array.isArray((packagesRes as any)?.data)
@@ -863,7 +860,6 @@ export function PharmacyInvoiceBuilderFixed({
       setPatients(patientsData);
       patientsAllRef.current = patientsData;
       setDoctors(doctorsData);
-      setDrugs(drugsData);
       setPackages(packagesData);
 
       if (contextVersion !== billingContextVersion.current) return;
@@ -1115,10 +1111,10 @@ export function PharmacyInvoiceBuilderFixed({
 
     if (existingItemIndex !== -1) {
       // Increase quantity if already exists
-      const updatedItems = [...items];
-      updatedItems[existingItemIndex].quantity += 1;
-      calculateItemTotal(updatedItems[existingItemIndex]);
-      setItems(updatedItems);
+      const bumped = { ...items[existingItemIndex] };
+      bumped.quantity += 1;
+      calculateItemTotal(bumped);
+      setItems(items.map((item, i) => (i === existingItemIndex ? bumped : item)));
     } else {
       // Add new item
       const newItem: InvoiceItem = {
@@ -1151,10 +1147,10 @@ export function PharmacyInvoiceBuilderFixed({
 
     if (existingItemIndex !== -1) {
       // Increase quantity if already exists
-      const updatedItems = [...items];
-      updatedItems[existingItemIndex].quantity += 1;
-      calculateItemTotal(updatedItems[existingItemIndex]);
-      setItems(updatedItems);
+      const bumped = { ...items[existingItemIndex] };
+      bumped.quantity += 1;
+      calculateItemTotal(bumped);
+      setItems(items.map((item, i) => (i === existingItemIndex ? bumped : item)));
     } else {
       // Add new item
       const newItem: InvoiceItem = {
