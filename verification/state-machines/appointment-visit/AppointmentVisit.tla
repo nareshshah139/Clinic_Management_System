@@ -15,13 +15,14 @@
    MODE picks the variant. "code" is the code as it is now. "before" is the
    code before the fix, kept as a regression control. "uiOnly" is "before"
    restricted to writes a screen sends. "fixed" is the design the fix started
-   from. The other modes each remove one guard from "fixed". *)
+   from. "editReopens" makes an edit to a completed visit reopen it. The other
+   modes each remove one guard from "fixed". *)
 EXTENDS Naturals
 
 CONSTANTS MODE, MaxEdits
 
 ASSUME MODE \in {"code", "before", "uiOnly", "fixed", "patchIgnoresVisit", "bulkIgnoresVisit",
-                 "checkInFromAnyStatus", "editAfterComplete", "typeProbe"}
+                 "checkInFromAnyStatus", "editReopens", "typeProbe"}
 ASSUME MaxEdits \in Nat \ {0}
 
 Statuses == {"SCHEDULED", "CONFIRMED", "CHECKED_IN", "IN_PROGRESS", "COMPLETED",
@@ -36,9 +37,9 @@ VisitStatuses == {"IN_PROGRESS", "COMPLETED"}
 
 \* visit is the live visit linked to the appointment: Visit.status of the row
 \* with appointmentId = this appointment and deletedAt null, or none.
-VARIABLES appt, visit, notes, signed, checkInPlanned, cancelHeld
+VARIABLES appt, visit, notes, checkInPlanned, cancelHeld
 
-vars == <<appt, visit, notes, signed, checkInPlanned, cancelHeld>>
+vars == <<appt, visit, notes, checkInPlanned, cancelHeld>>
 
 Before == MODE \in {"before", "uiOnly"}
 ApiReachable == MODE # "uiOnly"
@@ -47,7 +48,6 @@ TypeOK ==
   /\ appt \in Statuses
   /\ visit \in {"none", "open", "done"}
   /\ notes \in 0..MaxEdits
-  /\ signed \in 0..MaxEdits
   /\ checkInPlanned \in BOOLEAN
   /\ cancelHeld \in BOOLEAN
 
@@ -72,9 +72,6 @@ BulkAllows(f, t) ==
     [] MODE = "code" -> CodeAllows(f, t)
     [] OTHER -> VisitAllows(MODE = "bulkIgnoresVisit") /\ CheckInAllows(f, t)
 
-\* Before the fix, visits.service.ts update never read the visit status.
-EditAllowed == visit = "open" \/ (visit = "done" /\ (Before \/ MODE = "editAfterComplete"))
-
 \* cancelHeld is true while a cancel stands that nobody who saw it has undone.
 \* A deliberate status write by someone looking at the current status sets it
 \* by its target.
@@ -85,7 +82,6 @@ Init ==
   /\ appt = IF MODE = "typeProbe" THEN "RESCHEDULED" ELSE "SCHEDULED"
   /\ visit = "none"
   /\ notes = 0
-  /\ signed = 0
   /\ checkInPlanned = FALSE
   /\ cancelHeld = FALSE
 
@@ -97,24 +93,27 @@ DoctorStartsVisit ==
   /\ visit' = "open"
   /\ appt' = "IN_PROGRESS"
   /\ notes' = 0
-  /\ signed' = 0
   /\ UNCHANGED <<checkInPlanned, cancelHeld>>
 
-\* visits.service.ts update: version compare-and-set, and in "code" a refusal
-\* once the visit is completed.
+\* visits.service.ts update: version compare-and-set on an open or completed
+\* visit. It writes clinical columns only. "editReopens" is a variant that
+\* turns an edit to a completed visit into a reopen of the visit and its
+\* appointment.
+Reopens == MODE = "editReopens" /\ visit = "done"
+
 DoctorEditsNotes ==
   /\ visit # "none"
-  /\ EditAllowed
   /\ notes < MaxEdits
   /\ notes' = notes + 1
-  /\ UNCHANGED <<appt, visit, signed, checkInPlanned, cancelHeld>>
+  /\ visit' = IF Reopens THEN "open" ELSE visit
+  /\ appt' = IF Reopens THEN "IN_PROGRESS" ELSE appt
+  /\ UNCHANGED <<checkInPlanned, cancelHeld>>
 
 \* visits.service.ts complete: lock the visit row, write COMPLETED, then write
 \* the appointment COMPLETED by id whatever its status.
 DoctorCompletesVisit ==
   /\ visit = "open"
   /\ visit' = "done"
-  /\ signed' = notes
   /\ appt' = "COMPLETED"
   /\ UNCHANGED <<notes, checkInPlanned, cancelHeld>>
 
@@ -125,7 +124,6 @@ VisitIsDeleted ==
   /\ visit # "none"
   /\ visit' = "none"
   /\ notes' = 0
-  /\ signed' = 0
   /\ appt' = IF appt \in {"IN_PROGRESS", "COMPLETED"} THEN "CHECKED_IN" ELSE appt
   /\ UNCHANGED <<checkInPlanned, cancelHeld>>
 
@@ -135,7 +133,7 @@ DeskCancels ==
   /\ appt \notin {"COMPLETED", "IN_PROGRESS", "CANCELLED"}
   /\ appt' = "CANCELLED"
   /\ cancelHeld' = TRUE
-  /\ UNCHANGED <<visit, notes, signed, checkInPlanned>>
+  /\ UNCHANGED <<visit, notes, checkInPlanned>>
 
 \* voice-command.ts matchAppointment: the dialog offers check-in only for an
 \* appointment it read as SCHEDULED or CONFIRMED.
@@ -143,7 +141,7 @@ DeskPlansCheckIn ==
   /\ ~checkInPlanned
   /\ appt \in Waiting
   /\ checkInPlanned' = TRUE
-  /\ UNCHANGED <<appt, visit, notes, signed, cancelHeld>>
+  /\ UNCHANGED <<appt, visit, notes, cancelHeld>>
 
 \* VoiceCommandDialog.tsx run: PATCH status CHECKED_IN with no expected status.
 \* The server compares against its own fresh read, so the write lands on
@@ -153,7 +151,7 @@ DeskConfirmsCheckIn ==
   /\ checkInPlanned
   /\ checkInPlanned' = FALSE
   /\ appt' = IF PatchAllows(appt, "CHECKED_IN") THEN "CHECKED_IN" ELSE appt
-  /\ UNCHANGED <<visit, notes, signed, cancelHeld>>
+  /\ UNCHANGED <<visit, notes, cancelHeld>>
 
 \* appointments.service.ts update: PATCH any status, compare-and-set on the
 \* status read in the same request. No screen sends it except the check-in.
@@ -164,7 +162,7 @@ DeskSetsStatus ==
     /\ PatchAllows(appt, t)
     /\ appt' = t
     /\ cancelHeld' = HeldAfterDeliberate(t)
-    /\ UNCHANGED <<visit, notes, signed, checkInPlanned>>
+    /\ UNCHANGED <<visit, notes, checkInPlanned>>
 
 \* appointments.service.ts bulkUpdate. ADMIN only, no screen sends it. In
 \* "code" it compare-and-sets each row on the status it read.
@@ -175,7 +173,7 @@ AdminBulkSets ==
     /\ BulkAllows(appt, t)
     /\ appt' = t
     /\ cancelHeld' = HeldAfterDeliberate(t)
-    /\ UNCHANGED <<visit, notes, signed, checkInPlanned>>
+    /\ UNCHANGED <<visit, notes, checkInPlanned>>
 
 Next ==
   \/ DoctorStartsVisit
@@ -203,8 +201,9 @@ StatusesAgree ==
 \* A cancel stands until someone looking at the cancelled appointment undoes it.
 NoResurrection == cancelHeld => appt = "CANCELLED"
 
-\* A completed visit's clinical notes stay as they were when it was completed.
-CompletedVisitFrozen == visit = "done" => notes = signed
+\* An edit to a completed visit keeps it completed and leaves its appointment alone.
+EditKeepsCompletion ==
+  [][visit = "done" /\ visit' # "none" /\ notes' # notes => visit' = "done" /\ appt' = appt]_vars
 
 \* When the two rows disagree, something brings them back into agreement.
 DisagreementHeals == [](~StatusesAgree => <>StatusesAgree)

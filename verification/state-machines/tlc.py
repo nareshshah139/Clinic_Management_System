@@ -77,7 +77,7 @@ def parse_output(out: str) -> Run:
     states = int(counts[-1].replace(",", "")) if counts else None
     if "Model checking completed. No error has been found." in out:
         return Run("holds", states, output=out)
-    if re.search(r"Error: Invariant \w+ is violated", out) or "Temporal properties were violated" in out:
+    if re.search(r"Error: (?:Invariant|Action property) \w+ is violated", out) or "Temporal properties were violated" in out:
         trace, loop_to = parse_trace(out)
         return Run("breaks", states, trace, loop_to, out)
     return Run("error", states, output=out)

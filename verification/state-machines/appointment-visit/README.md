@@ -4,7 +4,9 @@ An appointment and the visit started from it are two rows that write each other.
 
 `AppointmentVisit.tla` models one appointment and its live visit with two actors, the doctor on the visit and the desk on the appointment. Calendar capacity is out of scope. `verification/appointment-calendars/` models it.
 
-The model was first checked at commit `6416677`. The bugs it found are fixed. `code` mode is the code now, and `before` mode is the code as it was, kept as a regression control. `results/before.md` keeps TLC's paths to the old breaks.
+The model was first checked at commit `6416677`. The bugs it found are fixed. `code` mode is the code now, and `before` mode is the code as it was at `be2b934`, kept as a regression control. `results/before.md` keeps TLC's paths to the old breaks.
+
+The requirement for completed visits changed. An earlier rule, `CompletedVisitFrozen`, said a completed visit's notes never change, and the server refused every edit to one. Doctors need to correct a completed visit, so the product now lets them edit it through a deliberate Edit visit action, and `EditKeepsCompletion` replaces that rule. The edit must keep the visit completed and leave its appointment alone.
 
 ## State
 
@@ -13,7 +15,6 @@ The model was first checked at commit `6416677`. The bugs it found are fixed. `c
 | `appt` | `Appointment.status`, all seven values |
 | `visit` | the live visit linked to the appointment: `Visit.status` of the row with `appointmentId` set to this appointment and `deletedAt` null. `none` when there is no such row. A deleted visit has `deletedAt` set and its link moved to `deletedAppointmentId`, so it leaves the model. |
 | `notes` | the visit's clinical columns (`complaints`, `diagnosis`, `plan` and the rest), as a count of edits |
-| `signed` | model only. The value of `notes` when `complete` ran. The code keeps no copy. |
 | `checkInPlanned` | the voice dialog has resolved a check-in from the appointment list it read (`voice-command.ts` `matchAppointment`) and waits for the desk to confirm |
 | `cancelHeld` | model only. A cancel was applied and nobody looking at the cancelled appointment has undone it. In the code this intent lives only in `status`, which is why a later write can erase it without anyone noticing. |
 
@@ -26,8 +27,10 @@ The lifecycle is spread over two rows. `StatusesAgree` names the agreement the c
 | `TypeOK` | invariant | Every variable holds a value of its type. | holds | holds |
 | `StatusesAgree` | invariant | While a visit is open the appointment shows in progress, and once the visit is completed the appointment shows completed. | breaks | holds |
 | `NoResurrection` | invariant | A cancelled appointment stays cancelled until someone looking at it as cancelled brings it back. | breaks | holds |
-| `CompletedVisitFrozen` | invariant | A completed visit's clinical notes stay as they were when the doctor completed it. | breaks | holds |
+| `EditKeepsCompletion` | property | Editing a completed visit keeps the visit completed and does not move its appointment. | holds | holds |
 | `DisagreementHeals` | property | When the appointment and its visit disagree, the system brings them back into agreement by itself. | breaks | holds |
+
+`EditKeepsCompletion` is an action property, `[][...]_vars`. It looks at each step that changes `notes` on a completed visit without deleting it, and asks that the visit stay `done` and `appt` stay where it was. TLC reports its violation as "Action property ... is violated", which `tlc.py` reads as a break. It holds in `before` too, because `update` there never wrote a status either.
 
 `NoResurrection` allows a deliberate reactivation. `update` treats a status edit out of `CANCELLED` as a reactivation and runs the capacity check for it, and the model keeps that. The rule forbids a write by someone who never saw the cancel. Two such writers exist. The doctor completes the visit, or the desk confirms a voice check-in planned from a list read before the cancel.
 
@@ -37,15 +40,13 @@ The lifecycle is spread over two rows. `StatusesAgree` names the agreement the c
 
 - `StatusesAgree`. The doctor starts the visit. The desk edits the status to `SCHEDULED`. `update` compared only the status it read in the same request, so the edit landed. The visit stayed open with its appointment back on the Scheduled calendar.
 - `NoResurrection`. The doctor starts the visit. The desk edits the status to `CANCELLED`. The doctor completes the visit, and `complete` writes the appointment `COMPLETED` by id without reading its status.
-- `CompletedVisitFrozen`. The doctor completes the visit, then saves a new diagnosis. `update` checked the version and `deletedAt` but never the status.
 - `DisagreementHeals`. Once the rows disagreed, no step in the code repaired them. Nothing reconciles the two statuses.
 
-The `uiOnly` mode is `before` restricted to writes a screen sends. It drops the raw status edit, the bulk update and visit delete, which no screen calls. It still breaks every rule except `TypeOK`:
+The `uiOnly` mode is `before` restricted to writes a screen sends. It drops the raw status edit, the bulk update and visit delete, which no screen calls. It still breaks `StatusesAgree`, `NoResurrection` and `DisagreementHeals`:
 
 - A voice check-in planned while the appointment was waiting, confirmed after the doctor started the visit, moved the appointment to `CHECKED_IN` under an open visit. `matchAppointment` filters for `SCHEDULED` or `CONFIRMED` on the client, but the PATCH carries no expected status, and the server compares against its own fresh read.
 - The same stale check-in, confirmed after another desk cancelled, brought the appointment back as `CHECKED_IN`.
 - After that check-in under an open visit, the desk could cancel (`CHECKED_IN` is cancellable), and completing the visit then overwrote the cancel with `COMPLETED`.
-- The visit form's Save Draft button stayed enabled after completion, so the doctor could change a completed visit from the screen. The server now refuses that save.
 
 ## The fixed protocol
 
@@ -56,9 +57,9 @@ The `uiOnly` mode is `before` restricted to writes a screen sends. It drops the 
 | While a live visit exists, a status edit may not change the appointment. The visit owns the status. | `update`, before `updateMany` at `appointments.service.ts:509` | `patchIgnoresVisit` | `StatusesAgree`, `NoResurrection`, `DisagreementHeals` |
 | The same for the bulk update. | `bulkUpdate` at `appointments.service.ts:618` | `bulkIgnoresVisit` | `StatusesAgree`, `NoResurrection`, `DisagreementHeals` |
 | A patient is checked in only from `SCHEDULED`, `CONFIRMED` or `NO_SHOW`. | `update` | `checkInFromAnyStatus` | `NoResurrection` |
-| A completed visit refuses clinical edits. | `visits.service.ts` `update` at line 469 | `editAfterComplete` | `CompletedVisitFrozen` |
+| An edit to a completed visit writes clinical columns only, never the visit status or the appointment. | `visits.service.ts` `update` at line 475 | `editReopens`, an edit to a completed visit that reopens the visit and its appointment | `EditKeepsCompletion` |
 
-`checkInFromAnyStatus` keeps the visit guard, so its only break is the stale voice check-in that undoes a cancel. `typeProbe` starts the appointment as `RESCHEDULED`, a value the frontend status registry lists and the enum lacks, and breaks `TypeOK`.
+`checkInFromAnyStatus` keeps the visit guard, so its only break is the stale voice check-in that undoes a cancel. `editReopens` moves the appointment back to `IN_PROGRESS` with the visit, so `StatusesAgree` still holds and only `EditKeepsCompletion` breaks. `typeProbe` starts the appointment as `RESCHEDULED`, a value the frontend status registry lists and the enum lacks, and breaks `TypeOK`.
 
 `complete` writing the appointment by id needs no guard of its own in `fixed` or in `code`. With the visit guard, an appointment whose visit is open is always `IN_PROGRESS`, so the unconditional write is safe. A compare-and-set on `IN_PROGRESS` there would be a sound second line of defence.
 
@@ -69,9 +70,9 @@ Paths are under `backend/src/modules/` unless they start with `frontend/`.
 | Model | Code |
 | --- | --- |
 | `DoctorStartsVisit` | `visits/visits.service.ts:74` `create`. Row lock on the appointment at line 129, refuse `CANCELLED` and `COMPLETED` at line 132, refuse a second live visit at line 135, write `IN_PROGRESS` at line 187. |
-| `DoctorEditsNotes` | `visits/visits.service.ts:474` `update`. Refuse a completed visit at line 530, version compare-and-set at line 535. The screen path is the visit form's save in `frontend/src/components/visits/MedicalVisitForm.tsx`. |
-| `DoctorCompletesVisit` | `visits/visits.service.ts:580` `complete`. Row lock on the visit at line 582, return early when already `COMPLETED` at line 585, write the appointment `COMPLETED` by id at line 602. |
-| `VisitIsDeleted` | `visits/visits.service.ts:620` `remove`. Soft delete and detach at line 632, move `IN_PROGRESS` or `COMPLETED` back to `CHECKED_IN` at line 641. No screen calls it. |
+| `DoctorEditsNotes` | `visits/visits.service.ts:475` `update`, on an open or completed visit. Version compare-and-set at line 533. The data it writes holds clinical columns and `version` only. No visit DTO carries a status. The screen path is the visit form's save in `frontend/src/components/visits/MedicalVisitForm.tsx`, and on a completed visit its Edit visit action. |
+| `DoctorCompletesVisit` | `visits/visits.service.ts:578` `complete`. Row lock on the visit at line 580, return early when already `COMPLETED` at line 583, write the appointment `COMPLETED` by id at line 600. |
+| `VisitIsDeleted` | `visits/visits.service.ts:618` `remove`. Soft delete and detach at line 630, move `IN_PROGRESS` or `COMPLETED` back to `CHECKED_IN` at line 639. No screen calls it. |
 | `DeskCancels` | `appointments/appointments.service.ts:649` `remove`, an `updateMany` to `CANCELLED` filtered by `notIn` `COMPLETED`, `IN_PROGRESS`, `CANCELLED` at line 654. |
 | `DeskPlansCheckIn` | `frontend/src/lib/voice-command.ts:292`, the `WAITING` filter in `matchAppointment` |
 | `DeskConfirmsCheckIn` | `frontend/src/components/voice/VoiceCommandDialog.tsx:209` sends `PATCH /appointments/:id` with `status: CHECKED_IN`, served by `appointments/appointments.service.ts:478` `update` |
@@ -79,7 +80,7 @@ Paths are under `backend/src/modules/` unless they start with `frontend/`.
 | `AdminBulkSets` | `appointments/appointments.service.ts:622` `bulkUpdate`. Refuses `SCHEDULED` and `CONFIRMED` targets at line 624, `assertStatusEdit` on every row at line 636, then one `updateMany` that compare-and-sets each row on the status it read at line 638, in a transaction that rolls back unless every row matched. ADMIN only. |
 | `CodeAllows` | `appointments/appointments.service.ts:81` `assertStatusEdit` |
 | `PatchAllows`, `BulkAllows` | `before` accepts every jump. `code` is `CodeAllows`. `fixed` and its controls use the visit guard. |
-| `EditAllowed` | `before` allows any live visit. `code` and `fixed` allow open visits only. |
+| `Reopens` | Only the `editReopens` control. No code reopens a visit. |
 
 ## The fix
 
@@ -92,7 +93,7 @@ Paths are under `backend/src/modules/` unless they start with `frontend/`.
 | A check-in starts only from `SCHEDULED`, `CONFIRMED` or `NO_SHOW`. | `backend/src/modules/appointments/appointments.service.ts:89` | `NoResurrection` |
 | `update` runs these on the status it re-read in the transaction. | `backend/src/modules/appointments/appointments.service.ts:518` | all three above |
 | `bulkUpdate` runs them on every row and compare-and-sets each row on the status it read. | `backend/src/modules/appointments/appointments.service.ts:636` and `:639` | all three above |
-| A completed visit refuses every clinical change. Prescription saves that carry clinical fields go through the same `update`. | `backend/src/modules/visits/visits.service.ts:530` | `CompletedVisitFrozen` |
+| An edit to a completed visit writes clinical columns and `version` only, so the visit stays `COMPLETED` with its `completedAt` and the appointment is not written. Prescription saves that carry clinical fields go through the same `update`. | `backend/src/modules/visits/visits.service.ts:532` | `EditKeepsCompletion` |
 
 The status guard also refuses a status edit on an `IN_PROGRESS` or `COMPLETED` appointment that has no visit, which only rows from before the fix can be. It is a product choice: a paper visit is no longer recorded by marking the appointment completed.
 
@@ -107,6 +108,8 @@ None. No step in this lifecycle happens with nobody acting. No timer, cron or re
 ## Replays
 
 `backend/src/modules/visits/tests/appointment-visit.formal-replay.database.spec.ts` drives the real `AppointmentsService` and `VisitsService` against a private PostgreSQL schema. Each rule that broke in `before` has a test that walks TLC's path and asserts the outcome the rule demands. They pass on the fixed code. The `(screens only)` tests replay the `uiOnly` paths. The voice dialog's client read is replayed as `findOne` returning `SCHEDULED`, the same check `matchAppointment` makes. Each test gets its own doctor so capacity never refuses a write.
+
+`EditKeepsCompletion` never broke in `before`, so its test walks the `editReopens` counterexample instead. The doctor starts the visit, completes it and edits the diagnosis. The test asserts that the new diagnosis is saved, both rows stay `COMPLETED`, and `completedAt` is unchanged.
 
 The liveness replay has no timer to run. After the path it reads the appointment the way the screens do and asserts agreement.
 
