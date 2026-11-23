@@ -5,6 +5,8 @@ import * as bcrypt from 'bcryptjs';
 import { UserStatus } from '@prisma/client';
 import { passwordStamp } from './strategies/jwt.strategy';
 
+const UNKNOWN_ACCOUNT_HASH = bcrypt.hashSync('unknown-account', 10);
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -19,10 +21,10 @@ export class AuthService {
    * MUST NOT contain the password hash.
    */
   /**
-   * @cc [owner:nareshshah139,label:security;target] sign-in-hides-account-existence
+   * @cc [owner:nareshshah139,label:security] sign-in-hides-account-existence
    * A failed sign-in MUST NOT reveal whether the account exists or its status to a caller without
-   * the right password. Today an unknown account gets 404 and a refused status gets 403 before the
-   * password is checked, while a wrong password gets 401. This is a target obligation, not a pass claim.
+   * the right password: an unknown account and a wrong password for any account MUST get the same
+   * 401 and message, and an unknown account MUST still run a password hash comparison.
    */
   async validateUser(identifier: string, password: string): Promise<any> {
     const trimmedIdentifier = identifier?.trim();
@@ -61,8 +63,10 @@ export class AuthService {
 
     const user = await this.prisma.user.findFirst({ where: lookupField });
 
-    if (!user) {
-      throw new HttpException('Account not found', HttpStatus.NOT_FOUND);
+    const passwordMatches = await bcrypt.compare(password ?? '', user?.password ?? UNKNOWN_ACCOUNT_HASH);
+
+    if (!user || !passwordMatches) {
+      throw new HttpException('Incorrect email, phone number or password', HttpStatus.UNAUTHORIZED);
     }
 
     if (user.status !== UserStatus.ACTIVE || user.isActive === false) {
@@ -70,12 +74,6 @@ export class AuthService {
         ? 'Account suspended'
         : 'Account disabled';
       throw new HttpException(statusMessage, HttpStatus.FORBIDDEN);
-    }
-
-    const passwordMatches = await bcrypt.compare(password, user.password);
-
-    if (!passwordMatches) {
-      throw new HttpException('Invalid password', HttpStatus.UNAUTHORIZED);
     }
 
     const { password: _password, ...result } = user as any;

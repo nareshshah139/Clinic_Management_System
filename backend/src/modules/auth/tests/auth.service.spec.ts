@@ -85,18 +85,16 @@ describe('AuthService sign-in', () => {
     },
   );
 
-  it('answers 404 for an unknown account, 401 for a wrong password and 403 for a suspended account before checking its password', async () => {
-    expect(await failure('nobody@example.test')).toEqual({
-      status: 404,
-      message: 'Account not found',
-    });
-    expect(await failure('active@example.test', 'wrong-password')).toEqual({
+  it.each([
+    ['an unknown email', 'nobody@example.test', PASSWORD],
+    ['an unknown phone', '+919999999999', PASSWORD],
+    ['an active account', 'active@example.test', 'wrong-password'],
+    ['a suspended account', 'suspended@example.test', 'wrong-password'],
+    ['a switched-off account', 'switched-off@example.test', 'wrong-password'],
+  ])('answers %s without the right password with the same 401', async (_case, identifier, password) => {
+    expect(await failure(identifier, password)).toEqual({
       status: 401,
-      message: 'Invalid password',
-    });
-    expect(await failure('suspended@example.test', 'wrong-password')).toEqual({
-      status: 403,
-      message: 'Account suspended',
+      message: 'Incorrect email, phone number or password',
     });
   });
 
