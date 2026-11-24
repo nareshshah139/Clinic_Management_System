@@ -96,7 +96,7 @@ export function purchaseDifferences(local: { header: Record<string, unknown>; li
   const result: PurchaseDifference[] = [];
   const compare = (a: Record<string, unknown>, b: Record<string, unknown>, prefix = '') => {
     for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) {
-      if (['localId', 'id', 'lineNumber', 'ocrSourceRef', 'ocrFlags', 'ocrConfidence'].includes(key)) continue;
+      if (['localId', 'id', 'lineNumber', 'ocrSourceRef', 'ocrLineKey', 'learnedCorrections', 'ocrFlags', 'ocrConfidence'].includes(key)) continue;
       if (printable(a[key]) !== printable(b[key])) result.push({ label: `${prefix}${key.replace(/([A-Z])/g, ' $1').toLowerCase()}`, local: printable(a[key]), saved: printable(b[key]) });
     }
   };

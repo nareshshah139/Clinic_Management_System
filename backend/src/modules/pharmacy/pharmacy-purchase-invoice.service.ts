@@ -1,11 +1,13 @@
 import { PurchaseImportRecovery, PurchaseImportFence, claimPurchaseImport, bindPurchaseImport, preparePurchaseWrite } from './purchase-import-recovery';
 import { checkedProductQuery, matchProductSearch, normalizeProductSearch, ocrProductSearchQuery, searchPackKey } from '../../shared/search/product-search';
 import { autocompleteDrugCatalog, findDrugSearchCandidates, loadReviewedProductAliases, searchableDrug, DrugSearchCandidate } from '../../shared/search/drug-search';
-import { hasPurchaseNameEvidence, purchaseMatchMismatches } from './purchase-match-safety';
+import { hasPurchaseNameEvidence, purchaseFormsConflict, purchaseFormsShared, purchaseMatchMismatches } from './purchase-match-safety';
 import { Prisma } from '@prisma/client';
 import { alignPurchaseSource, matchingSourceRows, readPurchaseSourcePages, PurchaseSourceMap } from './purchase-invoice-source';
 import { purchaseCatalogData, purchaseCatalogIssues, purchaseInventoryClassification, purchaseProductKind } from './purchase-product-catalog';
 import { canonicalPurchasePack, normalizedIdentity, verifyPurchaseRead } from './purchase-invoice-identity';
+import { AppliedLesson, applyLessonsToDraft, buildOcrRead, buildOutcomeExamples, CatalogueChange, CatalogueDrug, LearningExampleRow, lessonLookupKeys, Origin, pickOcrRead, productRawKey, PurchaseOcrRead, trustedLessonsEnabled } from './purchase-learning';
+import { forgetPurchaseLesson, LearnedBoosts, listPurchaseLessons, loadPurchaseLearnedAliases, loadPurchaseLessons, purchaseLearningMetrics, recordPurchaseOutcome } from './purchase-learning.repository';
 import { PURCHASE_INVOICE_EXTRACTION_PROMPT, PURCHASE_INVOICE_VERIFICATION_PROMPT, PURCHASE_INVOICE_SOURCE_PROMPT, PURCHASE_INVOICE_OCR_PROMPT_VERSION } from './purchase-invoice-ocr.prompts';
 import {
   BadRequestException,
@@ -374,10 +376,12 @@ export class PharmacyPurchaseInvoiceService {
           item.ocrSourceRef = indexes[index] === undefined ? undefined : `${sourceDocument.id}:${sourceMap!.rows[indexes[index]!].index}`;
         });
       }
-      extracted.draft = await this.enrichKnownProducts(extracted.draft, branchId);
+      const learned = await this.applyLearnedCorrections(extracted, sourceDocument.id, branchId);
+      extracted.draft = learned.draft;
       await this.prisma.auditLog.create({ data: { entity: 'PharmacyPurchaseInvoiceDocument', entityId: sourceDocument.id,
-        userId: sourceDocument.uploadedBy, action: 'OCR_EXTRACTED', newValues: JSON.stringify({ branchId, lineCount: extracted.draft.items.length, sourceMapAvailable: !!sourceMap }) } });
-      return { ...extracted, draft: { ...extracted.draft, sourceDocumentId: sourceDocument.id }, sourceDocument };
+        userId: sourceDocument.uploadedBy, action: 'OCR_EXTRACTED', newValues: JSON.stringify({ branchId, lineCount: extracted.draft.items.length, sourceMapAvailable: !!sourceMap,
+          lessonsApplied: learned.learning.applied.map(({ slot, field, tier, lessonKey }) => ({ slot, field, tier, lessonKey })) }) } });
+      return { ...extracted, draft: { ...extracted.draft, sourceDocumentId: sourceDocument.id }, sourceDocument, learning: learned.learning };
     } catch (error) {
       await this.prisma.auditLog.create({ data: { entity: 'PharmacyPurchaseInvoiceDocument', entityId: sourceDocument.id,
         userId: sourceDocument.uploadedBy, action: 'OCR_FAILED', newValues: JSON.stringify({ branchId, originalRetained: true, error: error instanceof HttpException ? error.message : 'Extraction unavailable' }) } });
@@ -385,6 +389,40 @@ export class PharmacyPurchaseInvoiceService {
         message: error instanceof HttpException ? error.message : 'Invoice extraction failed. The original upload is saved; retry or enter the invoice details manually.',
         sourceDocument,
       }, error instanceof HttpException ? error.getStatus() : 500);
+    }
+  }
+
+  private async applyLearnedCorrections(extracted: Awaited<ReturnType<PharmacyPurchaseInvoiceService['extractDocumentDraft']>>, documentId: string, branchId: string) {
+    const learning: { applied: AppliedLesson[]; suggestions: AppliedLesson[] } = { applied: [], suggestions: [] };
+    let read: PurchaseOcrRead | undefined;
+    let draft = extracted.draft;
+    try {
+      ({ read, draft } = buildOcrRead(draft, documentId, extracted.extraction?.promptVersion || PURCHASE_INVOICE_OCR_PROMPT_VERSION));
+    } catch (error) {
+      this.logger.warn(`Purchase OCR learning skipped: ${error instanceof Error ? error.message : 'invalid read'}`);
+    }
+    const manufacturers = draft.items.map(item => item.manufacturer);
+    draft = await this.enrichKnownProducts(draft, branchId);
+    if (!read) return { draft, learning };
+    const catalogue: CatalogueChange[] = draft.items.flatMap((item, index) => item.ocrLineKey && normalizedIdentity(item.manufacturer) !== normalizedIdentity(manufacturers[index])
+      ? [{ slot: item.ocrLineKey, field: 'manufacturer' as const, to: item.manufacturer || '' }] : []);
+    try {
+      const gstin = draft.distributorGstin?.trim().toUpperCase() || '';
+      const [{ lessons, drugs }, suppliers] = await Promise.all([
+        loadPurchaseLessons(this.prisma, branchId, gstin, lessonLookupKeys(draft)),
+        gstin ? this.prisma.supplier.findMany({ where: { branchId, isActive: true, gstNumber: { equals: gstin, mode: 'insensitive' } }, select: { name: true, gstNumber: true } }) : [],
+      ]);
+      const outcome = applyLessonsToDraft(draft, lessons, drugs, { branchId, supplier: suppliers.length === 1 ? suppliers[0] : undefined,
+        trustedEnabled: trustedLessonsEnabled(process.env.PHARMACY_PURCHASE_TRUSTED_LESSONS) });
+      const saved = await this.prisma.pharmacyPurchaseInvoiceDocument.updateMany({
+        where: { id: documentId, branchId, purchaseInvoiceId: null },
+        data: { ocrRead: { ...read, applied: outcome.applied, catalogue } as unknown as Prisma.InputJsonValue },
+      });
+      if (saved.count !== 1) return { draft, learning };
+      return { draft: outcome.draft, learning: { applied: outcome.applied, suggestions: outcome.suggestions } };
+    } catch (error) {
+      this.logger.warn(`Purchase OCR lessons unavailable: ${error instanceof Error ? error.message : 'unknown error'}`);
+      return { draft, learning };
     }
   }
 
@@ -593,8 +631,10 @@ export class PharmacyPurchaseInvoiceService {
         await tx.pharmacyPurchaseInvoice.update({
           where: { id }, data: { status: 'REVIEWED', reconciliationIssues: null, unresolvedOcrFlags: 0 },
         });
-        await this.purchaseAudit(tx, id, branchId, userId, 'AUTOMATIC_REVIEWED', { status: invoice.status }, { status: 'REVIEWED', unresolvedOcrFlags: 0 });
-        const committed = await this.commitStockInTransaction(tx, id, branchId, userId);
+        const trustedLessons = ((await this.invoiceOcrRead(tx, invoice))?.applied || []).filter(lesson => lesson.tier === 'TRUSTED')
+          .map(({ slot, field, from, to, lessonKey, support }) => ({ slot, field, from, to, lessonKey, support }));
+        await this.purchaseAudit(tx, id, branchId, userId, 'AUTOMATIC_REVIEWED', { status: invoice.status }, { status: 'REVIEWED', unresolvedOcrFlags: 0, trustedLessons });
+        const committed = await this.commitStockInTransaction(tx, id, branchId, userId, 'AUTOMATIC');
         return this.automationResult(committed, 'STOCK_COMMITTED');
       }, { timeout: 30000, isolationLevel: 'Serializable' });
     } catch (error) {
@@ -644,7 +684,7 @@ export class PharmacyPurchaseInvoiceService {
     const sourceDocument = await this.archiveOriginal(file, branchId, userId);
     const result = await this.extractArchivedDocument(file, branchId, sourceDocument);
     // Matching availability must not discard a successful extraction or its original.
-    const masterMatches = await this.suggestMasterMatches(result.draft.items, branchId).catch(() => ({ matches: [] }));
+    const masterMatches = await this.suggestMasterMatches(result.draft.items, branchId, result.draft.distributorGstin).catch(() => ({ matches: [] }));
     return {
       ...result,
       masterMatches,
@@ -716,6 +756,26 @@ export class PharmacyPurchaseInvoiceService {
     };
   }
 
+  async learningMetrics(branchId: string, query: { from?: string; to?: string }) {
+    const to = query.to ? new Date(query.to) : new Date();
+    const from = query.from ? new Date(query.from) : new Date(to.getTime() - 56 * 24 * 60 * 60 * 1000);
+    if (!Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime()) || from > to) {
+      throw new BadRequestException('Choose a valid date range for OCR learning metrics.');
+    }
+    return purchaseLearningMetrics(this.prisma, branchId, { from, to });
+  }
+
+  async learningLessons(branchId: string) {
+    return { lessons: await listPurchaseLessons(this.prisma, branchId) };
+  }
+
+  async forgetLearningLesson(branchId: string, lessonKey: string, userId: string) {
+    const revokedExamples = await forgetPurchaseLesson(this.prisma, branchId, lessonKey, userId);
+    if (revokedExamples === null) throw new BadRequestException('Unknown OCR lesson.');
+    if (!revokedExamples) throw new NotFoundException('This OCR lesson is already forgotten or was never learned in this branch.');
+    return { lessonKey, revokedExamples };
+  }
+
   /**
    * @cc [owner:nareshshah139,label:security] purchase-manual-search-scope
    * Manual selection search MUST return only active products in the caller's branch and MUST NOT
@@ -729,6 +789,7 @@ export class PharmacyPurchaseInvoiceService {
   async suggestMasterMatches(
     items: CreatePharmacyPurchaseInvoiceItemDto[],
     branchId: string,
+    supplierGstin?: string,
   ) {
     if (!Array.isArray(items) || items.length === 0) {
       throw new BadRequestException(
@@ -738,7 +799,14 @@ export class PharmacyPurchaseInvoiceService {
 
     // Validate before database work; share aliases and repeated-name retrieval across a whole invoice.
     for (const item of items) checkedProductQuery(item.productName);
-    const aliases = await loadReviewedProductAliases(this.prisma, branchId);
+    const [aliases, learned] = await Promise.all([
+      loadReviewedProductAliases(this.prisma, branchId),
+      loadPurchaseLearnedAliases(this.prisma, branchId, supplierGstin).catch(error => {
+        this.logger.warn(`Learned purchase names unavailable: ${error instanceof Error ? error.message : 'unknown error'}`);
+        return { aliases: new Map<string, string[]>(), boosts: new Map() as LearnedBoosts };
+      }),
+    ]);
+    for (const [drugId, names] of learned.aliases) aliases.set(drugId, [...new Set([...(aliases.get(drugId) || []), ...names])]);
     const candidates = new Map<string, Promise<DrugSearchCandidate[]>>();
     const matches: { lineIndex: number; ocr: ReturnType<PharmacyPurchaseInvoiceService['masterLineSummary']>; candidates: any[]; catalogueResolution: Awaited<ReturnType<PharmacyPurchaseInvoiceService['inspectPurchaseLineDrug']>> }[] = [];
     for (let offset = 0; offset < items.length; offset += 4) {
@@ -747,7 +815,7 @@ export class PharmacyPurchaseInvoiceService {
         const key = normalizeProductSearch(query);
         if (!candidates.has(key)) candidates.set(key, findDrugSearchCandidates(this.prisma, query, branchId, 'name', aliases));
         return { lineIndex: offset + index, ocr: this.masterLineSummary(item),
-          candidates: this.rankMasterMatchCandidates(item, await candidates.get(key)!),
+          candidates: this.rankMasterMatchCandidates(item, await candidates.get(key)!, learned.boosts.get(productRawKey(item))),
           catalogueResolution: await this.inspectPurchaseLineDrug(this.prisma, item, branchId) };
       })));
     }
@@ -1362,7 +1430,7 @@ export class PharmacyPurchaseInvoiceService {
     }
 
     for (let attempt = 0; ; attempt++) {
-      try { return await this.prisma.$transaction((tx) => this.commitStockInTransaction(tx, id, branchId, userId), { isolationLevel: 'Serializable', timeout: 30000 }); }
+      try { return await this.prisma.$transaction((tx) => this.commitStockInTransaction(tx, id, branchId, userId, 'HUMAN_REVIEW'), { isolationLevel: 'Serializable', timeout: 30000 }); }
       catch (error) { if ((error as any)?.code === 'P2034' && attempt < 2) continue; throw error; }
     }
   }
@@ -1373,7 +1441,7 @@ export class PharmacyPurchaseInvoiceService {
    * stock unit exactly once, add zero additional stock, and retain the verified invoice rate and
    * tax-exclusive cost per received paid-plus-free unit. The original receipt effects stay intact.
    */
-  private async commitStockInTransaction(tx: any, id: string, branchId: string, userId: string) {
+  private async commitStockInTransaction(tx: any, id: string, branchId: string, userId: string, origin: Origin) {
     await preparePurchaseWrite(tx, branchId);
     const invoice = await tx.pharmacyPurchaseInvoice.findFirst({
       where: { id, branchId },
@@ -1445,9 +1513,11 @@ export class PharmacyPurchaseInvoiceService {
       batchNumber: string;
       expiryDate: Date;
     }> = [];
+    const committedDrugs: Array<{ lineNumber: number; drug: CatalogueDrug }> = [];
 
     for (const item of invoice.items) {
       const drug = await this.resolvePurchaseLineDrug(tx, item, branchId);
+      committedDrugs.push({ lineNumber: item.lineNumber, drug });
       await this.purchaseAudit(tx, id, branchId, userId, 'PRODUCT_MAPPED',
         { lineId: item.id, productName: item.productName, packSize: item.packSize, source: item.ocrSourceRef },
         { lineId: item.id, drugId: drug.id, productName: drug.name, packSize: drug.packSizeLabel });
@@ -1520,6 +1590,15 @@ export class PharmacyPurchaseInvoiceService {
       );
     }
 
+    const read = await this.invoiceOcrRead(tx, invoice);
+    let outcome: LearningExampleRow[] = [];
+    // Only this pure step may fail softly; a failed statement would abort the stock transaction.
+    if (read) try {
+      outcome = buildOutcomeExamples({ invoice, read, committed: committedDrugs, origin, decidedBy: userId, committedAt: stockCommittedAt });
+    } catch (error) {
+      this.logger.warn(`Purchase learning outcome skipped for ${id}: ${error instanceof Error ? error.message : 'unknown error'}`);
+    }
+    await recordPurchaseOutcome(tx, outcome);
     await this.purchaseAudit(tx, id, branchId, userId, 'STOCK_COMMITTED', invoice, { ...updated, committedItems });
     return {
       ...this.formatPurchaseInvoice(updated),
@@ -1561,6 +1640,15 @@ export class PharmacyPurchaseInvoiceService {
       used.add(line.id);
     }
     return receipt;
+  }
+
+  private async invoiceOcrRead(tx: any, invoice: { id: string; branchId: string; documents?: unknown[]; items: Array<{ ocrLineKey?: string | null }> }): Promise<PurchaseOcrRead | null> {
+    if (!invoice.documents?.length) return null;
+    const documents = await tx.pharmacyPurchaseInvoiceDocument.findMany({
+      where: { purchaseInvoiceId: invoice.id, branchId: invoice.branchId, NOT: { ocrRead: { equals: Prisma.DbNull } } },
+      select: { ocrRead: true }, orderBy: { createdAt: 'desc' },
+    });
+    return pickOcrRead(documents.map((document: { ocrRead: unknown }) => document.ocrRead as PurchaseOcrRead), invoice.items);
   }
 
   private async purchaseAudit(tx: any, id: string, branchId: string, userId: string | undefined, action: string, before: any, after: any) {
@@ -2214,14 +2302,14 @@ export class PharmacyPurchaseInvoiceService {
    * Every candidate MUST have distinguishing name/alias evidence; generic forms or pack metadata
    * alone MUST produce no candidates, regardless of manufacturer, price or combined score.
    */
-  private rankMasterMatchCandidates(item: CreatePharmacyPurchaseInvoiceItemDto, candidates: DrugSearchCandidate[]) {
-    return candidates.map(drug => this.scoreMasterCandidate(item, drug))
+  private rankMasterMatchCandidates(item: CreatePharmacyPurchaseInvoiceItemDto, candidates: DrugSearchCandidate[], chosen?: Map<string, number>) {
+    return candidates.map(drug => this.scoreMasterCandidate(item, drug, chosen?.get(drug.id) || 0))
       .filter((c): c is NonNullable<typeof c> => !!c && c.score >= 35)
       .sort((a,b) => b.score-a.score || b.searchMatch.score-a.searchMatch.score || a.drug.name.localeCompare(b.drug.name) || a.drug.id.localeCompare(b.drug.id))
       .slice(0,3);
   }
 
-  private scoreMasterCandidate(item: CreatePharmacyPurchaseInvoiceItemDto, drug: DrugSearchCandidate) {
+  private scoreMasterCandidate(item: CreatePharmacyPurchaseInvoiceItemDto, drug: DrugSearchCandidate, chosen = 0) {
     if (!hasPurchaseNameEvidence(item, drug)) return null;
     const mismatches = purchaseMatchMismatches(item, drug);
     if (mismatches.includes('Product kinds differ')) return null;
@@ -2230,15 +2318,14 @@ export class PharmacyPurchaseInvoiceService {
     if (!name) return null;
     const pack = searchPackKey(item.packSize || ''), candidatePack = searchPackKey(drug.packSizeLabel || '');
     if (pack && candidatePack && pack !== candidatePack) return null;
-    const forms = (value: string) => normalizeProductSearch(value).split(' ').filter(t => ['tablet','capsule','cream','ointment','gel','lotion','solution','syrup','suspension','injection','drops'].includes(t));
-    const wantedForms = forms(item.productName), actualForms = forms(drug.name + ' ' + (drug.dosageForm || ''));
-    if (wantedForms.length && actualForms.length && !wantedForms.some(f => actualForms.includes(f))) return null;
+    if (purchaseFormsConflict(item.productName, drug)) return null;
     const manufacturer = item.manufacturer ? matchProductSearch(item.manufacturer, {names:[drug.manufacturerName || '']}, 'name') : null;
-    const score = this.money(Math.min(100, name.quality * 64 + (manufacturer?.quality || 0) * 18 + (pack && candidatePack && pack===candidatePack ? 14 : 0) + (wantedForms.some(f => actualForms.includes(f)) ? 4 : 0)));
+    const score = this.money(Math.min(100, name.quality * 64 + (manufacturer?.quality || 0) * 18 + (pack && candidatePack && pack===candidatePack ? 14 : 0) + (purchaseFormsShared(item.productName, drug) ? 4 : 0) + Math.min(12, 4 * chosen)));
     const reasons = [name.kind==='fuzzy' ? 'similar spelling: '+name.corrections.join(', ') : name.kind==='alias' ? 'reviewed earlier name' : 'name '+name.kind+' match'];
     reasons.push(...notes);
     if (manufacturer) reasons.push('manufacturer match');
     if (pack && pack===candidatePack) reasons.push('pack size match');
+    if (chosen) reasons.push(`chosen ${chosen}× for this supplier`);
     return { drug:this.masterDrugSummary(drug), score, confidence:score>=85?'HIGH':score>=65?'MEDIUM':'LOW', reasons, searchMatch:name, mismatches };
   }
 
@@ -2936,6 +3023,7 @@ export class PharmacyPurchaseInvoiceService {
   ) {
     return {
       ocrSourceRef: item.ocrSourceRef || null,
+      ocrLineKey: item.ocrLineKey || null,
       lineNumber,
       serialNumber: item.serialNumber,
       productName: item.productName.trim(),

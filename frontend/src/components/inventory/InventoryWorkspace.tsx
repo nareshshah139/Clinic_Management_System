@@ -35,6 +35,7 @@ import { NativeSelect } from '@/components/ui/native-select';
 const lazyView = <P,>(load: () => Promise<ComponentType<P>>) =>
   dynamic(load, { loading: () => <LoadingSkeleton label="Loading…" /> }) as ComponentType<P>;
 const PurchaseInvoiceWorkbench = lazyView(() => import("@/components/pharmacy/PurchaseInvoiceWorkbench").then((m) => m.PurchaseInvoiceWorkbench));
+const PurchaseLearningCard = dynamic(() => import("@/components/pharmacy/PurchaseLearningCard").then((m) => m.PurchaseLearningCard), { loading: () => null });
 const PurchaseLedger = lazyView(() => import("@/components/pharmacy/PurchaseLedger").then((m) => m.PurchaseLedger));
 const DistributorAnalytics = lazyView(() => import("@/components/pharmacy/DistributorAnalytics").then((m) => m.DistributorAnalytics));
 const PharmacyInventoryStarterImport = lazyView(() => import("@/components/pharmacy/PharmacyInventoryStarterImport").then((m) => m.PharmacyInventoryStarterImport));
@@ -464,6 +465,7 @@ export function InventoryWorkspace() {
             />
           )}
           {area === "purchases" && view === "register" && (
+            <>
             <PurchaseBills
               searchParams={params}
               onParamsChange={purchaseRegisterParams}
@@ -476,6 +478,8 @@ export function InventoryWorkspace() {
               onLedger={caps.ledger ? (gstin?: string) => switchTask("ledger", { gstin: gstin ?? "" }) : null}
               onSuppliers={() => switchTask("suppliers")}
             />
+            <PurchaseLearningCard />
+            </>
           )}
           {area === "purchases" && view === "suppliers" && (
             <SupplierWorkspace

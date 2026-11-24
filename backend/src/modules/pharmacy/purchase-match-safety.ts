@@ -35,3 +35,16 @@ export function purchaseMatchMismatches(line: PurchaseLineIdentity, product: Sav
   if (productStrengthConflict(query, { names: [product.name], strength: product.strength })) reasons.push('Product strengths differ');
   return reasons;
 }
+
+const dosageForms = new Set(['tablet', 'capsule', 'cream', 'ointment', 'gel', 'lotion', 'solution', 'syrup', 'suspension', 'injection', 'drops']);
+const formsOf = (value: string) => normalizeProductSearch(value).split(' ').filter(token => dosageForms.has(token));
+
+export function purchaseFormsConflict(lineName: string, product: { name: string; dosageForm?: string | null }): boolean {
+  const wanted = formsOf(lineName), actual = formsOf(`${product.name} ${product.dosageForm || ''}`);
+  return !!wanted.length && !!actual.length && !wanted.some(form => actual.includes(form));
+}
+
+export function purchaseFormsShared(lineName: string, product: { name: string; dosageForm?: string | null }): boolean {
+  const actual = formsOf(`${product.name} ${product.dosageForm || ''}`);
+  return formsOf(lineName).some(form => actual.includes(form));
+}

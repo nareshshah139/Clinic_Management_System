@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import * as path from 'node:path';
+import { readFileSync } from 'node:fs';
 
 /**
  * @cc [owner:nareshshah139,label:testing] disposable-local-database
@@ -100,4 +101,12 @@ export async function exposeTestTrigramOperator(prisma: PrismaClient) {
   await prisma.$executeRawUnsafe(
     `CREATE OPERATOR <->> (LEFTARG = text, RIGHTARG = text, FUNCTION = ${namespace}.word_similarity_dist_commutator_op)`,
   );
+}
+
+export async function replayOcrLearningMigration(prisma: PrismaClient) {
+  await prisma.$executeRawUnsafe('DROP TABLE IF EXISTS "pharmacy_purchase_learning_examples"');
+  await prisma.$executeRawUnsafe('ALTER TABLE "pharmacy_purchase_invoice_documents" DROP COLUMN IF EXISTS "ocrRead"');
+  await prisma.$executeRawUnsafe('ALTER TABLE "pharmacy_purchase_invoice_items" DROP COLUMN IF EXISTS "ocrLineKey"');
+  const migration = readFileSync(path.resolve('prisma/migrations/20261124100000_purchase_ocr_learning/migration.sql'), 'utf8');
+  for (const statement of migration.split(';').filter(sql => sql.replace(/--.*$/gm, '').trim())) await prisma.$executeRawUnsafe(statement);
 }
