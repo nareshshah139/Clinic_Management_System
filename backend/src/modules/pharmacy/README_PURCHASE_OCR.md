@@ -199,7 +199,7 @@ A failing check leaves the line as read. Applied lessons appear on the line or h
 as `learnedCorrections` and in `learning.applied` on extraction and import
 responses. The `OCR_EXTRACTED` audit lists applied lessons; `AUTOMATIC_REVIEWED`
 lists the trusted lessons a bill relied on. Set
-`PHARMACY_PURCHASE_TRUSTED_LESSONS=off` to treat trusted lessons as `APPLY`, which
+`PHARMACY_PURCHASE_TRUSTED_LESSONS=off` (any letter case) to treat trusted lessons as `APPLY`, which
 returns every learned product to human confirmation. Learning failures are logged and
 extraction continues without lessons; at commit only the pure outcome calculation
 may fail softly, never a database statement.

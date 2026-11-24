@@ -170,6 +170,10 @@ const sameValue = (field: LearnableField, a: string | null | undefined, b: strin
 
 export const lessonKey = (field: LearnableField, supplierGstin: string, rawKey: string) => `${field}:${supplierGstin}:${rawKey}`;
 
+export function trustedLessonsEnabled(setting: string | undefined): boolean {
+  return setting?.trim().toLowerCase() !== 'off';
+}
+
 export function parseLessonKey(key: string): { field: LearnableField; supplierGstin: string; rawKey: string } | null {
   const [field, supplierGstin, ...rest] = String(key).split(':');
   const rawKey = rest.join(':');

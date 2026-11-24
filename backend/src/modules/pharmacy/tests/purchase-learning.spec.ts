@@ -1,6 +1,6 @@
 import {
   applyLessonsToDraft, buildOcrRead, buildOutcomeExamples, deriveLessons, drugIdentity, LearningDrug, LearningExample,
-  lessonLookupKeys, pairOcrLines, parseLessonKey, PurchaseOcrRead, summarizeLearningMetrics,
+  lessonLookupKeys, pairOcrLines, parseLessonKey, PurchaseOcrRead, summarizeLearningMetrics, trustedLessonsEnabled,
 } from '../purchase-learning';
 
 const GSTIN = '36AAACM1234F1Z5';
@@ -221,6 +221,11 @@ describe('Purchase OCR learning', () => {
   it('parses a lesson key whose raw text contains separators', () => {
     expect(parseLessonKey('manufacturer:*:micro: labs|dolo|15')).toEqual({ field: 'manufacturer', supplierGstin: '*', rawKey: 'micro: labs|dolo|15' });
     expect(parseLessonKey('constructor:x:y')).toBeNull();
+  });
+
+  it('turns trusted lessons off for any spelling of off and leaves them on otherwise', () => {
+    expect(['off', 'OFF', ' Off '].map(trustedLessonsEnabled)).toEqual([false, false, false]);
+    expect([undefined, '', 'on', 'false'].map(trustedLessonsEnabled)).toEqual([true, true, true, true]);
   });
 
   it('summarizes reviewer touches, raw corrections, automation and overrides by week', () => {

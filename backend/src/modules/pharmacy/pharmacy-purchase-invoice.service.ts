@@ -6,7 +6,7 @@ import { Prisma } from '@prisma/client';
 import { alignPurchaseSource, matchingSourceRows, readPurchaseSourcePages, PurchaseSourceMap } from './purchase-invoice-source';
 import { purchaseCatalogData, purchaseCatalogIssues, purchaseInventoryClassification, purchaseProductKind } from './purchase-product-catalog';
 import { canonicalPurchasePack, normalizedIdentity, verifyPurchaseRead } from './purchase-invoice-identity';
-import { AppliedLesson, applyLessonsToDraft, buildOcrRead, buildOutcomeExamples, CatalogueChange, CatalogueDrug, LearningExampleRow, lessonLookupKeys, Origin, pickOcrRead, productRawKey, PurchaseOcrRead } from './purchase-learning';
+import { AppliedLesson, applyLessonsToDraft, buildOcrRead, buildOutcomeExamples, CatalogueChange, CatalogueDrug, LearningExampleRow, lessonLookupKeys, Origin, pickOcrRead, productRawKey, PurchaseOcrRead, trustedLessonsEnabled } from './purchase-learning';
 import { forgetPurchaseLesson, LearnedBoosts, listPurchaseLessons, loadPurchaseLearnedAliases, loadPurchaseLessons, purchaseLearningMetrics, recordPurchaseOutcome } from './purchase-learning.repository';
 import { PURCHASE_INVOICE_EXTRACTION_PROMPT, PURCHASE_INVOICE_VERIFICATION_PROMPT, PURCHASE_INVOICE_SOURCE_PROMPT, PURCHASE_INVOICE_OCR_PROMPT_VERSION } from './purchase-invoice-ocr.prompts';
 import {
@@ -413,7 +413,7 @@ export class PharmacyPurchaseInvoiceService {
         gstin ? this.prisma.supplier.findMany({ where: { branchId, isActive: true, gstNumber: { equals: gstin, mode: 'insensitive' } }, select: { name: true, gstNumber: true } }) : [],
       ]);
       const outcome = applyLessonsToDraft(draft, lessons, drugs, { branchId, supplier: suppliers.length === 1 ? suppliers[0] : undefined,
-        trustedEnabled: process.env.PHARMACY_PURCHASE_TRUSTED_LESSONS !== 'off' });
+        trustedEnabled: trustedLessonsEnabled(process.env.PHARMACY_PURCHASE_TRUSTED_LESSONS) });
       const saved = await this.prisma.pharmacyPurchaseInvoiceDocument.updateMany({
         where: { id: documentId, branchId, purchaseInvoiceId: null },
         data: { ocrRead: { ...read, applied: outcome.applied, catalogue } as unknown as Prisma.InputJsonValue },
