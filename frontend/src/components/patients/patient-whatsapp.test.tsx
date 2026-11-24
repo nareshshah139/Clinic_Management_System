@@ -50,6 +50,14 @@ describe('PatientWhatsAppCard', () => {
     expect(screen.getByTestId('whatsapp-consent-state')).toHaveTextContent('Waiting for the number to confirm');
   });
 
+  it('PP-04: while waiting, staff can send a new code when the last one expired or was locked', async () => {
+    (apiClient.recordWhatsAppConsent as jest.Mock).mockResolvedValue({ ...profile, consentState: 'PENDING' });
+    render(<PatientWhatsAppCard patientId="p1" profile={{ ...profile, consentState: 'PENDING' }} />);
+    expect(screen.queryByRole('button', { name: 'Patient agreed to WhatsApp' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Send a new code' }));
+    expect(apiClient.recordWhatsAppConsent).toHaveBeenCalledWith('p1', 'agreed');
+  });
+
   it('PP-05: changing the language saves it on the patient', async () => {
     (apiClient.updatePatient as jest.Mock).mockResolvedValue({});
     render(<PatientWhatsAppCard patientId="p1" profile={profile} />);

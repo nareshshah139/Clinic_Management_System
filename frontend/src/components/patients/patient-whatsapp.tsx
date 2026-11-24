@@ -74,9 +74,9 @@ export function PatientWhatsAppCard({ patientId, profile: initial, phone }: { pa
           <Badge variant="outline" data-testid="whatsapp-consent-state">{CONSENT_LABEL[profile.consentState]}</Badge>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button size="sm" disabled={busy || !usable || profile.consentState === 'PENDING' || profile.consentState === 'OPTED_IN'}
+          <Button size="sm" disabled={busy || !usable || profile.consentState === 'OPTED_IN'}
             onClick={() => run(() => apiClient.recordWhatsAppConsent(patientId, 'agreed'))}>
-            Patient agreed to WhatsApp
+            {profile.consentState === 'PENDING' ? 'Send a new code' : 'Patient agreed to WhatsApp'}
           </Button>
           <Button size="sm" variant="outline" disabled={busy || profile.consentState === 'OPTED_OUT'}
             onClick={() => run(() => apiClient.recordWhatsAppConsent(patientId, 'refused'))}>
