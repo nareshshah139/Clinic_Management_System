@@ -946,3 +946,21 @@ it('reports a failed interaction check instead of an all-clear, and shows the re
     expect(within(dialog).queryByRole('alert')).toBeNull();
   } finally { check.mockRestore(); }
 });
+
+it('closes the print preview with Close and offers no toggle that reopens it', async () => {
+  render(<PrescriptionBuilder patientId="close-patient" visitId={null} doctorId="doctor" standalone />);
+  const preview = async () => {
+    await openPreview();
+    return document.getElementById('pagedjs-container')!.closest('[role="dialog"]') as HTMLElement;
+  };
+  let dialog = await preview();
+  expect(within(dialog).queryByRole('button', { name: /Live Preview/ })).toBeNull();
+  const closeCount = within(dialog).getAllByRole('button', { name: 'Close' }).length;
+  expect(closeCount).toBe(2);
+  for (let index = 0; index < closeCount; index++) {
+    if (index > 0) dialog = await preview();
+    await act(async () => fireEvent.click(within(dialog).getAllByRole('button', { name: 'Close' })[index]));
+    await act(async () => { jest.advanceTimersByTime(400); });
+    expect(document.getElementById('pagedjs-container')).toBeNull();
+  }
+});

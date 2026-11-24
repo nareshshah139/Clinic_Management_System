@@ -770,7 +770,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const padSaveKey = useRef<string | null>(null);
   const skipPostSaveCleanupRef = useRef(false);
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [autoPreview, setAutoPreview] = useState(false);
   const [previewZoom, setPreviewZoom] = useState(1);
   const [previewJustUpdated, setPreviewJustUpdated] = useState(false);
   const [rxPrintFormat, setRxPrintFormat] = useState<'TEXT' | 'TABLE'>('TABLE');
@@ -827,7 +826,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const initialRenderDoneRef = useRef(false);
   const lastContentHashRef = useRef<string | null>(null);
   const [showRefillStamp, setShowRefillStamp] = useState<boolean>(false);
-  const { showSignature, setShowSignature, signatureUrl, signatureWidth, signatureHeight, signatureLoading, signatureError, reloadSignature } = usePrescriptionSignature(visitData?.doctor?.id || doctorId, previewOpen || autoPreview);
+  const { showSignature, setShowSignature, signatureUrl, signatureWidth, signatureHeight, signatureLoading, signatureError, reloadSignature } = usePrescriptionSignature(visitData?.doctor?.id || doctorId, previewOpen);
   const [renderedSignatureUrl, setRenderedSignatureUrl] = useState<string | null>(null);
   const pagedJsProcessRef = useRef<(() => Promise<void>) | null>(null);
   const [sharingEmail, setSharingEmail] = useState(false);
@@ -3487,10 +3486,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     };
   }, [cleanupPreviewPrintMode]);
 
-  useEffect(() => {
-    if (autoPreview && !previewOpen) setPreviewOpen(true);
-  }, [autoPreview, previewOpen]);
-
   // Memoize array dependencies to prevent unnecessary re-renders
   const itemsStringified = useMemo(() => JSON.stringify(items), [items]);
   const investigationsStringified = useMemo(() => JSON.stringify(investigations), [investigations]);
@@ -3508,7 +3503,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     window.addEventListener('beforeprint', handleBeforePrint);
     window.addEventListener('afterprint', handleAfterPrint);
 
-    if (!(previewOpen || autoPreview)) {
+    if (!previewOpen) {
       // Clear any pending refresh when preview closes
       if (previewRefreshTimeoutRef.current) {
         clearTimeout(previewRefreshTimeoutRef.current);
@@ -3581,11 +3576,11 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       window.removeEventListener('beforeprint', handleBeforePrint);
       window.removeEventListener('afterprint', handleAfterPrint);
     };
-  }, [isTeleVideo, previewOpen, autoPreview, language, rxPrintFormat, itemsStringified, diagnosis, followUpInstructions, chiefComplaints, personalHistory, investigationsStringified, customSectionsStringified, contentOffsetXPx, contentOffsetYPx, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, activeProfileId, overrideTopMarginPx, overrideBottomMarginPx, spaceOptimized, fitToPage, lineSpacing, avoidBreakInsideTables, translateForPreview]);
+  }, [isTeleVideo, previewOpen, language, rxPrintFormat, itemsStringified, diagnosis, followUpInstructions, chiefComplaints, personalHistory, investigationsStringified, customSectionsStringified, contentOffsetXPx, contentOffsetYPx, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, activeProfileId, overrideTopMarginPx, overrideBottomMarginPx, spaceOptimized, fitToPage, lineSpacing, avoidBreakInsideTables, translateForPreview]);
 
-  // Globally suppress Paged.js internal DOM errors while preview is active or in autoPreview mode
+  // Globally suppress Paged.js internal DOM errors while preview is active
   useEffect(() => {
-    if (!(previewOpen || autoPreview)) return;
+    if (!previewOpen) return;
     const globalHandler = (event: ErrorEvent | PromiseRejectionEvent) => {
       const message = 'message' in event ? event.message : String((event as PromiseRejectionEvent).reason);
       const stack = event instanceof ErrorEvent && event.error?.stack ? event.error.stack : '';
@@ -3607,13 +3602,12 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       window.removeEventListener('error', globalHandler as EventListener);
       window.removeEventListener('unhandledrejection', globalHandler as EventListener);
     };
-  }, [previewOpen, autoPreview]);
+  }, [previewOpen]);
 
   // Unified Paged.js processing with custom controls integration
   useEffect(() => {
     console.log('🔄 Paged.js useEffect triggered', { 
       previewOpen,
-      autoPreview,
       hasRef: !!pagedJsContainerRef.current,
       effectiveTopMarginMm,
       effectiveBottomMarginMm,
@@ -3621,8 +3615,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       overrideBottomMarginPx
     });
     
-    // Only proceed in preview or autoPreview mode; container may not be mounted yet
-    if (!(previewOpen || autoPreview)) {
+    // Only proceed while the preview is open; container may not be mounted yet
+    if (!previewOpen) {
       console.log('⚠️ Early return from paged.js effect - preview disabled');
       // Reset change detection when preview closes so next open gets fresh render
       initialRenderDoneRef.current = false;
@@ -3699,7 +3693,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
             pagedJsRunningRef.current = false;
             setTimeout(() => {
               // Re-run once the container is likely visible
-              if (previewOpen || autoPreview) void processWithPagedJs();
+              if (previewOpen) void processWithPagedJs();
             }, 50); // Reduced from 150ms to 50ms
             return;
           }
@@ -3708,7 +3702,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
           setPagedJsProcessing(false);
           pagedJsRunningRef.current = false;
           setTimeout(() => {
-            if (previewOpen || autoPreview) void processWithPagedJs();
+            if (previewOpen) void processWithPagedJs();
           }, 50); // Reduced from 150ms to 50ms
           return;
         }
@@ -4243,7 +4237,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       // Only clear the reference, not the container content
       // The container will be cleared by processWithPagedJs when it runs next
     };
-  }, [isTeleVideo, previewOpen, autoPreview, itemsStringified, diagnosis, chiefComplaints, personalHistory, spaceOptimized, fitToPage, lineSpacing, investigationsStringified, customSectionsStringified, followUpInstructions,
+  }, [isTeleVideo, previewOpen, itemsStringified, diagnosis, chiefComplaints, personalHistory, spaceOptimized, fitToPage, lineSpacing, investigationsStringified, customSectionsStringified, followUpInstructions,
       paperPreset, effectiveTopMarginMm, effectiveBottomMarginMm, overrideTopMarginPx, overrideBottomMarginPx,
       activeProfileId, printerProfiles, printLeftMarginPx, printRightMarginPx, contentOffsetXPx, contentOffsetYPx, 
       designAids, frames, bleedSafe, showRefillStamp, printedSignatureUrl, letterheadOption, resolvedPrintBgUrl, grayscale, translationsMap]); // Added translationsMap to re-process when translations complete
@@ -6426,10 +6420,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               </div>
               <div className="p-4 space-y-4">
                 <div className="space-y-3">
-                  <Button variant="ghost" size="sm" onClick={() => setAutoPreview(v => !v)} className="w-full justify-between">
-                    <span>{autoPreview ? 'Live Preview: On' : 'Live Preview: Off'}</span>
-                  </Button>
-                  
                   {/* Unified Pagination Info */}
                   {pagedJsProcessing && (
                     <div className="p-2 bg-info-soft border border-info-border rounded-md text-xs text-info-text">
