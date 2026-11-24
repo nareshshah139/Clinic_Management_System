@@ -74,14 +74,14 @@ async function openPage(browser, state, who = "pharmacist", contextOptions = {})
   return { context, page };
 }
 
-function recorder(page, state) {
+function recorder(page, state, origin = state.base) {
   const log = { pageErrors: [], consoleErrors: [], writes: [], failures: [] };
   page.on("pageerror", (e) => log.pageErrors.push(e.message.slice(0, 400)));
   page.on("console", (m) => m.type() === "error" && log.consoleErrors.push(m.text().slice(0, 400)));
   page.on("response", (r) => {
     const url = r.url();
-    if (!url.startsWith(`${state.base}/api/`)) return;
-    const entry = { at: Date.now(), method: r.request().method(), status: r.status(), path: url.slice(state.base.length).split("?")[0] };
+    if (!url.startsWith(`${origin}/api/`)) return;
+    const entry = { at: Date.now(), method: r.request().method(), status: r.status(), path: url.slice(origin.length).split("?")[0] };
     if (entry.method !== "GET") log.writes.push(entry);
     if (entry.status >= 400) log.failures.push(entry);
   });

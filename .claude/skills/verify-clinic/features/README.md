@@ -1,6 +1,6 @@
 # Clinic verification map
 
-This directory is the maintained source for verifying how stock gets into the clinic pharmacy's inventory, and the follow-up loop between a visit and the patient's WhatsApp check-in. Read this index before driving the app, then follow the matching feature file as the recipe. Other dashboard areas (appointments, billing) are not mapped yet. Add a file here when you verify one.
+This directory is the maintained source for verifying how stock gets into the clinic pharmacy's inventory, the follow-up loop between a visit and the patient's WhatsApp check-in, and the patient portal's sign-in and records. Read this index before driving the app, then follow the matching feature file as the recipe. Other dashboard areas (appointments, billing) are not mapped yet. Add a file here when you verify one.
 
 ## Baseline preconditions
 
@@ -35,3 +35,4 @@ Each feature file starts with an H1 title and one paragraph on the user-visible 
 - [Opening stock](./opening-stock.md): the Excel opening-stock import and the manual opening-stock document.
 - [Purchase bills and unfinished intake](./purchase-bills.md): the register where posted bills appear, and the "Recent invoices" list where saved drafts resume.
 - [Follow-up loop](./follow-up-loop.md): number confirmation, a visit with a follow-up plan, the scheduler's check-in link through a fake WhatsApp endpoint, the patient's photo answer at phone width, the staff reply and worklist resolution, plus the review reminder. **Scripted:** `drive-follow-up-loop.cjs` with `fake-meta.cjs`.
+- [Portal sign-in and records](./portal-sign-in.md): WhatsApp code sign-in on `/p`, the shared-phone profile picker, read-only appointments, prescriptions, check-ins and messages, writing to the clinic, a staff reply after the WhatsApp window that lands in the portal, and sign out. **Scripted:** `drive-portal-sign-in.cjs` with `fake-meta.cjs`.

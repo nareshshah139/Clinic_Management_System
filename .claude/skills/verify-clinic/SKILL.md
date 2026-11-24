@@ -98,6 +98,18 @@ NODE_PATH=~/pw/node_modules node .claude/skills/verify-clinic/scripts/drive-foll
 
 Reception confirms two numbers with the codes fake Meta received; the doctor completes one visit with "Two-week skin check" and one with a review date; the shifted scheduler clock opens the day-3 check-in and sends its link and the review reminder; the patient answers at 390px with a camera photo and a severity of 9; a signed inbound message gets an in-window staff reply; staff resolve both worklist items. It takes about 10 minutes because the send pass runs every 5. See [`features/follow-up-loop.md`](features/follow-up-loop.md).
 
+**Scripted proof (Release 1c portal sign-in and records, fake WhatsApp):**
+
+```bash
+node .claude/skills/verify-clinic/scripts/fake-meta.cjs --name portal &   # prints FAKE META READY
+{ cat output/verify-clinic/fake-meta/portal.env; echo PORTAL_BASE_URL=https://127.0.0.1:44300; } > output/verify-clinic/fake-meta/portal-tls.env
+node .claude/skills/verify-clinic/scripts/launch.cjs --name portal --env-file output/verify-clinic/fake-meta/portal-tls.env &
+node .claude/skills/verify-clinic/scripts/https-proxy.cjs --port 44300 --target "$(node -p 'require("./output/verify-clinic/instances/portal.json").base')" &
+NODE_PATH=~/pw/node_modules node .claude/skills/verify-clinic/scripts/drive-portal-sign-in.cjs --instance portal --fake portal --portal https://127.0.0.1:44300
+```
+
+Two patients share one confirmed number; the patient signs in on `/p` at 390px with the code fake Meta received, picks a profile, reads every records tab, switches profile, writes to the clinic; reception replies after the WhatsApp window has shut, so fake Meta gets `portal_reply_notice` and the reply shows in the portal; then cross-origin and staff/portal cookie probes, sign out and sign out everywhere. About 12 minutes, mostly the two number confirmations. See [`features/portal-sign-in.md`](features/portal-sign-in.md).
+
 ## Evidence
 
 - Drivers write to `output/verify-clinic/evidence/<UTC-stamp>-<feature>/`: `summary.md` (pass/fail table, user-step counts, timings), `result.json` (every check, network writes, DB before and after, ledger rows) and numbered screenshots per step (`<run>-1-intake-home.png` … `<run>-4-stock-added.png`, `duplicate-refused-as-seen.png`, `readback-*.png`). Put ad-hoc evidence in the same tree.
@@ -132,5 +144,7 @@ All are in `.claude/skills/verify-clinic/scripts/` and run from the repo root.
 | `drive-manual-bill.cjs [--instance N] [--only …]` | Scripted end-to-end proof of manual bill intake; exits 0 only if all checks pass. |
 | `fake-meta.cjs [--name F] [--advance-days D]` | Fake WhatsApp Cloud API: writes `output/verify-clinic/fake-meta/F.env` (Graph base URL, token, app secret, and a scheduler clock D IST days ahead at 10:00), records every send to `F.sends.jsonl`, and exports helpers that sign inbound webhook events. Start it before `launch.cjs --env-file`. |
 | `drive-follow-up-loop.cjs [--instance N] [--fake F] [--no-review-leg]` | Scripted Release 1b loop (see `features/follow-up-loop.md`); exits 0 only if all checks pass. |
+| `drive-portal-sign-in.cjs [--instance N] [--fake F] [--portal URL] [--reuse-phone P]` | Scripted Release 1c sign-in and records proof (see `features/portal-sign-in.md`); exits 0 only if all checks pass. |
+| `https-proxy.cjs --port P --target URL` | Self-signed TLS in front of a stack so the browser keeps the portal's `Secure` `__Host-` cookie. |
 | `stop.cjs [--instance N]` | Tears down only what `launch.cjs` started. |
 | `lib.cjs` | Library, not a CLI: `loadState`, `openPage` (one login per role, cookie reuse), `recorder`, `sql` (read-only JSON rows from the instance schema), `evidenceDir`, `checker`. |
