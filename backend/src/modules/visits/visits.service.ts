@@ -1232,11 +1232,13 @@ export class VisitsService {
     const draftPhoto = /^\/uploads\/patients\/([A-Za-z0-9_-]+)\/([A-Za-z0-9_-]+)\/[A-Za-z0-9._-]+$/.exec(normalized);
     if (!contentType || (!visitPhoto && !draftPhoto)) throw notFound();
     if (visitPhoto) {
-      const visit = await this.prisma.visit.findFirst({
+      // Substring match also finds longer names (a.png in a.png.png); any candidate must list the exact ref.
+      const candidates = await this.prisma.visit.findMany({
         where: { deletedAt: null, patient: { branchId }, attachments: { contains: normalized.slice(1) } },
         select: { attachments: true },
       });
-      if (!visit || !legacyRefs(this.safeParse<string[]>(visit.attachments as any, [])).includes(normalized)) throw notFound();
+      const listed = candidates.some(v => legacyRefs(this.safeParse<string[]>(v.attachments as any, [])).includes(normalized));
+      if (!listed) throw notFound();
     } else {
       const patient = await this.prisma.patient.findFirst({ where: { id: draftPhoto![1], branchId }, select: { id: true } });
       if (!patient) throw notFound();

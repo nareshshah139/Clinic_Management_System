@@ -25,6 +25,7 @@ const users: Record<string, { id: string; role: string; branchId: string }> = {
   lab: { id: 'lab', role: 'LAB_TECH', branchId: 'branch-a' },
 };
 const visits = [
+  { id: 'v0', deletedAt: null, branchId: 'branch-a', attachments: JSON.stringify(['/uploads/visits/1700000000000_aa.png.png']) },
   { id: 'v1', deletedAt: null, branchId: 'branch-a', attachments: JSON.stringify(['/uploads/visits/1700000000000_aa.png']) },
   { id: 'v2', deletedAt: new Date(), branchId: 'branch-a', attachments: JSON.stringify(['/uploads/visits/1700000000000_deleted.png']) },
   { id: 'v3', deletedAt: null, branchId: 'branch-a', attachments: JSON.stringify(['uploads/visits/1700000000000_relative.png']) },
@@ -36,9 +37,9 @@ const db: any = {
     },
   },
   visit: {
-    findFirst: async ({ where }: any) => visits.find(v =>
+    findMany: async ({ where }: any) => visits.filter(v =>
       v.deletedAt === where.deletedAt && v.branchId === where.patient.branchId &&
-      v.attachments.includes(where.attachments.contains)) ?? null,
+      v.attachments.includes(where.attachments.contains)),
     findUnique: async () => { throw new Error('unexpected'); },
   },
   patient: { findFirst: async ({ where }: any) => where.id === 'p1' && where.branchId === 'branch-a' ? { id: 'p1' } : null },
