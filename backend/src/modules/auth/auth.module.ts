@@ -12,7 +12,9 @@ import { WindowThrottlerStorage } from '../../shared/http/window-throttler-stora
 
 @Module({
   imports: [
-    ThrottlerModule.forRoot({ throttlers: [DEFAULT_THROTTLE], storage: new WindowThrottlerStorage() }),
+    ThrottlerModule.forRootAsync({
+      useFactory: () => ({ throttlers: [DEFAULT_THROTTLE], storage: new WindowThrottlerStorage() }),
+    }),
     PrismaModule,
     ConfigModule,
     JwtModule.registerAsync({
