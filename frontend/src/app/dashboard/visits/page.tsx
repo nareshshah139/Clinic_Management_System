@@ -462,6 +462,7 @@ function VisitsPageInner() {
   const [appointmentData, setAppointmentData] = useState<AppointmentWithVisit | null>(null);
   const [appointmentFailed, setAppointmentFailed] = useState(false);
   const [startedVisitId, setStartedVisitId] = useState<string | null>(null);
+  const [resumedVisitPatientId, setResumedVisitPatientId] = useState<string | null>(null);
 
   const searchParams = useSearchParams();
   const urlPatientId = searchParams.get('patientId');
@@ -479,6 +480,8 @@ function VisitsPageInner() {
   const appointmentActive = Boolean(selectedPatientId) && selectedPatientId === appointmentPatientId;
   const activeAppointment = appointmentActive ? appointmentData : null;
   const appointmentDoctorId = activeAppointment?.doctorId;
+  const visitPatientId = resumedVisitPatientId ?? urlPatientId;
+  const resumedVisitId = urlVisitId && selectedPatientId === visitPatientId ? urlVisitId : undefined;
   const appointmentPending = Boolean(
     appointmentActive && appointmentIdParam && !appointmentData && !appointmentFailed,
   );
@@ -607,7 +610,10 @@ function VisitsPageInner() {
         const visit: any = await apiClient.get(`/visits/${urlVisitId}`);
         const pid = visit?.patient?.id;
         const did = visit?.doctor?.id;
-        if (typeof pid === 'string') setSelectedPatientId(pid);
+        if (typeof pid === 'string') {
+          setSelectedPatientId(pid);
+          setResumedVisitPatientId(pid);
+        }
         if (typeof did === 'string') setChosenDoctorId(did);
         // Populate appointment context if present (non-blocking)
         const apptId = visit?.appointment?.id;
@@ -672,7 +678,7 @@ function VisitsPageInner() {
       : undefined;
 
   const visitAlreadyStarted = Boolean(
-    urlVisitId || startedVisitId || (activeAppointment?.visit && 'id' in activeAppointment.visit),
+    resumedVisitId || startedVisitId || (activeAppointment?.visit && 'id' in activeAppointment.visit),
   );
   const doctorLocked = Boolean(appointmentDoctorId) || visitAlreadyStarted;
 
@@ -955,7 +961,7 @@ function VisitsPageInner() {
 
   return (
     <MedicalVisitForm
-      key={`${selectedPatientId}:${urlVisitId || activeAppointment?.id || "new"}`}
+      key={`${selectedPatientId}:${resumedVisitId || activeAppointment?.id || "new"}`}
       patientId={selectedPatientId}
       doctorId={selectedDoctorId}
       doctorName={selectedDoctorName}
@@ -966,7 +972,7 @@ function VisitsPageInner() {
       appointmentId={activeAppointment?.id}
       appointmentData={activeAppointment}
       onVisitIdChange={setStartedVisitId}
-      initialVisitId={urlVisitId || (activeAppointment?.visit && 'id' in activeAppointment.visit ? activeAppointment.visit.id : undefined)}
+      initialVisitId={resumedVisitId || (activeAppointment?.visit && 'id' in activeAppointment.visit ? activeAppointment.visit.id : undefined)}
       identity={
         <>
           <h1 className="sr-only">Visit Documentation</h1>
