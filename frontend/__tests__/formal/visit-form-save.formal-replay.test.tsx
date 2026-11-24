@@ -108,6 +108,7 @@ async function autosaveRacesThePrescription() {
   expect(indicator()).toHaveTextContent('Saved');
   if (!screen.queryAllByPlaceholderText('Search medicine name...').length) fireEvent.click(screen.getByRole('button', { name: 'Add Row' }));
   fireEvent.change(screen.getAllByPlaceholderText('Search medicine name...')[0], { target: { value: medicine.drugName } });
+  fireEvent.change(screen.getByLabelText(`Duration for ${medicine.drugName}`), { target: { value: String(medicine.duration) } });
   await settle();
   expect(indicator()).toHaveTextContent('Unsaved changes');
   await settle(8100);

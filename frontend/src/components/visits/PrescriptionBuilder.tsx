@@ -2665,6 +2665,12 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     return true;
   }, [onClinicalConflict]);
 
+  /**
+   * @cc [owner:nareshshah139,label:product] prescription-medicines-checked-before-write
+   * Every prescription write, including completion and Save changes, MUST first check
+   * each medicine. A medicine without a duration MUST be named to the doctor in plain
+   * words, and nothing may be written for the prescription.
+   */
   const create = useCallback(async (fromPreview = false, exportVisitId?: string, forVisitCompletion = false) => {
     if (prescriptionSaveInFlight.current) return;
     if (consultationType === 'TELE_VIDEO' && !teleVideoConsent) {
@@ -2685,6 +2691,13 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
         title: 'Cannot create prescription',
         description,
       });
+      return;
+    }
+    const undated = validItems.find((it) => !(Number(it.duration) >= 1));
+    if (undated) {
+      const description = `Add a duration for ${undated.drugName.trim()}.`;
+      if (forVisitCompletion) throw new Error(description);
+      toast({ variant: 'destructive', title: 'Cannot create prescription', description });
       return;
     }
     prescriptionSaveInFlight.current = true;
