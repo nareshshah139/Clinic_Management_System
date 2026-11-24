@@ -255,7 +255,7 @@ async function bootStack(opts = {}) {
       const file = path.join(root, "backend/prisma/migrations", dir, "migration.sql");
       if (!fs.existsSync(file)) continue;
       for (const statement of fs.readFileSync(file, "utf8").match(/^CREATE UNIQUE INDEX [^;]* WHERE [^;]*;/gm) || [])
-        await owned.db.$executeRawUnsafe(statement.replace(/^CREATE UNIQUE INDEX /, "CREATE UNIQUE INDEX IF NOT EXISTS "));
+        await owned.db.$executeRawUnsafe(statement.replace(/^CREATE UNIQUE INDEX (IF NOT EXISTS )?/, "CREATE UNIQUE INDEX IF NOT EXISTS "));
     }
     // The isolated schema hides public's pg_trgm operator that product search orders by.
     await owned.admin.$executeRawUnsafe("CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public");
