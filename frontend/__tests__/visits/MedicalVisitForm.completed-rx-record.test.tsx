@@ -20,8 +20,8 @@ jest.mock('pagedjs', () => ({
 const doxycycline = { drugName: 'Doxycycline 100', dosage: 1, dosageUnit: 'TABLET', frequency: 'ONCE_DAILY', duration: 30, durationUnit: 'DAYS' };
 const MINOCYCLINE = 'Minocycline 50';
 
-function clinicServer(initialStatus: 'COMPLETED' | 'IN_PROGRESS', { prescriptionRefusal = '', saved = true } = {}) {
-  const server = { status: initialStatus, version: 4, saved, record: [doxycycline] as Array<{ drugName: string }>, writes: [] as string[] };
+function clinicServer(initialStatus: 'COMPLETED' | 'IN_PROGRESS', { prescriptionRefusal = '', saved = true, record = [doxycycline] as Array<{ drugName: string }> } = {}) {
+  const server = { status: initialStatus, version: 4, saved, rxStatus: 'ACTIVE', record, writes: [] as string[] };
   const reply = (code: number, body: unknown) => ({ ok: code < 400, status: code, headers: { get: (name: string) => (name.toLowerCase() === 'content-type' ? 'application/json' : null) }, json: async () => body, text: async () => JSON.stringify(body) });
   const visit = () => ({
     id: 'v1', version: server.version, status: server.status, patientId: 'p', doctorId: 'd',
@@ -29,7 +29,7 @@ function clinicServer(initialStatus: 'COMPLETED' | 'IN_PROGRESS', { prescription
     doctor: { id: 'd', firstName: 'Priya', lastName: 'Menon' },
     complaints: [{ complaint: 'Acne' }], diagnosis: [{ diagnosis: 'Acne vulgaris' }], history: {}, exam: {},
     plan: { dermatology: { medicationPlan: server.record } },
-    prescription: server.saved ? { id: 'rx1', items: server.record } : null,
+    prescription: server.saved ? { id: 'rx1', status: server.rxStatus, items: server.record } : null,
   });
   global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -39,8 +39,12 @@ function clinicServer(initialStatus: 'COMPLETED' | 'IN_PROGRESS', { prescription
     server.writes.push(`${method} ${url}`);
     const body = init?.body ? JSON.parse(String(init.body)) : {};
     if (url === '/api/visits/v1') { server.version += 1; return reply(200, visit()); }
+    if (method === 'DELETE' && url.startsWith('/api/prescriptions/rx1')) { server.rxStatus = 'CANCELLED'; return reply(200, { id: 'rx1', status: 'CANCELLED' }); }
     if (url === '/api/prescriptions/rx1' || url === '/api/prescriptions') {
       if (prescriptionRefusal) return reply(409, { message: prescriptionRefusal });
+      if (!body.items.length) return reply(400, { message: 'At least one prescription item is required' });
+      const undated = body.items.findIndex((item: { duration: number }) => !(item.duration >= 1));
+      if (undated >= 0) return reply(400, { message: [`items.${undated}.duration must not be less than 1`] });
       server.saved = true;
       server.record = body.items;
       server.version += 1;
@@ -209,4 +213,171 @@ it('creates the prescription record when a visit with medicines but no saved pre
   await waitFor(() => expect(server.status).toBe('COMPLETED'), { timeout: 10_000 });
   expect(server.writes).toEqual(['PATCH /api/visits/v1', 'POST /api/prescriptions', 'POST /api/visits/v1/complete']);
   expect(server.record.map((item) => item.drugName)).toEqual([doxycycline.drugName]);
+});
+
+const clearDuration = () => fireEvent.change(screen.getByLabelText(`Duration for ${doxycycline.drugName}`), { target: { value: '' } });
+
+it('names the medicine missing a duration and leaves the visit open with no prescription written', async () => {
+  const server = clinicServer('IN_PROGRESS', { saved: false });
+  render(<><MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v1" userRole="DOCTOR" /><Toaster /></>);
+  await screen.findByDisplayValue(doxycycline.drugName, {}, { timeout: 20_000 });
+  clearDuration();
+  await completeVisit();
+  expect(await screen.findByText('Add a duration for Doxycycline 100.', {}, { timeout: 10_000 })).toBeInTheDocument();
+  expect(screen.getByText('Visit not completed')).toBeInTheDocument();
+  expect(server.status).toBe('IN_PROGRESS');
+  expect(server.saved).toBe(false);
+  expect(server.writes).toEqual(['PATCH /api/visits/v1']);
+});
+
+it('names the medicine missing a duration on Create Prescription and writes nothing', async () => {
+  const server = clinicServer('IN_PROGRESS', { saved: false });
+  render(<><MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v1" userRole="DOCTOR" /><Toaster /></>);
+  await screen.findByDisplayValue(doxycycline.drugName, {}, { timeout: 20_000 });
+  clearDuration();
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Create Prescription' })); });
+  expect(await screen.findByText('Add a duration for Doxycycline 100.', {}, { timeout: 10_000 })).toBeInTheDocument();
+  expect(screen.getByText('Cannot create prescription')).toBeInTheDocument();
+  expect(server.writes).toEqual([]);
+});
+
+it('names the medicine missing a duration on Save changes and keeps the completed visit and its record unchanged', async () => {
+  const server = clinicServer('COMPLETED');
+  render(<><MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v1" userRole="DOCTOR" /><Toaster /></>);
+  await lockedMedicine();
+  fireEvent.click(screen.getByRole('button', { name: 'Edit visit' }));
+  clearDuration();
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save changes' })); });
+  expect(await screen.findByText('Add a duration for Doxycycline 100.', {}, { timeout: 10_000 })).toBeInTheDocument();
+  expect(screen.getByText('Changes not saved')).toBeInTheDocument();
+  expect(server.record).toEqual([doxycycline]);
+  expect(server.writes).toEqual(['PATCH /api/visits/v1']);
+});
+
+it('unlocks a completed visit with Edit visit as saved, and marks it unsaved only once the doctor edits', async () => {
+  const server = clinicServer('COMPLETED');
+  render(<MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v1" userRole="DOCTOR" />);
+  await lockedMedicine();
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 500)); });
+  fireEvent.click(screen.getByRole('button', { name: 'Edit visit' }));
+  expect(screen.getByRole('status')).toHaveTextContent(/^Editing a completed visit\. Saved$/);
+  fireEvent.change(screen.getByDisplayValue(doxycycline.drugName), { target: { value: MINOCYCLINE } });
+  await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/^Editing a completed visit\. Unsaved changes$/));
+  expect(server.writes).toEqual([]);
+});
+
+it('reopens a visit completed in this browser and unlocks it with Edit visit as saved', async () => {
+  const server = clinicServer('IN_PROGRESS', { saved: false, record: [] });
+  const first = render(<MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v1" userRole="DOCTOR" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Add Row' }, { timeout: 20_000 }));
+  fireEvent.change(screen.getAllByPlaceholderText('Search medicine name...')[0], { target: { value: MINOCYCLINE } });
+  fireEvent.change(screen.getByLabelText(`Duration for ${MINOCYCLINE}`), { target: { value: '5' } });
+  await completeVisit();
+  await waitFor(() => expect(server.status).toBe('COMPLETED'), { timeout: 10_000 });
+  first.unmount();
+  render(<MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v1" userRole="DOCTOR" />);
+  await screen.findByRole('button', { name: 'Edit visit' }, { timeout: 20_000 });
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 500)); });
+  fireEvent.click(screen.getByRole('button', { name: 'Edit visit' }));
+  expect(screen.getByRole('status')).toHaveTextContent(/^Editing a completed visit\. Saved$/);
+});
+
+function holdVisitStatus() {
+  const answer = global.fetch;
+  let release = () => {};
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const stack = String(new Error().stack);
+    if (String(input) === '/api/visits/v1' && (init?.method || 'GET') === 'GET' && stack.includes('MedicalVisitForm') && !stack.includes('PrescriptionBuilder')) await held;
+    return answer(input, init);
+  }) as unknown as typeof fetch;
+  return async () => {
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 500)); });
+    await act(async () => { release(); });
+  };
+}
+
+it('reopens a visit completed in this browser as saved when its prescription record loads before its completed status', async () => {
+  const server = clinicServer('IN_PROGRESS', { saved: false, record: [] });
+  const first = render(<MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v1" userRole="DOCTOR" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Add Row' }, { timeout: 20_000 }));
+  fireEvent.change(screen.getAllByPlaceholderText('Search medicine name...')[0], { target: { value: MINOCYCLINE } });
+  fireEvent.change(screen.getByLabelText(`Duration for ${MINOCYCLINE}`), { target: { value: '5' } });
+  await completeVisit();
+  await waitFor(() => expect(server.status).toBe('COMPLETED'), { timeout: 10_000 });
+  first.unmount();
+
+  const releaseStatus = holdVisitStatus();
+  render(<MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v1" userRole="DOCTOR" />);
+  await screen.findByDisplayValue(MINOCYCLINE, {}, { timeout: 20_000 });
+  await releaseStatus();
+  fireEvent.click(await screen.findByRole('button', { name: 'Edit visit' }, { timeout: 20_000 }));
+  expect(screen.getByRole('status')).toHaveTextContent(/^Editing a completed visit\. Saved$/);
+  fireEvent.change(screen.getByDisplayValue(MINOCYCLINE), { target: { value: doxycycline.drugName } });
+  await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/^Editing a completed visit\. Unsaved changes$/));
+});
+
+it('reads an edit as unsaved when the visit itself cannot be loaded', async () => {
+  clinicServer('IN_PROGRESS', { saved: false, record: [] });
+  const answer = global.fetch;
+  const notFound = { ok: false, status: 404, headers: { get: () => 'application/json' }, json: async () => ({ message: 'Visit not found' }), text: async () => 'Visit not found' };
+  global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => (
+    String(input) === '/api/visits/v1' && (init?.method || 'GET') === 'GET' ? notFound : answer(input, init)
+  )) as unknown as typeof fetch;
+  render(<MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v1" userRole="DOCTOR" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Add Row' }, { timeout: 20_000 }));
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 500)); });
+  fireEvent.change(screen.getAllByPlaceholderText('Search medicine name...')[0], { target: { value: MINOCYCLINE } });
+  await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/^Unsaved changes$/));
+});
+
+it('still shows an unsaved edit to a completed visit as unsaved after the page is reloaded mid-edit', async () => {
+  clinicServer('COMPLETED');
+  const first = render(<MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v1" userRole="DOCTOR" />);
+  await lockedMedicine();
+  fireEvent.click(screen.getByRole('button', { name: 'Edit visit' }));
+  fireEvent.change(screen.getByLabelText('Follow-up instructions'), { target: { value: 'Review in 6 weeks' } });
+  await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/Unsaved changes$/));
+  first.unmount();
+  const releaseStatus = holdVisitStatus();
+  render(<MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v1" userRole="DOCTOR" />);
+  await screen.findByDisplayValue('Review in 6 weeks', {}, { timeout: 20_000 });
+  await releaseStatus();
+  await lockedMedicine();
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 500)); });
+  fireEvent.click(screen.getByRole('button', { name: 'Edit visit' }));
+  expect(screen.getByRole('status')).toHaveTextContent(/^Editing a completed visit\. Unsaved changes$/);
+});
+
+const clearEveryMedicine = async () => {
+  await lockedMedicine();
+  fireEvent.click(screen.getByRole('button', { name: 'Edit visit' }));
+  fireEvent.change(screen.getByDisplayValue(doxycycline.drugName), { target: { value: '' } });
+};
+
+it('tells the doctor what Save changes needs once every medicine is cleared from a completed visit', async () => {
+  clinicServer('COMPLETED');
+  render(<MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v1" userRole="DOCTOR" />);
+  await clearEveryMedicine();
+  const save = screen.getByRole('button', { name: 'Save changes' });
+  await waitFor(() => expect(save).toBeDisabled());
+  expect(save).toHaveAccessibleDescription('To save changes, record a complaint or diagnosis, and a plan or prescription.');
+});
+
+it('withdraws the prescription when every medicine is cleared from a completed visit and a plan is saved instead', async () => {
+  const server = clinicServer('COMPLETED');
+  const { unmount } = render(<><MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v1" userRole="DOCTOR" /><Toaster /></>);
+  await clearEveryMedicine();
+  fireEvent.change(screen.getByLabelText('Follow-up instructions'), { target: { value: 'Review in 2 weeks' } });
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save changes' })); });
+  expect(await screen.findByText('Changes saved', {}, { timeout: 10_000 })).toBeInTheDocument();
+  expect(server.rxStatus).toBe('CANCELLED');
+  expect(server.status).toBe('COMPLETED');
+  expect(screen.getByText('Completed. Read only.')).toBeInTheDocument();
+
+  unmount();
+  render(<MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v1" userRole="DOCTOR" />);
+  await screen.findByRole('button', { name: 'Edit visit' }, { timeout: 20_000 });
+  await screen.findByDisplayValue('Review in 2 weeks', {}, { timeout: 20_000 });
+  expect(screen.queryByDisplayValue(doxycycline.drugName)).toBeNull();
 });

@@ -764,6 +764,12 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const isTeleVideo = (consultationType ?? visitData?.consultationType) === 'TELE_VIDEO';
   const createdPrescriptionIdRef = useRef<string | null>(null);
   const [savedPrescriptionId, setSavedPrescriptionId] = useState<string | null>(null);
+  /**
+   * @cc [owner:nareshshah139,label:product] cleared-medicines-withdraw-prescription
+   * Completing or saving a visit whose medicines were all cleared MUST cancel its saved
+   * prescription through the audited cancellation, so the pharmacy no longer sees it.
+   * A cancelled prescription MUST load as no medicines.
+   */
   const recordItemsKey = useRef('[]');
   const [savingFromPreview, setSavingFromPreview] = useState(false);
   const prescriptionSaveInFlight = useRef(false);
@@ -1377,7 +1383,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
 
         if (res?.prescription?.id) {
           setSavedPrescriptionId(res.prescription.id);
-          const savedItems = typeof res.prescription.items === 'string' ? JSON.parse(res.prescription.items) : res.prescription.items;
+          const savedItems = res.prescription.status === 'CANCELLED' ? [] : typeof res.prescription.items === 'string' ? JSON.parse(res.prescription.items) : res.prescription.items;
           if (Array.isArray(savedItems)) {
             const recordItems = savedItems.map(mapPrevRxItem).filter(Boolean) as PrescriptionItemForm[];
             recordItemsKey.current = JSON.stringify(recordItems.map(toItemPayload));
@@ -2670,6 +2676,12 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     return true;
   }, [onClinicalConflict]);
 
+  /**
+   * @cc [owner:nareshshah139,label:product] prescription-medicines-checked-before-write
+   * Every prescription write, including completion and Save changes, MUST first check
+   * each medicine. A medicine without a duration MUST be named to the doctor in plain
+   * words, and nothing may be written for the prescription.
+   */
   const create = useCallback(async (fromPreview = false, exportVisitId?: string, forVisitCompletion = false) => {
     if (prescriptionSaveInFlight.current) return;
     if (consultationType === 'TELE_VIDEO' && !teleVideoConsent) {
@@ -2690,6 +2702,13 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
         title: 'Cannot create prescription',
         description,
       });
+      return;
+    }
+    const undated = validItems.find((it) => !(Number(it.duration) >= 1));
+    if (undated) {
+      const description = `Add a duration for ${undated.drugName.trim()}.`;
+      if (forVisitCompletion) throw new Error(description);
+      toast({ variant: 'destructive', title: 'Cannot create prescription', description });
       return;
     }
     prescriptionSaveInFlight.current = true;
@@ -2848,6 +2867,12 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
 
   useImperativeHandle(syncPrescriptionRef, () => async (savedVisitId: string) => {
     if (JSON.stringify(prescriptionItemsPayload) === recordItemsKey.current) return;
+    const recordId = createdPrescriptionIdRef.current || savedPrescriptionId || visitData?.prescription?.id;
+    if (!validItems.length && recordId) {
+      await apiClient.cancelPrescription(recordId, 'Every medicine was removed from the visit');
+      recordItemsKey.current = '[]';
+      return;
+    }
     if (!await create(true, savedVisitId, true)) {
       throw new Error('The prescription could not be saved. A prescription needs at least one medicine.');
     }

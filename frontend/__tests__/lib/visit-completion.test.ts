@@ -1,4 +1,4 @@
-import { COMPLETION_RULE, canCompleteVisit, completionSteps } from '@/lib/visit-completion';
+import { canCompleteVisit, completionRule, completionSteps } from '@/lib/visit-completion';
 
 const nothing = { complaint: false, diagnosis: false, plan: false, prescription: false, vitals: false, photos: false, labs: false };
 
@@ -26,5 +26,6 @@ it('requires only the two clinical minimums and states them in one rule', () => 
     ['Photos', false],
     ['Labs', false],
   ]);
-  expect(COMPLETION_RULE).toBe('To complete, record a complaint or diagnosis, and a plan or prescription.');
+  expect(completionRule('complete')).toBe('To complete, record a complaint or diagnosis, and a plan or prescription.');
+  expect(completionRule('save changes')).toBe('To save changes, record a complaint or diagnosis, and a plan or prescription.');
 });

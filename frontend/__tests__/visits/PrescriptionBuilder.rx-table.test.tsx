@@ -42,6 +42,7 @@ it('inserts a medicine between two others, focuses it, and saves the medicines i
   expect(names().slice(0, 4)).toEqual(['Amoxicillin', '', 'Cetirizine', 'Doxycycline']);
   await waitFor(() => expect(screen.getAllByPlaceholderText('Search medicine name...')[1]).toHaveFocus());
   fireEvent.change(screen.getAllByPlaceholderText('Search medicine name...')[1], { target: { value: 'Ibuprofen' } });
+  fireEvent.change(screen.getByLabelText('Duration for Ibuprofen'), { target: { value: '5' } });
   expect(names().filter(Boolean)).toEqual(['Amoxicillin', 'Ibuprofen', 'Cetirizine', 'Doxycycline']);
   await waitFor(() => expect(medicationPlan(onClinicalDataChange)).toEqual(['Amoxicillin', 'Ibuprofen', 'Cetirizine', 'Doxycycline']));
   fireEvent.click(screen.getByRole('button', { name: 'Create Prescription' }));

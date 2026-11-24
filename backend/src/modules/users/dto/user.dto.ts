@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsEmail, IsEnum, IsBoolean, IsUUID, IsArray, IsDateString, MinLength, MaxLength } from 'class-validator';
+import { IsString, IsOptional, IsEmail, IsEnum, IsBoolean, IsNotEmpty, IsArray, IsDateString, MinLength, MaxLength } from 'class-validator';
 import { UserRole, UserStatus } from '@prisma/client';
 
 // Runtime enums for class-validator to avoid undefined during decorator evaluation in some build environments
@@ -53,7 +53,8 @@ export class CreateUserDto {
   @IsOptional()
   status?: UserStatus;
 
-  @IsUUID()
+  @IsString()
+  @IsNotEmpty()
   @IsOptional()
   branchId?: string;
 

@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsEnum, IsBoolean, IsUUID, IsDateString } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsBoolean, IsNotEmpty, IsDateString } from 'class-validator';
 import { UserRole, UserStatus } from '@prisma/client';
 
 // Runtime enums for class-validator evaluation
@@ -37,7 +37,8 @@ export class QueryUsersDto extends PaginationDto {
   @IsOptional()
   status?: UserStatus;
 
-  @IsUUID()
+  @IsString()
+  @IsNotEmpty()
   @IsOptional()
   branchId?: string;
 
@@ -121,14 +122,16 @@ export class UserStatisticsDto {
   @IsOptional()
   endDate?: Date;
 
-  @IsUUID()
+  @IsString()
+  @IsNotEmpty()
   @IsOptional()
   branchId?: string;
 }
 
 // User Activity DTOs
 export class UserActivityDto extends PaginationDto {
-  @IsUUID()
+  @IsString()
+  @IsNotEmpty()
   @IsOptional()
   userId?: string;
 
@@ -147,7 +150,8 @@ export class UserActivityDto extends PaginationDto {
 
 // User Dashboard DTOs
 export class UserDashboardDto {
-  @IsUUID()
+  @IsString()
+  @IsNotEmpty()
   @IsOptional()
   branchId?: string;
 

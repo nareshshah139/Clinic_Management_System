@@ -58,7 +58,7 @@ import { encounterTime } from '@/lib/patient-history';
 import PatientHistoryVisitCard from '@/components/visits/PatientHistoryVisitCard';
 import PrescriptionBuilder, { type ConsultationSummary } from '@/components/visits/PrescriptionBuilder';
 import type { ExtraVitalsPatch } from '@/lib/voice-fill-visit';
-import { COMPLETION_RULE, canCompleteVisit, completionSteps } from '@/lib/visit-completion';
+import { canCompleteVisit, completionRule, completionSteps } from '@/lib/visit-completion';
 import type VisitPhotosPanel from '@/components/visits/VisitPhotos';
 import type { Patient, VisitStatus, VisitDetails, VisitPatientSummary, VisitSummary } from '@/lib/types';
 import { getErrorMessage } from '@/lib/utils';
@@ -276,6 +276,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
   }, [visitId, onVisitIdChange]);
   const [currentVisitNumber, setCurrentVisitNumber] = useState(visitNumber);
   const [visitStatus, setVisitStatus] = useState<VisitStatus | 'draft'>('draft');
+  const [statusLoaded, setStatusLoaded] = useState(!visitId);
   // A completed visit opens locked. Edit visit unlocks it until Save changes, a reload or leaving.
   const [amending, setAmending] = useState(false);
   const editMode = visitStatus !== 'COMPLETED' ? 'open' : amending ? 'amending' : 'locked';
@@ -715,8 +716,10 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
   /**
    * @cc [owner:nareshshah139,label:product] visit-unsaved-means-edited
    * Unsaved changes MUST mean the doctor edited a field since the visit loaded or
-   * last saved. Server loads, restored saved drafts, save receipts and the
-   * prescription editor's echoed consultation type and personal history MUST NOT.
+   * last saved. Server loads, restored saved drafts, save receipts, the prescription
+   * editor's echoed consultation type and personal history, and anything that loads
+   * before the visit's status arrives or while a completed visit is locked MUST NOT.
+   * Edits restored from an unsaved draft MUST still read as unsaved.
    */
   const editSignature = useCallback((draft: MedicalVisitDraftState) => {
     const sinceHydration = (key: string, value: unknown) => {
@@ -839,6 +842,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
     labs: labsRecorded,
   }), [consultation, complaints, dermDx, plan, topicals, systemics, formVitalsRecorded, photoCount, labsRecorded]);
   const canComplete = canCompleteVisit(steps);
+  const completionHelp = completionRule(editMode === 'amending' ? 'save changes' : 'complete');
   const recordedSections = useMemo(() => steps.filter((step) => step.done).map((step) => step.key), [steps]);
 
   /**
@@ -1112,7 +1116,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
           if (parsed.visitId && typeof parsed.visitId === 'string') {
             setVisitId(parsed.visitId);
           }
-          hasUnsavedChangesRef.current = false;
+          hasUnsavedChangesRef.current = !parsed.saved;
         }
       }
     } catch (error) {
@@ -1161,6 +1165,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
         }
         if (visitVersionRef.current === undefined && !automaticSaveBlocked.current) visitVersionRef.current = res.version;
         if (res.status) setVisitStatus(res.status);
+        setStatusLoaded(true);
         setAmending(false);
         if (!latestDraftStateRef.current.consultationType) {
           setConsultationType(res?.consultationType === 'TELE_VIDEO' ? 'TELE_VIDEO' : 'IN_PERSON');
@@ -1235,7 +1240,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
           if (derm?.counseling && !counseling) hydrateCounseling(String(derm.counseling));
         } catch {}
       } catch {
-        // ignore
+        setStatusLoaded(true);
       }
     };
     void load();
@@ -1243,9 +1248,12 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
 
   useEffect(() => {
     const signature = editSignature(serializeDraft());
+    // Until the visit's status arrives, and while it is locked, every change is a load and moves the baseline; edits restored from an unsaved draft stay unsaved.
+    const editing = statusLoaded && canEdit;
+    if (!editing && !hasUnsavedChangesRef.current) editBaselineRef.current = signature;
     editBaselineRef.current ??= signature;
     if (justSavedRef.current) justSavedRef.current = false;
-    if (signature === lastEditSignatureRef.current) return;
+    if (!editing || signature === lastEditSignatureRef.current) return;
     lastEditSignatureRef.current = signature;
 
     if (signature === editBaselineRef.current) {
@@ -1294,6 +1302,8 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
     counseling,
     reviewDate,
     visitStatus,
+    editMode,
+    statusLoaded,
   ]);
 
   useEffect(() => {
@@ -1451,7 +1461,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
         return;
       }
       if (!canComplete) {
-        toast({ variant: 'warning', title: 'Not ready to complete', description: COMPLETION_RULE });
+        toast({ variant: 'warning', title: 'Not ready to complete', description: completionHelp });
         return;
       }
     }
@@ -1832,7 +1842,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
             <ul aria-label="Optional" className="flex flex-wrap items-center gap-x-3 gap-y-1">
               {optionalSteps.map(stepItem)}
             </ul>
-            {!canComplete && <p id="visit-completion-help" className="text-muted-foreground">{COMPLETION_RULE}</p>}
+            {!canComplete && <p id="visit-completion-help" className="text-muted-foreground">{completionHelp}</p>}
           </div>
         )}
         {consultationType === 'TELE_VIDEO' && (
