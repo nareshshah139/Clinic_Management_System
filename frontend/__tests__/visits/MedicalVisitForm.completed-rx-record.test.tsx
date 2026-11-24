@@ -21,7 +21,7 @@ const doxycycline = { drugName: 'Doxycycline 100', dosage: 1, dosageUnit: 'TABLE
 const MINOCYCLINE = 'Minocycline 50';
 
 function clinicServer(initialStatus: 'COMPLETED' | 'IN_PROGRESS', { prescriptionRefusal = '', saved = true, record = [doxycycline] as Array<{ drugName: string }> } = {}) {
-  const server = { status: initialStatus, version: 4, saved, record, writes: [] as string[] };
+  const server = { status: initialStatus, version: 4, saved, rxStatus: 'ACTIVE', record, writes: [] as string[] };
   const reply = (code: number, body: unknown) => ({ ok: code < 400, status: code, headers: { get: (name: string) => (name.toLowerCase() === 'content-type' ? 'application/json' : null) }, json: async () => body, text: async () => JSON.stringify(body) });
   const visit = () => ({
     id: 'v1', version: server.version, status: server.status, patientId: 'p', doctorId: 'd',
@@ -29,7 +29,7 @@ function clinicServer(initialStatus: 'COMPLETED' | 'IN_PROGRESS', { prescription
     doctor: { id: 'd', firstName: 'Priya', lastName: 'Menon' },
     complaints: [{ complaint: 'Acne' }], diagnosis: [{ diagnosis: 'Acne vulgaris' }], history: {}, exam: {},
     plan: { dermatology: { medicationPlan: server.record } },
-    prescription: server.saved ? { id: 'rx1', items: server.record } : null,
+    prescription: server.saved ? { id: 'rx1', status: server.rxStatus, items: server.record } : null,
   });
   global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -39,8 +39,10 @@ function clinicServer(initialStatus: 'COMPLETED' | 'IN_PROGRESS', { prescription
     server.writes.push(`${method} ${url}`);
     const body = init?.body ? JSON.parse(String(init.body)) : {};
     if (url === '/api/visits/v1') { server.version += 1; return reply(200, visit()); }
+    if (method === 'DELETE' && url.startsWith('/api/prescriptions/rx1')) { server.rxStatus = 'CANCELLED'; return reply(200, { id: 'rx1', status: 'CANCELLED' }); }
     if (url === '/api/prescriptions/rx1' || url === '/api/prescriptions') {
       if (prescriptionRefusal) return reply(409, { message: prescriptionRefusal });
+      if (!body.items.length) return reply(400, { message: 'At least one prescription item is required' });
       const undated = body.items.findIndex((item: { duration: number }) => !(item.duration >= 1));
       if (undated >= 0) return reply(400, { message: [`items.${undated}.duration must not be less than 1`] });
       server.saved = true;
@@ -294,4 +296,37 @@ it('still shows an unsaved edit to a completed visit as unsaved after the page i
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 500)); });
   fireEvent.click(screen.getByRole('button', { name: 'Edit visit' }));
   expect(screen.getByRole('status')).toHaveTextContent(/^Editing a completed visit\. Unsaved changes$/);
+});
+
+const clearEveryMedicine = async () => {
+  await lockedMedicine();
+  fireEvent.click(screen.getByRole('button', { name: 'Edit visit' }));
+  fireEvent.change(screen.getByDisplayValue(doxycycline.drugName), { target: { value: '' } });
+};
+
+it('tells the doctor what Save changes needs once every medicine is cleared from a completed visit', async () => {
+  clinicServer('COMPLETED');
+  render(<MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v1" userRole="DOCTOR" />);
+  await clearEveryMedicine();
+  const save = screen.getByRole('button', { name: 'Save changes' });
+  await waitFor(() => expect(save).toBeDisabled());
+  expect(save).toHaveAccessibleDescription('To save changes, record a complaint or diagnosis, and a plan or prescription.');
+});
+
+it('withdraws the prescription when every medicine is cleared from a completed visit and a plan is saved instead', async () => {
+  const server = clinicServer('COMPLETED');
+  const { unmount } = render(<><MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v1" userRole="DOCTOR" /><Toaster /></>);
+  await clearEveryMedicine();
+  fireEvent.change(screen.getByLabelText('Follow-up instructions'), { target: { value: 'Review in 2 weeks' } });
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save changes' })); });
+  expect(await screen.findByText('Changes saved', {}, { timeout: 10_000 })).toBeInTheDocument();
+  expect(server.rxStatus).toBe('CANCELLED');
+  expect(server.status).toBe('COMPLETED');
+  expect(screen.getByText('Completed. Read only.')).toBeInTheDocument();
+
+  unmount();
+  render(<MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v1" userRole="DOCTOR" />);
+  await screen.findByRole('button', { name: 'Edit visit' }, { timeout: 20_000 });
+  await screen.findByDisplayValue('Review in 2 weeks', {}, { timeout: 20_000 });
+  expect(screen.queryByDisplayValue(doxycycline.drugName)).toBeNull();
 });
