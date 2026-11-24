@@ -286,6 +286,9 @@ async function bootStack(opts = {}) {
     }
 
     const backendPort = await freePort();
+    // The portal refuses writes whose Origin is not PORTAL_BASE_URL's (PP-59), so the stack's own frontend is it.
+    const nextPort = await freePort();
+    env.PORTAL_BASE_URL ??= `http://127.0.0.1:${nextPort}`;
     const bfd = logFd("backend");
     const backend = fork(path.join(__dirname, "backend.cjs"), [], {
       cwd: temp,
@@ -316,7 +319,6 @@ async function bootStack(opts = {}) {
     }
     fs.symlinkSync(path.join(root, "frontend/node_modules"), path.join(frontend, "node_modules"));
     fs.symlinkSync(path.join(root, "shared-types"), path.join(temp, "shared-types"));
-    const nextPort = await freePort();
     const ffd = logFd("frontend");
     const next = spawn(
       process.execPath,
