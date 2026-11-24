@@ -58,7 +58,7 @@ import { encounterTime } from '@/lib/patient-history';
 import PatientHistoryVisitCard from '@/components/visits/PatientHistoryVisitCard';
 import PrescriptionBuilder, { type ConsultationSummary } from '@/components/visits/PrescriptionBuilder';
 import type { ExtraVitalsPatch } from '@/lib/voice-fill-visit';
-import { COMPLETION_RULE, canCompleteVisit, completionSteps } from '@/lib/visit-completion';
+import { canCompleteVisit, completionRule, completionSteps } from '@/lib/visit-completion';
 import type VisitPhotosPanel from '@/components/visits/VisitPhotos';
 import type { Patient, VisitStatus, VisitDetails, VisitPatientSummary, VisitSummary } from '@/lib/types';
 import { getErrorMessage } from '@/lib/utils';
@@ -841,6 +841,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
     labs: labsRecorded,
   }), [consultation, complaints, dermDx, plan, topicals, systemics, formVitalsRecorded, photoCount, labsRecorded]);
   const canComplete = canCompleteVisit(steps);
+  const completionHelp = completionRule(editMode === 'amending' ? 'save changes' : 'complete');
   const recordedSections = useMemo(() => steps.filter((step) => step.done).map((step) => step.key), [steps]);
 
   /**
@@ -1456,7 +1457,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
         return;
       }
       if (!canComplete) {
-        toast({ variant: 'warning', title: 'Not ready to complete', description: COMPLETION_RULE });
+        toast({ variant: 'warning', title: 'Not ready to complete', description: completionHelp });
         return;
       }
     }
@@ -1837,7 +1838,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
             <ul aria-label="Optional" className="flex flex-wrap items-center gap-x-3 gap-y-1">
               {optionalSteps.map(stepItem)}
             </ul>
-            {!canComplete && <p id="visit-completion-help" className="text-muted-foreground">{COMPLETION_RULE}</p>}
+            {!canComplete && <p id="visit-completion-help" className="text-muted-foreground">{completionHelp}</p>}
           </div>
         )}
         {consultationType === 'TELE_VIDEO' && (

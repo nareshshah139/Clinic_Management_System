@@ -10,7 +10,7 @@ export type ClinicalRecordPresence = {
 
 export type CompletionStep = { key: 'assessment' | 'plan' | 'vitals' | 'photos' | 'labs'; label: string; done: boolean; required: boolean };
 
-export const COMPLETION_RULE = 'To complete, record a complaint or diagnosis, and a plan or prescription.';
+export const completionRule = (action: 'complete' | 'save changes') => `To ${action}, record a complaint or diagnosis, and a plan or prescription.`;
 
 /**
  * @cc [owner:nareshshah139,label:product] visit-completion-minimums

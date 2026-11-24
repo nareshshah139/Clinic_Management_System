@@ -1012,6 +1012,10 @@ export class ApiClient {
     return this.patch(`/prescriptions/${id}`, data, { idempotencyKey: opts?.idempotencyKey || autoKey });
   }
 
+  async cancelPrescription(id: string, reason: string) {
+    return this.delete(`/prescriptions/${id}?reason=${encodeURIComponent(reason)}`, { idempotencyKey: `cms:DELETE:prescriptions:${id}` });
+  }
+
   async getPrescription<T = unknown>(id: string): Promise<T> {
     return this.get<T>(`/prescriptions/${id}`);
   }
