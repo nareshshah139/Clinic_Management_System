@@ -348,6 +348,14 @@ databaseTests('Durable outbound WhatsApp messages on PostgreSQL against a fake M
     expect(items).toHaveLength(1);
     expect(items[0]).toMatchObject({ kind: 'DELIVERY_FAILURE', state: 'OPEN', subjectKey: `APPOINTMENT:${a.id}`, patientId: p.id, branchId: 'A' });
     expect(items[0].lastEventAt.toISOString()).toBe(ist('2099-11-25T12:00:00').toISOString());
+    const audits = await db.auditLog.findMany({ where: { entityId: items[0].id }, orderBy: [{ timestamp: 'asc' }, { action: 'asc' }] });
+    expect(audits.map((a) => [a.entity, a.action, a.actorKind, a.userId, a.oldValues, a.newValues])).toEqual([
+      ['AttentionItem', 'CREATE', 'system', null, null, JSON.stringify({ fields: ['branchId', 'kind', 'lastEventAt', 'patientId', 'phoneE164', 'reason', 'state', 'subjectKey'] })],
+      ['AttentionItem', 'UPDATE', 'system', null, null, JSON.stringify({ fields: ['lastEventAt', 'reason', 'updatedAt'] })],
+    ]);
+    const leases = await db.auditLog.findMany({ where: { entity: 'OutboundMessage', entityId: { in: (await messages()).map((m) => m.id) } } });
+    expect(leases).toHaveLength(2);
+    expect(leases.every((a) => a.action === 'UPDATE' && a.actorKind === 'system' && a.oldValues === null && a.newValues === JSON.stringify({ fields: ['leaseUntil', 'state', 'updatedAt'] }))).toBe(true);
   });
 
   it('PP-12/17: a provider outage retries later instead of failing; credentials missing leaves the row queued', async () => {
