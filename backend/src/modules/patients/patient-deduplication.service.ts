@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { Patient, Prisma } from '@prisma/client';
+import { combineProfiles } from './portal/portal-profile';
+import { toE164 } from './portal/phone-e164';
 import { PrismaService } from '../../shared/database/prisma.service';
 
 type DuplicatePatientCandidate = {
@@ -223,6 +225,8 @@ export class PatientDeduplicationService {
       tx.experimentAssignment.updateMany({ where: { patientId: duplicate.id }, data: { patientId: canonical.id } }),
     ]);
 
+    await this.mergePortalProfiles(tx, canonical, duplicate.id);
+
     await tx.patient.update({
       where: { id: duplicate.id },
       data: {
@@ -234,6 +238,42 @@ export class PatientDeduplicationService {
 
     this.logger.log(`Merged duplicate patient ${duplicate.id} into canonical patient ${canonical.id}.`);
     return canonical;
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:security] merge-keeps-opt-out
+   * Merging two patients MUST leave one portal profile on the kept patient where an opt-out on
+   * either row wins and a disabled portal on either row wins; the duplicate's profile is removed.
+   */
+  private async mergePortalProfiles(tx: Prisma.TransactionClient, keptPatient: Patient, duplicateId: string) {
+    const keptId = keptPatient.id;
+    const [kept, dup] = await Promise.all([
+      tx.patientPortalProfile.findUnique({ where: { patientId: keptId } }),
+      tx.patientPortalProfile.findUnique({ where: { patientId: duplicateId } }),
+    ]);
+    const patch = combineProfiles(kept, dup);
+    if (!dup || !patch) return;
+    await tx.patientPortalProfile.delete({ where: { patientId: duplicateId } });
+    if (kept) {
+      await tx.patientPortalProfile.update({ where: { patientId: keptId }, data: patch });
+    } else {
+      const phoneE164 = toE164(keptPatient.phone);
+      const sameNumber = phoneE164 === dup.phoneE164;
+      await tx.patientPortalProfile.create({
+        data: {
+          patientId: keptId,
+          phoneE164,
+          preferredLanguage: dup.preferredLanguage,
+          portalEnabled: dup.portalEnabled,
+          mergeHoldReason: dup.mergeHoldReason,
+          consentState: dup.consentState === 'OPTED_OUT' ? 'OPTED_OUT' : sameNumber ? dup.consentState : 'NOT_ASKED',
+          phoneConfirmedAt: sameNumber && dup.consentState !== 'OPTED_OUT' ? dup.phoneConfirmedAt : null,
+          consentRecordedAt: dup.consentRecordedAt,
+          consentRecordedById: dup.consentRecordedById,
+          consentMethod: dup.consentMethod,
+        },
+      });
+    }
   }
 
   /**

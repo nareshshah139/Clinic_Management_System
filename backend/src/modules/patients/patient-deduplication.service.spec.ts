@@ -75,6 +75,7 @@ describe('PatientDeduplicationService', () => {
     pharmacyInvoice: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
     draftAttachment: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
     experimentAssignment: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+    patientPortalProfile: { findUnique: jest.fn().mockResolvedValue(null) },
   });
 
   it('skips the merge run when another instance holds the advisory lock', async () => {

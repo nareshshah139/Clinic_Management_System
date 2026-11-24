@@ -32,6 +32,21 @@ function redactSensitiveFields<T>(input: T): T {
   return visit(input);
 }
 
+/**
+ * @cc [owner:nareshshah139,label:privacy] patient-facing-audit-names-only
+ * Audit entries for the patient-facing Access, Messaging, Follow-up and Studies tables MUST hold
+ * only the row id, the action, the actor kind and the changed field names, never a field's value.
+ */
+export const NAMES_ONLY_AUDIT_MODELS = new Set<string>(['PatientPortalProfile']);
+
+export function namesOnlyAuditValues(operation: string, args: any, ctx: { userId?: string | null } | undefined) {
+  const data = Array.isArray(args?.data) ? args.data[0] : args?.data ?? (operation === 'upsert' ? { ...args?.create, ...args?.update } : undefined);
+  return {
+    actorKind: ctx?.userId ? 'staff' : 'system',
+    newValues: JSON.stringify({ fields: Object.keys(data ?? {}).sort() }),
+  };
+}
+
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(PrismaService.name);
@@ -90,6 +105,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     Object.assign(this, extended);
 
     async function tryFindOld(client: any, model: string, args: any) {
+      if (NAMES_ONLY_AUDIT_MODELS.has(model)) return null;
       try {
         const lower = model.charAt(0).toLowerCase() + model.slice(1);
         if (args?.where) {
@@ -123,10 +139,19 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       }
 
       const ctx = getCtx?.();
+      const namesOnly = NAMES_ONLY_AUDIT_MODELS.has(model) ? namesOnlyAuditValues(operation, args, ctx) : null;
 
       try {
         await base.auditLog.create({
-          data: {
+          data: namesOnly ? {
+            userId: ctx?.userId ?? null,
+            action: String(operation).toUpperCase(),
+            entity: model,
+            entityId: entityId ?? 'UNKNOWN',
+            actorKind: namesOnly.actorKind,
+            oldValues: null,
+            newValues: namesOnly.newValues,
+          } : {
             userId: ctx?.userId ?? null,
             action: String(operation).toUpperCase(),
             entity: model,

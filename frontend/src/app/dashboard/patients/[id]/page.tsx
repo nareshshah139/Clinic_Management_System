@@ -20,6 +20,7 @@ import VisitPhotos from '@/components/visits/VisitPhotos';
 import { Calendar, Users, ArrowLeft } from 'lucide-react';
 import { enumLabel } from '@/lib/labels';
 import { NativeSelect } from '@/components/ui/native-select';
+import { PatientWhatsAppCard } from '@/components/patients/patient-whatsapp';
 
 type NextAppointment = { date: string; slot: string; doctor?: { firstName?: string; lastName?: string } | null };
 
@@ -283,6 +284,9 @@ export default function PatientDetailsPage() {
               <div><span className="text-muted-foreground">Address:</span> <span className="text-foreground">{patient.address || '—'}</span></div>
             </CardContent>
           </Card>
+          <div className="mt-4">
+            <PatientWhatsAppCard patientId={id} profile={patient.portalProfile} phone={patient.phone} />
+          </div>
         </TabsContent>
 
         <TabsContent value="history" className="mt-4">

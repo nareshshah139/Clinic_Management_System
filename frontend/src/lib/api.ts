@@ -391,6 +391,14 @@ export class ApiClient {
     return this.patch(`/patients/${id}`, data);
   }
 
+  async recordWhatsAppConsent(id: string, action: 'agreed' | 'refused') {
+    return this.post(`/patients/${id}/whatsapp-consent`, { action });
+  }
+
+  async setPatientPortalEnabled(id: string, enabled: boolean) {
+    return this.patch(`/patients/${id}/portal`, { enabled });
+  }
+
   async archivePatient(id: string) {
     return this.post(`/patients/${id}/archive`, {});
   }

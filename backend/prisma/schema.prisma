@@ -328,6 +328,7 @@ model Patient {
   visits           Visit[]
   pharmacyInvoices PharmacyInvoice[]
   draftAttachments DraftAttachment[]
+  portalProfile    PatientPortalProfile?
 
   // Back-relations
   experimentAssignments ExperimentAssignment[]
@@ -1237,6 +1238,7 @@ model AuditLog {
   action    String
   entity    String
   entityId  String
+  actorKind String?
   oldValues String?
   newValues String?
   ipAddress String?
@@ -2274,6 +2276,34 @@ enum Language {
   EN
   TE
   HI
+}
+
+enum WhatsAppConsentState {
+  NOT_ASKED
+  PENDING
+  OPTED_IN
+  OPTED_OUT
+}
+
+model PatientPortalProfile {
+  id                  String               @id @default(cuid())
+  patientId           String               @unique
+  phoneE164           String?
+  phoneConfirmedAt    DateTime?
+  consentState        WhatsAppConsentState @default(NOT_ASKED)
+  consentRecordedById String?
+  consentRecordedAt   DateTime?
+  consentMethod       String?
+  preferredLanguage   Language             @default(EN)
+  portalEnabled       Boolean              @default(true)
+  mergeHoldReason     String?
+  lastSeenAt          DateTime?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  patient             Patient              @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([phoneE164])
+  @@map("patient_portal_profiles")
 }
 
 enum MedicineForm {

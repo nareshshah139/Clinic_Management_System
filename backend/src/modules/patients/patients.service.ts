@@ -10,6 +10,18 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { Prisma } from '@prisma/client';
 import { generatePatientCode } from '../../shared/ids/patient-code.util';
 import { readUpcomingAppointments } from '../appointments/upcoming-appointments';
+import { ensureProfile, syncPatientPhone } from './portal/portal-profile';
+
+const portalProfileSelect = {
+  phoneE164: true,
+  phoneConfirmedAt: true,
+  consentState: true,
+  consentRecordedAt: true,
+  consentMethod: true,
+  preferredLanguage: true,
+  portalEnabled: true,
+  mergeHoldReason: true,
+} as const;
 
 /**
  * @cc [owner:nareshshah139,label:security] portal-user-safe-fields
@@ -101,7 +113,7 @@ export class PatientsService {
    */
   async create(createPatientDto: CreatePatientDto, branchId: string, creator?: { id: string; role: string }) {
     const normalizedPhone = this.normalizePhone(createPatientDto.phone);
-    const { dob: dobStr, age, primaryDoctorId: requestedDoctorId, ...rest } = createPatientDto;
+    const { dob: dobStr, age, primaryDoctorId: requestedDoctorId, preferredLanguage, ...rest } = createPatientDto;
     const primaryDoctorId = await this.resolvePrimaryDoctor(
       requestedDoctorId !== undefined ? requestedDoctorId : creator?.role === 'DOCTOR' ? creator.id : null, branchId);
 
@@ -121,16 +133,21 @@ export class PatientsService {
       dob = this.ageToApproximateDob(resolvedAge);
     }
 
-    return this.prisma.$transaction((tx) =>
-      this.createPatientWithCode(tx, {
+    return this.prisma.$transaction(async (tx) => {
+      const patient = await this.createPatientWithCode(tx, {
         ...rest,
         phone: normalizedPhone,
         branchId,
         dob,
         age: resolvedAge,
         primaryDoctorId,
-      }),
-    );
+      });
+      await syncPatientPhone(tx, patient.id, createPatientDto.phone);
+      if (preferredLanguage) {
+        await tx.patientPortalProfile.update({ where: { patientId: patient.id }, data: { preferredLanguage } });
+      }
+      return patient;
+    });
   }
 
   private async resolvePrimaryDoctor(doctorId: string | null | undefined, branchId: string): Promise<string | null> {
@@ -316,6 +333,7 @@ export class PatientsService {
           take: 5,
         },
         portalUser: { select: portalUserSelect },
+        portalProfile: { select: portalProfileSelect },
       },
     });
     if (!patient) throw new NotFoundException('Patient not found');
@@ -367,7 +385,7 @@ export class PatientsService {
   async update(id: string, updatePatientDto: UpdatePatientDto, branchId: string) {
     await this.findOne(id, branchId);
 
-    const { dob, age, phone, primaryDoctorId, ...rest } = updatePatientDto as any;
+    const { dob, age, phone, primaryDoctorId, preferredLanguage, ...rest } = updatePatientDto as any;
     const updateData: any = { ...rest };
     if (primaryDoctorId !== undefined) {
       updateData.primaryDoctorId = await this.resolvePrimaryDoctor(primaryDoctorId, branchId);
@@ -396,9 +414,17 @@ export class PatientsService {
       updateData.phone = this.normalizePhone(phone);
     }
 
-    return this.prisma.patient.update({
-      where: { id },
-      data: updateData,
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.patient.update({
+        where: { id },
+        data: updateData,
+      });
+      if (phone !== undefined) await syncPatientPhone(tx, id, phone);
+      if (preferredLanguage) {
+        await ensureProfile(tx, id);
+        await tx.patientPortalProfile.update({ where: { patientId: id }, data: { preferredLanguage } });
+      }
+      return updated;
     });
   }
 

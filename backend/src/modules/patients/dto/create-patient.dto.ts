@@ -6,7 +6,9 @@ import {
   Min,
   Max,
   Matches,
+  IsEnum,
 } from 'class-validator';
+import { Language } from '@prisma/client';
 
 export class CreatePatientDto {
   @IsOptional()
@@ -28,6 +30,10 @@ export class CreatePatientDto {
   @Min(0)
   @Max(150)
   age?: number;
+
+  @IsOptional()
+  @IsEnum(Language)
+  preferredLanguage?: Language;
 
   @Matches(/^\+?[1-9]\d{6,14}$/, { message: 'phone must be a valid international phone number (E.164 format)' })
   phone: string;

@@ -15,6 +15,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import Link from 'next/link';
 import { Plus, Search, Edit, Eye, Archive, Link as LinkIcon, Unlink, MessageSquare, Stethoscope, Download, MoreHorizontal, CalendarPlus, Copy } from 'lucide-react';
 import { apiClient } from '@/lib/api';
+import { PREFERRED_LANGUAGES, type PreferredLanguage } from './patient-whatsapp';
 import { track } from '@/lib/analytics';
 import { formatPatientName, filterRoomsByVisitType, calculateAge } from '@/lib/utils';
 import { enumLabel } from '@/lib/labels';
@@ -43,6 +44,7 @@ interface PatientFormState {
   emergencyContact?: string;
   referralSource?: string;
   consultationType?: 'ONLINE' | 'OFFLINE';
+  preferredLanguage?: PreferredLanguage;
   patientType?: 'WALKIN' | 'NON_WALKIN';
   walkinDoctorId?: string;
   walkinVisitType?: VisitType;
@@ -188,6 +190,7 @@ export default function PatientsManagement() {
     emergencyContact: '',
     referralSource: '',
     consultationType: 'OFFLINE',
+    preferredLanguage: 'EN',
     patientType: 'NON_WALKIN',
     walkinDoctorId: '',
     walkinVisitType: 'OPD',
@@ -424,6 +427,7 @@ export default function PatientsManagement() {
       emergencyContact: '',
       referralSource: '',
       consultationType: 'OFFLINE',
+      preferredLanguage: 'EN',
       patientType: 'NON_WALKIN',
       walkinDoctorId: '',
       walkinVisitType: 'OPD',
@@ -486,6 +490,7 @@ export default function PatientsManagement() {
         emergencyContact: form.emergencyContact || undefined,
         referralSource: form.referralSource || undefined,
         consultationType: form.consultationType || undefined,
+        preferredLanguage: form.preferredLanguage || undefined,
         ...(form.primaryDoctorId !== undefined ? { primaryDoctorId: form.primaryDoctorId || null } : {}),
       };
       
@@ -617,6 +622,7 @@ export default function PatientsManagement() {
             ...prev,
             emergencyContact: (full.emergencyContact ?? prev.emergencyContact) || '',
             primaryDoctorId: prev.primaryDoctorId ?? (full.primaryDoctorId || ''),
+            preferredLanguage: full.portalProfile?.preferredLanguage ?? prev.preferredLanguage,
           }));
         }
       } catch {}
@@ -822,6 +828,17 @@ export default function PatientsManagement() {
               <div className="md:col-span-2">
                 <Label htmlFor="emergencyContact">Emergency Contact</Label>
                 <Input id="emergencyContact" value={form.emergencyContact} onChange={(e) => setForm({ ...form, emergencyContact: e.target.value })} />
+              </div>
+              <div>
+                <Label id="preferredLanguage-label" htmlFor="preferredLanguage">Preferred language for messages</Label>
+                <Select value={form.preferredLanguage || 'EN'} onValueChange={(v: PreferredLanguage) => setForm({ ...form, preferredLanguage: v })}>
+                  <SelectTrigger id="preferredLanguage" aria-labelledby="preferredLanguage-label">
+                    <SelectValue placeholder="Select language" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PREFERRED_LANGUAGES.map((l) => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <Label id="consultationType-label" htmlFor="consultationType">Consultation Type</Label>

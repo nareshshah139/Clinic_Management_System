@@ -8,6 +8,11 @@ const reviewedExclusions: Record<string, string> = {
     'branchId lives on the Patient row and every duplicate group shares one branch',
 };
 
+const combinedByMerge: Record<string, string> = {
+  PatientPortalProfile:
+    'one profile per patient: the merge folds the duplicate profile into the kept one (opt-out and a disabled portal win) and deletes it',
+};
+
 const knownGaps: Record<string, string> = {
   PharmacyDispenseTask:
     'patientId has no Prisma relation, so dispense tasks stay on the archived duplicate',
@@ -59,6 +64,13 @@ async function modelsRepointedByMerge(): Promise<Set<string>> {
           }),
         };
       return {
+        findUnique: async ({ where }: any) => (where?.patientId === duplicate.id ? { patientId: duplicate.id, consentState: 'OPTED_OUT' } : null),
+        findUniqueOrThrow: async () => kept,
+        create: async () => ({}),
+        delete: async ({ where }: any) => {
+          if (where?.patientId === duplicate.id) repointed.add(delegate);
+          return {};
+        },
         findMany: async () => [],
         update: async () => ({}),
         updateMany: async ({ where, data }: any) => {
@@ -92,6 +104,7 @@ const unaccounted = (linked: string[], repointed: Set<string>) =>
     (name) =>
       !repointed.has(delegateFor(name)) &&
       !(name in reviewedExclusions) &&
+      !(name in combinedByMerge) &&
       !(name in knownGaps),
   );
 
@@ -104,7 +117,7 @@ describe('Patient merge covers every patient-linked model', () => {
     expect(unaccounted(linked, await modelsRepointedByMerge())).toEqual([]);
   });
 
-  it('repoints all eleven foreign-key children of Patient', async () => {
+  it('repoints or folds every foreign-key child of Patient', async () => {
     expect([...(await modelsRepointedByMerge())].sort()).toEqual([
       'appointment',
       'consent',
@@ -114,6 +127,7 @@ describe('Patient merge covers every patient-linked model', () => {
       'invoice',
       'labOrder',
       'newInvoice',
+      'patientPortalProfile',
       'pharmacyInvoice',
       'referral',
       'visit',
