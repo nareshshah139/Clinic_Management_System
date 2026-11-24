@@ -636,6 +636,18 @@ export class ApiClient {
     return this.post<T>('/pharmacy/purchase-invoices/master-matches', data);
   }
 
+  async getPharmacyPurchaseLearningMetrics<T = unknown>(params: { from: string; to: string }): Promise<T> {
+    return this.get<T>('/pharmacy/purchase-invoices/learning/metrics', params);
+  }
+
+  async getPharmacyPurchaseLearningLessons<T = unknown>(): Promise<T> {
+    return this.get<T>('/pharmacy/purchase-invoices/learning/lessons');
+  }
+
+  async forgetPharmacyPurchaseLearningLesson<T = unknown>(lessonKey: string): Promise<T> {
+    return this.post<T>('/pharmacy/purchase-invoices/learning/lessons/forget', { lessonKey });
+  }
+
   async confirmPharmacyPurchaseMaster<T = unknown>(
     data: Record<string, unknown>
   ): Promise<T> {
