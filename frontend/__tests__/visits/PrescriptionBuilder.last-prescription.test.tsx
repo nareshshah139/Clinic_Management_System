@@ -43,18 +43,33 @@ afterEach(() => {
 
 const renderVisit = () => render(<PrescriptionBuilder patientId="p-last" visitId="current" doctorId="d" />);
 
-it('shows the last saved prescription read-only while the medicines table stays empty', async () => {
+it('shows one collapsed line, expands to the medicines, and keeps the table empty', async () => {
   renderVisit();
   const panel = await screen.findByRole('region', { name: 'Last prescription' });
-  expect(panel.textContent).toBe(
-    'Last prescription10 Oct 2026 • Asha RaoCopy to this prescriptionTab Doxycycline 100mg • 1-0-1 • after food • 14 days • Avoid sun exposureCap Itraconazole 100mg • once daily • after food • 7 days',
-  );
+  const header = within(panel).getByRole('button');
+  expect(panel.textContent).toBe('Last prescription · 10 Oct 2026 · 2 medicines');
+  expect(header.getAttribute('aria-expanded')).toBe('false');
+  expect(screen.queryByText(/Tab Doxycycline 100mg/)).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Copy to this prescription' })).toBeNull();
   expect(screen.queryByDisplayValue('Tab Doxycycline 100mg')).toBeNull();
+
+  fireEvent.click(header);
+  expect(header.getAttribute('aria-expanded')).toBe('true');
+  expect(panel.textContent).toBe(
+    'Last prescription · 10 Oct 2026 · 2 medicinesTab Doxycycline 100mg • 1-0-1 • after food • 14 days • Avoid sun exposureCap Itraconazole 100mg • once daily • after food • 7 daysCopy to this prescription',
+  );
   expect(within(panel).queryByText(/Cetirizine/)).toBeNull();
+  expect(screen.queryByDisplayValue('Tab Doxycycline 100mg')).toBeNull();
+
+  fireEvent.click(header);
+  expect(header.getAttribute('aria-expanded')).toBe('false');
 });
 
 it('copies the last prescription into the medicines table', async () => {
   renderVisit();
+  const panel = await screen.findByRole('region', { name: 'Last prescription' });
+  fireEvent.click(within(panel).getByRole('button'));
   fireEvent.click(await screen.findByRole('button', { name: 'Copy to this prescription' }));
   expect(await screen.findByDisplayValue('Tab Doxycycline 100mg')).toBeTruthy();
+  expect(await screen.findByDisplayValue('Cap Itraconazole 100mg')).toBeTruthy();
 });

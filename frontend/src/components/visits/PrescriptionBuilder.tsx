@@ -654,6 +654,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   };
   const [patientHistoryForLearning, setPatientHistoryForLearning] = useState<any[]>([]);
   const [lastPrescription, setLastPrescription] = useState<LastPrescription | null>(null);
+  const [lastRxOpenId, setLastRxOpenId] = useState<string | null>(null);
   const [doctorPrescriptionsForLearning, setDoctorPrescriptionsForLearning] = useState<any[]>([]);
   const [learningSourcesStatus, setLearningSourcesStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [learningSourcesError, setLearningSourcesError] = useState('');
@@ -5327,31 +5328,37 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                     </div>
                   </div>
                 )}
-                {learningSourcesStatus === 'loading' && !lastPrescription && (
-                  <div className="text-xs text-muted-foreground">Loading last prescription…</div>
-                )}
-                {lastPrescription && (
-                  <section aria-label="Last prescription" className="rounded-lg border border-border bg-muted/40 p-3 text-sm">
-                    <div className="flex flex-wrap items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <h4 className="font-medium">Last prescription</h4>
-                        <p className="text-xs text-muted-foreground">
-                          {displayClinicDate(new Date(lastPrescription.date))}{lastPrescription.doctorName ? ` • ${lastPrescription.doctorName}` : ''}
-                        </p>
-                      </div>
-                      <Button size="sm" variant="outline" onClick={copyLastPrescription}>Copy to this prescription</Button>
-                    </div>
-                    <ul className="mt-2 space-y-1">
-                      {lastPrescription.items.map((m, i) => (
-                        <li key={`${m.drugName}-${i}`} className="break-words">
-                          <span className="font-medium">{m.drugName}</span>
-                          {[m.dosePattern || String(m.frequency || '').replace(/_/g, ' ').toLowerCase(), m.timing ? String(m.timing).replace(/_/g, ' ').toLowerCase() : '', m.duration !== '' && m.duration != null ? `${m.duration} ${String(m.durationUnit || '').toLowerCase()}` : '', m.instructions || '']
-                            .filter((part, idx, parts) => part && parts.findIndex((p) => p.toLowerCase() === part.toLowerCase()) === idx).map((part) => ` • ${part}`).join('')}
-                        </li>
-                      ))}
-                    </ul>
-                  </section>
-                )}
+                {lastPrescription && (() => {
+                  const open = lastRxOpenId === lastPrescription.visitId;
+                  const count = lastPrescription.items.length;
+                  return (
+                    <section aria-label="Last prescription" className="rounded-lg border border-border bg-muted/40 text-sm">
+                      <button
+                        type="button"
+                        aria-expanded={open}
+                        onClick={() => setLastRxOpenId(open ? null : lastPrescription.visitId)}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium leading-5"
+                      >
+                        {open ? <ChevronDown className="h-4 w-4 shrink-0" aria-hidden="true" /> : <ChevronRight className="h-4 w-4 shrink-0" aria-hidden="true" />}
+                        <span className="min-w-0 break-words">{`Last prescription · ${displayClinicDate(new Date(lastPrescription.date))} · ${count} ${count === 1 ? 'medicine' : 'medicines'}`}</span>
+                      </button>
+                      {open && (
+                        <div className="px-3 pb-2">
+                          <ul className="space-y-1">
+                            {lastPrescription.items.map((m, i) => (
+                              <li key={`${m.drugName}-${i}`} className="break-words">
+                                <span className="font-medium">{m.drugName}</span>
+                                {[m.dosePattern || String(m.frequency || '').replace(/_/g, ' ').toLowerCase(), m.timing ? String(m.timing).replace(/_/g, ' ').toLowerCase() : '', m.duration !== '' && m.duration != null ? `${m.duration} ${String(m.durationUnit || '').toLowerCase()}` : '', m.instructions || '']
+                                  .filter((part, idx, parts) => part && parts.findIndex((p) => p.toLowerCase() === part.toLowerCase()) === idx).map((part) => ` • ${part}`).join('')}
+                              </li>
+                            ))}
+                          </ul>
+                          <Button size="sm" variant="outline" className="mt-2" onClick={copyLastPrescription}>Copy to this prescription</Button>
+                        </div>
+                      )}
+                    </section>
+                  );
+                })()}
                 <div className="flex justify-between items-center">
                   <div className="text-sm text-muted-foreground">Total items: {items.length}</div>
                   <div className="flex gap-2">
