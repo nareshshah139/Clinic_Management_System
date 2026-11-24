@@ -1,6 +1,6 @@
 @cc [owner:nareshshah139,label:verification] date-display-source-parity
-sync-date-display.cjs check mode MUST fail when the committed backend formatter differs from
-frontend/src/lib/date-display.ts. Write mode MUST copy that source without changing app packaging.
+sync-mirrored-modules.cjs check mode MUST fail when a committed backend copy (date-display.ts, pdf-file-name.ts)
+differs from its frontend source. Write mode MUST copy those sources without changing app packaging.
 
 @cc [owner:nareshshah139,label:testing] language-browser-isolation
 ux/verify-language.cjs MUST use only loopback app URLs and synthetic API responses. A failed
