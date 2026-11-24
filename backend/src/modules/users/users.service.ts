@@ -9,6 +9,8 @@ import { readDoctorSignature, signatureDataUrl } from './doctor-signature';
 import { letterheadDataUrl, readDoctorLetterhead } from './doctor-letterhead';
 import { fixedGrants, permissionDeltas, tickedPermissions } from '../../shared/access/permission-grants';
 
+const ADMIN_ROLES: UserRole[] = [UserRole.OWNER, UserRole.ADMIN];
+
 const statusColumns = (status: UserStatus) => ({ status, isActive: status === UserStatus.ACTIVE });
 
 @Injectable()
@@ -201,7 +203,7 @@ export class UsersService {
     return this.formatUser(user);
   }
 
-  async updateUser(id: string, updateUserDto: UpdateUserDto, branchId: string) {
+  async updateUser(id: string, updateUserDto: UpdateUserDto, branchId: string, actorId: string) {
     const existingUser = await this.prisma.user.findFirst({
       where: { id, branchId },
     });
@@ -209,6 +211,8 @@ export class UsersService {
     if (!existingUser) {
       throw new NotFoundException('User not found');
     }
+
+    await this.assertNotLockout(existingUser, actorId, { role: updateUserDto.role, status: updateUserDto.status });
 
     // Check if email already exists (excluding current user)
     if (updateUserDto.email && updateUserDto.email !== existingUser.email) {
@@ -251,7 +255,7 @@ export class UsersService {
     return this.formatUser(await this.saveUser(id, updateData));
   }
 
-  async deleteUser(id: string, branchId: string) {
+  async deleteUser(id: string, branchId: string, actorId: string) {
     const user = await this.prisma.user.findFirst({
       where: { id, branchId },
     });
@@ -259,6 +263,8 @@ export class UsersService {
     if (!user) {
       throw new NotFoundException('User not found');
     }
+
+    await this.assertNotLockout(user, actorId, { remove: true });
 
     // Check if user has any related records
     const hasAppointments = await this.prisma.appointment.count({
@@ -278,6 +284,38 @@ export class UsersService {
     });
 
     return { message: 'User deleted successfully' };
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:security] no-admin-self-lockout
+   * A caller MUST NOT delete, deactivate, suspend or change the role of their own account, and no
+   * change may remove, deactivate or demote the last active OWNER or ADMIN of a branch.
+   */
+  private async assertNotLockout(
+    target: { id: string; branchId: string; role: UserRole; status: UserStatus },
+    actorId: string,
+    change: { role?: UserRole; status?: UserStatus; remove?: boolean },
+  ) {
+    const demoted = change.role !== undefined && change.role !== target.role && !ADMIN_ROLES.includes(change.role);
+    const roleChanged = change.role !== undefined && change.role !== target.role;
+    const deactivated = change.status !== undefined && change.status !== UserStatus.ACTIVE && target.status === UserStatus.ACTIVE;
+    if (target.id === actorId && (change.remove || deactivated || roleChanged)) {
+      throw new ForbiddenException(
+        change.remove
+          ? 'You cannot delete your own account.'
+          : deactivated
+            ? 'You cannot deactivate or suspend your own account.'
+            : 'You cannot change your own role.',
+      );
+    }
+    const losesAdmin = ADMIN_ROLES.includes(target.role) && target.status === UserStatus.ACTIVE && (change.remove || deactivated || demoted);
+    if (!losesAdmin) return;
+    const others = await this.prisma.user.count({
+      where: { branchId: target.branchId, id: { not: target.id }, role: { in: ADMIN_ROLES }, status: UserStatus.ACTIVE },
+    });
+    if (others === 0) {
+      throw new BadRequestException('This is the last active Owner or Admin of the branch; make someone else an Owner or Admin first.');
+    }
   }
 
   // Password Management Methods
@@ -333,7 +371,7 @@ export class UsersService {
     return this.formatUser(await this.saveUser(id, { ...updateProfileDto }));
   }
 
-  async updateUserStatus(id: string, userStatusDto: UserStatusDto, branchId: string) {
+  async updateUserStatus(id: string, userStatusDto: UserStatusDto, branchId: string, actorId: string) {
     const user = await this.prisma.user.findFirst({
       where: { id, branchId },
     });
@@ -341,6 +379,8 @@ export class UsersService {
     if (!user) {
       throw new NotFoundException('User not found');
     }
+
+    await this.assertNotLockout(user, actorId, { status: userStatusDto.status });
 
     const updatedUser = await this.prisma.user.update({
       where: { id },
@@ -354,7 +394,7 @@ export class UsersService {
   }
 
   // Role and Permission Management Methods
-  async assignRole(id: string, assignRoleDto: AssignRoleDto, branchId: string) {
+  async assignRole(id: string, assignRoleDto: AssignRoleDto, branchId: string, actorId: string) {
     const user = await this.prisma.user.findFirst({
       where: { id, branchId },
     });
@@ -362,6 +402,8 @@ export class UsersService {
     if (!user) {
       throw new NotFoundException('User not found');
     }
+
+    await this.assertNotLockout(user, actorId, { role: assignRoleDto.role });
 
     // Find the role by name
     const roleRecord = await this.prisma.role.findFirst({

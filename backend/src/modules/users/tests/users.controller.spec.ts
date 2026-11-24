@@ -147,7 +147,7 @@ describe('UsersController', () => {
       const result = await controller.updateUser('user-123', updateUserDto, mockRequest as any);
 
       expect(result).toEqual(updatedUser);
-      expect(mockUsersService.updateUser).toHaveBeenCalledWith('user-123', updateUserDto, 'branch-123');
+      expect(mockUsersService.updateUser).toHaveBeenCalledWith('user-123', updateUserDto, 'branch-123', 'user-123');
     });
 
     it('should delete user', async () => {
@@ -156,7 +156,7 @@ describe('UsersController', () => {
       const result = await controller.deleteUser('user-123', mockRequest as any);
 
       expect(result).toEqual({ message: 'User deleted successfully' });
-      expect(mockUsersService.deleteUser).toHaveBeenCalledWith('user-123', 'branch-123');
+      expect(mockUsersService.deleteUser).toHaveBeenCalledWith('user-123', 'branch-123', 'user-123');
     });
 
     it('should change password', async () => {
@@ -206,7 +206,7 @@ describe('UsersController', () => {
       const result = await controller.assignRole('user-123', assignRoleDto, mockRequest as any);
 
       expect(result).toEqual(updatedUser);
-      expect(mockUsersService.assignRole).toHaveBeenCalledWith('user-123', assignRoleDto, 'branch-123');
+      expect(mockUsersService.assignRole).toHaveBeenCalledWith('user-123', assignRoleDto, 'branch-123', 'user-123');
     });
 
     it('should update permissions', async () => {
@@ -237,7 +237,7 @@ describe('UsersController', () => {
       const result = await controller.updateUserStatus('user-123', userStatusDto, mockRequest as any);
 
       expect(result).toEqual(updatedUser);
-      expect(mockUsersService.updateUserStatus).toHaveBeenCalledWith('user-123', userStatusDto, 'branch-123');
+      expect(mockUsersService.updateUserStatus).toHaveBeenCalledWith('user-123', userStatusDto, 'branch-123', 'user-123');
     });
   });
 
