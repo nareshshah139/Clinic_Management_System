@@ -24,6 +24,9 @@ export async function requirePlanVersion(tx: Tx | PrismaClient, planVersionId: s
  */
 export async function startTrack(tx: Tx, input: { visitId: string; patientId: string; planVersionId: string; anchorDay: string }) {
   const version = await requirePlanVersion(tx, input.planVersionId);
+  // FOR SHARE orders this against a staff archive, whose stop would otherwise miss this track.
+  const [patient] = await tx.$queryRaw<{ isArchived: boolean }[]>`SELECT "isArchived" FROM patients WHERE id = ${input.patientId} FOR SHARE`;
+  if (!patient || patient.isArchived) return null;
   const { steps } = version.content as unknown as PlanContent;
   const track = await tx.followUpTrack.create({
     data: { visitId: input.visitId, patientId: input.patientId, planVersionId: version.id, anchorDate: input.anchorDay },
