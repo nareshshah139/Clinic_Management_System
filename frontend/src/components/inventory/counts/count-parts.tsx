@@ -4,7 +4,7 @@ import { Check } from 'lucide-react';
 import { displayUtcDate } from '@/lib/date-display';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { COUNT_STATE_BADGE, COUNT_STATE_LABELS, COUNT_STATE_SHORT, differ, itemCount, signedRupees, signedUnits, splitParts, type CountLine, type CountState, type SplitFigures } from './count-model';
+import { COUNT_STATE_BADGE, COUNT_STATE_LABELS, COUNT_STATE_SHORT, differ, itemCount, signedRupees, signedUnits, unitName, splitParts, type CountLine, type CountState, type SplitFigures } from './count-model';
 
 const tone = (n: number) => (n < 0 ? 'text-destructive-text' : n > 0 ? 'text-warning-text' : undefined);
 
@@ -35,7 +35,7 @@ export function Difference({ line, withValue = true }: { line: Pick<CountLine, '
   return (
     <span className={cn('flex flex-col leading-tight tabular-nums', diff < 0 ? 'text-destructive-text' : 'text-warning-text')}>
       <span className="whitespace-nowrap font-semibold">
-        {signedUnits(diff)}
+        {signedUnits(diff)} <span className="text-sm font-normal">{unitName(line.unit)}</span>
         <span className="sr-only"> {diff < 0 ? 'fewer' : 'more'} than the system</span>
       </span>
       {withValue && <span className="whitespace-nowrap text-sm">{signedRupees(Math.round(diff * line.unitCost * 100) / 100)}</span>}

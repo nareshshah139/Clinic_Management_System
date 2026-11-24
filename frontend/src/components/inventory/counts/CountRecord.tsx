@@ -6,7 +6,7 @@ import { toast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { BatchLine, CountStateBadge, Difference, Split, SummaryLine } from './count-parts';
 import { DecisionDialog, type Decision } from './DecisionDialog';
-import { clinicStamp, countSummary, type CountDetail } from './count-model';
+import { clinicStamp, countSummary, quantity, type CountDetail } from './count-model';
 
 const join = (names: string[]) => (names.length <= 1 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} or ${names.at(-1)}`);
 
@@ -89,7 +89,7 @@ export function CountRecord({
       <div role="list" aria-label="Counted batches" className="flex flex-col rounded-lg border border-border">
         <div
           aria-hidden="true"
-          className="hidden gap-x-3 rounded-t-lg bg-muted px-3 py-2 text-sm font-semibold sm:grid sm:grid-cols-[minmax(12rem,2.6fr)_4.5rem_4.5rem_minmax(7rem,1fr)_minmax(10rem,2fr)]"
+          className="hidden gap-x-3 rounded-t-lg bg-muted px-3 py-2 text-sm font-semibold sm:grid sm:grid-cols-[minmax(12rem,2.6fr)_6rem_6rem_minmax(7rem,1fr)_minmax(10rem,2fr)]"
         >
           <span>Item</span>
           <span className="text-right">System</span>
@@ -101,7 +101,7 @@ export function CountRecord({
           <div
             key={line.id}
             role="listitem"
-            className="grid grid-cols-3 gap-x-3 gap-y-1 border-t border-border px-3 py-2.5 first-of-type:border-t-0 sm:grid-cols-[minmax(12rem,2.6fr)_4.5rem_4.5rem_minmax(7rem,1fr)_minmax(10rem,2fr)] sm:items-center"
+            className="grid grid-cols-3 gap-x-3 gap-y-1 border-t border-border px-3 py-2.5 first-of-type:border-t-0 sm:grid-cols-[minmax(12rem,2.6fr)_6rem_6rem_minmax(7rem,1fr)_minmax(10rem,2fr)] sm:items-center"
           >
             <div className="col-span-3 min-w-0 sm:col-span-1">
               <BatchLine line={line} />
@@ -109,11 +109,11 @@ export function CountRecord({
             </div>
             <div className="text-sm sm:text-right">
               <span className="block text-xs sm:sr-only">System</span>
-              <span className="tabular-nums">{line.systemStock ?? '—'}</span>
+              <span className="tabular-nums">{quantity(line.systemStock, line.unit)}</span>
             </div>
             <div className="text-sm sm:text-right">
               <span className="block text-xs sm:sr-only">Counted</span>
-              <span className="font-semibold tabular-nums">{line.physicalStock ?? '—'}</span>
+              <span className="font-semibold tabular-nums">{quantity(line.physicalStock, line.unit)}</span>
             </div>
             <div className="text-sm">
               <span className="block text-xs sm:sr-only">Difference</span>

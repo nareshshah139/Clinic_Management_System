@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { requestKey } from '@/components/inventory/workspace-model';
 import { ActionDialog, DialogClose } from '@/components/inventory/purchase/ActionDialog';
 import { BatchLine } from './count-parts';
-import { RECONCILIATION, batchCount, failureMessage } from './count-model';
+import { RECONCILIATION, batchCount, failureMessage, quantity } from './count-model';
 import { NativeSelect } from '@/components/ui/native-select';
 
 type OpenCount = { id: string; day: string | null; person: string | null; signed: boolean };
@@ -242,7 +242,7 @@ export function StartCountDialog({ anchor, onClose, onStarted }: { anchor: HTMLE
                 <span className="min-w-0 flex-1">
                   <BatchLine line={{ name: batch.name, batchNumber: batch.batchNumber, expiryDate: batch.expiryDate ?? '' }} />
                   <span className="block">
-                    {batch.storageLocation || 'Location not recorded'} · <span className={cn('tabular-nums', batch.currentStock === 0 && 'font-medium')}>{batch.currentStock} in stock</span>
+                    {batch.storageLocation || 'Location not recorded'} · <span className={cn('tabular-nums', batch.currentStock === 0 && 'font-medium')}>{quantity(batch.currentStock, batch.unit)} in stock</span>
                   </span>
                   {batch.openCount && <span className="block font-medium text-warning-text">{onCount(batch.openCount)}</span>}
                 </span>
