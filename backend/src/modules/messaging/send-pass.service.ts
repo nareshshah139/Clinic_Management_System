@@ -80,9 +80,9 @@ export class SendPassService {
       async (tx) => {
         const [row] = await tx.$queryRaw<OutboundMessage[]>`SELECT * FROM "outbound_messages" WHERE "id" = ${id} FOR UPDATE`;
         if (!row || row.state !== 'SENDING') return 'skipped';
-        await tx.$queryRaw`SELECT "id" FROM "patient_portal_profiles" WHERE "phoneE164" = ${row.toE164} ORDER BY "id" FOR UPDATE`;
-        // Holds off an archive until this send is decided and done.
+        // Patient before profiles, the order patient edits use. Holds off an archive until this send is decided and done.
         if (row.patientId) await tx.$queryRaw`SELECT "id" FROM "patients" WHERE "id" = ${row.patientId} FOR SHARE`;
+        await tx.$queryRaw`SELECT "id" FROM "patient_portal_profiles" WHERE "phoneE164" = ${row.toE164} ORDER BY "id" FOR UPDATE`;
         const decision = await this.decide(tx, row, now);
         if (decision.kind === 'suppress' || decision.kind === 'expire') {
           await tx.outboundMessage.update({

@@ -207,6 +207,28 @@ databaseTests('Durable outbound WhatsApp messages on PostgreSQL against a fake M
     expect(meta.calls).toHaveLength(0);
   });
 
+  it('PP-13: a phone edit running while the pass sends to that patient does not deadlock (patient row is locked before profiles)', async () => {
+    const p = await register('9876577774');
+    await optIn(p.id);
+    await care(p.id, 'REVIEW_REMINDER', `edit:${p.id}`);
+    let release!: () => void;
+    let locked!: () => void;
+    const patientHeld = new Promise<void>((r) => { locked = r; });
+    const editing = db.$transaction(async (tx) => {
+      await tx.patient.update({ where: { id: p.id }, data: { phone: '9876577775' } });
+      locked();
+      await new Promise<void>((r) => { release = r; });
+      await tx.patientPortalProfile.update({ where: { patientId: p.id }, data: { phoneE164: '+919876577775', consentState: 'NOT_ASKED', phoneConfirmedAt: null } });
+    }, { timeout: 20_000 });
+    await patientHeld;
+    const passing = pass.runPass(NOON);
+    await new Promise((r) => setTimeout(r, 300));
+    release();
+    await expect(editing).resolves.toBeUndefined();
+    await passing;
+    expect((await messages())[0]).toMatchObject({ state: 'SUPPRESSED', outcome: 'consent-not_asked' });
+  });
+
   it('PP-13: a confirmation for an appointment that was moved, or whose slot has started, expires instead of sending the old time', async () => {
     const p = await register('9876577773');
     await optIn(p.id);
