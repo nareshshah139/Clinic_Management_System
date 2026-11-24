@@ -715,8 +715,10 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
   /**
    * @cc [owner:nareshshah139,label:product] visit-unsaved-means-edited
    * Unsaved changes MUST mean the doctor edited a field since the visit loaded or
-   * last saved. Server loads, restored saved drafts, save receipts and the
-   * prescription editor's echoed consultation type and personal history MUST NOT.
+   * last saved. Server loads, restored saved drafts, save receipts, the prescription
+   * editor's echoed consultation type and personal history, and anything a completed
+   * visit loads while locked MUST NOT. Edits restored from an unsaved draft MUST
+   * still read as unsaved.
    */
   const editSignature = useCallback((draft: MedicalVisitDraftState) => {
     const sinceHydration = (key: string, value: unknown) => {
@@ -1243,6 +1245,8 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
 
   useEffect(() => {
     const signature = editSignature(serializeDraft());
+    // Nothing can be edited while locked, so a load then moves the baseline; edits restored from an unsaved draft stay unsaved.
+    if (editMode === 'locked' && !hasUnsavedChangesRef.current) editBaselineRef.current = signature;
     editBaselineRef.current ??= signature;
     if (justSavedRef.current) justSavedRef.current = false;
     if (signature === lastEditSignatureRef.current) return;
@@ -1294,6 +1298,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
     counseling,
     reviewDate,
     visitStatus,
+    editMode,
   ]);
 
   useEffect(() => {
