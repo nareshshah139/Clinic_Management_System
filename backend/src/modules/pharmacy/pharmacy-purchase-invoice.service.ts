@@ -1,7 +1,7 @@
 import { PurchaseImportRecovery, PurchaseImportFence, claimPurchaseImport, bindPurchaseImport, preparePurchaseWrite } from './purchase-import-recovery';
 import { checkedProductQuery, matchProductSearch, normalizeProductSearch, ocrProductSearchQuery, searchPackKey } from '../../shared/search/product-search';
 import { autocompleteDrugCatalog, findDrugSearchCandidates, loadReviewedProductAliases, searchableDrug, DrugSearchCandidate } from '../../shared/search/drug-search';
-import { hasPurchaseNameEvidence, purchaseMatchMismatches } from './purchase-match-safety';
+import { hasPurchaseNameEvidence, purchaseFormsConflict, purchaseFormsShared, purchaseMatchMismatches } from './purchase-match-safety';
 import { Prisma } from '@prisma/client';
 import { alignPurchaseSource, matchingSourceRows, readPurchaseSourcePages, PurchaseSourceMap } from './purchase-invoice-source';
 import { purchaseCatalogData, purchaseCatalogIssues, purchaseInventoryClassification, purchaseProductKind } from './purchase-product-catalog';
@@ -2230,11 +2230,9 @@ export class PharmacyPurchaseInvoiceService {
     if (!name) return null;
     const pack = searchPackKey(item.packSize || ''), candidatePack = searchPackKey(drug.packSizeLabel || '');
     if (pack && candidatePack && pack !== candidatePack) return null;
-    const forms = (value: string) => normalizeProductSearch(value).split(' ').filter(t => ['tablet','capsule','cream','ointment','gel','lotion','solution','syrup','suspension','injection','drops'].includes(t));
-    const wantedForms = forms(item.productName), actualForms = forms(drug.name + ' ' + (drug.dosageForm || ''));
-    if (wantedForms.length && actualForms.length && !wantedForms.some(f => actualForms.includes(f))) return null;
+    if (purchaseFormsConflict(item.productName, drug)) return null;
     const manufacturer = item.manufacturer ? matchProductSearch(item.manufacturer, {names:[drug.manufacturerName || '']}, 'name') : null;
-    const score = this.money(Math.min(100, name.quality * 64 + (manufacturer?.quality || 0) * 18 + (pack && candidatePack && pack===candidatePack ? 14 : 0) + (wantedForms.some(f => actualForms.includes(f)) ? 4 : 0)));
+    const score = this.money(Math.min(100, name.quality * 64 + (manufacturer?.quality || 0) * 18 + (pack && candidatePack && pack===candidatePack ? 14 : 0) + (purchaseFormsShared(item.productName, drug) ? 4 : 0)));
     const reasons = [name.kind==='fuzzy' ? 'similar spelling: '+name.corrections.join(', ') : name.kind==='alias' ? 'reviewed earlier name' : 'name '+name.kind+' match'];
     reasons.push(...notes);
     if (manufacturer) reasons.push('manufacturer match');
