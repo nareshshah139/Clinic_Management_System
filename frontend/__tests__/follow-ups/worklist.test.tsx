@@ -71,6 +71,17 @@ describe('item detail', () => {
     expect(screen.getByText('Sent')).toBeInTheDocument();
   });
 
+  it('keeps the draft and says so when WhatsApp rejects the reply (PP-51)', async () => {
+    api.getWorklistItem.mockResolvedValue(base);
+    api.replyToPatient.mockResolvedValue({ outcome: 'failed', delivery: { state: 'FAILED', outcome: 'rejected:400:131047' }, item: base });
+    render(<WorklistItemDetailView itemId="item1" currentUserId="doc" onChanged={jest.fn()} />);
+    fireEvent.change(await screen.findByLabelText('Reply on WhatsApp'), { target: { value: 'Come tomorrow' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send reply' }));
+    expect(await screen.findByText(/WhatsApp did not take the reply \(rejected:400:131047\)/)).toBeInTheDocument();
+    expect(screen.queryByText('Reply sent.')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Reply on WhatsApp')).toHaveValue('Come tomorrow');
+  });
+
   it('with the window closed says why and offers "log a call" in place of the reply box', async () => {
     api.getWorklistItem.mockResolvedValue({ ...base, reply: { canReply: false, reason: 'window-closed', message: 'The patient has not written in the last 24 hours, so WhatsApp allows no free-text reply.' } });
     api.logPatientCall.mockResolvedValue({ ...base, reply: { canReply: false, reason: 'window-closed', message: 'x' } });

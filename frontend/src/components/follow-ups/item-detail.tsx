@@ -211,8 +211,17 @@ export function WorklistItemDetailView({ itemId, currentUserId, onChanged, onClo
         <form className="space-y-2" onSubmit={async (e) => {
           e.preventDefault();
           replyKey.current ??= `reply-${item.id}-${Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => b.toString(16).padStart(2, '0')).join('')}`;
-          const ok = await act(async () => (await apiClient.replyToPatient(item.id, reply, replyKey.current!)).item, 'Reply sent.');
-          if (ok) { setReply(''); replyKey.current = null; }
+          let delivery: { state: string; outcome: string | null } | null = null;
+          const ok = await act(async () => {
+            const res = await apiClient.replyToPatient(item.id, reply, replyKey.current!);
+            delivery = res.delivery;
+            return res.item;
+          });
+          replyKey.current = null;
+          if (!ok || !delivery) return;
+          const { state, outcome } = delivery as { state: string; outcome: string | null };
+          if (state === 'FAILED' || state === 'SUPPRESSED') setError(`WhatsApp did not take the reply (${outcome ?? state.toLowerCase()}). Your text is kept; try again or log a call.`);
+          else { setReply(''); setNotice('Reply sent.'); }
         }}>
           <Label htmlFor="staff-reply">Reply on WhatsApp</Label>
           <Textarea id="staff-reply" value={reply} maxLength={4096} onChange={(e) => { setReply(e.target.value); replyKey.current = null; }} disabled={busy} />
