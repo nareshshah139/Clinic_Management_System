@@ -64,17 +64,26 @@ export async function ensureProfile(tx: Tx, patientId: string) {
 
 type Profile = { consentState: WhatsAppConsentState; portalEnabled: boolean; mergeHoldReason: string | null; preferredLanguage: Language; phoneConfirmedAt: Date | null; consentRecordedAt: Date | null; consentRecordedById: string | null; consentMethod: string | null; lastSeenAt: Date | null; phoneE164: string | null };
 
-/** Merge rule: an opt-out on either row wins, and a disabled portal on either row wins. */
+const CONSENT_RANK: Record<WhatsAppConsentState, number> = { NOT_ASKED: 0, PENDING: 1, OPTED_IN: 2, OPTED_OUT: 3 };
+
+/**
+ * Merge rule: an opt-out on either row wins and a disabled portal on either row wins. Otherwise,
+ * when both rows hold the same number, the further-along consent is kept with its confirmation;
+ * consent given for a different number does not carry over.
+ */
 export function combineProfiles(kept: Profile | null, dup: Profile | null): Partial<Profile> | null {
   if (!dup) return null;
   if (!kept) return { ...dup, phoneE164: dup.phoneE164 };
+  const sameNumber = kept.phoneE164 !== null && kept.phoneE164 === dup.phoneE164;
   const optedOut = kept.consentState === 'OPTED_OUT' ? kept : dup.consentState === 'OPTED_OUT' ? dup : null;
-  const consentFrom = optedOut ?? kept;
+  const furthest = sameNumber && CONSENT_RANK[dup.consentState] > CONSENT_RANK[kept.consentState] ? dup : kept;
+  const consentFrom = optedOut ?? furthest;
   return {
     consentState: consentFrom.consentState,
     consentRecordedAt: consentFrom.consentRecordedAt,
     consentRecordedById: consentFrom.consentRecordedById,
     consentMethod: consentFrom.consentMethod,
+    phoneConfirmedAt: optedOut ? null : consentFrom.phoneConfirmedAt,
     portalEnabled: kept.portalEnabled && dup.portalEnabled,
     mergeHoldReason: kept.mergeHoldReason ?? dup.mergeHoldReason,
   };

@@ -111,6 +111,15 @@ databaseTests('Patient phone, WhatsApp consent, language and portal switch on Po
     expect(await profile(kept.id)).toMatchObject({ consentState: 'OPTED_OUT', portalEnabled: false });
   });
 
+  it('PP-10: a merge keeps the duplicate agreement on the same number when the kept patient was never asked', async () => {
+    const kept = await db.patient.create({ data: { name: 'Jaya Dup', gender: 'F', phone: '9876500019', branchId: 'A', createdAt: new Date('2026-01-01') } });
+    const dup = await db.patient.create({ data: { name: 'Jaya Dup', gender: 'F', phone: '9876500019', branchId: 'A', createdAt: new Date('2026-02-01') } });
+    await db.patientPortalProfile.create({ data: { patientId: kept.id, phoneE164: '+919876500019' } });
+    await db.patientPortalProfile.create({ data: { patientId: dup.id, phoneE164: '+919876500019', consentState: 'PENDING', consentRecordedById: 'rec', consentMethod: 'reception-agreed' } });
+    await new PatientDeduplicationService(db as any).runDuplicatePatientMergeJob();
+    expect(await profile(kept.id)).toMatchObject({ consentState: 'PENDING', consentRecordedById: 'rec', consentMethod: 'reception-agreed' });
+  });
+
   it('PP-10: a merge moves the duplicate profile to a kept patient without one, keeping an opt-out', async () => {
     const kept = await db.patient.create({ data: { name: 'Indu Dup', gender: 'F', phone: '9876500018', branchId: 'A', createdAt: new Date('2026-01-01') } });
     const dup = await db.patient.create({ data: { name: 'Indu Dup', gender: 'F', phone: '9876500018', branchId: 'A', createdAt: new Date('2026-02-01') } });
