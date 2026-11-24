@@ -1003,11 +1003,14 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
           });
           clearAutoSaveTimer();
         } else {
-          toast({
-            variant: 'warning',
-            title: 'Auto-save failed',
-            description: getErrorMessage(error) || 'We will retry shortly.',
-          });
+          if (!autoSaveFailureNotifiedRef.current) {
+            autoSaveFailureNotifiedRef.current = true;
+            toast({
+              variant: 'warning',
+              title: 'Auto-save failed',
+              description: getErrorMessage(error) || 'We will retry shortly.',
+            });
+          }
           clearAutoSaveTimer();
           if (retryAllowed) {
             autoSaveTimerRef.current = window.setTimeout(() => {
@@ -1260,7 +1263,6 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
 
     hasUnsavedChangesRef.current = true;
     setSaveStatus(automaticSaveBlocked.current ? 'error' : 'unsaved');
-    autoSaveFailureNotifiedRef.current = false;
     const changed = persistDraftToStorage();
     if (changed) {
       scheduleAutoSave();
