@@ -91,10 +91,15 @@ export class SendPassService {
   }
 
   async applyPendingReceipts(now: Date): Promise<number> {
-    // Receipts for staff-started sends never find a row; stop retrying them once a row could no longer be committing.
+    // Receipts for staff-started sends never find a row; settle them once a row could no longer be committing.
     const horizon = new Date(now.getTime() - RECEIPT_MATCH_MS);
     await this.prisma.inboundWhatsAppEvent.updateMany({ where: { kind: 'status', appliedAt: null, receivedAt: { lt: horizon } }, data: { appliedAt: now } });
-    const pending = await this.prisma.inboundWhatsAppEvent.findMany({ where: { kind: 'status', appliedAt: null }, orderBy: { receivedAt: 'desc' }, take: BATCH });
+    // Only receipts whose row now exists, so unmatched ones never crowd out the batch.
+    const pending = await this.prisma.$queryRaw<{ id: string; payload: unknown }[]>`
+      SELECT e."id", e."payload" FROM "inbound_whatsapp_events" e
+      JOIN "outbound_messages" o ON o."providerMessageId" = e."payload"->>'id'
+      WHERE e."kind" = 'status' AND e."appliedAt" IS NULL
+      ORDER BY e."receivedAt" ASC LIMIT ${BATCH}`;
     let applied = 0;
     for (const event of pending) {
       const done = await this.prisma.$transaction(async (tx) => {

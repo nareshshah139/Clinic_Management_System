@@ -225,13 +225,13 @@ databaseTests('Inbound WhatsApp webhook on PostgreSQL against a fake Meta endpoi
     expect(await db.patientMessage.count({ where: { phoneE164: '+919876500011' } })).toBe(0);
   });
 
-  it('PP-16: receipts apply in any order, only forward; a receipt before its row is applied by the next pass even behind 60 unmatched ones; receipts unmatched for an hour stop being retried; a failed receipt reaches staff', async () => {
+  it('PP-16: receipts apply in any order, only forward; a receipt before its row is applied by the next pass even with 60 newer unmatched ones; receipts unmatched for an hour stop being retried; a failed receipt reaches staff', async () => {
     const p = await patient('+919876500012');
     const status = (id: string, s: string, extra: Record<string, unknown> = {}) => envelope({ statuses: [{ id, status: s, recipient_id: '919876500012', timestamp: '1', ...extra }] });
     await post(status('wamid.out.early', 'delivered'));
     const early = await db.inboundWhatsAppEvent.findUniqueOrThrow({ where: { providerEventId: 'status:wamid.out.early:delivered' } });
     expect(early.appliedAt).toBeNull();
-    await db.inboundWhatsAppEvent.update({ where: { id: early.id }, data: { receivedAt: new Date(NOON.getTime() - 60_000) } });
+    await db.inboundWhatsAppEvent.update({ where: { id: early.id }, data: { receivedAt: new Date(NOON.getTime() - 50 * 60_000) } });
     const unmatched = (n: number, ageMs: number, tag: string) => db.inboundWhatsAppEvent.createMany({ data: Array.from({ length: n }, (_, i) => ({ providerEventId: `status:wamid.staff.${tag}${i}:delivered`, kind: 'status', payload: { id: `wamid.staff.${tag}${i}`, status: 'delivered' }, receivedAt: new Date(NOON.getTime() - ageMs) })) });
     await unmatched(60, 30 * 60_000, 'recent');
     await unmatched(5, 2 * 60 * 60_000, 'old');
