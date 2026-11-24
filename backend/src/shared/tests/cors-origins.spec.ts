@@ -3,7 +3,7 @@ import { Test } from '@nestjs/testing';
 import * as fs from 'fs';
 import * as path from 'path';
 import request from 'supertest';
-import { ALLOWED_ORIGINS, CORS_OPTIONS } from '../cors-origins';
+import { allowedOrigins, CORS_OPTIONS } from '../cors-origins';
 
 @Controller('probe')
 class ProbeController {
@@ -16,7 +16,10 @@ class ProbeController {
 describe('CORS origins', () => {
   let app: INestApplication;
 
+  const configured = process.env.CORS_ALLOWED_ORIGINS;
   beforeAll(async () => {
+    process.env.CORS_ALLOWED_ORIGINS =
+      ' https://clinic.example.test , https://frontend-production-703e.up.railway.app,https://*.up.railway.app,http://plain.example.test,https://slash.example.test/,not a url';
     const module = await Test.createTestingModule({
       controllers: [ProbeController],
     }).compile();
@@ -24,13 +27,24 @@ describe('CORS origins', () => {
     app.enableCors(CORS_OPTIONS);
     await app.init();
   });
-  afterAll(() => app.close());
+  afterAll(async () => {
+    await app.close();
+    if (configured === undefined) delete process.env.CORS_ALLOWED_ORIGINS;
+    else process.env.CORS_ALLOWED_ORIGINS = configured;
+  });
 
-  it('pins the reviewed origin list', () => {
-    expect(ALLOWED_ORIGINS.map((origin) => origin.source)).toEqual([
-      '^http:\\/\\/localhost:(3000|3001|3002)$',
-      '^https:\\/\\/.*\\.railway\\.app$',
-      '^https:\\/\\/.*\\.up\\.railway\\.app$',
+  it('keeps only the local frontend ports and the exact https origins configured', () => {
+    expect([...allowedOrigins()]).toEqual([
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'http://localhost:3002',
+      'https://clinic.example.test',
+      'https://frontend-production-703e.up.railway.app',
+    ]);
+    expect([...allowedOrigins('')]).toEqual([
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'http://localhost:3002',
     ]);
   });
 
@@ -49,9 +63,16 @@ describe('CORS origins', () => {
     ['http://localhost:3000', true],
     ['http://localhost:3001', true],
     ['http://localhost:3002', true],
-    ['https://clinic.up.railway.app', true],
-    ['https://evil.up.railway.app', true],
-    ['https://anyone.railway.app', true],
+    ['https://clinic.example.test', true],
+    ['https://frontend-production-703e.up.railway.app', true],
+    ['https://clinic.up.railway.app', false],
+    ['https://evil.up.railway.app', false],
+    ['https://anyone.railway.app', false],
+    ['https://frontend-production-703e.up.railway.app.evil.example', false],
+    ['https://x.frontend-production-703e.up.railway.app', false],
+    ['http://plain.example.test', false],
+    ['https://slash.example.test', false],
+    ['https://clinic.example.test:8443', false],
     ['http://localhost:4000', false],
     ['https://localhost:3000', false],
     ['http://evil.up.railway.app', false],
@@ -73,7 +94,9 @@ describe('CORS origins', () => {
       expect(res.headers['access-control-allow-origin']).toBe(
         granted ? origin : undefined,
       );
-      expect(res.headers['access-control-allow-credentials']).toBe('true');
+      expect(res.headers['access-control-allow-credentials']).toBe(
+        granted ? 'true' : undefined,
+      );
     }
     if (granted) {
       expect(preflight.headers['access-control-allow-methods']).toBe(
