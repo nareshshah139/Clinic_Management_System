@@ -82,6 +82,19 @@ describe('item detail', () => {
     expect(screen.getByLabelText('Reply on WhatsApp')).toHaveValue('Come tomorrow');
   });
 
+  it('retries a reply whose response was lost with the same idempotency key (PP-51)', async () => {
+    api.getWorklistItem.mockResolvedValue(base);
+    api.replyToPatient.mockRejectedValueOnce(new Error('Network error')).mockResolvedValueOnce({ outcome: 'sent', delivery: { state: 'SENT', outcome: null }, item: base });
+    render(<WorklistItemDetailView itemId="item1" currentUserId="doc" onChanged={jest.fn()} />);
+    fireEvent.change(await screen.findByLabelText('Reply on WhatsApp'), { target: { value: 'Come tomorrow' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send reply' }));
+    await waitFor(() => expect(api.replyToPatient).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Send reply' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Send reply' }));
+    await screen.findByText('Reply sent.');
+    expect(api.replyToPatient.mock.calls[1][2]).toBe(api.replyToPatient.mock.calls[0][2]);
+  });
+
   it('with the window closed says why and offers "log a call" in place of the reply box', async () => {
     api.getWorklistItem.mockResolvedValue({ ...base, reply: { canReply: false, reason: 'window-closed', message: 'The patient has not written in the last 24 hours, so WhatsApp allows no free-text reply.' } });
     api.logPatientCall.mockResolvedValue({ ...base, reply: { canReply: false, reason: 'window-closed', message: 'x' } });

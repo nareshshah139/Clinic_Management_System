@@ -217,8 +217,8 @@ export function WorklistItemDetailView({ itemId, currentUserId, onChanged, onClo
             delivery = res.delivery;
             return res.item;
           });
-          replyKey.current = null;
           if (!ok || !delivery) return;
+          replyKey.current = null;
           const { state, outcome } = delivery as { state: string; outcome: string | null };
           if (state === 'FAILED' || state === 'SUPPRESSED') setError(`WhatsApp did not take the reply (${outcome ?? state.toLowerCase()}). Your text is kept; try again or log a call.`);
           else { setReply(''); setNotice('Reply sent.'); }
