@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { AgenticPharmacyDock } from '@/components/pharmacy/AgenticPharmacyDock';
 import { apiClient } from '@/lib/api';
 
@@ -180,5 +180,72 @@ describe('AgenticPharmacyDock proposal review', () => {
     fireEvent.click(apply);
 
     await waitFor(() => expect(api.applyPharmacyAgentProposal).toHaveBeenCalledTimes(2));
+  });
+
+  describe('higher-risk proposals', () => {
+    const highRisk = {
+      ...proposal,
+      id: 'proposal-high',
+      title: 'Correct stock for Telma 40',
+      riskLevel: 'HIGH',
+      actions: [
+        {
+          id: 'action-high',
+          actionType: 'adjust_stock',
+          targetType: 'inventory_item',
+          targetId: 'stock-77',
+          permissionRequired: null,
+          preview: { newQuantity: 0, reasonNote: 'Expired batch' },
+        },
+      ],
+    };
+
+    beforeEach(() => {
+      api.getPharmacyAgentSession.mockResolvedValue({ ...sessionDetail, proposals: [highRisk] });
+      api.applyPharmacyAgentProposal.mockResolvedValue({ proposal: { ...highRisk, status: 'APPLIED' } });
+    });
+
+    it('shows what will change and does not apply until confirmed', async () => {
+      render(<AgenticPharmacyDock />);
+      const [apply] = await screen.findAllByRole('button', { name: /Apply/ });
+
+      expect(screen.getAllByText('stock-77').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('Expired batch').length).toBeGreaterThan(0);
+
+      fireEvent.click(apply);
+      const dialog = await screen.findByRole('alertdialog');
+      expect(dialog).toHaveTextContent('Correct stock for Telma 40');
+      expect(dialog).toHaveTextContent('stock-77');
+      expect(dialog).toHaveTextContent('Expired batch');
+      expect(api.applyPharmacyAgentProposal).not.toHaveBeenCalled();
+
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Apply changes' }));
+      await waitFor(() => expect(api.applyPharmacyAgentProposal).toHaveBeenCalledWith('proposal-high'));
+    });
+
+    it('never applies when the pharmacist cancels', async () => {
+      render(<AgenticPharmacyDock />);
+      const [apply] = await screen.findAllByRole('button', { name: /Apply/ });
+
+      fireEvent.click(apply);
+      const dialog = await screen.findByRole('alertdialog');
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+
+      await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+      expect(api.applyPharmacyAgentProposal).not.toHaveBeenCalled();
+    });
+  });
+
+  it('labels the in-progress state neutrally', async () => {
+    let finishSend!: (value: unknown) => void;
+    api.sendPharmacyAgentMessage.mockReturnValue(new Promise((resolve) => (finishSend = resolve)) as any);
+    render(<AgenticPharmacyDock />);
+    const box = await screen.findByPlaceholderText(/Enter sends, Shift\+Enter adds a line/i);
+    fireEvent.change(box, { target: { value: 'hello' } });
+    fireEvent.keyDown(box, { key: 'Enter' });
+
+    expect(await screen.findByText('Assistant is working')).toBeInTheDocument();
+    expect(screen.queryByText(/Codex/)).toBeNull();
+    finishSend({ message: { id: 'm', role: 'assistant', content: 'ok' }, proposals: [] });
   });
 });
