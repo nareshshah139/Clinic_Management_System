@@ -207,6 +207,11 @@ GET /pharmacy/reports/:reportId | roles: OWNER,ADMIN,MANAGER,ACCOUNTANT,PHARMACI
 GET /pharmacy/sales-register | roles: ADMIN,PHARMACIST,DOCTOR | permissions: pharmacy:invoice:read
 GET /pharmacy/trade-terms | roles: OWNER,ADMIN,DOCTOR,PHARMACIST,RECEPTION,MANAGER,ACCOUNTANT | permissions: -
 GET /pharmacy/trade-terms/distributors | roles: OWNER,ADMIN,DOCTOR,PHARMACIST,RECEPTION,MANAGER,ACCOUNTANT | permissions: -
+GET /portal/records/appointments | public
+GET /portal/records/check-ins | public
+GET /portal/records/home | public
+GET /portal/records/messages | public
+GET /portal/records/visits | public
 GET /portal/session | public
 GET /prescriptions | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /prescriptions/:id | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
@@ -443,6 +448,7 @@ POST /portal/auth/code | public
 POST /portal/auth/sign-out | public
 POST /portal/auth/sign-out-everywhere | public
 POST /portal/auth/verify | public
+POST /portal/records/messages | public
 POST /portal/session/profile | public
 POST /portal/task/questions | public
 POST /portal/task/responses | public

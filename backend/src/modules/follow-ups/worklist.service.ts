@@ -5,7 +5,8 @@ import { roleMeetsRoles } from '../../shared/guards/roles.guard';
 import { openPatientMessageItem } from '../messaging/attention';
 import { enqueueOutbound } from '../messaging/outbox';
 import { SendPassService } from '../messaging/send-pass.service';
-import { staffReplyStatus } from '../messaging/staff-reply';
+import { clinicName } from '../messaging/number-confirmation';
+import { staffReplyRoute } from '../messaging/staff-reply';
 import { InstrumentContent, PlanContent } from './content';
 import { ResolutionCode } from './dto/worklist.dto';
 import { TASK_LINK_SUBJECT } from './scheduler';
@@ -103,7 +104,7 @@ export class WorklistService {
     const earlier = response && item.patientId ? await this.earlierResponses(item.patientId, response) : [];
     const thread = await this.thread(item.patientId ? { patientId: item.patientId } : { patientId: null, phoneE164: item.phoneE164 ?? '' });
     const names = await this.userNames([item.claimedById, item.resolvedById]);
-    const reply = await staffReplyStatus(this.prisma, item.patientId, now);
+    const reply = await staffReplyRoute(this.prisma, item.patientId, now);
     return {
       ...this.summary(item, names, now),
       resolutionCode: item.resolutionCode,
@@ -115,7 +116,10 @@ export class WorklistService {
       response: response && this.presentResponse(response),
       earlierResponses: earlier.map((r) => this.presentResponse(r)),
       thread,
-      reply: reply.canReply ? { canReply: true, windowClosesAt: reply.windowClosesAt } : { canReply: false, reason: reply.reason, message: reply.message },
+      reply:
+        reply.via === 'whatsapp' ? { canReply: true, via: 'whatsapp', windowClosesAt: reply.windowClosesAt }
+        : reply.via === 'portal' ? { canReply: true, via: 'portal', message: reply.message }
+        : { canReply: false, reason: reply.reason, message: reply.message },
     };
   }
 
@@ -292,25 +296,30 @@ export class WorklistService {
     return { read: count };
   }
 
-  /** PP-51: a free-text reply inside the 24-hour window, sent through the outbound sender. */
+  /** PP-51: a free-text reply inside the 24-hour window; PP-65: after it, a portal reply and one templated notice. */
   async reply(id: string, staff: Staff, body: string) {
     const item = await this.findItem(id, staff.branchId);
     if (item.state === 'RESOLVED') throw new ConflictException('This item is already resolved.');
     const now = new Date();
     const text = body.trim();
     const outboundId = await this.prisma.$transaction(async (tx) => {
-      const status = await staffReplyStatus(tx, item.patientId, now);
-      if (!status.canReply) throw new ConflictException({ message: status.message, reason: status.reason });
+      const route = await staffReplyRoute(tx, item.patientId, now);
+      if (!route.via) throw new ConflictException({ message: route.message, reason: route.reason });
       const message = await tx.patientMessage.create({
         data: {
-          patientId: item.patientId, phoneE164: status.toE164, direction: 'OUTBOUND', kind: 'text', body: text,
+          patientId: item.patientId, phoneE164: route.toE164, direction: 'OUTBOUND', channel: route.via === 'portal' ? 'PORTAL' : 'WHATSAPP', kind: 'text', body: text,
           assignment: 'CONFIRMED', assignedById: staff.id, authorKind: 'staff', readAt: now, createdAt: now,
         },
       });
-      const dedupeKey = `staff-reply:${message.id}`;
+      const notice = route.via === 'portal';
+      const dedupeKey = notice ? `portal-reply-notice:${message.id}` : `staff-reply:${message.id}`;
+      const language = notice ? (await tx.patientPortalProfile.findUnique({ where: { patientId: item.patientId! }, select: { preferredLanguage: true } }))?.preferredLanguage : undefined;
       await enqueueOutbound(tx, {
-        dedupeKey, purpose: OutboundMessagePurpose.STAFF_REPLY, patientId: item.patientId, toE164: status.toE164,
-        templateKey: 'staff_reply', params: { whatsapp: { kind: 'text', text } },
+        dedupeKey,
+        purpose: notice ? OutboundMessagePurpose.PORTAL_REPLY_NOTICE : OutboundMessagePurpose.STAFF_REPLY,
+        patientId: item.patientId, toE164: route.toE164,
+        templateKey: notice ? 'portal_reply_notice' : 'staff_reply',
+        params: notice ? { clinic: clinicName(), language } : { whatsapp: { kind: 'text', text } },
         subjectType: REPLY_SUBJECT, subjectId: message.id, notBefore: now, createdAt: now,
       });
       await this.markThreadRead(tx, item, now);

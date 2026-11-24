@@ -12,6 +12,7 @@ import { kolkataAt } from '../schedule';
 import { startTrack } from '../tracks';
 import { FollowUpsController } from '../follow-ups.controller';
 import { Staff, WorklistService } from '../worklist.service';
+import { PortalRecordsService } from '../../portal/records.service';
 
 const HOUR = 3600 * 1000;
 const ist = (s: string) => new Date(`${s}+05:30`);
@@ -167,9 +168,10 @@ databaseTests('Follow-up worklist and clinic inbox on PostgreSQL against a fake 
       expect((await worklist.listThreads('A')).find((t) => t.subjectKey === `patient:${p.id}`)).toBeUndefined();
     });
 
-    it('a closed window, an unconfirmed number or an opt-out offers "log a call" and sends nothing', async () => {
+    it('a closed window with the portal off, an unconfirmed number or an opt-out offers "log a call" and sends nothing', async () => {
       const stale = await patient();
       await inboundText(stale.phoneE164, 'Hello', new Date(Date.now() - 25 * HOUR));
+      await db.patientPortalProfile.update({ where: { patientId: stale.id }, data: { portalEnabled: false } });
       const staleItem = await itemFor(`patient:${stale.id}`);
       expect((await worklist.getItem(staleItem.id, reception)).reply).toMatchObject({ canReply: false, reason: 'window-closed' });
       meta.reset();
@@ -186,6 +188,37 @@ databaseTests('Follow-up worklist and clinic inbox on PostgreSQL against a fake 
       const unknownPhone = '+919999900077';
       await inboundText(unknownPhone, 'Who is this?');
       expect((await worklist.getItem((await itemFor(`phone:${unknownPhone}`)).id, reception)).reply).toMatchObject({ canReply: false, reason: 'unknown-sender' });
+    });
+
+    it('PP-65: after the window closes, a reply goes to the portal thread and queues one templated notice with no reply text', async () => {
+      const p = await patient();
+      await inboundText(p.phoneE164, 'Is the cream still fine?', new Date(Date.now() - 25 * HOUR));
+      // A message written in the portal does not reopen the WhatsApp window.
+      await db.patientMessage.create({ data: { patientId: p.id, phoneE164: p.phoneE164, direction: 'INBOUND', channel: 'PORTAL', kind: 'text', body: 'Also, my skin is dry', assignment: 'EXACT', authorKind: 'patient' } });
+      const pending = await itemFor(`patient:${p.id}`);
+      expect((await worklist.getItem(pending.id, reception)).reply).toMatchObject({ canReply: true, via: 'portal', message: expect.stringContaining('portal') });
+      meta.reset();
+
+      const result = await worklist.reply(pending.id, doctor, 'Yes, keep using it twice a day.');
+      expect(result).toMatchObject({ outcome: 'sent', delivery: { state: 'SENT' } });
+      expect(meta.calls).toHaveLength(1);
+      const sent = meta.calls[0].body as any;
+      expect(sent).toMatchObject({ to: p.phoneE164.slice(1), type: 'template', template: { name: 'portal_reply_notice' } });
+      expect(JSON.stringify(sent)).not.toContain('twice a day');
+      expect(await db.outboundMessage.count({ where: { patientId: p.id, purpose: 'STAFF_REPLY' } })).toBe(0);
+      expect(await db.outboundMessage.findFirstOrThrow({ where: { patientId: p.id, purpose: 'PORTAL_REPLY_NOTICE' } })).toMatchObject({ state: 'SENT', templateKey: 'portal_reply_notice' });
+      expect(result.item.thread.at(-1)).toMatchObject({ direction: 'OUTBOUND', channel: 'PORTAL', body: 'Yes, keep using it twice a day.', delivery: { state: 'SENT' } });
+      // The patient reads the reply in the portal, after their own portal message.
+      const identity = await db.portalIdentity.create({ data: { phoneE164: p.phoneE164 } });
+      const seen = await new PortalRecordsService(db as any).messages({ kind: 'portal-patient', sessionId: 'session', identityId: identity.id, patientId: p.id, branchId: 'A' });
+      expect(seen.messages.slice(-2)).toMatchObject([
+        { from: 'patient', channel: 'PORTAL', body: 'Also, my skin is dry' },
+        { from: 'clinic', channel: 'PORTAL', body: 'Yes, keep using it twice a day.' },
+      ]);
+
+      await db.patientPortalProfile.update({ where: { patientId: p.id }, data: { consentState: 'OPTED_OUT', phoneConfirmedAt: null } });
+      const row = await db.outboundMessage.create({ data: { dedupeKey: `notice-${p.id}`, purpose: 'PORTAL_REPLY_NOTICE', patientId: p.id, toE164: p.phoneE164, templateKey: 'portal_reply_notice', params: { clinic: 'X' }, subjectType: 'PATIENT_MESSAGE', subjectId: 'm' } });
+      expect(await db.$transaction((tx) => pass.decide(tx, row, new Date()))).toEqual({ kind: 'suppress', reason: 'consent-opted_out' });
     });
 
     it('the send pass re-checks at send time and exempts replies from the send window and the daily cap (PP-14)', async () => {

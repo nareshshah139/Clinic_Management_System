@@ -19,6 +19,8 @@ import { PortalController } from '../portal.controller';
 import { PORTAL_ROUTE } from '../portal.decorator';
 import { PortalGuard } from '../portal.guard';
 import { TaskPageService } from '../task.service';
+import { PortalRecordsController } from '../records.controller';
+import { PortalRecordsService } from '../records.service';
 import { SignInController } from '../sign-in.controller';
 import { SignInService } from '../sign-in.service';
 import { SESSION_COOKIE } from '../session';
@@ -66,6 +68,7 @@ describe('portal routes (PP-37, PP-39, PP-55, PP-59, PP-83, PP-84, PP-86, StaffC
     idempotencyRecord: { findFirst: jest.fn(), create: jest.fn(), updateMany: jest.fn(), deleteMany: jest.fn() },
   };
   const tasks = { page: jest.fn(), submit: jest.fn() };
+  const records = { home: jest.fn(), appointments: jest.fn(), visits: jest.fn(), checkIns: jest.fn(), messages: jest.fn(), write: jest.fn() };
   const signIn = {
     requestCode: jest.fn(async () => 'sent'),
     verifyCode: jest.fn(async () => ({ ok: false, reason: 'wrong' })),
@@ -89,12 +92,13 @@ describe('portal routes (PP-37, PP-39, PP-55, PP-59, PP-83, PP-84, PP-86, StaffC
     process.env.PORTAL_BASE_URL = `${ORIGIN}/`;
     process.env.PORTAL_CODE_ANSWER_MS = '1';
     const module = await Test.createTestingModule({
-      controllers: [PortalController, SignInController, StaffProbeController],
+      controllers: [PortalController, SignInController, PortalRecordsController, StaffProbeController],
       providers: [
         PortalGuard,
         { provide: PrismaService, useValue: prisma },
         { provide: TaskPageService, useValue: tasks },
         { provide: SignInService, useValue: signIn },
+        { provide: PortalRecordsService, useValue: records },
         { provide: APP_GUARD, useClass: JwtAuthGuard },
         { provide: APP_INTERCEPTOR, useClass: IdempotencyInterceptor },
         Reflector,
@@ -119,11 +123,17 @@ describe('portal routes (PP-37, PP-39, PP-55, PP-59, PP-83, PP-84, PP-86, StaffC
 
   it('finds the portal routes, none with a patient id in its path; task-link routes are all POST', () => {
     expect(routes.map((r) => r.key).sort()).toEqual([
+      'GET /portal/records/appointments',
+      'GET /portal/records/check-ins',
+      'GET /portal/records/home',
+      'GET /portal/records/messages',
+      'GET /portal/records/visits',
       'GET /portal/session',
       'POST /portal/auth/code',
       'POST /portal/auth/sign-out',
       'POST /portal/auth/sign-out-everywhere',
       'POST /portal/auth/verify',
+      'POST /portal/records/messages',
       'POST /portal/session/profile',
       'POST /portal/task/questions',
       'POST /portal/task/responses',
