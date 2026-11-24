@@ -11,6 +11,7 @@ import { enqueueOutbound } from '../outbox';
 import { confirmByCode, hashCode, MAX_CODE_ATTEMPTS } from '../number-confirmation';
 import { startFakeMeta } from './fake-meta';
 import { AppointmentsService } from '../../appointments/appointments.service';
+import { PatientDeduplicationService } from '../../patients/patient-deduplication.service';
 
 // Pass times sit in the future so rows queued now are already due.
 const ist = (s: string) => new Date(`${s}+05:30`);
@@ -227,6 +228,33 @@ databaseTests('Durable outbound WhatsApp messages on PostgreSQL against a fake M
     await expect(editing).resolves.toBeUndefined();
     await passing;
     expect((await messages())[0]).toMatchObject({ state: 'SUPPRESSED', outcome: 'consent-not_asked' });
+  });
+
+  it('PP-10/PP-13: a duplicate merge running while the pass sends to the kept patient does not deadlock (merge locks the group patients first)', async () => {
+    const kept = await register('9876577764');
+    const dup1 = await register('9876577764');
+    const dup2 = await register('9876577764', { email: 'late@example.test' });
+    await optIn(kept.id);
+    await care(kept.id, 'REVIEW_REMINDER', `merge:${kept.id}`);
+    const merger = new PatientDeduplicationService(db as any) as any;
+    const original = merger.mergePortalProfiles.bind(merger);
+    let release!: () => void;
+    let locked!: () => void;
+    const profilesHeld = new Promise<void>((r) => { locked = r; });
+    let first = true;
+    merger.mergePortalProfiles = async (...args: unknown[]) => {
+      await original(...args);
+      if (first) { first = false; locked(); await new Promise<void>((r) => { release = r; }); }
+    };
+    const merging = merger.mergeDuplicateGroup([kept.id, dup1.id, dup2.id]);
+    await profilesHeld;
+    const passing = pass.runPass(NOON);
+    await new Promise((r) => setTimeout(r, 300));
+    release();
+    await expect(merging).resolves.toEqual(expect.objectContaining({ archivedPatients: 2 }));
+    await passing;
+    expect((await db.patient.findUniqueOrThrow({ where: { id: kept.id } })).email).toBe('late@example.test');
+    expect((await messages({ dedupeKey: `merge:${kept.id}` }))[0].state).toBe('SENT');
   });
 
   it('PP-13: a confirmation for an appointment that was moved, or whose slot has started, expires instead of sending the old time', async () => {
