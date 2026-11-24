@@ -27,6 +27,7 @@ const users: Record<string, { id: string; role: string; branchId: string }> = {
 const visits = [
   { id: 'v1', deletedAt: null, branchId: 'branch-a', attachments: JSON.stringify(['/uploads/visits/1700000000000_aa.png']) },
   { id: 'v2', deletedAt: new Date(), branchId: 'branch-a', attachments: JSON.stringify(['/uploads/visits/1700000000000_deleted.png']) },
+  { id: 'v3', deletedAt: null, branchId: 'branch-a', attachments: JSON.stringify(['uploads/visits/1700000000000_relative.png']) },
 ];
 const db: any = {
   user: {
@@ -58,7 +59,7 @@ describe('legacy /uploads and clinic photo delivery', () => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), 'legacy-uploads-'));
     for (const rel of [
       'uploads/visits/1700000000000_aa.png', 'uploads/visits/1700000000000_unlisted.png',
-      'uploads/visits/1700000000000_deleted.png', 'uploads/patients/p1/20261124/draft.png',
+      'uploads/visits/1700000000000_deleted.png', 'uploads/visits/1700000000000_relative.png', 'uploads/patients/p1/20261124/draft.png',
       'uploads/pharmacy-agent/s1/invoice.png', 'uploads/visits/notes.txt', 'secret.png',
     ]) {
       fs.mkdirSync(path.join(root, path.dirname(rel)), { recursive: true });
@@ -96,7 +97,7 @@ describe('legacy /uploads and clinic photo delivery', () => {
   });
 
   it('serves a recorded visit photo and a draft photo to clinic staff in the branch, never cached', async () => {
-    for (const url of ['/uploads/visits/1700000000000_aa.png', '/uploads/patients/p1/20261124/draft.png']) {
+    for (const url of ['/uploads/visits/1700000000000_aa.png', '/uploads/visits/1700000000000_relative.png', '/uploads/patients/p1/20261124/draft.png']) {
       for (const user of ['doctor', 'reception']) {
         const res = await get(url, as(user)).buffer(true).expect(200);
         expect(res.headers['content-type']).toBe('image/png');
@@ -117,6 +118,8 @@ describe('legacy /uploads and clinic photo delivery', () => {
     ['another upload folder', '/uploads/pharmacy-agent/s1/invoice.png', 'doctor'],
     ['a non-image file', '/uploads/visits/notes.txt', 'doctor'],
     ['an encoded traversal', '/uploads/visits/..%2F..%2Fsecret.png', 'doctor'],
+    ['a traversal alias of a readable photo', '/uploads/visits/..%2Fvisits%2F1700000000000_aa.png', 'doctor'],
+    ['a dot-segment alias of a readable photo', '/uploads/visits/.%2F1700000000000_aa.png', 'doctor'],
     ['a missing file', '/uploads/visits/missing.png', 'doctor'],
   ])('answers 404 for %s', async (_case, url, user) => {
     const res = await get(url, as(user));

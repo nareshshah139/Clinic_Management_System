@@ -18,6 +18,10 @@ import * as fs from 'fs';
  * @cc [owner:nareshshah139,label:product] read-without-mutation
  * Read operations MUST NOT rewrite clinical documents or advance updatedAt.
  */
+const legacyRef = (ref: unknown) =>
+  typeof ref === 'string' ? pathPosix.normalize(`/${ref.trim().replace(/^\/+/, '')}`) : '';
+const legacyRefs = (refs: unknown) => (Array.isArray(refs) ? refs.map(legacyRef) : []);
+
 const LEGACY_IMAGE_TYPES: Record<string, string> = {
   '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif',
 };
@@ -515,7 +519,11 @@ export class VisitsService {
     }
 
     if (updateVisitDto.attachments !== undefined) {
-      updateData.attachments = updateVisitDto.attachments ? JSON.stringify(updateVisitDto.attachments) : null;
+      // Legacy files are history: an update may drop references, never add one (that would claim another visit's file).
+      const recorded = new Set(legacyRefs(this.safeParse<string[]>(visit.attachments as any, [])));
+      updateData.attachments = updateVisitDto.attachments
+        ? JSON.stringify([...new Set(legacyRefs(updateVisitDto.attachments))].filter(ref => recorded.has(ref)))
+        : null;
     }
 
     if (updateVisitDto.scribeJson !== undefined) {
@@ -1217,17 +1225,18 @@ export class VisitsService {
   async getLegacyUploadBinary(requestPath: string, branchId: string) {
     const notFound = () => new NotFoundException('File not found');
     if (!branchId || typeof requestPath !== 'string' || requestPath.includes('\\')) throw notFound();
-    const normalized = pathPosix.normalize(`/${requestPath.replace(/^\/+/, '')}`);
+    const normalized = legacyRef(requestPath);
+    if (normalized !== `/${requestPath.replace(/^\/+/, '')}`) throw notFound();
     const contentType = LEGACY_IMAGE_TYPES[pathPosix.extname(normalized).toLowerCase()];
     const visitPhoto = /^\/uploads\/visits\/[A-Za-z0-9._-]+$/.test(normalized);
     const draftPhoto = /^\/uploads\/patients\/([A-Za-z0-9_-]+)\/([A-Za-z0-9_-]+)\/[A-Za-z0-9._-]+$/.exec(normalized);
     if (!contentType || (!visitPhoto && !draftPhoto)) throw notFound();
     if (visitPhoto) {
       const visit = await this.prisma.visit.findFirst({
-        where: { deletedAt: null, patient: { branchId }, attachments: { contains: JSON.stringify(normalized) } },
+        where: { deletedAt: null, patient: { branchId }, attachments: { contains: normalized.slice(1) } },
         select: { attachments: true },
       });
-      if (!visit || !this.safeParse<string[]>(visit.attachments as any, []).includes(normalized)) throw notFound();
+      if (!visit || !legacyRefs(this.safeParse<string[]>(visit.attachments as any, [])).includes(normalized)) throw notFound();
     } else {
       const patient = await this.prisma.patient.findFirst({ where: { id: draftPhoto![1], branchId }, select: { id: true } });
       if (!patient) throw notFound();

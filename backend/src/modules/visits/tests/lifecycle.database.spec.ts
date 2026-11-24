@@ -227,6 +227,14 @@ databaseTests('Visit and prescription lifecycle against PostgreSQL', () => {
     expect((await db.visit.findUniqueOrThrow({ where: { id: v.id } })).deletedAt).toBeNull();
   });
 
+  it('lets an update drop legacy photo references but never add one', async () => {
+    const v = await visit({ attachments: '["/uploads/visits/own.png","uploads/visits/older.png"]' });
+    await visits.update(v.id, { version: 0, attachments: ['/uploads/visits/own.png', 'uploads/visits/older.png', '/uploads/visits/other-branch.png'] } as any, branchId);
+    expect((await visits.findOne(v.id, branchId)).attachments).toEqual(['/uploads/visits/own.png', '/uploads/visits/older.png']);
+    await visits.update(v.id, { version: 1, attachments: ['/uploads/visits/older.png'] } as any, branchId);
+    expect((await visits.findOne(v.id, branchId)).attachments).toEqual(['/uploads/visits/older.png']);
+  });
+
   it('preserves omission and persists exact clinical clears through validation and reload', async () => {
     const v = await visit({ vitals: '{"heartRate":80,"weight":60}', diagnosis: '[{"diagnosis":"Old"}]', history: '{"personalHistory":"Old","pastHistory":"Keep"}', followUp: new Date('2026-10-01'), plan: '{"followUpInstructions":"Old","investigations":["Old"],"dermatology":{"procedures":[{"type":"Old"}],"counseling":"Keep"}}' });
     const input = await new ValidationPipe({ transform: true, whitelist: true }).transform({ version: 0, vitals: { heartRate: null }, diagnosis: [], history: { personalHistory: '' }, treatmentPlan: { followUpDate: null, followUpInstructions: '', investigations: [], dermatology: { procedures: [] } } }, { type: 'body', metatype: UpdateVisitDto });
