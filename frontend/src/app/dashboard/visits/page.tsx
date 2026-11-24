@@ -252,6 +252,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { QuickGuide } from '@/components/common/QuickGuide';
 import { UserRole } from '@cms/shared-types';
 import { resolveDefaultDoctorId } from '@/lib/default-visit-doctor';
+import { todayIst } from '@/lib/doctor-availability';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import { VisitIdentityBar } from '@/components/visits/VisitIdentityBar';
 import { useRecordById, type RecordState } from '@/components/visits/useRecordById';
 import type {
@@ -462,6 +464,9 @@ function VisitsPageInner() {
   const [appointmentData, setAppointmentData] = useState<AppointmentWithVisit | null>(null);
   const [appointmentFailed, setAppointmentFailed] = useState(false);
   const [startedVisitId, setStartedVisitId] = useState<string | null>(null);
+  const [resumedVisitPatientId, setResumedVisitPatientId] = useState<string | null>(null);
+  const [visitUnsaved, setVisitUnsaved] = useState(false);
+  const [confirm, confirmDialog] = useConfirm();
 
   const searchParams = useSearchParams();
   const urlPatientId = searchParams.get('patientId');
@@ -479,6 +484,8 @@ function VisitsPageInner() {
   const appointmentActive = Boolean(selectedPatientId) && selectedPatientId === appointmentPatientId;
   const activeAppointment = appointmentActive ? appointmentData : null;
   const appointmentDoctorId = activeAppointment?.doctorId;
+  const visitPatientId = resumedVisitPatientId ?? urlPatientId;
+  const resumedVisitId = urlVisitId && selectedPatientId === visitPatientId ? urlVisitId : undefined;
   const appointmentPending = Boolean(
     appointmentActive && appointmentIdParam && !appointmentData && !appointmentFailed,
   );
@@ -536,6 +543,7 @@ function VisitsPageInner() {
     try {
       const appointment = await apiClient.getAppointment<AppointmentWithVisit>(appointmentId);
       setAppointmentData(appointment);
+      setSelectedPatientId((current) => current || appointment.patientId);
     } catch (error) {
       console.error('Failed to fetch appointment data:', error);
       setAppointmentFailed(true);
@@ -581,10 +589,10 @@ function VisitsPageInner() {
 
   // Deep links open documentation; selecting a patient in setup keeps history accessible.
   useEffect(() => {
-    if (urlPatientId && selectedPatientId === urlPatientId && selectedDoctorId) {
+    if (appointmentPatientId && selectedPatientId === appointmentPatientId && selectedDoctorId) {
       setShowForm(true);
     }
-  }, [selectedPatientId, selectedDoctorId, urlPatientId]);
+  }, [selectedPatientId, selectedDoctorId, appointmentPatientId]);
 
   // Handle URL parameters for appointment linking
   useEffect(() => {
@@ -593,9 +601,9 @@ function VisitsPageInner() {
       if (urlDoctorId && isValidId(urlDoctorId)) {
         setChosenDoctorId(urlDoctorId);
       }
-      if (appointmentIdParam) {
-        void fetchAppointmentData(appointmentIdParam);
-      }
+    }
+    if (appointmentIdParam) {
+      void fetchAppointmentData(appointmentIdParam);
     }
   }, [appointmentIdParam, fetchAppointmentData, urlDoctorId, urlPatientId]);
 
@@ -607,7 +615,10 @@ function VisitsPageInner() {
         const visit: any = await apiClient.get(`/visits/${urlVisitId}`);
         const pid = visit?.patient?.id;
         const did = visit?.doctor?.id;
-        if (typeof pid === 'string') setSelectedPatientId(pid);
+        if (typeof pid === 'string') {
+          setSelectedPatientId(pid);
+          setResumedVisitPatientId(pid);
+        }
         if (typeof did === 'string') setChosenDoctorId(did);
         // Populate appointment context if present (non-blocking)
         const apptId = visit?.appointment?.id;
@@ -672,13 +683,23 @@ function VisitsPageInner() {
       : undefined;
 
   const visitAlreadyStarted = Boolean(
-    urlVisitId || startedVisitId || (activeAppointment?.visit && 'id' in activeAppointment.visit),
+    resumedVisitId || startedVisitId || (activeAppointment?.visit && 'id' in activeAppointment.visit),
   );
   const doctorLocked = Boolean(appointmentDoctorId) || visitAlreadyStarted;
 
   const pickPatient = (id: string) => {
     if (id !== selectedPatientId) setStartedVisitId(null);
     setSelectedPatientId(id);
+  };
+
+  const leaveVisit = async (leave: () => void) => {
+    if (visitUnsaved && !(await confirm({
+      title: 'Leave with unsaved changes?',
+      description: 'Your latest changes are not saved to the visit yet. Stay and choose Save Draft to keep them on the record.',
+      confirmLabel: 'Leave anyway',
+      destructive: true,
+    }))) return;
+    leave();
   };
 
   const startNewVisit = () => {
@@ -955,25 +976,27 @@ function VisitsPageInner() {
 
   return (
     <MedicalVisitForm
-      key={`${selectedPatientId}:${urlVisitId || activeAppointment?.id || "new"}`}
+      key={`${selectedPatientId}:${resumedVisitId || activeAppointment?.id || "new"}`}
       patientId={selectedPatientId}
       doctorId={selectedDoctorId}
       doctorName={selectedDoctorName}
       userRole={currentUserRole}
       patient={selectedPatient.status === 'ready' ? selectedPatient.record : null}
       doctorRecord={listedDoctor ?? null}
-      visitDate={new Date().toISOString()}
+      visitDate={todayIst()}
       appointmentId={activeAppointment?.id}
       appointmentData={activeAppointment}
       onVisitIdChange={setStartedVisitId}
-      initialVisitId={urlVisitId || (activeAppointment?.visit && 'id' in activeAppointment.visit ? activeAppointment.visit.id : undefined)}
+      onUnsavedChange={setVisitUnsaved}
+      initialVisitId={resumedVisitId || (activeAppointment?.visit && 'id' in activeAppointment.visit ? activeAppointment.visit.id : undefined)}
       identity={
         <>
           <h1 className="sr-only">Visit Documentation</h1>
-          <Button variant="ghost" size="icon" className="-ml-2 h-8 w-8" aria-label="Back to Setup" title="Back to setup" onClick={() => setShowForm(false)}>
+          {confirmDialog}
+          <Button variant="ghost" size="icon" className="-ml-2 h-8 w-8" aria-label="Back to Setup" title="Back to setup" onClick={() => void leaveVisit(() => setShowForm(false))}>
             <ArrowLeft className="h-4 w-4" aria-hidden="true" />
           </Button>
-          <VisitIdentityBar className="min-w-0 truncate" patient={selectedPatient} doctor={selectedDoctor} appointment={activeAppointment} hideDoctor />
+          <VisitIdentityBar className="min-w-0 break-words" patient={selectedPatient} doctor={selectedDoctor} appointment={activeAppointment} hideDoctor />
         </>
       }
       doctorControl={
@@ -1001,7 +1024,7 @@ function VisitsPageInner() {
         </div>
       }
       visitActions={activeAppointment ? (
-        <DropdownMenuItem onSelect={() => window.history.back()}>
+        <DropdownMenuItem onSelect={() => void leaveVisit(() => window.history.back())}>
           <Calendar className="mr-2 h-4 w-4" aria-hidden="true" />
           Back to calendar
         </DropdownMenuItem>

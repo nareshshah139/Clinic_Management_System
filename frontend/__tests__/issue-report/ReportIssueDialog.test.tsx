@@ -45,6 +45,9 @@ async function openDialog() {
   return dialog;
 }
 
+const confirmScreenshot = (dialog: HTMLElement) =>
+  userEvent.click(within(dialog).getByRole('checkbox', { name: /no patient-identifying information/ }));
+
 it('sends the title, the captured screen and the context, then shows the issue', async () => {
   api.submitIssueReport.mockResolvedValue({ number: 42, url: 'https://github.com/acme/clinic/issues/42' });
   renderApp();
@@ -54,6 +57,7 @@ it('sends the title, the captured screen and the context, then shows the issue',
   await userEvent.click(within(dialog).getByRole('radio', { name: 'Question' }));
   await userEvent.type(within(dialog).getByLabelText('Summarize it in a line'), 'How do I refund a bill?');
   await userEvent.type(within(dialog).getByLabelText(/Details/), 'Pharmacy sale from today');
+  await confirmScreenshot(dialog);
   await userEvent.click(within(dialog).getByRole('button', { name: 'Send report' }));
 
   expect(await screen.findByRole('heading', { name: "Thanks, we've got it" })).toBeInTheDocument();
@@ -79,6 +83,7 @@ it('leaves out technical details when switched off', async () => {
   renderApp();
   const dialog = await openDialog();
   await userEvent.type(within(dialog).getByLabelText('Summarize it in a line'), 'Slow search');
+  await confirmScreenshot(dialog);
   await userEvent.click(within(dialog).getByRole('switch', { name: 'Include technical details' }));
   await userEvent.keyboard('{Control>}{Enter}{/Control}');
   await screen.findByRole('heading', { name: "Thanks, we've got it" });
@@ -121,6 +126,7 @@ it('shows the server message and keeps everything when sending fails', async () 
   renderApp();
   const dialog = await openDialog();
   await userEvent.type(within(dialog).getByLabelText('Summarize it in a line'), 'Printer stuck');
+  await confirmScreenshot(dialog);
   await userEvent.click(within(dialog).getByRole('button', { name: 'Send report' }));
 
   expect(await within(dialog).findByRole('alert')).toHaveTextContent(
@@ -147,4 +153,47 @@ it('hides the entry point when reporting is not set up', async () => {
   await waitFor(() => expect(api.getIssueReportStatus).toHaveBeenCalled());
   await act(async () => {});
   expect(screen.queryByRole('button', { name: 'Report a problem' })).not.toBeInTheDocument();
+});
+
+it('blocks sending while a screenshot is attached until the no-patient-details box is checked', async () => {
+  api.submitIssueReport.mockResolvedValue({ number: 9, url: 'https://github.com/acme/clinic/issues/9' });
+  renderApp();
+  const dialog = await openDialog();
+  await userEvent.type(within(dialog).getByLabelText('Summarize it in a line'), 'Printer stuck');
+
+  const send = within(dialog).getByRole('button', { name: 'Send report' });
+  expect(send).toHaveAttribute('aria-disabled', 'true');
+  await userEvent.click(send);
+  expect(api.submitIssueReport).not.toHaveBeenCalled();
+
+  await confirmScreenshot(dialog);
+  expect(within(dialog).getByRole('button', { name: 'Send report' })).not.toHaveAttribute('aria-disabled');
+  await userEvent.click(within(dialog).getByRole('button', { name: 'Send report' }));
+  await screen.findByRole('heading', { name: "Thanks, we've got it" });
+  expect(api.submitIssueReport).toHaveBeenCalledTimes(1);
+});
+
+it('lets the user send without the box once the screenshot is removed', async () => {
+  api.submitIssueReport.mockResolvedValue({ number: 10, url: 'https://github.com/acme/clinic/issues/10' });
+  renderApp();
+  const dialog = await openDialog();
+  await userEvent.type(within(dialog).getByLabelText('Summarize it in a line'), 'Printer stuck');
+  expect(within(dialog).getByRole('button', { name: 'Send report' })).toHaveAttribute('aria-disabled', 'true');
+
+  await userEvent.click(within(dialog).getByRole('button', { name: 'Remove screenshot 1' }));
+  expect(within(dialog).queryByRole('checkbox', { name: /no patient-identifying information/ })).not.toBeInTheDocument();
+  expect(within(dialog).getByRole('button', { name: 'Send report' })).not.toHaveAttribute('aria-disabled');
+  await userEvent.click(within(dialog).getByRole('button', { name: 'Send report' }));
+  await screen.findByRole('heading', { name: "Thanks, we've got it" });
+  expect((api.submitIssueReport.mock.calls[0][0] as FormData).has('screenshots')).toBe(false);
+});
+
+it('asks for a fresh confirmation when another screenshot is added', async () => {
+  renderApp();
+  const dialog = await openDialog();
+  await userEvent.type(within(dialog).getByLabelText('Summarize it in a line'), 'Printer stuck');
+  await confirmScreenshot(dialog);
+  await userEvent.upload(within(dialog).getByLabelText('Add screenshots'), new File(['x'], 'photo.webp', { type: 'image/webp' }));
+  expect(within(dialog).getByRole('checkbox', { name: /no patient-identifying information/ })).toHaveAttribute('aria-checked', 'false');
+  expect(within(dialog).getByRole('button', { name: 'Send report' })).toHaveAttribute('aria-disabled', 'true');
 });

@@ -67,9 +67,10 @@ export default function RoomsManagement() {
       setLoading(true);
       let res: any;
       try {
-        res = await apiClient.getRooms();
-      } catch (err) {
         res = await apiClient.getAllRooms();
+      } catch (err) {
+        if ((err as { status?: number })?.status !== 403) throw err;
+        res = await apiClient.getRooms();
       }
       setRooms(res?.rooms || []);
     } catch (e) {

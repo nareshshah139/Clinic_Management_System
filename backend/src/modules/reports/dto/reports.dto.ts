@@ -1116,9 +1116,11 @@ export class TopDoctorDto {
 // Export DTOs
 export class ExportReportDto {
   @ApiProperty({ description: 'Report type', enum: ReportType })
+  @IsEnum(ReportType)
   reportType: ReportType;
 
   @ApiProperty({ description: 'Export format', enum: ExportFormat })
+  @IsEnum(ExportFormat)
   exportFormat: ExportFormat;
 
   @ApiProperty({ description: 'Report parameters' })

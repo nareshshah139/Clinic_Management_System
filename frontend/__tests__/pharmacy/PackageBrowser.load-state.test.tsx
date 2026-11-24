@@ -27,4 +27,16 @@ describe('PackageBrowser load states', () => {
     expect(await screen.findByText('No packages yet')).toBeInTheDocument();
     expect(get).toHaveBeenCalledTimes(2);
   });
+
+  it('loads packages from every category and shows a General package', async () => {
+    get.mockResolvedValue({
+      packages: [{
+        id: 'p1', name: 'Wellness bundle', category: 'General', originalPrice: 100, packagePrice: 90,
+        discountPercent: 10, isActive: true, isPublic: true, createdAt: '2026-01-01T00:00:00Z', items: [],
+      }],
+    });
+    render(<PackageBrowser />);
+    expect(await screen.findByText('Wellness bundle')).toBeInTheDocument();
+    expect(get.mock.calls[0][1]).not.toHaveProperty('category');
+  });
 });

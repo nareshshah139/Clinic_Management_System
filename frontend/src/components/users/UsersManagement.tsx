@@ -4,7 +4,7 @@
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingSkeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -26,6 +26,7 @@ import React, { useRef } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { BranchHolidaySettings, DoctorAvailabilitySettings } from '@/components/users/DoctorAvailabilitySettings';
 import { ResetCodeDialog } from '@/components/users/ResetCodeDialog';
+import { useDashboardUser } from '@/components/layout/dashboard-user-context';
 
 import {
   parseMetadataObject,
@@ -35,6 +36,9 @@ import {
 
 type UserForm = { id?: string; firstName: string; lastName: string; email: string; phone: string; role: string; status: string; password?: string };
 const EMPTY_FORM: UserForm = { firstName: '', lastName: '', email: '', phone: '', role: 'RECEPTION', status: 'ACTIVE' };
+const ASSIGNABLE_ROLES = ['OWNER', 'ADMIN', 'MANAGER', 'DOCTOR', 'NURSE', 'RECEPTION', 'PHARMACIST', 'ACCOUNTANT', 'LAB_TECH'];
+const USER_ADMIN_ROLES = ['OWNER', 'ADMIN'];
+const roleOptions = (current: string) => (!current || ASSIGNABLE_ROLES.includes(current) ? ASSIGNABLE_ROLES : [current, ...ASSIGNABLE_ROLES]);
 // The API serves at most 100 permissions per page.
 const PERMISSIONS_PAGE_SIZE = 100;
 
@@ -44,6 +48,8 @@ const coveredBy = (permission: string, listed: string[]) =>
 
 export default function UsersManagement() {
   const { toast } = useToast();
+  const { user: signedInUser } = useDashboardUser();
+  const canWrite = USER_ADMIN_ROLES.includes(String(signedInUser?.role));
   const [confirm, confirmDialog] = useConfirm();
   const [formError, setFormError] = useState<string | null>(null);
   const [resetUser, setResetUser] = useState<User | null>(null);
@@ -93,6 +99,9 @@ export default function UsersManagement() {
   const [tplTestTo, setTplTestTo] = useState('');
   const [tplTestStatus, setTplTestStatus] = useState<{ ok: boolean; msg: string } | null>(null);
   const editorRef = useRef<HTMLDivElement | null>(null);
+  const editorHtmlRef = useRef('');
+  const editorRange = useRef<Range | null>(null);
+  const [newVarName, setNewVarName] = useState('');
   const [genLoading, setGenLoading] = useState(false);
   const [genHints, setGenHints] = useState('');
   const [whOpen, setWhOpen] = useState(false);
@@ -116,10 +125,24 @@ export default function UsersManagement() {
       const res = await apiClient.getUsers({ limit: 100 });
       const list = (res as any)?.users ?? (res as any)?.data ?? [];
       setUsers(list);
+    } catch (e) {
+      toast({ variant: 'destructive', title: 'Could not load users', description: getErrorMessage(e) });
     } finally {
       setLoading(false);
     }
   };
+
+  const protectedReason = (u: User) => {
+    if (u.id === signedInUser?.id) return 'This is your own account. Ask another Owner or Admin to change it.';
+    const otherActiveAdmins = users.filter((x) => x.id !== u.id && USER_ADMIN_ROLES.includes(String(x.role)) && String(x.status) === 'ACTIVE');
+    if (USER_ADMIN_ROLES.includes(String(u.role)) && String(u.status) === 'ACTIVE' && otherActiveAdmins.length === 0) {
+      return 'This is the last active Owner or Admin. Make someone else an Owner or Admin first.';
+    }
+    return null;
+  };
+  const formTarget = form.id ? users.find((x) => x.id === form.id) : undefined;
+  const formLockReason = formTarget ? protectedReason(formTarget) : null;
+  const permLockReason = selectedUser ? protectedReason(selectedUser) : null;
 
   useEffect(() => {
     void fetchUsers();
@@ -234,10 +257,24 @@ export default function UsersManagement() {
       const res = await apiClient.getWhatsAppTemplates();
       const list = (res as any)?.data || (res as any) || [];
       setTplList(Array.isArray(list) ? list : []);
+    } catch (e) {
+      toast({ variant: 'destructive', title: 'Could not load templates', description: getErrorMessage(e) });
     } finally {
       setTplLoading(false);
     }
   };
+
+  const loadEditorContent = (html: string) => {
+    editorHtmlRef.current = html;
+    editorRange.current = null;
+    if (editorRef.current) editorRef.current.innerHTML = html;
+    setTplHtml(html);
+  };
+
+  const bindEditor = useCallback((el: HTMLDivElement | null) => {
+    editorRef.current = el;
+    if (el) el.innerHTML = editorHtmlRef.current;
+  }, []);
 
   const openTemplateEditor = async () => {
     await loadTemplates();
@@ -246,7 +283,7 @@ export default function UsersManagement() {
     setTplTouchpoint('appointment_confirmation');
     setTplLanguage('en');
     setTplOwnerScope('ME');
-    setTplHtml('');
+    loadEditorContent('');
     setTplText('');
     setTplVars(['patient_name','doctor_name','appointment_date','appointment_time','queue_token']);
     setTplActive(true);
@@ -261,7 +298,7 @@ export default function UsersManagement() {
     setTplTouchpoint(String(tpl.touchpoint || 'appointment_confirmation'));
     setTplLanguage(String(tpl.language || 'en'));
     setTplOwnerScope(tpl.ownerId ? 'ME' : 'BRANCH');
-    setTplHtml(String(tpl.contentHtml || ''));
+    loadEditorContent(String(tpl.contentHtml || ''));
     setTplText(String(tpl.contentText || ''));
     const hydratedVars = Array.isArray(tpl.variables) ? tpl.variables : [];
     setTplVars(hydratedVars.length ? hydratedVars : ['patient_name','doctor_name','appointment_date','appointment_time','queue_token']);
@@ -285,26 +322,31 @@ export default function UsersManagement() {
       return;
     }
 
-    if (tplEditing?.id) {
-      await apiClient.updateWhatsAppTemplate(tplEditing.id, {
-        name: tplName,
-        touchpoint: tplTouchpoint,
-        language: tplLanguage,
-        contentHtml: tplHtml || undefined,
-        contentText: tplText,
-        variables: tplVars,
-        isActive: tplActive,
-      });
-    } else {
-      await apiClient.createWhatsAppTemplate({
-        name: tplName,
-        touchpoint: tplTouchpoint,
-        language: tplLanguage,
-        contentHtml: tplHtml || undefined,
-        contentText: tplText,
-        variables: tplVars,
-        ownerScope: tplOwnerScope,
-      });
+    try {
+      if (tplEditing?.id) {
+        await apiClient.updateWhatsAppTemplate(tplEditing.id, {
+          name: tplName,
+          touchpoint: tplTouchpoint,
+          language: tplLanguage,
+          contentHtml: tplHtml || undefined,
+          contentText: tplText,
+          variables: tplVars,
+          isActive: tplActive,
+        });
+      } else {
+        await apiClient.createWhatsAppTemplate({
+          name: tplName,
+          touchpoint: tplTouchpoint,
+          language: tplLanguage,
+          contentHtml: tplHtml || undefined,
+          contentText: tplText,
+          variables: tplVars,
+          ownerScope: tplOwnerScope,
+        });
+      }
+    } catch (e) {
+      toast({ variant: 'destructive', title: 'Could not save the template', description: getErrorMessage(e) });
+      return;
     }
     await loadTemplates();
     toast({ title: 'Template saved' });
@@ -314,7 +356,12 @@ export default function UsersManagement() {
     if (!tpl?.id) return;
     const ok = await confirm({ title: tpl.name ? `Delete template ${tpl.name}?` : 'Delete this template?', confirmLabel: 'Delete template', destructive: true });
     if (!ok) return;
-    await apiClient.deleteWhatsAppTemplate(String(tpl.id));
+    try {
+      await apiClient.deleteWhatsAppTemplate(String(tpl.id));
+    } catch (e) {
+      toast({ variant: 'destructive', title: 'Could not delete the template', description: getErrorMessage(e) });
+      return;
+    }
     await loadTemplates();
   };
 
@@ -345,27 +392,59 @@ export default function UsersManagement() {
 
   const applyEditorCommand = (cmd: string) => {
     try {
+      editorRef.current?.focus();
       document.execCommand(cmd, false);
-      if (editorRef.current) {
-        const html = editorRef.current.innerHTML;
-        setTplHtml(html);
-        setTplText(stripHtml(html));
-      }
+      syncEditor();
     } catch {}
+  };
+
+  const syncEditor = () => {
+    const html = editorRef.current?.innerHTML || '';
+    editorHtmlRef.current = html;
+    setTplHtml(html);
+    setTplText(stripHtml(html));
+    return html;
+  };
+
+  const rememberCaret = () => {
+    const editor = editorRef.current;
+    const selection = window.getSelection();
+    if (editor && selection && selection.rangeCount > 0 && editor.contains(selection.anchorNode)) {
+      editorRange.current = selection.getRangeAt(0).cloneRange();
+    }
   };
 
   const insertVariable = (v: string) => {
     try {
-      const token = `{{${v}}}`;
-      if (editorRef.current) {
-        editorRef.current.focus();
-        document.execCommand('insertText', false, token);
-        const html = editorRef.current.innerHTML;
-        setTplHtml(html);
-        setTplText(stripHtml(html));
-        syncVarsWithContent(html, stripHtml(html));
+      const editor = editorRef.current;
+      if (!editor) return;
+      editor.focus();
+      const saved = editorRange.current && editor.contains(editorRange.current.startContainer) ? editorRange.current : null;
+      const target = saved ?? document.createRange();
+      if (!saved) {
+        target.selectNodeContents(editor);
+        target.collapse(false);
       }
+      target.deleteContents();
+      const node = document.createTextNode(`{{${v}}}`);
+      target.insertNode(node);
+      target.setStartAfter(node);
+      target.collapse(true);
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(target);
+      editorRange.current = target.cloneRange();
+      const html = syncEditor();
+      syncVarsWithContent(html, stripHtml(html));
     } catch {}
+  };
+
+  const addVariable = () => {
+    const val = newVarName.trim();
+    if (/^[a-zA-Z0-9_]+$/.test(val) && !tplVars.includes(val)) {
+      setTplVars([...tplVars, val]);
+      setNewVarName('');
+    }
   };
 
   const saveWhatsAppSettings = async () => {
@@ -397,6 +476,8 @@ export default function UsersManagement() {
       setWaOpen(false);
       await fetchUsers();
       toast({ title: 'Saved', description: 'WhatsApp settings updated' });
+    } catch (e) {
+      toast({ variant: 'destructive', title: 'Could not save WhatsApp settings', description: getErrorMessage(e) });
     } finally {
       setLoading(false);
     }
@@ -501,7 +582,7 @@ export default function UsersManagement() {
             }
           ]}
         />
-        <Dialog open={holidaysOpen} onOpenChange={setHolidaysOpen}>
+        {canWrite && <Dialog open={holidaysOpen} onOpenChange={setHolidaysOpen}>
           <DialogTrigger asChild>
             <Button variant="outline">Clinic Holidays</Button>
           </DialogTrigger>
@@ -509,8 +590,8 @@ export default function UsersManagement() {
             <DialogHeader><DialogTitle>Clinic Holidays</DialogTitle></DialogHeader>
             {holidaysOpen && <BranchHolidaySettings />}
           </DialogContent>
-        </Dialog>
-        <Dialog open={open} onOpenChange={setOpen}>
+        </Dialog>}
+        {canWrite && <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button onClick={onCreate}><Plus className="h-4 w-4 mr-2" /> New User</Button>
           </DialogTrigger>
@@ -535,21 +616,16 @@ export default function UsersManagement() {
               </div>
               <div>
                 <Label htmlFor="user-role">Role</Label>
-                <Select value={form.role} onValueChange={(v: string) => setForm({ ...form, role: v })}>
+                <Select value={form.role} disabled={!!formLockReason} onValueChange={(v: string) => setForm({ ...form, role: v })}>
                   <SelectTrigger id="user-role"><SelectValue placeholder="Role" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="ADMIN">Admin</SelectItem>
-                    <SelectItem value="DOCTOR">Doctor</SelectItem>
-                    <SelectItem value="NURSE">Nurse</SelectItem>
-                    <SelectItem value="RECEPTION">Receptionist</SelectItem>
-                    <SelectItem value="MANAGER">Manager</SelectItem>
-                    <SelectItem value="PHARMACIST">Pharmacist</SelectItem>
+                    {roleOptions(form.role).map((r) => <SelectItem key={r} value={r}>{enumLabel('role', r)}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div>
                 <Label htmlFor="user-status">Status</Label>
-                <Select value={form.status} onValueChange={(v: string) => setForm({ ...form, status: v })}>
+                <Select value={form.status} disabled={!!formLockReason} onValueChange={(v: string) => setForm({ ...form, status: v })}>
                   <SelectTrigger id="user-status"><SelectValue placeholder="Status" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="ACTIVE">Active</SelectItem>
@@ -559,6 +635,7 @@ export default function UsersManagement() {
                   </SelectContent>
                 </Select>
               </div>
+              {formLockReason && <p className="md:col-span-2 text-xs text-muted-foreground">Role and status are locked. {formLockReason}</p>}
               {!form.id && (
                 <div className="md:col-span-2">
                   <Label htmlFor="user-password">Password (8-20 chars)</Label>
@@ -572,8 +649,9 @@ export default function UsersManagement() {
               <Button onClick={submit} disabled={loading}>{form.id ? 'Save' : 'Create'}</Button>
             </div>
           </DialogContent>
-        </Dialog>
+        </Dialog>}
       </>} />
+      {!canWrite && <p className="text-sm text-muted-foreground">You can view users here. Only Owners and Admins can add or change them.</p>}
 
       <Card>
         <CardContent>
@@ -590,7 +668,7 @@ export default function UsersManagement() {
                     <TableHead>Email</TableHead>
                     <TableHead>Role</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Actions</TableHead>
+                    {canWrite && <TableHead>Actions</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -600,7 +678,7 @@ export default function UsersManagement() {
                       <TableCell>{u.email}</TableCell>
                       <TableCell>{enumLabel('role', String(u.role))}</TableCell>
                       <TableCell>{humanizeEnum(String(u.status))}</TableCell>
-                      <TableCell>
+                      {canWrite && <TableCell>
                         <div className="flex items-center gap-1">
                           <Button variant="outline" size="sm" onClick={() => onEdit(u)}><Edit /> Edit</Button>
                           <DropdownMenu>
@@ -613,11 +691,13 @@ export default function UsersManagement() {
                               {u.role === 'DOCTOR' && <DropdownMenuItem onSelect={() => { setSelectedUser(u); setWhOpen(true); }}><Clock /> Working Hours</DropdownMenuItem>}
                               {u.role === 'DOCTOR' && <DropdownMenuItem onSelect={() => openWhatsAppSettings(u)}><MessageSquare /> WhatsApp Settings</DropdownMenuItem>}
                               <DropdownMenuSeparator />
-                              <DropdownMenuItem variant="destructive" onSelect={() => void onDelete(u)}><Trash2 /> Delete</DropdownMenuItem>
+                              <DropdownMenuItem variant="destructive" disabled={!!protectedReason(u)} title={protectedReason(u) ?? undefined} onSelect={() => void onDelete(u)}>
+                                <Trash2 /> Delete{protectedReason(u) && <span className="text-xs font-normal">(not available: {u.id === signedInUser?.id ? 'your own account' : 'last Owner or Admin'})</span>}
+                              </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>
-                      </TableCell>
+                      </TableCell>}
                     </TableRow>
                   ))}
                 </TableBody>
@@ -644,19 +724,15 @@ export default function UsersManagement() {
             <div className="md:col-span-4 space-y-3">
               <div>
                 <Label htmlFor="user-permissions-role">Role</Label>
-                <Select value={roleSelect} onValueChange={(v: string) => setRoleSelect(v)}>
+                <Select value={roleSelect} disabled={!!permLockReason} onValueChange={(v: string) => setRoleSelect(v)}>
                   <SelectTrigger id="user-permissions-role" className="mt-1"><SelectValue placeholder="Select role" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="ADMIN">Admin</SelectItem>
-                    <SelectItem value="MANAGER">Manager</SelectItem>
-                    <SelectItem value="DOCTOR">Doctor</SelectItem>
-                    <SelectItem value="NURSE">Nurse</SelectItem>
-                    <SelectItem value="RECEPTION">Receptionist</SelectItem>
-                    <SelectItem value="PHARMACIST">Pharmacist</SelectItem>
+                    {roleOptions(roleSelect).map((r) => <SelectItem key={r} value={r}>{enumLabel('role', r)}</SelectItem>)}
                   </SelectContent>
                 </Select>
+                {permLockReason && <p className="mt-1 text-xs text-muted-foreground">Role is locked. {permLockReason}</p>}
                 <div className="flex gap-2 mt-2">
-                  <Button size="sm" onClick={() => void applyRole(roleSelect as string)}>Apply Role</Button>
+                  <Button size="sm" disabled={!!permLockReason} onClick={() => void applyRole(roleSelect as string)}>Apply Role</Button>
                   <Button size="sm" variant="outline" onClick={() => setRolePerms([])}>Clear All</Button>
                 </div>
               </div>
@@ -895,13 +971,9 @@ export default function UsersManagement() {
                         const html = String(out.contentHtml || '');
                         const text = String(out.contentText || '');
                         const vars = Array.isArray(out.variables) ? out.variables : tplVars;
-                        setTplHtml(html);
+                        loadEditorContent(html);
                         setTplText(text);
                         setTplVars(vars);
-                        // Reflect in editor
-                        if (editorRef.current) {
-                          editorRef.current.innerHTML = html;
-                        }
                         toast({ title: 'Template generated', description: 'Review and save if it looks good.' });
                       } catch (e) {
                         const msg = (e as any)?.body?.message || (e as any)?.message || 'Failed to generate';
@@ -930,18 +1002,20 @@ export default function UsersManagement() {
                   </div>
                 </div>
                 <div
-                  ref={editorRef}
+                  ref={bindEditor}
                   contentEditable
+                  suppressContentEditableWarning
                   role="textbox"
                   aria-multiline="true"
                   aria-label="Template designer"
                   className="border rounded-md min-h-32 p-2 prose prose-sm max-w-none"
                   onInput={() => {
-                    const html = editorRef.current?.innerHTML || '';
-                    setTplHtml(html);
-                    setTplText(stripHtml(html));
+                    syncEditor();
+                    rememberCaret();
                   }}
-                  dangerouslySetInnerHTML={{ __html: tplHtml }}
+                  onBlur={rememberCaret}
+                  onKeyUp={rememberCaret}
+                  onMouseUp={rememberCaret}
                 />
                 <div className="text-xs text-muted-foreground mt-1">Use variables to personalize messages.</div>
               </div>
@@ -957,29 +1031,16 @@ export default function UsersManagement() {
                   <Input
                     aria-label="New variable"
                     placeholder="Add variable (letters/numbers/underscore)"
+                    value={newVarName}
+                    onChange={(e) => setNewVarName(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         e.preventDefault();
-                        const val = (e.target as HTMLInputElement).value.trim();
-                        if (/^[a-zA-Z0-9_]+$/.test(val) && !tplVars.includes(val)) {
-                          setTplVars([...tplVars, val]);
-                          (e.target as HTMLInputElement).value = '';
-                        }
+                        addVariable();
                       }
                     }}
                   />
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      const input = (document.activeElement as HTMLInputElement) ?? null;
-                      if (!input) return;
-                      const val = input.value.trim();
-                      if (/^[a-zA-Z0-9_]+$/.test(val) && !tplVars.includes(val)) {
-                        setTplVars([...tplVars, val]);
-                        input.value = '';
-                      }
-                    }}
-                  >
+                  <Button variant="outline" onClick={addVariable}>
                     Add
                   </Button>
                 </div>

@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Badge } from '@/components/ui/badge';
 import { apiClient } from '@/lib/api';
 import { useRouter } from 'next/navigation';
-import { X, FileText, AlertTriangle } from 'lucide-react';
+import { X, FileText, AlertTriangle, UserCheck, UserX } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
   generateTimeSlots,
@@ -37,6 +37,9 @@ import { AppointmentBillDialog } from './AppointmentBillDialog';
 import { BILL_TYPE_LABEL, billingChip } from './appointment-billing-view';
 import { enumLabel } from '@/lib/labels';
 import { statusLabel } from '@/lib/status-variants';
+
+const CHECK_IN_FROM: readonly AppointmentStatus[] = [AppointmentStatus.SCHEDULED, AppointmentStatus.CONFIRMED, AppointmentStatus.NO_SHOW];
+const NO_SHOW_FROM: readonly AppointmentStatus[] = [AppointmentStatus.SCHEDULED, AppointmentStatus.CONFIRMED];
 
 const NO_BILL_ACCESS: ClinicBillAccess = { read: false, createBill: false, takePayment: false, editFees: false };
 
@@ -364,6 +367,30 @@ function DoctorDayCalendarForSelection({
     router.push(`/dashboard/visits?${searchParams.toString()}`);
   };
 
+  const setStatus = async (appointment: AppointmentInSlot, status: AppointmentStatus.CHECKED_IN | AppointmentStatus.NO_SHOW) => {
+    if (placing) return;
+    setPlacing(true);
+    try {
+      await apiClient.updateAppointment(appointment.id, { status });
+      toast({
+        variant: 'success',
+        title: status === AppointmentStatus.CHECKED_IN ? 'Patient checked in' : 'Marked as no-show',
+        description: formatPatientName(appointment.patient),
+      });
+      setSelectedAppointment(null);
+      await fetchSchedule();
+      onAppointmentUpdate?.();
+    } catch (e) {
+      toast({
+        variant: 'destructive',
+        title: status === AppointmentStatus.CHECKED_IN ? 'Could not check in' : 'Could not mark no-show',
+        description: getErrorMessage(e),
+      });
+    } finally {
+      setPlacing(false);
+    }
+  };
+
   const place = async (appointment: AppointmentInSlot, from: string, target: SlotChoice): Promise<'placed' | 'declined'> => {
     const moved = await sendWithOverbookConfirm((allowOverbook) => apiClient.rescheduleAppointment(appointment.id, {
       date,
@@ -660,6 +687,18 @@ function DoctorDayCalendarForSelection({
                   <FileText className="h-4 w-4 mr-2" />
                   Start Visit
                 </Button>
+                {CHECK_IN_FROM.includes(selectedAppointment.status) && (
+                  <Button variant="outline" disabled={placing} onClick={() => void setStatus(selectedAppointment, AppointmentStatus.CHECKED_IN)}>
+                    <UserCheck className="h-4 w-4 mr-2" />
+                    Check in
+                  </Button>
+                )}
+                {NO_SHOW_FROM.includes(selectedAppointment.status) && (
+                  <Button variant="outline" disabled={placing} onClick={() => void setStatus(selectedAppointment, AppointmentStatus.NO_SHOW)}>
+                    <UserX className="h-4 w-4 mr-2" />
+                    Mark no-show
+                  </Button>
+                )}
                 {canMove(selectedAppointment.status) && (
                   <Button
                     variant="outline"

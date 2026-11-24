@@ -11,6 +11,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingSkeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { RegisterDenied } from '@/components/register/RegisterGrid';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import { CountSheet } from './CountSheet';
 import { CountRecord } from './CountRecord';
 import { CountRegister } from './CountRegister';
@@ -81,6 +82,23 @@ function CountDocument({
   onChanged: () => void;
 }) {
   const { load, reload, set } = useLoad<CountDetail>(countPath(id));
+  const [confirm, confirmDialog] = useConfirm();
+  const unsaved = useRef(false);
+  const setUnsaved = useCallback((value: boolean) => {
+    unsaved.current = value;
+  }, []);
+  const leave = async () => {
+    if (unsaved.current) {
+      const discard = await confirm({
+        title: 'Leave without saving?',
+        description: 'Some counts are not saved. If you leave now they are lost.',
+        confirmLabel: 'Leave and lose them',
+        destructive: true,
+      });
+      if (!discard) return;
+    }
+    onBack();
+  };
   const focusHeading = () => requestAnimationFrame(() => document.getElementById('count-record-title')?.focus());
   const stale = (message: string) => {
     toast({
@@ -92,7 +110,8 @@ function CountDocument({
   };
   return (
     <div className="flex min-w-0 flex-col gap-3">
-      <Button variant="ghost" className="self-start px-2" onClick={onBack}>
+      {confirmDialog}
+      <Button variant="ghost" className="self-start px-2" onClick={() => void leave()}>
         <ArrowLeft aria-hidden="true" /> Back to stock counts
       </Button>
       {load.status === 'loading' && <LoadingSkeleton variant="cards" label="Loading the count…" />}
@@ -104,6 +123,7 @@ function CountDocument({
             key={`${load.data.id}:${load.data.version}`}
             detail={load.data}
             onStale={stale}
+            onUnsavedChange={setUnsaved}
             onSigned={(signed) => {
               set(signed);
               onChanged();

@@ -1,5 +1,5 @@
 'use client';
-import { displayUtcDate, displayClinicDate, displayClinicDateTime } from '@/lib/date-display';
+import { displayUtcDate, displayClinicDate } from '@/lib/date-display';
 import { Spinner } from "@/components/ui/spinner";
 import { TELE_VIDEO_DISCLAIMER, TELE_VIDEO_CONSENT_REQUIRED, type ConsultationType } from '@/lib/tele-consultation';
 import React, { useCallback, useDeferredValue, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
@@ -40,6 +40,7 @@ import { applyVoiceFillRegistry, voiceDraftLines, type VoiceFillFields } from '@
 import { visitVoiceRegistry, type ExtraVitalsPatch } from '@/lib/voice-fill-visit';
 import { applySpokenPrescriptionItems, inventoryNamesOf, spokenPrescriptionDraftLines } from '@/lib/voice-fill-prescription';
 import { usePrescriptionSignature } from '@/hooks/usePrescriptionSignature';
+import { localMobile } from '@/components/pharmacy/sales/sales-register-model';
 import { useDoctorLetterhead } from '@/hooks/useDoctorLetterhead';
 import { PRINT_FIT_MIN_FONT_PX, PRINT_FIT_STEPS, fitPrintMarkup, pageContentBoxPx } from '@/lib/print-fit';
 import { billHref } from '@/components/pharmacy/sales/sales-bill-model';
@@ -98,6 +99,8 @@ function restoreLegacyDosage<T>(dosage: T): T | '' {
 }
 
 // Use centralized options from lib/frequency
+
+type LastPrescription = { visitId: string; date: number; items: PrescriptionItemForm[] };
 
 interface PrescriptionItemForm extends RegimenRow {
   drugName: string;
@@ -281,6 +284,12 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
   );
 });
 
+function printablePagesHtml(container: Element) {
+  const pages = container.cloneNode(true) as Element;
+  pages.querySelectorAll('[data-preview-overlay]').forEach(overlay => overlay.remove());
+  return pages.innerHTML;
+}
+
 /**
  * @cc [owner:nareshshah139,label:product] compact-clinical-print-fields
  * Space-optimized print content MUST place Chief Complaints, Review Date and
@@ -340,7 +349,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const [followUpInstructions, setFollowUpInstructions, hydrateFollowUpInstructions] = useClinicalState('', 'followUpInstructions', dirtyClinicalFields);
 
   const [items, setItems, hydrateItems] = useClinicalState<PrescriptionItemForm[]>([], 'items', dirtyClinicalFields);
-  const [loadingPrevMeds, setLoadingPrevMeds] = useState(false);
   const [customSections, setCustomSections, hydrateCustomSections] = useClinicalState<Array<{ id: string; title: string; content: string }>>([], 'customSections', dirtyClinicalFields);
   const [procedureMetrics, setProcedureMetrics, hydrateProcedureMetrics] = useClinicalState<{ device?: string; wavelengthNm?: number | ''; fluenceJcm2?: number | ''; spotSizeMm?: number | ''; pulseMs?: number | ''; shots?: number | ''; cooling?: string; area?: string; peelAgent?: string; peelConcentration?: string; peelContactTimeMin?: number | ''; frosting?: string; needleDepthMm?: string; passes?: number | ''; anesthetic?: string }>({}, 'procedureMetrics', dirtyClinicalFields);
 
@@ -645,6 +653,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     return removed;
   };
   const [patientHistoryForLearning, setPatientHistoryForLearning] = useState<any[]>([]);
+  const [lastPrescription, setLastPrescription] = useState<LastPrescription | null>(null);
+  const [lastRxOpenId, setLastRxOpenId] = useState<string | null>(null);
   const [doctorPrescriptionsForLearning, setDoctorPrescriptionsForLearning] = useState<any[]>([]);
   const [learningSourcesStatus, setLearningSourcesStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [learningSourcesError, setLearningSourcesError] = useState('');
@@ -770,7 +780,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const padSaveKey = useRef<string | null>(null);
   const skipPostSaveCleanupRef = useRef(false);
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [autoPreview, setAutoPreview] = useState(false);
   const [previewZoom, setPreviewZoom] = useState(1);
   const [previewJustUpdated, setPreviewJustUpdated] = useState(false);
   const [rxPrintFormat, setRxPrintFormat] = useState<'TEXT' | 'TABLE'>('TABLE');
@@ -796,7 +805,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const pagedInstanceRef = useRef<any>(null); // Store paged.js instance for cleanup
   const isPrintingRef = useRef(false);
   const previewPrintHostRef = useRef<HTMLDivElement | null>(null);
-  const previewPrintCleanupTimeoutRef = useRef<number | null>(null);
   const pagedJsPreloadedRef = useRef(false);
   const prevPreviewOpenRef = useRef(previewOpen);
   // Refs to track previous values for change detection to prevent unnecessary refreshes
@@ -827,7 +835,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const initialRenderDoneRef = useRef(false);
   const lastContentHashRef = useRef<string | null>(null);
   const [showRefillStamp, setShowRefillStamp] = useState<boolean>(false);
-  const { showSignature, setShowSignature, signatureUrl, signatureWidth, signatureHeight, signatureLoading, signatureError, reloadSignature } = usePrescriptionSignature(visitData?.doctor?.id || doctorId, previewOpen || autoPreview);
+  const { showSignature, setShowSignature, signatureUrl, signatureWidth, signatureHeight, signatureLoading, signatureError, reloadSignature } = usePrescriptionSignature(visitData?.doctor?.id || doctorId, previewOpen);
   const [renderedSignatureUrl, setRenderedSignatureUrl] = useState<string | null>(null);
   const pagedJsProcessRef = useRef<(() => Promise<void>) | null>(null);
   const [sharingEmail, setSharingEmail] = useState(false);
@@ -849,7 +857,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const [breakBeforeFollowUp, setBreakBeforeFollowUp] = useState(false);
   const [breakBeforeSignature, setBreakBeforeSignature] = useState(false);
   const [avoidBreakInsideTables, setAvoidBreakInsideTables] = useState(true);
-  const [interactions, setInteractions] = useState<any[]>([]);
+  const [interactions, setInteractions] = useState<any[] | 'failed'>([]);
   const [confirmPharmacy, setConfirmPharmacy] = useState<{
     open: boolean;
     prescriptionId: string;
@@ -1932,67 +1940,45 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     return `${year}-${month}-${day}`;
   }, []);
 
-  const addPreviousMedications = async () => {
-    if (!patientId) {
+  const findLastPrescription = (visits: any[]): LastPrescription | null => {
+    const sorted = [...visits].sort((a, b) => encounterTime(b) - encounterTime(a));
+    for (const v of sorted) {
+      if (!v || v.id === visitId || !Array.isArray(v.prescriptionItems)) continue;
+      const mapped = v.prescriptionItems.map(mapPrevRxItem).filter(Boolean) as PrescriptionItemForm[];
+      if (!mapped.length) continue;
+      return { visitId: v.id, date: encounterTime(v), items: mapped };
+    }
+    return null;
+  };
+
+  const copyLastPrescription = () => {
+    if (!lastPrescription) return;
+    const keyOf = (m: PrescriptionItemForm) => `${m.drugName.toLowerCase()}|${m.frequency}|${m.dosePattern || ''}|${m.timing || ''}|${m.duration}|${m.durationUnit}`;
+    const base = items.filter((it) => (it.drugName || '').trim());
+    const existingKeys = new Set(base.map(keyOf));
+    const merged = [...base];
+    let added = 0;
+    for (const m of lastPrescription.items) {
+      if (existingKeys.has(keyOf(m))) continue;
+      merged.push(clonePrescriptionItems([m])[0]);
+      existingKeys.add(keyOf(m));
+      added += 1;
+    }
+    if (!added) {
       toast({
         variant: 'warning',
-        title: 'Select a patient',
-        description: 'Choose a patient before importing previous medications.',
+        title: 'Already in this prescription',
+        description: 'Every medicine from the last prescription is already listed.',
       });
       return;
     }
-    setLoadingPrevMeds(true);
-    try {
-      const res = await apiClient.getAllPatientVisitHistory<any>(patientId);
-      const visits = normalizeHistoryResponse(res)
-        .sort((a, b) => {
-          const at = encounterTime(a);
-          const bt = encounterTime(b);
-          return bt - at; // newest first
-        });
-      const currentIndex = visits.findIndex((v) => v.id === visitId);
-      const previousVisits = currentIndex < 0 ? visits : visits.slice(currentIndex + 1);
-      const prevWithRx = previousVisits.find((v) => v && v.id !== visitId && Array.isArray((v as any).prescriptionItems) && (v as any).prescriptionItems.length > 0);
-      const rawItems: any[] = prevWithRx ? (prevWithRx as any).prescriptionItems : [];
-      const mapped = rawItems
-        .map(mapPrevRxItem)
-        .filter((it): it is PrescriptionItemForm => Boolean(it && (it as PrescriptionItemForm).drugName));
-      if (!mapped.length) {
-        toast({
-          variant: 'warning',
-          title: 'No previous medications found',
-          description: 'Could not find medications in the last visits for this patient.',
-        });
-        return;
-      }
-      setItems((prev) => {
-        const base = prev.filter((it) => (it.drugName || '').trim());
-        const existingKeys = new Set(base.map((it) => `${it.drugName.toLowerCase()}|${it.frequency}|${it.dosePattern || ''}|${it.timing || ''}|${it.duration}|${it.durationUnit}`));
-        const merged = [...base];
-        for (const m of mapped) {
-          const key = `${m.drugName.toLowerCase()}|${m.frequency}|${m.dosePattern || ''}|${m.timing || ''}|${m.duration}|${m.durationUnit}`;
-          if (!existingKeys.has(key)) {
-            merged.push(m);
-            existingKeys.add(key);
-          }
-        }
-        if (!hasTrailingBlank(merged)) merged.push(createBlankItem());
-        return merged;
-      });
-      toast({
-        variant: 'success',
-        title: 'Previous medications added',
-        description: `Added ${mapped.length} item${mapped.length === 1 ? '' : 's'} from the last visit.`,
-      });
-    } catch (e) {
-      toast({
-        variant: 'destructive',
-        title: 'Unable to load previous medications',
-        description: getErrorMessage(e) || 'Please try again.',
-      });
-    } finally {
-      setLoadingPrevMeds(false);
-    }
+    if (!hasTrailingBlank(merged)) merged.push(createBlankItem());
+    setItems(merged);
+    toast({
+      variant: 'success',
+      title: 'Last prescription copied',
+      description: `Added ${added} item${added === 1 ? '' : 's'} from the last prescription.`,
+    });
   };
 
   useEffect(() => {
@@ -2009,6 +1995,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     const loadLearningSources = async () => {
       if (!patientId && !doctorId) {
         setPatientHistoryForLearning([]);
+        setLastPrescription(null);
         setDoctorPrescriptionsForLearning([]);
         setLearningSourcesStatus('idle');
         setLearningSourcesError('');
@@ -2017,22 +2004,25 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
 
       setLearningSourcesStatus('loading');
       setLearningSourcesError('');
+      setLastPrescription(null);
 
       const [patientResult, doctorResult] = await Promise.allSettled([
-        patientId ? Promise.resolve(patientId).then(loadPatientHistory).then((entries) => visitEntries(entries).slice(0, 12)) : Promise.resolve([]),
+        patientId ? Promise.resolve(patientId).then(loadPatientHistory).then(visitEntries) : Promise.resolve([]),
         doctorId ? apiClient.get<any>(`/prescriptions/doctor/${doctorId}`, { limit: 60, page: 1 }) : Promise.resolve([]),
       ]);
 
       if (cancelled) return;
 
-      const nextPatientHistory = patientResult.status === 'fulfilled'
+      const allVisits = patientResult.status === 'fulfilled'
         ? normalizeHistoryResponse(patientResult.value)
         : [];
+      const nextPatientHistory = allVisits.slice(0, 12);
       const nextDoctorPrescriptions = doctorResult.status === 'fulfilled'
         ? normalizePrescriptionResponse(doctorResult.value)
         : [];
 
       setPatientHistoryForLearning(nextPatientHistory);
+      setLastPrescription(findLastPrescription(allVisits));
       setDoctorPrescriptionsForLearning(nextDoctorPrescriptions);
 
       if (patientResult.status === 'rejected' && doctorResult.status === 'rejected') {
@@ -2761,6 +2751,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
         if (!res?.id) throw new Error('The server did not confirm the saved prescription. Your draft is still available; please retry.');
         if (!existingId) track('prescription_created', { mode: standalone ? 'quick' : 'visit' });
         createdPrescriptionIdRef.current = res.id;
+        try { localStorage.removeItem(`rxDraft:${patientId}:standalone`); } catch {}
         recordItemsKey.current = JSON.stringify(payload.items);
         padSaveKey.current = null;
         setSavedPrescriptionId(res?.id || null);
@@ -3362,12 +3353,11 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const openInteractions = useCallback(async () => {
     try {
       const res: any = await apiClient.previewDrugInteractions(items as any);
-      setInteractions(Array.isArray(res?.interactions) ? res.interactions : []);
-      setInteractionsOpen(true);
+      setInteractions(Array.isArray(res?.interactions) ? res.interactions : 'failed');
     } catch {
-      setInteractions([]);
-      setInteractionsOpen(true);
+      setInteractions('failed');
     }
+    setInteractionsOpen(true);
   }, [items]);
 
   const removePreviewPrintHost = useCallback(() => {
@@ -3389,7 +3379,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
 
     const pages = document.createElement('div');
     pages.className = 'prescription-print-pages';
-    pages.innerHTML = container.innerHTML;
+    pages.innerHTML = printablePagesHtml(container);
 
     host.appendChild(pages);
     document.body.appendChild(host);
@@ -3403,10 +3393,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       document.body.classList.remove('prescription-preview-printing');
     }
     removePreviewPrintHost();
-    if (previewPrintCleanupTimeoutRef.current !== null) {
-      window.clearTimeout(previewPrintCleanupTimeoutRef.current);
-      previewPrintCleanupTimeoutRef.current = null;
-    }
   }, [removePreviewPrintHost]);
 
   const printPreviewInPlace = useCallback(async () => {
@@ -3442,10 +3428,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     };
 
     window.addEventListener('afterprint', handleAfterPrint);
-    previewPrintCleanupTimeoutRef.current = window.setTimeout(() => {
-      window.removeEventListener('afterprint', handleAfterPrint);
-      cleanupPreviewPrintMode();
-    }, 3000);
 
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
@@ -3476,7 +3458,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
         html, body { margin: 0; padding: 0; }
         ${pagedPrintExportCss}
       </style>
-      ${container.innerHTML}`;
+      ${printablePagesHtml(container)}`;
     const { renderPrescriptionPages } = await import('@/lib/pdf-export');
     return renderPrescriptionPages(wrapper, paperPreset);
   };
@@ -3486,10 +3468,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       cleanupPreviewPrintMode();
     };
   }, [cleanupPreviewPrintMode]);
-
-  useEffect(() => {
-    if (autoPreview && !previewOpen) setPreviewOpen(true);
-  }, [autoPreview, previewOpen]);
 
   // Memoize array dependencies to prevent unnecessary re-renders
   const itemsStringified = useMemo(() => JSON.stringify(items), [items]);
@@ -3508,7 +3486,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     window.addEventListener('beforeprint', handleBeforePrint);
     window.addEventListener('afterprint', handleAfterPrint);
 
-    if (!(previewOpen || autoPreview)) {
+    if (!previewOpen) {
       // Clear any pending refresh when preview closes
       if (previewRefreshTimeoutRef.current) {
         clearTimeout(previewRefreshTimeoutRef.current);
@@ -3581,11 +3559,11 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       window.removeEventListener('beforeprint', handleBeforePrint);
       window.removeEventListener('afterprint', handleAfterPrint);
     };
-  }, [isTeleVideo, previewOpen, autoPreview, language, rxPrintFormat, itemsStringified, diagnosis, followUpInstructions, chiefComplaints, personalHistory, investigationsStringified, customSectionsStringified, contentOffsetXPx, contentOffsetYPx, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, activeProfileId, overrideTopMarginPx, overrideBottomMarginPx, spaceOptimized, fitToPage, lineSpacing, avoidBreakInsideTables, translateForPreview]);
+  }, [isTeleVideo, previewOpen, language, rxPrintFormat, itemsStringified, diagnosis, followUpInstructions, chiefComplaints, personalHistory, investigationsStringified, customSectionsStringified, contentOffsetXPx, contentOffsetYPx, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, activeProfileId, overrideTopMarginPx, overrideBottomMarginPx, spaceOptimized, fitToPage, lineSpacing, avoidBreakInsideTables, translateForPreview]);
 
-  // Globally suppress Paged.js internal DOM errors while preview is active or in autoPreview mode
+  // Globally suppress Paged.js internal DOM errors while preview is active
   useEffect(() => {
-    if (!(previewOpen || autoPreview)) return;
+    if (!previewOpen) return;
     const globalHandler = (event: ErrorEvent | PromiseRejectionEvent) => {
       const message = 'message' in event ? event.message : String((event as PromiseRejectionEvent).reason);
       const stack = event instanceof ErrorEvent && event.error?.stack ? event.error.stack : '';
@@ -3607,13 +3585,12 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       window.removeEventListener('error', globalHandler as EventListener);
       window.removeEventListener('unhandledrejection', globalHandler as EventListener);
     };
-  }, [previewOpen, autoPreview]);
+  }, [previewOpen]);
 
   // Unified Paged.js processing with custom controls integration
   useEffect(() => {
     console.log('🔄 Paged.js useEffect triggered', { 
       previewOpen,
-      autoPreview,
       hasRef: !!pagedJsContainerRef.current,
       effectiveTopMarginMm,
       effectiveBottomMarginMm,
@@ -3621,8 +3598,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       overrideBottomMarginPx
     });
     
-    // Only proceed in preview or autoPreview mode; container may not be mounted yet
-    if (!(previewOpen || autoPreview)) {
+    // Only proceed while the preview is open; container may not be mounted yet
+    if (!previewOpen) {
       console.log('⚠️ Early return from paged.js effect - preview disabled');
       // Reset change detection when preview closes so next open gets fresh render
       initialRenderDoneRef.current = false;
@@ -3656,6 +3633,18 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       spaceOptimized,
       fitToPage,
       lineSpacing,
+      includeSections,
+      breakBeforeMedications,
+      breakBeforeInvestigations,
+      breakBeforeFollowUp,
+      breakBeforeSignature,
+      activeProfileId,
+      printerProfiles,
+      resolvedPrintBgUrl,
+      translationsMap,
+      designAids,
+      frames,
+      bleedSafe,
     });
     
     // Skip processing if: initial render is done AND content hash hasn't changed
@@ -3699,7 +3688,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
             pagedJsRunningRef.current = false;
             setTimeout(() => {
               // Re-run once the container is likely visible
-              if (previewOpen || autoPreview) void processWithPagedJs();
+              if (previewOpen) void processWithPagedJs();
             }, 50); // Reduced from 150ms to 50ms
             return;
           }
@@ -3708,7 +3697,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
           setPagedJsProcessing(false);
           pagedJsRunningRef.current = false;
           setTimeout(() => {
-            if (previewOpen || autoPreview) void processWithPagedJs();
+            if (previewOpen) void processWithPagedJs();
           }, 50); // Reduced from 150ms to 50ms
           return;
         }
@@ -4075,6 +4064,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               z-index: 100;
             `;
             safeOverlay.setAttribute('aria-hidden', 'true');
+            safeOverlay.setAttribute('data-preview-overlay', '');
             (pagebox as HTMLElement).style.position = 'relative';
             pagebox.appendChild(safeOverlay);
           }
@@ -4095,6 +4085,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               z-index: 99;
             `;
             headerFrame.setAttribute('aria-hidden', 'true');
+            headerFrame.setAttribute('data-preview-overlay', '');
             headerFrame.setAttribute('data-frame', 'header');
             (pagebox as HTMLElement).style.position = 'relative';
             pagebox.appendChild(headerFrame);
@@ -4113,6 +4104,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               z-index: 99;
             `;
             footerFrame.setAttribute('aria-hidden', 'true');
+            footerFrame.setAttribute('data-preview-overlay', '');
             footerFrame.setAttribute('data-frame', 'footer');
             pagebox.appendChild(footerFrame);
           }
@@ -4127,6 +4119,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               z-index: 98;
             `;
             designContainer.setAttribute('aria-hidden', 'true');
+            designContainer.setAttribute('data-preview-overlay', '');
             
             if (designAids.showGrid) {
               const gridOverlay = document.createElement('div');
@@ -4243,10 +4236,11 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       // Only clear the reference, not the container content
       // The container will be cleared by processWithPagedJs when it runs next
     };
-  }, [isTeleVideo, previewOpen, autoPreview, itemsStringified, diagnosis, chiefComplaints, personalHistory, spaceOptimized, fitToPage, lineSpacing, investigationsStringified, customSectionsStringified, followUpInstructions,
+  }, [isTeleVideo, previewOpen, itemsStringified, diagnosis, chiefComplaints, personalHistory, spaceOptimized, fitToPage, lineSpacing, investigationsStringified, customSectionsStringified, followUpInstructions,
       paperPreset, effectiveTopMarginMm, effectiveBottomMarginMm, overrideTopMarginPx, overrideBottomMarginPx,
       activeProfileId, printerProfiles, printLeftMarginPx, printRightMarginPx, contentOffsetXPx, contentOffsetYPx, 
-      designAids, frames, bleedSafe, showRefillStamp, printedSignatureUrl, letterheadOption, resolvedPrintBgUrl, grayscale, translationsMap]); // Added translationsMap to re-process when translations complete
+      designAids, frames, bleedSafe, showRefillStamp, printedSignatureUrl, letterheadOption, resolvedPrintBgUrl, grayscale, translationsMap,
+      rxPrintFormat, includeSections, breakBeforeMedications, breakBeforeInvestigations, breakBeforeFollowUp, breakBeforeSignature]);
 
   // Handle page navigation
   useEffect(() => {
@@ -4276,6 +4270,9 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
    */
   const saveDraftNow = useCallback(() => {
     if (shouldPersistDraft?.() === false) return;
+    // A saved prescription without a visit has no recoverable draft: restoring
+    // one would start a second prescription from these medicines.
+    if (!visitId && createdPrescriptionIdRef.current) return;
     try {
       const data = {
         dosageSchemaVersion: 1,
@@ -4329,7 +4326,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       };
       localStorage.setItem(draftKey, JSON.stringify(data));
     } catch {}
-  }, [shouldPersistDraft, draftKey, procedureMetrics, exDermDx, familyHistoryTouched, language, items, followUpInstructions, chiefComplaints, diagnosis, pastHistory, personalHistory, medicationHistory, menstrualHistory, exObjective, procedures, procedurePlanned, investigations, customInvestigationOptions, vitalsHeightCm, vitalsWeightKg, vitalsBmi, vitalsBpSys, vitalsBpDia, vitalsPulse, skinConcerns, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, customSections, overrideTopMarginPx, overrideBottomMarginPx, activeProfileId, showRefillStamp, letterheadOption, breakBeforeMedications, breakBeforeInvestigations, breakBeforeFollowUp, breakBeforeSignature, avoidBreakInsideTables]);
+  }, [shouldPersistDraft, visitId, draftKey, procedureMetrics, exDermDx, familyHistoryTouched, language, items, followUpInstructions, chiefComplaints, diagnosis, pastHistory, personalHistory, medicationHistory, menstrualHistory, exObjective, procedures, procedurePlanned, investigations, customInvestigationOptions, vitalsHeightCm, vitalsWeightKg, vitalsBmi, vitalsBpSys, vitalsBpDia, vitalsPulse, skinConcerns, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, customSections, overrideTopMarginPx, overrideBottomMarginPx, activeProfileId, showRefillStamp, letterheadOption, breakBeforeMedications, breakBeforeInvestigations, breakBeforeFollowUp, breakBeforeSignature, avoidBreakInsideTables]);
   useEffect(() => {
     const t = setTimeout(() => { saveDraftNow(); }, 600);
     return () => clearTimeout(t);
@@ -4418,6 +4415,14 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const latestDraftWriter = useRef(saveDraftNow);
   latestDraftWriter.current = saveDraftNow;
   useEffect(() => () => latestDraftWriter.current(), []);
+  const previousDraftKey = useRef(draftKey);
+  useEffect(() => {
+    const previous = previousDraftKey.current;
+    previousDraftKey.current = draftKey;
+    if (previous === draftKey || previous !== `rxDraft:${patientId}:standalone`) return;
+    saveDraftNow();
+    try { localStorage.removeItem(previous); } catch {}
+  }, [draftKey, patientId, saveDraftNow]);
 
   // Flush draft on nav/unload/back
   useEffect(() => {
@@ -5322,15 +5327,45 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                     </div>
                   </div>
                 )}
+                {lastPrescription && (() => {
+                  const open = lastRxOpenId === lastPrescription.visitId;
+                  const count = lastPrescription.items.length;
+                  return (
+                    <section aria-label="Last prescription" className="rounded-lg border border-border bg-muted/40 text-sm">
+                      <div className="flex items-center gap-2 pr-3">
+                        <button
+                          type="button"
+                          aria-expanded={open}
+                          onClick={() => setLastRxOpenId(open ? null : lastPrescription.visitId)}
+                          className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left text-sm font-medium leading-5"
+                        >
+                          {open ? <ChevronDown className="h-4 w-4 shrink-0" aria-hidden="true" /> : <ChevronRight className="h-4 w-4 shrink-0" aria-hidden="true" />}
+                          <span className="min-w-0 break-words">{`Last prescription · ${displayClinicDate(new Date(lastPrescription.date))} · ${count} ${count === 1 ? 'medicine' : 'medicines'}`}</span>
+                        </button>
+                        <Button size="sm" variant="outline" className="shrink-0" aria-label="Copy to this prescription" onClick={copyLastPrescription}>Copy</Button>
+                      </div>
+                      {open && (
+                        <div className="px-3 pb-2">
+                          <ul className="space-y-1">
+                            {lastPrescription.items.map((m, i) => (
+                              <li key={`${m.drugName}-${i}`} className="break-words">
+                                <span className="font-medium">{m.drugName}</span>
+                                {[m.dosePattern || String(m.frequency || '').replace(/_/g, ' ').toLowerCase(), m.timing ? String(m.timing).replace(/_/g, ' ').toLowerCase() : '', m.duration !== '' && m.duration != null ? `${m.duration} ${String(m.durationUnit || '').toLowerCase()}` : '', m.instructions || '']
+                                  .filter((part, idx, parts) => part && parts.findIndex((p) => p.toLowerCase() === part.toLowerCase()) === idx).map((part) => ` • ${part}`).join('')}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </section>
+                  );
+                })()}
                 <div className="flex justify-between items-center">
                   <div className="text-sm text-muted-foreground">Total items: {items.length}</div>
                   <div className="flex gap-2">
                     {canAddDrugToDB && (
                       <Button size="sm" variant="ghost" onClick={openAddDrugDialog}>+ Add to Drug Database</Button>
                     )}
-                    <Button size="sm" variant="outline" onClick={addPreviousMedications} disabled={loadingPrevMeds}>
-                      {loadingPrevMeds ? 'Adding...' : 'Reuse last meds'}
-                    </Button>
                     <Button size="sm" variant="outline" onClick={addRowAndFocus}>Add Row</Button>
                   </div>
                 </div>
@@ -5886,20 +5921,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   margin-top: var(--fit-sign-gap, 8px) !important;
                   padding-top: var(--fit-sign-gap, 8px) !important;
                 }
-                ${rxPrintFormat === 'TEXT' ? `
-                  /* Text print mode - hide non-text content in Paged.js output only */
-                  .pagedjs_page_content > *:not(.rx-text) { 
-                    display: none !important; 
-                  }
-                  .pagedjs_page_content .rx-text { 
-                    display: block !important; 
-                  }
-                ` : `
-                  /* Table/normal mode - hide text format in Paged.js output */
-                  .pagedjs_page_content .rx-text { 
-                    display: none !important; 
-                  }
-                `}
                 
                 /* Unified Paged.js styling */
                 #pagedjs-container .pagedjs_page,
@@ -6031,80 +6052,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   {(!printCompact || isTeleVideo) && (
                     <div className="text-sm text-foreground mb-2">{todayStr}{isTeleVideo && <span data-consultation-label> • Consultation: Tele-video</span>}</div>
                   )}
-                  {/* Optional plain text preview block (shown only when TEXT format) */}
-                  {rxPrintFormat === 'TEXT' && (
-                    <div className="rx-text p-4 text-sm whitespace-pre-wrap font-mono border rounded-md mb-3">
-                      {(() => {
-                        const headerLines = [
-                          'PRESCRIPTION',
-                          `${displayClinicDateTime(new Date())}`
-                        ];
-                        const patientLines = [
-                          `Patient: ${visitData?.patient?.name || patientData?.name || '—'}`,
-                          `Patient Code: ${patientCodeDisplay || '—'}`,
-                          reviewDateDisplay ? `Review Date: ${reviewDateDisplay}` : null,
-                          (followUpInstructions || '').trim().length ? `Follow-up Instructions: ${tt('followUpInstructions', followUpInstructions)}` : null,
-                        ].filter(Boolean);
-                        const medsLines = (items || []).map((it: any, idx: number) => {
-                          const parts: string[] = [];
-                          parts.push(`${idx + 1}. ${printedMedicineName(it.drugName)}`);
-                          if (it.dosage) parts.push(`Dosage: ${it.dosage}${it.dosageUnit ? ' ' + it.dosageUnit.toLowerCase() : ''}`);
-                          parts.push(`Freq: ${(it.frequency || '').replaceAll('_',' ').toLowerCase()}`);
-                          parts.push(`Duration: ${it.duration} ${String(it.durationUnit || '').toLowerCase()}`);
-                          if (it.instructions) parts.push(`Notes: ${it.instructions}`);
-                          return parts.join(' | ');
-                        });
-                        const sections: string[] = [];
-                        sections.push(headerLines.join('\n'));
-                        sections.push('');
-                        sections.push(patientLines.join('\n'));
-                        sections.push('');
-                        sections.push('Rx:');
-                        sections.push(medsLines.length ? medsLines.join('\n') : '—');
-                        if ((procedures || '').trim().length > 0) {
-                          sections.push('');
-                          sections.push('Procedures:');
-                          sections.push(tt('procedures', procedures));
-                        }
-                        if ((procedurePlanned || '').trim().length > 0) {
-                          sections.push('');
-                          sections.push('Procedure Planned:');
-                          sections.push(tt('procedurePlanned', procedurePlanned));
-                        }
-                        const printableCustomSections = (customSections || []).filter(
-                          (s) => (s?.title || '').trim().length > 0 || (s?.content || '').trim().length > 0
-                        );
-                        if (printableCustomSections.length) {
-                          sections.push('');
-                          sections.push('Custom Sections:');
-                          printableCustomSections.forEach((s, idx) => {
-                            const title = (s.title || '').trim();
-                            const content = (s.content || '').trim();
-                            if (title && content) {
-                              sections.push(`${tt(`custom.${idx}.title`, title)}: ${tt(`custom.${idx}.content`, content)}`);
-                            } else if (title) {
-                              sections.push(tt(`custom.${idx}.title`, title));
-                            } else if (content) {
-                              sections.push(tt(`custom.${idx}.content`, content));
-                            }
-                          });
-                        }
-                        if ((counselingText || '').trim().length > 0) {
-                          sections.push('');
-                          sections.push('Counseling:');
-                          sections.push(tt('counseling', counselingText));
-                        }
-                        if ((followUpInstructions || '').trim().length > 0) {
-                          sections.push('');
-                          sections.push('Follow-up Instructions:');
-                          sections.push(tt('followUpInstructions', followUpInstructions));
-                        }
-                        return sections.join('\n');
-                      })()}
-                    </div>
-                  )}
-
-
                   {/* Patient Info */}
                   {includeSections.patientInfo && (
                     printCompact ? (
@@ -6415,10 +6362,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               </div>
               <div className="p-4 space-y-4">
                 <div className="space-y-3">
-                  <Button variant="ghost" size="sm" onClick={() => setAutoPreview(v => !v)} className="w-full justify-between">
-                    <span>{autoPreview ? 'Live Preview: On' : 'Live Preview: Off'}</span>
-                  </Button>
-                  
                   {/* Unified Pagination Info */}
                   {pagedJsProcessing && (
                     <div className="p-2 bg-info-soft border border-info-border rounded-md text-xs text-info-text">
@@ -6634,7 +6577,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                           <Button variant="secondary" disabled={!hasSavedPrescription || savingForExport || savingFromPreview || sharingEmail || exportPreviewPending || pagedJsProcessing} className={!hasSavedPrescription ? 'pointer-events-none opacity-50' : ''} onClick={async () => {
                             setSharingEmail(true);
                             try {
-                              const to = visitData?.patient?.email?.trim();
+                              const to = (visitData?.patient?.email || patientData?.email)?.trim();
                               if (!to) throw new Error('Patient has no email address on file.');
                               const saved = await saveBeforeExport();
                               if (!saved?.prescriptionId) return;
@@ -6662,7 +6605,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                               const saved = await saveBeforeExport();
                               if (!saved) return;
                               const prescId = saved.prescriptionId;
-                              const phone = (visitData?.patient?.phone || '').replace(/\s+/g, '');
+                              const phone = (visitData?.patient?.phone || patientData?.phone || '').replace(/\s+/g, '');
                               if (!phone) {
                                 toast({ variant: 'destructive', title: 'No phone number', description: 'Patient has no phone number on file.' });
                                 return;
@@ -6688,7 +6631,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                                 a.remove();
                                 URL.revokeObjectURL(a.href);
 
-                                const digits = phone.replace(/[^\d]/g, '');
+                                const indianMobile = localMobile(phone);
+                                const digits = indianMobile ? `91${indianMobile}` : phone.replace(/[^\d]/g, '');
                                 window.open(`https://wa.me/${digits}?text=${encodeURIComponent('Hi, please find your prescription attached.')}`, '_blank');
                                 toast({ title: 'PDF downloaded', description: 'Attach the downloaded PDF in the WhatsApp chat that just opened.' });
                               }
@@ -6720,7 +6664,12 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               <DialogDescription>Preview potential interactions based on current items.</DialogDescription>
             </DialogHeader>
             <div className="max-h-[60vh] overflow-auto text-sm">
-              {interactions.length === 0 ? (
+              {interactions === 'failed' ? (
+                <div role="alert" className="flex items-center justify-between gap-3 rounded-md border border-destructive-border bg-destructive-soft p-3 text-destructive-text">
+                  <span>Couldn’t check interactions. This is not an all-clear.</span>
+                  <Button size="sm" variant="outline" onClick={() => void openInteractions()}>Retry</Button>
+                </div>
+              ) : interactions.length === 0 ? (
                 <div className="text-muted-foreground">No interactions found.</div>
               ) : (
                 <ul className="space-y-2">

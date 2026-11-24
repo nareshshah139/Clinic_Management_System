@@ -9,8 +9,9 @@ jest.mock('next/navigation', () => ({
   useRouter: () => ({ push }),
   useSearchParams: () => new URLSearchParams(),
 }));
-jest.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: jest.fn() }) }));
-jest.mock('@/lib/api', () => ({ apiClient: { getPatients: jest.fn(), getUsers: jest.fn().mockResolvedValue({ users: [] }), getRooms: jest.fn().mockResolvedValue([]), createPatient: jest.fn() } }));
+const mockToast = jest.fn();
+jest.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: mockToast }) }));
+jest.mock('@/lib/api', () => ({ apiClient: { getPatients: jest.fn(), getUsers: jest.fn().mockResolvedValue({ users: [] }), getRooms: jest.fn().mockResolvedValue([]), createPatient: jest.fn(), unlinkPortalUser: jest.fn() } }));
 
 const PATIENTS = [
   { id: 'p-ananya', patientCode: 'ES93U', name: 'Ananya Reddy', gender: 'FEMALE', age: 28, phone: '9848010000', abhaId: '12345678901234', referralSource: 'Instagram', consultationType: 'OFFLINE', lastVisitAt: '2026-11-10T06:00:00.000Z', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
@@ -129,5 +130,62 @@ describe('PatientsManagement table', () => {
       ',Karthik N,9848010959,30,Male,,No',
     ]);
     click.mockRestore();
+  });
+
+  describe('portal unlink and paging', () => {
+    const LINKED = { ...PATIENTS[0], portalUserId: 'u-1' };
+
+    beforeEach(() => {
+      mockToast.mockClear();
+      (apiClient.unlinkPortalUser as jest.Mock).mockClear();
+      Element.prototype.hasPointerCapture = () => false;
+      Element.prototype.scrollIntoView = () => undefined;
+    });
+
+    it('asks in a dialog before unlinking and only unlinks on confirm', async () => {
+      (apiClient.getPatients as jest.Mock).mockResolvedValue({ data: [LINKED], meta: { page: 1, limit: 20, total: 1, totalPages: 1 } });
+      (apiClient.unlinkPortalUser as jest.Mock).mockResolvedValue({});
+      render(<PatientsManagement />);
+      await screen.findByRole('link', { name: 'Ananya Reddy' });
+
+      await userEvent.click(screen.getByRole('button', { name: 'More actions for Ananya Reddy' }));
+      await userEvent.click(await screen.findByRole('menuitem', { name: /Unlink portal/ }));
+      const dialog = await screen.findByRole('alertdialog');
+      expect(dialog).toHaveTextContent('Remove portal access for Ananya Reddy?');
+      expect(apiClient.unlinkPortalUser).not.toHaveBeenCalled();
+
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Unlink' }));
+      await waitFor(() => expect(apiClient.unlinkPortalUser).toHaveBeenCalledWith('p-ananya'));
+      expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Portal user unlinked' }));
+    });
+
+    it('does not unlink when the dialog is cancelled', async () => {
+      (apiClient.getPatients as jest.Mock).mockResolvedValue({ data: [LINKED], meta: { page: 1, limit: 20, total: 1, totalPages: 1 } });
+      render(<PatientsManagement />);
+      await screen.findByRole('link', { name: 'Ananya Reddy' });
+
+      await userEvent.click(screen.getByRole('button', { name: 'More actions for Ananya Reddy' }));
+      await userEvent.click(await screen.findByRole('menuitem', { name: /Unlink portal/ }));
+      const dialog = await screen.findByRole('alertdialog');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+      await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+      expect(apiClient.unlinkPortalUser).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['Filter by consultation type', 'Online'],
+      ['Patients per page', '50 / page'],
+    ])('returns to page 1 when %s changes', async (label, option) => {
+      (apiClient.getPatients as jest.Mock).mockResolvedValue({ data: PATIENTS, meta: { page: 1, limit: 20, total: 90, totalPages: 5 } });
+      render(<PatientsManagement />);
+      await screen.findByRole('link', { name: 'Ananya Reddy' });
+
+      await userEvent.click(screen.getByRole('button', { name: '3' }));
+      await waitFor(() => expect((apiClient.getPatients as jest.Mock).mock.calls.at(-1)[0].page).toBe(3));
+
+      fireEvent.keyDown(screen.getByRole('combobox', { name: label }), { key: 'ArrowDown' });
+      fireEvent.click(await screen.findByRole('option', { name: option }));
+      await waitFor(() => expect((apiClient.getPatients as jest.Mock).mock.calls.at(-1)[0].page).toBe(1));
+    });
   });
 });

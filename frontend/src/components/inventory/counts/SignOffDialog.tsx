@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { requestKey } from '@/components/inventory/workspace-model';
 import { ActionDialog, DialogClose } from '@/components/inventory/purchase/ActionDialog';
 import { BatchLine, Difference, SummaryLine } from './count-parts';
-import { countPath, countSummary, failureMessage, failureOf, type CountDetail, type CountLine } from './count-model';
+import { countPath, countSummary, failureMessage, failureOf, quantity, type CountDetail, type CountLine } from './count-model';
 
 /**
  * @cc [owner:nareshshah139,label:product] count-sign-off-dialog
@@ -106,7 +106,7 @@ export function SignOffDialog({
               <span className="min-w-0">
                 <BatchLine line={line} />
                 <span className="block">
-                  System {line.systemStock} · counted {line.physicalStock}
+                  System {quantity(line.systemStock, line.unit)} · counted {quantity(line.physicalStock, line.unit)}
                 </span>
               </span>
               <Difference line={line} />

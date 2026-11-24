@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { requestKey } from '@/components/inventory/workspace-model';
 import { ActionDialog, DialogClose } from '@/components/inventory/purchase/ActionDialog';
 import { Difference, Money } from './count-parts';
-import { batchCount, countPath, countSummary, failureMessage, failureOf, splitParts, type CountDetail } from './count-model';
+import { batchCount, countPath, countSummary, failureMessage, failureOf, quantity, splitParts, type CountDetail } from './count-model';
 
 export type Decision = 'approve' | 'reject';
 
@@ -122,11 +122,11 @@ export function DecisionDialog({
                     {line.name} <span className="font-normal">· {line.batchNumber}</span>
                   </span>
                   <span className="tabular-nums">
-                    {now} now <span aria-hidden="true">→</span>
-                    <span className="sr-only">becomes</span> <strong>{now + diff}</strong>
+                    {quantity(now, line.unit)} now <span aria-hidden="true">→</span>
+                    <span className="sr-only">becomes</span> <strong>{quantity(now + diff, line.unit)}</strong>
                   </span>
                   {line.currentStock !== null && line.currentStock !== line.systemStock && (
-                    <span className="text-xs">It was {line.systemStock} when counted; stock has moved since.</span>
+                    <span className="text-xs">It was {quantity(line.systemStock, line.unit)} when counted; stock has moved since.</span>
                   )}
                 </span>
                 <Difference line={line} />

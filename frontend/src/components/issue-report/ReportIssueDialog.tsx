@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -97,7 +98,12 @@ export function ReportIssueDialog({ state, dispatch, onSubmit }: ReportIssueDial
 function ReportForm({ state, dispatch, onSubmit, onRedact }: ReportIssueDialogProps & { onRedact: (id: string) => void }) {
   const { draft, status, context } = state;
   const sending = status.phase === 'submitting';
-  const blocker = submitBlocker(draft);
+  const attached = draft.screenshots.map((shot) => shot.id).join(',');
+  const [confirmedFor, setConfirmedFor] = useState<string | null>(null);
+  const confirmed = attached !== '' && confirmedFor === attached;
+  const hasReadyShot = draft.screenshots.some((shot) => shot.state === 'ready');
+  const blocker =
+    submitBlocker(draft) ?? (hasReadyShot && !confirmed ? 'Check the screenshot for patient details and confirm below.' : null);
   const titleShort = draft.title.trim().length < TITLE_MIN;
   const titleRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -230,7 +236,7 @@ function ReportForm({ state, dispatch, onSubmit, onRedact }: ReportIssueDialogPr
               {draft.screenshots.length} of {MAX_SCREENSHOTS} · paste or drop images here too
             </span>
           </div>
-          <ul className="flex flex-wrap gap-2">
+          <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {draft.screenshots.map((shot, index) => (
               <ScreenshotTile
                 key={shot.id}
@@ -241,11 +247,11 @@ function ReportForm({ state, dispatch, onSubmit, onRedact }: ReportIssueDialogPr
               />
             ))}
             {slotsLeft > 0 && (
-              <li>
+              <li className="flex">
                 <button
                   type="button"
                   onClick={() => fileRef.current?.click()}
-                  className="flex h-20 w-32 flex-col items-center justify-center gap-1 rounded-md border border-dashed border-input text-xs text-muted-foreground transition-colors hover:border-ring hover:text-foreground"
+                  className="flex h-36 w-full flex-col items-center justify-center gap-1 rounded-md border border-dashed border-input text-xs text-muted-foreground transition-colors hover:border-ring hover:text-foreground"
                 >
                   <ImagePlus className="size-5" aria-hidden="true" />
                   Add screenshot
@@ -266,6 +272,20 @@ function ReportForm({ state, dispatch, onSubmit, onRedact }: ReportIssueDialogPr
               </li>
             )}
           </ul>
+          {hasReadyShot && (
+            <div className="flex items-start gap-2 rounded-md border bg-muted p-3 text-sm">
+              <Checkbox
+                id={`${ids}-phi`}
+                className="mt-0.5"
+                checked={confirmed}
+                onCheckedChange={(checked: boolean | 'indeterminate') => setConfirmedFor(checked === true ? attached : null)}
+              />
+              <Label htmlFor={`${ids}-phi`} className="font-normal leading-snug">
+                I&apos;ve checked {draft.screenshots.length > 1 ? 'these screenshots contain' : 'this screenshot contains'} no
+                patient-identifying information, or I&apos;ve redacted {draft.screenshots.length > 1 ? 'them' : 'it'}.
+              </Label>
+            </div>
+          )}
           {problems.length > 0 && (
             <ul role="alert" className="grid gap-1 text-sm text-destructive-text">
               {problems.map((problem) => (
@@ -304,8 +324,8 @@ function ReportForm({ state, dispatch, onSubmit, onRedact }: ReportIssueDialogPr
       <p className="flex gap-2 text-xs text-muted-foreground">
         <Lock className="mt-px size-3.5 shrink-0" aria-hidden="true" />
         <span>
-          Reports and screenshots are posted to the team&apos;s GitHub issue tracker, along with your role and user ID. Use Redact to cover
-          patient details first.
+          Reports and screenshots are posted to the team&apos;s GitHub issue tracker, along with your role and user ID. Review each screenshot and use
+          Redact to cover patient details before sending.
         </span>
       </p>
 
@@ -421,16 +441,16 @@ function ScreenshotTile({
   const name = `screenshot ${index + 1}`;
   if (shot.state === 'capturing') {
     return (
-      <li className="relative h-20 w-32 overflow-hidden rounded-md border" role="status">
+      <li className="relative h-36 w-full overflow-hidden rounded-md border" role="status">
         <Skeleton className="size-full rounded-none" />
         <span className="absolute inset-0 flex items-center justify-center text-xs text-muted-foreground">Capturing screen…</span>
       </li>
     );
   }
   return (
-    <li className="relative h-20 w-32 overflow-hidden rounded-md border bg-muted">
+    <li className="relative h-36 w-full overflow-hidden rounded-md border bg-muted">
       <button type="button" onClick={onRedact} aria-label={`Open ${name} to redact`} className="block size-full">
-        {url && <img src={url} alt="" draggable={false} className="size-full object-cover object-top" />}
+        {url && <img src={url} alt="" draggable={false} className="size-full object-contain" />}
       </button>
       <button
         type="button"

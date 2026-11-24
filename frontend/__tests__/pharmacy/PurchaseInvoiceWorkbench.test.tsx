@@ -589,6 +589,25 @@ describe('PurchaseInvoiceWorkbench', () => {
     expect(api.updatePharmacyPurchaseInvoiceDraft).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps the saved-version comparison open while typing the reason to reopen a reviewed bill', async () => {
+    renderSavedInvoice(); await editSelectedInvoice();
+    api.updatePharmacyPurchaseInvoiceDraft.mockRejectedValueOnce(Object.assign(new Error('Invoice changed'),{status:409,body:{code:'PURCHASE_STALE_REVISION'}}));
+    saveCurrentInvoice();
+    api.getPharmacyPurchaseInvoiceById.mockResolvedValueOnce({...draftInvoice,status:'REVIEWED',updatedAt:'2026-10-19T00:00:00Z'});
+    fireEvent.click((await screen.findAllByRole('button',{name:'Compare with saved version'}))[0]);
+    const reason = await screen.findByLabelText('Reason to reopen saved review');
+    fireEvent.change(reason,{target:{value:'Wrong batch'}});
+    expect(screen.getByLabelText('Compare with saved invoice')).toBeInTheDocument();
+    expect(screen.getByLabelText('Reason to reopen saved review')).toHaveValue('Wrong batch');
+  }, 20000);
+
+  it('shows the invoice progress and bill total comparison while the bill is still being reviewed', async () => {
+    renderSavedInvoice(); await editSelectedInvoice();
+    const progress = screen.getByRole('region', { name: 'Invoice progress' });
+    expect(within(progress).getByText('3. Add stock')).toBeInTheDocument();
+    expect(within(progress).getByText('Calculated total')).toBeInTheDocument();
+  });
+
   it('focuses the goods receipt date from a structured review rejection', async () => {
     mockPurchaseAccess = {...mockPurchaseAccess,commit:false};
     api.reviewPharmacyPurchaseInvoice.mockRejectedValue(Object.assign(new Error('Goods received date cannot be before invoice date'),{status:400,body:{code:'PURCHASE_REVIEW_REQUIRED',issues:[{message:'Goods received date cannot be before invoice date',field:'goodsReceivedDate'}]}}));
@@ -669,6 +688,20 @@ describe('PurchaseInvoiceWorkbench', () => {
     expect(api.processPharmacyPurchaseInvoice).not.toHaveBeenCalled();
     expect(api.reviewPharmacyPurchaseInvoice).not.toHaveBeenCalled();
     expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
+  });
+
+  it('keeps the bill on screen and asks to sign in again when the scan upload gets a 401', async () => {
+    const { subscribeToSessionRecovery, getSessionState } = jest.requireActual('@/lib/authRedirect');
+    const unsubscribe = subscribeToSessionRecovery(() => {});
+    const before = window.location.href;
+    (global.fetch as jest.Mock).mockResolvedValue({ ok: false, status: 401, json: async () => ({}) });
+    render(<PurchaseInvoiceWorkbench />);
+    fireEvent.change(screen.getByLabelText('Upload invoice PDF or image'), { target: { files: [new File(['test'], 'invoice.jpg', { type: 'image/jpeg' })] } });
+    fireEvent.click(screen.getByRole('button', { name: 'Scan bill' }));
+    expect(await screen.findByText('Your session expired. Sign in again, then retry the upload.')).toBeVisible();
+    expect(window.location.href).toBe(before);
+    expect(getSessionState()).toBe('expired');
+    unsubscribe();
   });
 
   it('keeps printed corrections independent and blocks unreconciled final submission', async () => {

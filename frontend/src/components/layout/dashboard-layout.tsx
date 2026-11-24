@@ -21,6 +21,7 @@ import { DashboardUserProvider } from "./dashboard-user-context";
 import { AnalyticsMount } from "@/lib/analytics";
 import { ReportIssueProvider } from "@/components/issue-report/ReportIssueProvider";
 import { ReportIssueButton } from "@/components/issue-report/ReportIssueButton";
+import { SessionExpiredDialog } from "@/components/auth/SessionExpiredDialog";
 import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -120,6 +121,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   return (
     <DashboardUserProvider value={contextValue}>
       <AnalyticsMount user={user} />
+      <SessionExpiredDialog />
       <ReportIssueProvider>
         <VoiceBarProvider>
           <div className="h-screen supports-[height:100dvh]:h-dvh flex bg-background">

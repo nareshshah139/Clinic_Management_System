@@ -164,17 +164,18 @@ export class ReportsService {
       where: paymentWhere,
       select: {
         amount: true,
-        invoice: { select: { patientId: true, visit: { select: { doctor } }, appointment: { select: { doctor } } } },
+        invoice: { select: { id: true, patientId: true, visitId: true, appointmentId: true, visit: { select: { doctor } }, appointment: { select: { doctor } } } },
       },
     });
 
-    const doctorMap = new Map<string, { id: string; name: string; revenue: number; patients: Set<string> }>();
+    const doctorMap = new Map<string, { id: string; name: string; revenue: number; patients: Set<string>; visits: Set<string> }>();
     for (const p of payments) {
       const d = p.invoice.visit?.doctor ?? p.invoice.appointment?.doctor;
       if (!d) continue;
-      const current = doctorMap.get(d.id) ?? { id: d.id, name: `${d.firstName || ''} ${d.lastName || ''}`.trim() || 'Doctor', revenue: 0, patients: new Set<string>() };
+      const current = doctorMap.get(d.id) ?? { id: d.id, name: `${d.firstName || ''} ${d.lastName || ''}`.trim() || 'Doctor', revenue: 0, patients: new Set<string>(), visits: new Set<string>() };
       current.revenue += p.amount;
       current.patients.add(p.invoice.patientId);
+      current.visits.add(p.invoice.visitId ?? p.invoice.appointmentId ?? p.invoice.id);
       doctorMap.set(d.id, current);
     }
 
@@ -184,7 +185,7 @@ export class ReportsService {
       revenue: d.revenue,
       patientCount: d.patients.size,
       averageRevenuePerPatient: d.patients.size ? d.revenue / d.patients.size : 0,
-      visitCount: d.patients.size,
+      visitCount: d.visits.size,
     }));
 
     result.sort((a, b) => b.revenue - a.revenue);
@@ -536,9 +537,13 @@ export class ReportsService {
         entry.total += 1;
         roomMap.set(a.roomId, entry);
       }
+      const rooms = roomMap.size
+        ? await this.prisma.room.findMany({ where: { id: { in: Array.from(roomMap.keys()) } }, select: { id: true, name: true } })
+        : [];
+      const roomNames = new Map(rooms.map((r) => [r.id, r.name]));
       roomUtilization = Array.from(roomMap.entries()).map(([roomId, v]) => ({
         roomId,
-        roomName: roomId,
+        roomName: roomNames.get(roomId) ?? roomId,
         totalAppointments: v.total,
         utilizationPercentage: total ? (100 * v.total) / total : 0,
         averageAppointmentsPerDay: v.total / Math.max(1, dailyTrends.length),
@@ -947,7 +952,10 @@ export class ReportsService {
       const doc = new PDFDocument({ size: 'A4', margin: 40 });
       const chunks: Buffer[] = [];
       doc.on('data', (chunk: Buffer) => chunks.push(chunk));
-      doc.on('end', () => {});
+      const pdfDone = new Promise<void>((resolve, reject) => {
+        doc.on('end', resolve);
+        doc.on('error', reject);
+      });
 
       doc.fontSize(18).text(`${reportType} Report`, { underline: true });
       doc.moveDown();
@@ -966,6 +974,7 @@ export class ReportsService {
       if (rows.length > maxLines) doc.text(`... and ${rows.length - maxLines} more rows`);
 
       doc.end();
+      await pdfDone;
       const pdfBuffer = Buffer.concat(chunks);
       const base64 = pdfBuffer.toString('base64');
       fileUrl = `data:application/pdf;base64,${base64}`;
