@@ -1009,3 +1009,47 @@ it('keeps the print layout until the browser reports printing finished', async (
     localStorage.removeItem('rxDraft:slow-print:slow-visit');
   }
 });
+
+it('shows the grid, rulers, frames and safe margin in the preview only, never in print or PDF', async () => {
+  paginateSourceContent = true;
+  localStorage.setItem('rxDraft:aids-patient:aids-visit', JSON.stringify({ items: [rxDrug('Amoxicillin')] }));
+  const print = jest.spyOn(window, 'print').mockImplementation(() => {});
+  const click = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+  const createRx = jest.spyOn(apiClient, 'createPrescription').mockResolvedValue({ id: 'aids-rx' } as any);
+  const patchRx = jest.spyOn(apiClient, 'patch').mockResolvedValue({ id: 'aids-rx' });
+  const overlayMarks = (root: Element | null) => {
+    const inlineStyles = Array.from(root?.querySelectorAll('[style]') ?? []).map(element => element.getAttribute('style')).join(';');
+    return ['background-size', 'dashed', 'outline: 2mm solid'].filter(mark => inlineStyles.includes(mark));
+  };
+  mockPdfOutput.mockClear();
+  try {
+    render(
+      <PrescriptionBuilder
+        patientId="aids-patient" visitId="aids-visit" doctorId="doctor" onBeforeExport={async () => 'aids-visit'}
+        designAids={{ enabled: true, showGrid: true, showRulers: true, snapToGrid: false, gridSizePx: 8, nudgeStepPx: 1 }}
+        frames={{ enabled: true, headerHeightMm: 30, footerHeightMm: 20 }}
+        bleedSafe={{ enabled: true, safeMarginMm: 7.56 }}
+      />,
+    );
+    await screen.findByDisplayValue('Amoxicillin');
+    await openPreview();
+    await settlePreviewPagination();
+    expect(overlayMarks(document.getElementById('pagedjs-container'))).toEqual(['background-size', 'dashed', 'outline: 2mm solid']);
+
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: /^Print$/ })));
+    await waitFor(() => expect(print).toHaveBeenCalledTimes(1));
+    const host = document.getElementById('prescription-print-host');
+    expect(host).toHaveTextContent('Amoxicillin');
+    expect(overlayMarks(host)).toEqual([]);
+    act(() => { window.dispatchEvent(new Event('afterprint')); });
+
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Download PDF' })));
+    await waitFor(() => expect(mockPdfOutput).toHaveBeenCalledTimes(1));
+    const pdf = mockPdfOutput.mock.calls[0][0] as Element;
+    expect(pdf).toHaveTextContent('Amoxicillin');
+    expect(overlayMarks(pdf)).toEqual([]);
+  } finally {
+    print.mockRestore(); click.mockRestore(); createRx.mockRestore(); patchRx.mockRestore();
+    localStorage.removeItem('rxDraft:aids-patient:aids-visit');
+  }
+});

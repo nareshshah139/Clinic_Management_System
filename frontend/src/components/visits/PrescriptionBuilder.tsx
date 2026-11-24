@@ -281,6 +281,12 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
   );
 });
 
+function printablePagesHtml(container: Element) {
+  const pages = container.cloneNode(true) as Element;
+  pages.querySelectorAll('[data-preview-overlay]').forEach(overlay => overlay.remove());
+  return pages.innerHTML;
+}
+
 /**
  * @cc [owner:nareshshah139,label:product] compact-clinical-print-fields
  * Space-optimized print content MUST place Chief Complaints, Review Date and
@@ -3387,7 +3393,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
 
     const pages = document.createElement('div');
     pages.className = 'prescription-print-pages';
-    pages.innerHTML = container.innerHTML;
+    pages.innerHTML = printablePagesHtml(container);
 
     host.appendChild(pages);
     document.body.appendChild(host);
@@ -3466,7 +3472,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
         html, body { margin: 0; padding: 0; }
         ${pagedPrintExportCss}
       </style>
-      ${container.innerHTML}`;
+      ${printablePagesHtml(container)}`;
     const { renderPrescriptionPages } = await import('@/lib/pdf-export');
     return renderPrescriptionPages(wrapper, paperPreset);
   };
@@ -4072,6 +4078,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               z-index: 100;
             `;
             safeOverlay.setAttribute('aria-hidden', 'true');
+            safeOverlay.setAttribute('data-preview-overlay', '');
             (pagebox as HTMLElement).style.position = 'relative';
             pagebox.appendChild(safeOverlay);
           }
@@ -4092,6 +4099,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               z-index: 99;
             `;
             headerFrame.setAttribute('aria-hidden', 'true');
+            headerFrame.setAttribute('data-preview-overlay', '');
             headerFrame.setAttribute('data-frame', 'header');
             (pagebox as HTMLElement).style.position = 'relative';
             pagebox.appendChild(headerFrame);
@@ -4110,6 +4118,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               z-index: 99;
             `;
             footerFrame.setAttribute('aria-hidden', 'true');
+            footerFrame.setAttribute('data-preview-overlay', '');
             footerFrame.setAttribute('data-frame', 'footer');
             pagebox.appendChild(footerFrame);
           }
@@ -4124,6 +4133,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               z-index: 98;
             `;
             designContainer.setAttribute('aria-hidden', 'true');
+            designContainer.setAttribute('data-preview-overlay', '');
             
             if (designAids.showGrid) {
               const gridOverlay = document.createElement('div');
