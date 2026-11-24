@@ -142,6 +142,8 @@ export class PatientDeduplicationService {
    */
   private async mergeDuplicateGroup(groupIds: string[]): Promise<{ archivedPatients: number; visitsRenumbered: number }> {
     return this.prisma.$transaction(async (tx) => {
+      // Patients before profiles, the order the WhatsApp send pass and patient edits use.
+      await tx.$queryRaw`SELECT "id" FROM "patients" WHERE "id" IN (${Prisma.join(groupIds)}) ORDER BY "id" FOR UPDATE`;
       const patients = await tx.patient.findMany({
         where: {
           id: { in: groupIds },
