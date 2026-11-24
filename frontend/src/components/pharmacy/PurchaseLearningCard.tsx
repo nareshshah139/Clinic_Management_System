@@ -44,8 +44,8 @@ export function PurchaseLearningCard() {
     const to = new Date();
     const from = new Date(to.getTime() - WEEKS * 7 * 24 * 60 * 60 * 1000);
     Promise.allSettled([
-      apiClient.getPharmacyPurchaseLearningMetrics<unknown>({ from: day(from), to: day(to) }),
-      apiClient.getPharmacyPurchaseLearningLessons<unknown>(),
+      Promise.resolve().then(() => apiClient.getPharmacyPurchaseLearningMetrics<unknown>({ from: day(from), to: day(to) })),
+      Promise.resolve().then(() => apiClient.getPharmacyPurchaseLearningLessons<unknown>()),
     ]).then(([metrics, learned]) => {
       if (!active) return;
       setWeeks(metrics.status === 'fulfilled' ? parseLearningWeeks(metrics.value).slice(-WEEKS) : []);
