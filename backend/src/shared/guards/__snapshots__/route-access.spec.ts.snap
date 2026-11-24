@@ -69,7 +69,7 @@ GET /drugs/dosage-forms | roles: ADMIN,PHARMACIST,DOCTOR | permissions: pharmacy
 GET /drugs/inventory-change-requests | roles: ADMIN,PHARMACIST,DOCTOR | permissions: pharmacy:drug:inventory-change:read
 GET /drugs/manufacturers | roles: ADMIN,PHARMACIST,DOCTOR | permissions: pharmacy:drug:manufacturers
 GET /drugs/statistics | roles: ADMIN,PHARMACIST | permissions: pharmacy:drug:statistics
-GET /follow-ups/attachments/:id | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
+GET /follow-ups/attachments/:id | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION | permissions: -
 GET /follow-ups/items | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION | permissions: -
 GET /follow-ups/items/:id | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION | permissions: -
 GET /follow-ups/patients/:patientId/timeline | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION | permissions: -

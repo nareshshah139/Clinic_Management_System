@@ -47,11 +47,13 @@ export class FollowUpsController {
 
   /**
    * @cc [owner:nareshshah139,label:security] attachment-serving-headers
-   * A patient photo MUST be served only to signed-in clinic staff of the patient's branch (any
-   * branch when the sender is unknown, as the clinic has one number), as
-   * image/jpeg with Cache-Control: private, no-store and X-Content-Type-Options: nosniff (PP-87).
+   * A patient photo MUST be served only to the Follow-ups roles (doctor, nurse, reception,
+   * manager, admin, owner; never pharmacist or accountant) of the patient's branch (any branch
+   * when the sender is unknown, as the clinic has one number), as image/jpeg with
+   * Cache-Control: private, no-store and X-Content-Type-Options: nosniff (PP-87).
    */
   @Get('attachments/:id')
+  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.MANAGER, UserRole.DOCTOR, UserRole.NURSE, UserRole.RECEPTION)
   async attachment(@Param('id') id: string, @Request() req: Req, @Res() res: Response) {
     const bytes = await this.followUps.attachment(id, req.branchId ?? req.user.branchId);
     res.set({ 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff', 'Content-Disposition': 'inline' });
