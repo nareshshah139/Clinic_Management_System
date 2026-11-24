@@ -1,6 +1,6 @@
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
-import { RequestContextService } from '../context/request-context.service';
+import { AuditActorKind, RequestContextService, currentRequestContext } from '../context/request-context.service';
 
 function redactSensitiveFields<T>(input: T): T {
   const SENSITIVE_KEYS = new Set([
@@ -39,12 +39,23 @@ function redactSensitiveFields<T>(input: T): T {
  */
 export const NAMES_ONLY_AUDIT_MODELS = new Set<string>(['PatientPortalProfile', 'PortalOtpChallenge', 'OutboundMessage', 'InboundWhatsAppEvent', 'PatientMessage', 'AttentionItem']);
 
-export function namesOnlyAuditValues(operation: string, args: any, ctx: { userId?: string | null } | undefined) {
+type ActorContext = { userId?: string | null; actorKind?: AuditActorKind } | undefined;
+
+const actorKindFor = (ctx: ActorContext): AuditActorKind => ctx?.actorKind ?? (ctx?.userId ? 'staff' : 'system');
+
+export function namesOnlyAuditValues(operation: string, args: any, ctx: ActorContext) {
   const data = Array.isArray(args?.data) ? args.data[0] : args?.data ?? (operation === 'upsert' ? { ...args?.create, ...args?.update } : undefined);
   return {
-    actorKind: ctx?.userId ? 'staff' : 'system',
+    actorKind: actorKindFor(ctx),
     newValues: JSON.stringify({ fields: Object.keys(data ?? {}).sort() }),
   };
+}
+
+/** The names-only audit row for a write the Prisma extension cannot see, such as a raw `INSERT ... ON CONFLICT`. */
+export async function auditRawWrite(client: { auditLog: { create: (args: any) => Promise<unknown> } }, entry: { entity: string; entityId: string; action: 'CREATE' | 'UPDATE'; fields: string[] }) {
+  await client.auditLog.create({
+    data: { userId: null, action: entry.action, entity: entry.entity, entityId: entry.entityId, actorKind: actorKindFor(currentRequestContext()), oldValues: null, newValues: JSON.stringify({ fields: [...entry.fields].sort() }) },
+  });
 }
 
 @Injectable()

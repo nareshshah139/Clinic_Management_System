@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { OutboundMessage, OutboundMessagePurpose as P, Prisma, WhatsAppConsentState } from '@prisma/client';
-import { PrismaService } from '../../shared/database/prisma.service';
+import { PrismaService, auditRawWrite } from '../../shared/database/prisma.service';
 import { WhatsAppNotConfiguredError, WhatsAppRejectedError, WhatsAppSender, WhatsAppUnavailableError } from './whatsapp-sender';
 import { renderTemplate } from './templates';
 import { CARE_PRIORITY, inSendWindow, isCare, kolkataDay, kolkataDayBounds, needsConsent, nextDayWindowStart, nextWindowStart } from './send-policy';
@@ -115,13 +115,17 @@ export class SendPassService {
   /** Leases due rows (and rows whose lease ran out), care rows first by spec order. */
   async lease(now: Date): Promise<OutboundMessage[]> {
     const until = new Date(now.getTime() + LEASE_MS);
-    const ids = await this.prisma.$queryRaw<{ id: string }[]>`
-      UPDATE "outbound_messages" SET "state" = 'SENDING', "leaseUntil" = ${until}, "updatedAt" = ${now}
-      WHERE "id" IN (
-        SELECT "id" FROM "outbound_messages"
-        WHERE ("state" = 'QUEUED' AND "notBefore" <= ${now}) OR ("state" = 'SENDING' AND "leaseUntil" < ${now})
-        ORDER BY "notBefore" ASC LIMIT ${BATCH} FOR UPDATE SKIP LOCKED)
-      RETURNING "id"`;
+    const ids = await this.prisma.$transaction(async (tx) => {
+      const leased = await tx.$queryRaw<{ id: string }[]>`
+        UPDATE "outbound_messages" SET "state" = 'SENDING', "leaseUntil" = ${until}, "updatedAt" = ${now}
+        WHERE "id" IN (
+          SELECT "id" FROM "outbound_messages"
+          WHERE ("state" = 'QUEUED' AND "notBefore" <= ${now}) OR ("state" = 'SENDING' AND "leaseUntil" < ${now})
+          ORDER BY "notBefore" ASC LIMIT ${BATCH} FOR UPDATE SKIP LOCKED)
+        RETURNING "id"`;
+      for (const { id } of leased) await auditRawWrite(tx, { entity: 'OutboundMessage', entityId: id, action: 'UPDATE', fields: ['leaseUntil', 'state', 'updatedAt'] });
+      return leased;
+    });
     if (!ids.length) return [];
     const rows = await this.prisma.outboundMessage.findMany({ where: { id: { in: ids.map((r) => r.id) } } });
     const rank = (r: OutboundMessage) => (isCare(r.purpose) ? CARE_PRIORITY[r.purpose]! : -1);
