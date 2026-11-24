@@ -900,7 +900,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
       merged.consultationType = consultationType;
       merged.teleVideoConsent = teleVideoConsent;
     }
-    if (visitId && followUpPlanTouched.current) merged.followUpPlanVersionId = followUpPlanVersionId || null;
+    if (followUpPlanTouched.current) merged.followUpPlanVersionId = followUpPlanVersionId || null;
     return merged;
   }, [followUpPlanVersionId, dirtyClinicalFields.current, consultationType, teleVideoConsent, prescriptionClinical, labSelections, labResults, spotSize, assessment, complaints, counseling, dermDx, doctorId, fluence, passes, patientId, plan, procType, reviewDate, skinConcerns, skinType, subjective, systemics, topicals, currentVisitNumber, appointmentId, morphology, distribution, acneSeverity, itchScore, painScore, recordedSections, userRole, vitals, objective, visitId]);
 
