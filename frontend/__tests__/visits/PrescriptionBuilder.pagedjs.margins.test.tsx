@@ -1053,3 +1053,30 @@ it('shows the grid, rulers, frames and safe margin in the preview only, never in
     localStorage.removeItem('rxDraft:aids-patient:aids-visit');
   }
 });
+
+it('shares a new visit by WhatsApp and Email using the patient record, with the Indian country code', async () => {
+  paginateSourceContent = true;
+  localStorage.setItem('rxDraft:share-patient:share-visit', JSON.stringify({ items: [rxDrug('Amoxicillin')] }));
+  const open = jest.spyOn(window, 'open').mockImplementation(() => null);
+  const click = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+  const createRx = jest.spyOn(apiClient, 'createPrescription').mockResolvedValue({ id: 'share-rx' } as any);
+  const patchRx = jest.spyOn(apiClient, 'patch').mockResolvedValue({ id: 'share-rx' });
+  const share = jest.spyOn(apiClient, 'sharePrescriptionPreview').mockResolvedValue({});
+  const patient = { id: 'share-patient', name: 'Synthetic Patient', phone: '098765 43210', email: 'synthetic@example.test' };
+  try {
+    render(<PrescriptionBuilder patientId="share-patient" patient={patient as any} visitId="share-visit" doctorId="doctor" onBeforeExport={async () => 'share-visit'} />);
+    await screen.findByDisplayValue('Amoxicillin');
+    await openPreview();
+    await settlePreviewPagination();
+
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'PDF via WhatsApp' })));
+    await waitFor(() => expect(open).toHaveBeenCalledWith(`https://wa.me/919876543210?text=${encodeURIComponent('Hi, please find your prescription attached.')}`, '_blank'));
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Email' })).toBeEnabled());
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Email' })));
+    await waitFor(() => expect(share).toHaveBeenCalledWith('share-rx', expect.any(File), expect.objectContaining({ channel: 'EMAIL', to: 'synthetic@example.test' })));
+  } finally {
+    open.mockRestore(); click.mockRestore(); createRx.mockRestore(); patchRx.mockRestore(); share.mockRestore();
+    localStorage.removeItem('rxDraft:share-patient:share-visit');
+  }
+});

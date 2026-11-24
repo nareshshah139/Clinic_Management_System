@@ -40,6 +40,7 @@ import { applyVoiceFillRegistry, voiceDraftLines, type VoiceFillFields } from '@
 import { visitVoiceRegistry, type ExtraVitalsPatch } from '@/lib/voice-fill-visit';
 import { applySpokenPrescriptionItems, inventoryNamesOf, spokenPrescriptionDraftLines } from '@/lib/voice-fill-prescription';
 import { usePrescriptionSignature } from '@/hooks/usePrescriptionSignature';
+import { localMobile } from '@/components/pharmacy/sales/sales-register-model';
 import { useDoctorLetterhead } from '@/hooks/useDoctorLetterhead';
 import { PRINT_FIT_MIN_FONT_PX, PRINT_FIT_STEPS, fitPrintMarkup, pageContentBoxPx } from '@/lib/print-fit';
 import { billHref } from '@/components/pharmacy/sales/sales-bill-model';
@@ -6561,7 +6562,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                           <Button variant="secondary" disabled={!hasSavedPrescription || savingForExport || savingFromPreview || sharingEmail || exportPreviewPending || pagedJsProcessing} className={!hasSavedPrescription ? 'pointer-events-none opacity-50' : ''} onClick={async () => {
                             setSharingEmail(true);
                             try {
-                              const to = visitData?.patient?.email?.trim();
+                              const to = (visitData?.patient?.email || patientData?.email)?.trim();
                               if (!to) throw new Error('Patient has no email address on file.');
                               const saved = await saveBeforeExport();
                               if (!saved?.prescriptionId) return;
@@ -6589,7 +6590,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                               const saved = await saveBeforeExport();
                               if (!saved) return;
                               const prescId = saved.prescriptionId;
-                              const phone = (visitData?.patient?.phone || '').replace(/\s+/g, '');
+                              const phone = (visitData?.patient?.phone || patientData?.phone || '').replace(/\s+/g, '');
                               if (!phone) {
                                 toast({ variant: 'destructive', title: 'No phone number', description: 'Patient has no phone number on file.' });
                                 return;
@@ -6615,7 +6616,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                                 a.remove();
                                 URL.revokeObjectURL(a.href);
 
-                                const digits = phone.replace(/[^\d]/g, '');
+                                const indianMobile = localMobile(phone);
+                                const digits = indianMobile ? `91${indianMobile}` : phone.replace(/[^\d]/g, '');
                                 window.open(`https://wa.me/${digits}?text=${encodeURIComponent('Hi, please find your prescription attached.')}`, '_blank');
                                 toast({ title: 'PDF downloaded', description: 'Attach the downloaded PDF in the WhatsApp chat that just opened.' });
                               }
