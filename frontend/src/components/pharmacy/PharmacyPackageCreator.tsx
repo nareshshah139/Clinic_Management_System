@@ -155,13 +155,13 @@ export function PharmacyPackageCreator({ onCreated, onCancel }: PharmacyPackageC
     <div className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label>Name</Label>
-          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Complete Acne Treatment Kit" />
+          <Label htmlFor="pkg-name">Name</Label>
+          <Input id="pkg-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Complete Acne Treatment Kit" />
         </div>
         <div className="space-y-2">
-          <Label>Category</Label>
+          <Label htmlFor="pkg-category">Category</Label>
           <Select value={category} onValueChange={setCategory}>
-            <SelectTrigger>
+            <SelectTrigger id="pkg-category">
               <SelectValue placeholder="Select category" />
             </SelectTrigger>
             <SelectContent>
@@ -171,45 +171,45 @@ export function PharmacyPackageCreator({ onCreated, onCancel }: PharmacyPackageC
           </Select>
         </div>
         <div className="space-y-2">
-          <Label>Subcategory (optional)</Label>
-          <Input value={subcategory || ''} onChange={(e) => setSubcategory(e.target.value || undefined)} placeholder="e.g. Acne Treatment" />
+          <Label htmlFor="pkg-subcategory">Subcategory (optional)</Label>
+          <Input id="pkg-subcategory" value={subcategory || ''} onChange={(e) => setSubcategory(e.target.value || undefined)} placeholder="e.g. Acne Treatment" />
         </div>
         <div className="space-y-2">
-          <Label>Package Price (₹)</Label>
-          <Input type="number" value={packagePrice} onChange={(e) => setPackagePrice(parseFloat(e.target.value) || 0)} min={0} />
+          <Label htmlFor="pkg-price">Package Price (₹)</Label>
+          <Input id="pkg-price" type="number" value={packagePrice} onChange={(e) => setPackagePrice(parseFloat(e.target.value) || 0)} min={0} />
         </div>
         <div className="space-y-2">
-          <Label>Discount % (optional)</Label>
-          <Input type="number" value={discountPercent} onChange={(e) => setDiscountPercent(parseFloat(e.target.value) || 0)} min={0} max={100} />
+          <Label htmlFor="pkg-discount">Discount % (optional)</Label>
+          <Input id="pkg-discount" type="number" value={discountPercent} onChange={(e) => setDiscountPercent(parseFloat(e.target.value) || 0)} min={0} max={100} />
         </div>
         <div className="space-y-2">
-          <Label>Duration (optional)</Label>
-          <Input value={duration} onChange={(e) => setDuration(e.target.value)} placeholder="e.g. 8 weeks" />
+          <Label htmlFor="pkg-duration">Duration (optional)</Label>
+          <Input id="pkg-duration" value={duration} onChange={(e) => setDuration(e.target.value)} placeholder="e.g. 8 weeks" />
         </div>
       </div>
 
       <div className="space-y-2">
-        <Label>Description (optional)</Label>
-        <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
+        <Label htmlFor="pkg-description">Description (optional)</Label>
+        <Textarea id="pkg-description" value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label>Indications (optional)</Label>
-          <Textarea value={indications} onChange={(e) => setIndications(e.target.value)} rows={2} />
+          <Label htmlFor="pkg-indications">Indications (optional)</Label>
+          <Textarea id="pkg-indications" value={indications} onChange={(e) => setIndications(e.target.value)} rows={2} />
         </div>
         <div className="space-y-2">
-          <Label>Contraindications (optional)</Label>
-          <Textarea value={contraindications} onChange={(e) => setContraindications(e.target.value)} rows={2} />
+          <Label htmlFor="pkg-contraindications">Contraindications (optional)</Label>
+          <Textarea id="pkg-contraindications" value={contraindications} onChange={(e) => setContraindications(e.target.value)} rows={2} />
         </div>
       </div>
 
       {/* Drug search and selection */}
       <div className="space-y-3">
-        <Label>Add drugs</Label>
+        <Label htmlFor="pkg-drug-search">Add drugs</Label>
         <div className="relative">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input className="pl-8" placeholder="Search drugs by name or ingredient..." value={drugQuery} onChange={(e) => setDrugQuery(e.target.value)} />
+          <Input id="pkg-drug-search" className="pl-8" placeholder="Search drugs by name or ingredient..." value={drugQuery} onChange={(e) => setDrugQuery(e.target.value)} />
         </div>
         {drugResults.length > 0 && (
           <div className="max-h-48 overflow-auto border rounded-md p-2">

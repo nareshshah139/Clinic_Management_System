@@ -91,10 +91,7 @@ export function PackageBrowser({ onSelectPackage, reloadKey }: PackageBrowserPro
   const loadPackages = async () => {
     try {
       setLoading(true);
-      const response = await apiClient.get('/pharmacy/packages', {
-        category: 'Dermatology',
-        limit: 50
-      });
+      const response = await apiClient.get('/pharmacy/packages', { limit: 50 });
       setLoadFailed(false);
       if (response && Array.isArray((response as any).packages)) {
         setPackages((response as any).packages);
