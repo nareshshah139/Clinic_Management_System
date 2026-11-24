@@ -1,5 +1,5 @@
 'use client';
-import { displayUtcDate, displayClinicDate, displayClinicDateTime } from '@/lib/date-display';
+import { displayUtcDate, displayClinicDate } from '@/lib/date-display';
 import { Spinner } from "@/components/ui/spinner";
 import { TELE_VIDEO_DISCLAIMER, TELE_VIDEO_CONSENT_REQUIRED, type ConsultationType } from '@/lib/tele-consultation';
 import React, { useCallback, useDeferredValue, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
