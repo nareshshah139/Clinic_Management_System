@@ -1758,11 +1758,11 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
   return (
     <div className="min-w-0 space-y-4">
       <div data-visit-bar className="sticky -top-4 z-30 -mx-4 space-y-1.5 border-b bg-background px-4 py-1.5 md:-top-6 md:-mx-6 md:px-6">
-        <div className="flex items-center justify-between gap-x-4">
-          <div className="flex min-w-0 flex-1 items-center gap-x-3">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5">
+          <div className="flex min-w-64 flex-1 items-center gap-x-3">
             {identity}
           </div>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs text-muted-foreground" role="status" aria-live="polite">
               {editMode === 'locked' ? 'Completed. Read only.' : <>
               {editMode === 'amending' && 'Editing a completed visit. '}

@@ -996,7 +996,7 @@ function VisitsPageInner() {
           <Button variant="ghost" size="icon" className="-ml-2 h-8 w-8" aria-label="Back to Setup" title="Back to setup" onClick={() => void leaveVisit(() => setShowForm(false))}>
             <ArrowLeft className="h-4 w-4" aria-hidden="true" />
           </Button>
-          <VisitIdentityBar className="min-w-0 truncate" patient={selectedPatient} doctor={selectedDoctor} appointment={activeAppointment} hideDoctor />
+          <VisitIdentityBar className="min-w-0 break-words" patient={selectedPatient} doctor={selectedDoctor} appointment={activeAppointment} hideDoctor />
         </>
       }
       doctorControl={
