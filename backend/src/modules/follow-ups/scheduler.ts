@@ -59,6 +59,12 @@ export async function linkOpenedCheckIns(db: PrismaClient, now: Date): Promise<n
   let queued = 0;
   for (const [key, g] of groups) {
     await db.$transaction(async (tx) => {
+      // Locking the tracks orders this against a duplicate merge, which repoints tracks before links;
+      // a group whose patient changed is regrouped by the next pass.
+      const owners = await tx.$queryRaw<{ patientId: string }[]>`
+        SELECT t."patientId" FROM follow_up_tracks t JOIN check_ins c ON c."trackId" = t.id
+        WHERE c.id = ANY(${g.ids}::text[]) FOR SHARE OF t`;
+      if (owners.some((o) => o.patientId !== g.patientId)) return;
       const id = `tl_${randomUUID().replaceAll('-', '')}`;
       await tx.portalTaskLink.createMany({
         data: [{ id, dedupeKey: `check-in:${key}`, patientId: g.patientId, tokenHash: hashTaskToken(deriveTaskToken(id)) }],
