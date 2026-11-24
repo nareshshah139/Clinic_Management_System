@@ -69,6 +69,8 @@ GET /drugs/dosage-forms | roles: ADMIN,PHARMACIST,DOCTOR | permissions: pharmacy
 GET /drugs/inventory-change-requests | roles: ADMIN,PHARMACIST,DOCTOR | permissions: pharmacy:drug:inventory-change:read
 GET /drugs/manufacturers | roles: ADMIN,PHARMACIST,DOCTOR | permissions: pharmacy:drug:manufacturers
 GET /drugs/statistics | roles: ADMIN,PHARMACIST | permissions: pharmacy:drug:statistics
+GET /follow-ups/patients/:patientId/tracks | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
+GET /follow-ups/plans | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /google-calendar/auth-url | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /google-calendar/callback | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /google-calendar/configured | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
@@ -320,6 +322,8 @@ POST /drugs | roles: ADMIN,PHARMACIST,DOCTOR | permissions: -
 POST /drugs/inventory-change-requests | roles: ADMIN,PHARMACIST | permissions: pharmacy:drug:inventory-change:create
 POST /drugs/inventory-change-requests/:id/approve | roles: ADMIN,DOCTOR | permissions: pharmacy:drug:inventory-change:approve
 POST /drugs/inventory-change-requests/:id/reject | roles: ADMIN,DOCTOR | permissions: pharmacy:drug:inventory-change:approve
+POST /follow-ups/import | roles: OWNER | permissions: -
+POST /follow-ups/tracks/:id/stop | roles: DOCTOR,ADMIN,OWNER | permissions: -
 POST /google-calendar/disconnect | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 POST /google-calendar/exchange | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 POST /inventory/adjustments | roles: ADMIN,PHARMACIST,RECEPTION | permissions: inventory:adjustment:create
