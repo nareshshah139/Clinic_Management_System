@@ -53,10 +53,28 @@ describe('pdfFileName', () => {
     expect(pdfFileName('Prescription', 'می\u200cخواهم', '2026-11-24')).toBe('Prescription - می\u200cخواهم - 2026-11-24.pdf');
   });
 
-  it('truncates the patient name and never the title', () => {
-    const result = pdfFileName('Prescription', 'x'.repeat(300), '2026-11-24');
-    expect(result.length).toBeLessThanOrEqual(124);
-    expect(result.startsWith('Prescription - xxx')).toBe(true);
-    expect(result.endsWith(' - 2026-11-24.pdf')).toBe(true);
+  it('caps a long Hindi name at 200 bytes', () => {
+    const result = pdfFileName('Prescription', 'प्रिया शर्मा '.repeat(20), '2026-11-24');
+    expect(Buffer.byteLength(result)).toBeLessThanOrEqual(200);
+    expect(result).toBe('Prescription - प्रिया शर्मा प्रिया शर्मा प्रिया शर्मा प्रिया शर्मा प्रिया श - 2026-11-24.pdf');
+  });
+
+  it('never cuts a Hindi name inside a grapheme cluster', () => {
+    const result = pdfFileName('Prescription', 'शर्मा'.repeat(40), '2026-11-24');
+    expect(Buffer.byteLength(result)).toBeLessThanOrEqual(200);
+    expect(result).toBe(`Prescription - ${'शर्मा'.repeat(11)}श - 2026-11-24.pdf`);
+  });
+
+  it('truncates a long ASCII patient name and keeps the title and day', () => {
+    expect(pdfFileName('Prescription', 'x'.repeat(300), '2026-11-24')).toBe(
+      `Prescription - ${'x'.repeat(168)} - 2026-11-24.pdf`,
+    );
+  });
+
+  it('truncates the title too when title and day alone overflow', () => {
+    const result = pdfFileName('T'.repeat(300), 'Priya', '2026-11-24');
+    expect(Buffer.byteLength(result)).toBeLessThanOrEqual(200);
+    expect(result).toBe(`${'T'.repeat(183)} - 2026-11-24.pdf`);
+    expect(pdfFileName('T'.repeat(300), 'Priya').endsWith('.pdf')).toBe(true);
   });
 });
