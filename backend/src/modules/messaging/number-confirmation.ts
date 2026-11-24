@@ -66,14 +66,17 @@ export async function confirmByCode(tx: Tx, phoneE164: string, code: string, at 
   });
   if (!challenge) return 'none';
   if (challenge.expiresAt <= at) return 'expired';
-  if (challenge.attempts >= MAX_CODE_ATTEMPTS) return 'locked';
+  // Spend the attempt before comparing, so parallel guesses cannot share one remaining attempt.
+  const spent = await tx.portalOtpChallenge.updateMany({
+    where: { id: challenge.id, consumedAt: null, attempts: { lt: MAX_CODE_ATTEMPTS } },
+    data: { attempts: { increment: 1 } },
+  });
+  if (!spent.count) return 'locked';
   const want = Buffer.from(challenge.codeHash, 'hex');
   const got = Buffer.from(hashCode(phoneE164, code.trim()), 'hex');
-  if (want.length !== got.length || !timingSafeEqual(want, got)) {
-    await tx.portalOtpChallenge.update({ where: { id: challenge.id }, data: { attempts: { increment: 1 } } });
-    return 'wrong';
-  }
-  await tx.portalOtpChallenge.update({ where: { id: challenge.id }, data: { consumedAt: at } });
+  if (want.length !== got.length || !timingSafeEqual(want, got)) return 'wrong';
+  const consumed = await tx.portalOtpChallenge.updateMany({ where: { id: challenge.id, consumedAt: null }, data: { consumedAt: at } });
+  if (!consumed.count) return 'none';
   await confirmNumber(tx, phoneE164, 'code-entered', at);
   return 'confirmed';
 }
