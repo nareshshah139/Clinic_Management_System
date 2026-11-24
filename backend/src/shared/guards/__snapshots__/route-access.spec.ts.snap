@@ -234,6 +234,7 @@ GET /stock-prediction/bulk-order | roles: OWNER,ADMIN,MANAGER,PHARMACIST | permi
 GET /stock-prediction/critical-items | roles: OWNER,ADMIN,MANAGER,PHARMACIST | permissions: -
 GET /stock-prediction/predictions | roles: OWNER,ADMIN,MANAGER,PHARMACIST | permissions: -
 GET /stock-prediction/trends | roles: OWNER,ADMIN,MANAGER | permissions: -
+GET /uploads/*path | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /users | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /users/:id | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /users/:id/letterhead | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -

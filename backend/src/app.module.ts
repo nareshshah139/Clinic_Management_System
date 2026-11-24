@@ -13,6 +13,7 @@ import { AppointmentsModule } from './modules/appointments/appointments.module';
 import { ClinicInvestigationsModule } from './modules/clinic-investigations/clinic-investigations.module';
 import { DoctorAvailabilityModule } from './modules/doctor-availability/doctor-availability.module';
 import { VisitsModule } from './modules/visits/visits.module';
+import { UploadsModule } from './modules/uploads/uploads.module';
 import { PrescriptionsModule } from './modules/prescriptions/prescriptions.module';
 import { BillingModule } from './modules/billing/billing.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
@@ -60,6 +61,7 @@ const fullFeatureModules = [
   DoctorAvailabilityModule,
   ClinicInvestigationsModule,
   VisitsModule,
+  UploadsModule,
   PrescriptionsModule,
   BillingModule,
   InventoryModule,

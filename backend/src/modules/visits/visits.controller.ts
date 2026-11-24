@@ -592,7 +592,7 @@ export class VisitsController {
     if (res) {
       res.set({
         'Content-Type': contentType,
-        'Cache-Control': 'public, max-age=31536000, immutable',
+        'Cache-Control': 'private, no-store',
       });
     }
     return new StreamableFile(data);
