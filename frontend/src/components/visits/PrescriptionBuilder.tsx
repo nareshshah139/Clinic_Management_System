@@ -2761,6 +2761,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
         if (!res?.id) throw new Error('The server did not confirm the saved prescription. Your draft is still available; please retry.');
         if (!existingId) track('prescription_created', { mode: standalone ? 'quick' : 'visit' });
         createdPrescriptionIdRef.current = res.id;
+        try { localStorage.removeItem(`rxDraft:${patientId}:standalone`); } catch {}
         recordItemsKey.current = JSON.stringify(payload.items);
         padSaveKey.current = null;
         setSavedPrescriptionId(res?.id || null);
@@ -4276,6 +4277,9 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
    */
   const saveDraftNow = useCallback(() => {
     if (shouldPersistDraft?.() === false) return;
+    // A saved prescription without a visit has no recoverable draft: restoring
+    // one would start a second prescription from these medicines.
+    if (!visitId && createdPrescriptionIdRef.current) return;
     try {
       const data = {
         dosageSchemaVersion: 1,
@@ -4329,7 +4333,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       };
       localStorage.setItem(draftKey, JSON.stringify(data));
     } catch {}
-  }, [shouldPersistDraft, draftKey, procedureMetrics, exDermDx, familyHistoryTouched, language, items, followUpInstructions, chiefComplaints, diagnosis, pastHistory, personalHistory, medicationHistory, menstrualHistory, exObjective, procedures, procedurePlanned, investigations, customInvestigationOptions, vitalsHeightCm, vitalsWeightKg, vitalsBmi, vitalsBpSys, vitalsBpDia, vitalsPulse, skinConcerns, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, customSections, overrideTopMarginPx, overrideBottomMarginPx, activeProfileId, showRefillStamp, letterheadOption, breakBeforeMedications, breakBeforeInvestigations, breakBeforeFollowUp, breakBeforeSignature, avoidBreakInsideTables]);
+  }, [shouldPersistDraft, visitId, draftKey, procedureMetrics, exDermDx, familyHistoryTouched, language, items, followUpInstructions, chiefComplaints, diagnosis, pastHistory, personalHistory, medicationHistory, menstrualHistory, exObjective, procedures, procedurePlanned, investigations, customInvestigationOptions, vitalsHeightCm, vitalsWeightKg, vitalsBmi, vitalsBpSys, vitalsBpDia, vitalsPulse, skinConcerns, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, customSections, overrideTopMarginPx, overrideBottomMarginPx, activeProfileId, showRefillStamp, letterheadOption, breakBeforeMedications, breakBeforeInvestigations, breakBeforeFollowUp, breakBeforeSignature, avoidBreakInsideTables]);
   useEffect(() => {
     const t = setTimeout(() => { saveDraftNow(); }, 600);
     return () => clearTimeout(t);
@@ -4418,6 +4422,14 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const latestDraftWriter = useRef(saveDraftNow);
   latestDraftWriter.current = saveDraftNow;
   useEffect(() => () => latestDraftWriter.current(), []);
+  const previousDraftKey = useRef(draftKey);
+  useEffect(() => {
+    const previous = previousDraftKey.current;
+    previousDraftKey.current = draftKey;
+    if (previous === draftKey || previous !== `rxDraft:${patientId}:standalone`) return;
+    saveDraftNow();
+    try { localStorage.removeItem(previous); } catch {}
+  }, [draftKey, patientId, saveDraftNow]);
 
   // Flush draft on nav/unload/back
   useEffect(() => {
