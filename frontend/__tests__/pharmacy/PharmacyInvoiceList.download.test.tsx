@@ -15,8 +15,8 @@ it('downloads the fetched invoice without opening a pop-up', async () => {
     render(<PharmacyInvoiceList />);
     fireEvent.click(await screen.findByTitle('Download Invoice'));
     await waitFor(() => expect(downloadInvoicePdf).toHaveBeenCalled());
-    const [source, number] = jest.mocked(downloadInvoicePdf).mock.calls[0];
-    expect(number).toBe('SALE-1');
+    const [source, parts] = jest.mocked(downloadInvoicePdf).mock.calls[0];
+    expect(parts).toEqual({ invoiceNumber: 'SALE-1', patientName: 'Sample Patient <img src=x onerror=alert(1)>', date: '2026-11-05T20:00:00Z' });
     expect(source.body.textContent).toContain('Sample Patient <img src=x onerror=alert(1)>');
     expect(source.body.querySelector('img')).toBeNull();
     expect(open).not.toHaveBeenCalled();

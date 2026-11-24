@@ -49,3 +49,17 @@ it('rejects cross-branch prescriptions and invalid uploads before sharing', asyn
   expect(notifications.sendWhatsAppDocument).not.toHaveBeenCalled();
   expect(db.prescriptionPrintEvent.create).not.toHaveBeenCalled();
 });
+
+it('names the shared preview attachment after the patient and visit day, ignoring the client file name', async () => {
+  const db = {
+    prescription: { findFirst: jest.fn().mockResolvedValue({ id: 'rx', createdAt: new Date('2026-11-25T00:00:00Z'), visit: { createdAt: new Date('2026-11-23T20:00:00Z'), patient: { name: 'Priya Sharma' } } }) },
+    prescriptionPrintEvent: { create: jest.fn() },
+  };
+  const notifications = { sendEmail: jest.fn(), sendWhatsAppDocument: jest.fn() };
+  const service = new PrescriptionsService(db as any, notifications as any);
+  const file = { buffer: Buffer.from('%PDF-synthetic'), mimetype: 'application/pdf', originalname: 'evil.pdf' } as any;
+  await service.sharePrescriptionPreview('rx', 'branch', { channel: 'EMAIL', to: 'synthetic@example.test' }, file);
+  expect(notifications.sendEmail.mock.calls[0][0].attachments[0].filename).toBe('Prescription - Priya Sharma - 2026-11-24.pdf');
+  await service.sharePrescriptionPreview('rx', 'branch', { channel: 'WHATSAPP', to: '+919000000000' }, file);
+  expect(notifications.sendWhatsAppDocument.mock.calls[0][0].fileName).toBe('Prescription - Priya Sharma - 2026-11-24.pdf');
+});
