@@ -3,8 +3,8 @@ import { auditRawWrite, namesOnlyAuditValues } from './prisma.service';
 
 describe('PP-88 names-only audit actor kind', () => {
   it('takes the actor kind the request context names, else staff for a user and system for none', () => {
-    expect(namesOnlyAuditValues('create', { data: { body: 'secret', patientId: 'p' } }, { userId: 'u', actorKind: 'system' }))
-      .toEqual({ actorKind: 'system', newValues: JSON.stringify({ fields: ['body', 'patientId'] }) });
+    expect(namesOnlyAuditValues('create', { data: { body: 'secret', patientId: 'p' } }, { userId: null, actorKind: 'task link' }))
+      .toEqual({ actorKind: 'task link', newValues: JSON.stringify({ fields: ['body', 'patientId'] }) });
     expect(namesOnlyAuditValues('update', { data: {} }, { userId: 'u' }).actorKind).toBe('staff');
     expect(namesOnlyAuditValues('update', { data: {} }, undefined).actorKind).toBe('system');
   });

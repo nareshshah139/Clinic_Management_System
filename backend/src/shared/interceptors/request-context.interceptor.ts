@@ -8,9 +8,11 @@ import { Observable } from 'rxjs';
 import type { Request } from 'express';
 import { AuditActorKind, RequestContextService } from '../context/request-context.service';
 
-/** Who a request acts for, by the route it reached: the WhatsApp webhook, staff, or nobody. */
+/** Who a request acts for, by the route it reached: a task link, the portal, the WhatsApp webhook, staff, or nobody. */
 export function actorKindOf(path: string, userId: string | null): AuditActorKind {
   const route = path.split('?')[0].replace(/^\/api(?=\/)/, '');
+  if (/^\/portal\/task(\/|$)/.test(route)) return 'task link';
+  if (/^\/portal(\/|$)/.test(route)) return 'portal';
   if (/^\/webhooks\/whatsapp(\/|$)/.test(route)) return 'webhook';
   return userId ? 'staff' : 'system';
 }

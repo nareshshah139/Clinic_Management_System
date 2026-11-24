@@ -118,7 +118,11 @@ databaseTests('Task links and the patient task page on PostgreSQL', () => {
     expect(message).toMatchObject({ direction: 'INBOUND', channel: 'PORTAL', authorKind: 'PATIENT' });
     expect(message.body).toContain('severity: 7');
     expect(message.attachments).toHaveLength(1);
-    expect(await db.attentionItem.findMany({ where: { patientId: patient.id } })).toMatchObject([{ kind: 'PATIENT_MESSAGE', state: 'OPEN' }]);
+    const [item] = await db.attentionItem.findMany({ where: { patientId: patient.id } });
+    expect(item).toMatchObject({ kind: 'PATIENT_MESSAGE', state: 'OPEN' });
+    const [audit] = await db.auditLog.findMany({ where: { entity: 'AttentionItem', entityId: item.id } });
+    expect(audit).toMatchObject({ action: 'CREATE', oldValues: null, userId: null });
+    expect(JSON.parse(audit.newValues!)).toEqual({ fields: ['branchId', 'kind', 'lastEventAt', 'patientId', 'phoneE164', 'reason', 'state', 'subjectKey'] });
   });
 
   it('PP-38/PP-42: a second submit is kept until the check-in closes, then gets the uniform inactive answer', async () => {

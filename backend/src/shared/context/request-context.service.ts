@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { AsyncLocalStorage } from 'node:async_hooks';
 
-export type AuditActorKind = 'staff' | 'webhook' | 'system';
+export type AuditActorKind = 'staff' | 'portal' | 'task link' | 'webhook' | 'system';
 
 export interface RequestContextData {
   userId: string | null;
