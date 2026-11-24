@@ -42,17 +42,16 @@ export default function PortalRecordsPage() {
     setView(next);
     setData(null);
     setError(null);
-    const r = await loadView<Record<string, unknown>>(next);
+    // The chosen profile belongs to the session, so another tab may have changed it: the header follows the session.
+    const [now, r] = await Promise.all([getSession(), loadView<Record<string, unknown>>(next)]);
+    if (now.ok && !now.data.chosen) return leave();
+    if (now.ok) setSession(now.data);
     if (!r.ok) return r.reason === 'signed-out' ? leave() : setError('offline');
     setData(next === 'home' ? { view: 'home', home: r.data as Home } : ({ view: next, ...r.data } as Data));
   }, [leave]);
 
   useEffect(() => {
-    void getSession().then((r) => {
-      if (!r.ok || !r.data.chosen) return leave();
-      setSession(r.data);
-      void open('home');
-    });
+    void open('home');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

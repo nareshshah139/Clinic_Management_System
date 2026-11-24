@@ -51,7 +51,7 @@ describe('portal records page (PP-61, PP-63, PP-65, PP-60)', () => {
   it('shows the profile switch only when the phone has several people, and reloads for the one chosen', async () => {
     await signedIn();
     const sw = screen.getByTestId('profile-switch');
-    fetchMock.mockReturnValueOnce(json(200, { ...SESSION, chosen: 'r2' })).mockReturnValueOnce(json(200, { ...HOME, profile: { firstName: 'Ravi', branch: 'Kukatpally' }, latestPrescription: null, messages: [] }));
+    fetchMock.mockReturnValueOnce(json(200, { ...SESSION, chosen: 'r2' })).mockReturnValueOnce(json(200, { ...SESSION, chosen: 'r2' })).mockReturnValueOnce(json(200, { ...HOME, profile: { firstName: 'Ravi', branch: 'Kukatpally' }, latestPrescription: null, messages: [] }));
     await act(async () => fireEvent.click(within(sw).getByRole('button', { name: /Ravi/ })));
     await screen.findByText('No prescription yet.');
     expect(screen.getByTestId('portal-name')).toHaveTextContent('Hello Ravi');
@@ -65,17 +65,17 @@ describe('portal records page (PP-61, PP-63, PP-65, PP-60)', () => {
 
   it('reads appointments, prescriptions and check-in history from their own views', async () => {
     await signedIn();
-    fetchMock.mockReturnValueOnce(json(200, { upcoming: [HOME.nextAppointment] }));
+    fetchMock.mockReturnValueOnce(json(200, SESSION)).mockReturnValueOnce(json(200, { upcoming: [HOME.nextAppointment] }));
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Appointments' })));
     expect(await screen.findByTestId('appointments')).toHaveTextContent('10:30-10:45');
 
-    fetchMock.mockReturnValueOnce(json(200, { visits: [{ id: 'v1', date: RX.writtenAt, doctor: 'Dr. Meera Rao', prescription: RX }, { id: 'v2', date: RX.writtenAt, doctor: 'Dr. Meera Rao', prescription: null }] }));
+    fetchMock.mockReturnValueOnce(json(200, SESSION)).mockReturnValueOnce(json(200, { visits: [{ id: 'v1', date: RX.writtenAt, doctor: 'Dr. Meera Rao', prescription: RX }, { id: 'v2', date: RX.writtenAt, doctor: 'Dr. Meera Rao', prescription: null }] }));
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Prescriptions' })));
     const visits = await screen.findByTestId('visits');
     expect(visits).toHaveTextContent('Clobetasol 0.05%');
     expect(visits).toHaveTextContent('No prescription yet.');
 
-    fetchMock.mockReturnValueOnce(json(200, { checkIns: [
+    fetchMock.mockReturnValueOnce(json(200, SESSION)).mockReturnValueOnce(json(200, { checkIns: [
       { id: 'c0', title: HOME.openCheckIns[0].title, state: 'ANSWERED', opensAt: RX.writtenAt, closesAt: RX.writtenAt, endedAt: null, response: { submittedAt: RX.writtenAt, photos: 2, answers: [{ prompt: { EN: 'How bad?', TE: 'ఎంత?', HI: 'कितना?' }, answer: 3 }, { prompt: { EN: 'Change?', TE: 'మార్పు?', HI: 'बदलाव?' }, answer: { EN: 'Same', TE: 'అలాగే', HI: 'वैसा ही' } }] } },
       { id: 'c1', title: HOME.openCheckIns[0].title, state: 'MISSED', opensAt: RX.writtenAt, closesAt: RX.writtenAt, endedAt: null, response: null },
     ] }));
@@ -87,12 +87,12 @@ describe('portal records page (PP-61, PP-63, PP-65, PP-60)', () => {
     expect(list).toHaveTextContent('Not answered');
     fireEvent.click(screen.getByRole('button', { name: 'తెలుగు' }));
     expect(list).toHaveTextContent('మార్పు?అలాగే');
-    expect(urls().slice(2)).toEqual(['GET /api/portal/records/appointments', 'GET /api/portal/records/visits', 'GET /api/portal/records/check-ins']);
+    expect(urls().slice(2).filter((u) => u !== 'GET /api/portal/session')).toEqual(['GET /api/portal/records/appointments', 'GET /api/portal/records/visits', 'GET /api/portal/records/check-ins']);
   });
 
   it('writes to the clinic with one key per message, keeps the key for a retry, and shows the staff reply in the thread', async () => {
     await signedIn();
-    fetchMock.mockReturnValueOnce(json(200, { messages: THREAD }));
+    fetchMock.mockReturnValueOnce(json(200, SESSION)).mockReturnValueOnce(json(200, { messages: THREAD }));
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Messages' })));
     await screen.findByLabelText('Write to the clinic');
     fireEvent.change(screen.getByLabelText('Write to the clinic'), { target: { value: 'Can I come Friday?' } });
@@ -114,7 +114,7 @@ describe('portal records page (PP-61, PP-63, PP-65, PP-60)', () => {
 
   it('an edited message after a failed send gets a new key, and a profile chosen in another tab stops the send', async () => {
     await signedIn();
-    fetchMock.mockReturnValueOnce(json(200, { messages: THREAD }));
+    fetchMock.mockReturnValueOnce(json(200, SESSION)).mockReturnValueOnce(json(200, { messages: THREAD }));
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Messages' })));
     fireEvent.change(await screen.findByLabelText('Write to the clinic'), { target: { value: 'Friday?' } });
     fetchMock.mockReturnValueOnce(json(200, SESSION)).mockRejectedValueOnce(new TypeError('offline'));
@@ -151,14 +151,21 @@ describe('portal records page (PP-61, PP-63, PP-65, PP-60)', () => {
     ['1 FTU', '30 min', 'Halve weekly', 'Week 1 of 4'].forEach((part) => expect(text).toContain(part));
   });
 
+  it('a profile switched in another tab moves the header with the next view', async () => {
+    await signedIn();
+    fetchMock.mockReturnValueOnce(json(200, { ...SESSION, chosen: 'r2' })).mockReturnValueOnce(json(200, { upcoming: [] }));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Appointments' })));
+    expect(screen.getByTestId('portal-name')).toHaveTextContent('Hello Ravi');
+  });
+
   it('goes back to sign-in when the session is gone, and signs out here or everywhere (PP-60)', async () => {
-    fetchMock.mockReturnValueOnce(json(401));
+    fetchMock.mockReturnValueOnce(json(401)).mockReturnValueOnce(json(401));
     render(<PortalRecordsPage />);
     await waitFor(() => expect(replace).toHaveBeenCalledWith('/p'));
 
     replace.mockClear();
     await signedIn();
-    fetchMock.mockReturnValueOnce(json(401));
+    fetchMock.mockReturnValueOnce(json(401)).mockReturnValueOnce(json(401));
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Appointments' })));
     await waitFor(() => expect(replace).toHaveBeenCalledWith('/p'));
 
