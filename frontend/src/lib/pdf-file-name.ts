@@ -1,5 +1,5 @@
 const MAX_BASE_LENGTH = 120;
-const BLANK_PLACEHOLDERS = new Set(['—', '-', '–', 'n/a', 'na', 'null', 'undefined']);
+const HAS_LETTER_OR_DIGIT = /[\p{L}\p{N}]/u;
 const CALENDAR_DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 const clinicDayFormat = new Intl.DateTimeFormat('en-CA', {
@@ -27,8 +27,8 @@ function dayPart(date: string | Date | null | undefined): string {
 
 export function pdfFileName(title: string, patientName?: string | null, date?: string | Date | null): string {
   const safeTitle = sanitizePart(title);
-  const rawName = (patientName ?? '').trim().toLowerCase();
-  let name = BLANK_PLACEHOLDERS.has(rawName) ? '' : sanitizePart(patientName ?? '');
+  let name = sanitizePart(patientName ?? '');
+  if (!HAS_LETTER_OR_DIGIT.test(name)) name = '';
   const day = dayPart(date);
   const fixedLength = [safeTitle, day].filter(Boolean).join(' - ').length + (name ? 3 : 0);
   if (name) name = sanitizePart(Array.from(name).slice(0, Math.max(0, MAX_BASE_LENGTH - fixedLength)).join(''));
