@@ -30,6 +30,9 @@ export type SubmitResult = { status: 'saved'; urgent: false } | { status: 'saved
 export const clinicPhone = () => process.env.CLINIC_PHONE || '';
 
 /** What a task-link holder can read and write; every method takes the guard's principal (PP-84). */
+/** A submit for an answered check-in is kept only until the check-in's window closes (PP-38, PP-42). */
+const keepsSecondAnswer = (c: { state: string; closesAt: Date }, now: Date) => c.state === 'ANSWERED' && now < c.closesAt;
+
 @Injectable()
 export class TaskPageService {
   constructor(private readonly prisma: PrismaService) {}
@@ -95,9 +98,9 @@ export class TaskPageService {
     if (photos.length > 4) throw new BadRequestException('At most four photos can be attached.');
     const checkIn = await this.prisma.checkIn.findFirst({
       where: { id: dto.checkInId, taskLink: { linkId: principal.linkId } },
-      select: { id: true, trackId: true, state: true, instrumentVersionId: true, instrumentVersion: { select: { content: true } } },
+      select: { id: true, trackId: true, state: true, closesAt: true, instrumentVersionId: true, instrumentVersion: { select: { content: true } } },
     });
-    if (!checkIn || (checkIn.state !== 'OPEN' && checkIn.state !== 'ANSWERED')) throw new LinkInactive();
+    if (!checkIn || !(checkIn.state === 'OPEN' || keepsSecondAnswer(checkIn, now))) throw new LinkInactive();
     const content = checkIn.instrumentVersion.content as unknown as InstrumentContent;
     const problems = answerProblems(content, answers, photos.map((p) => p.itemKey));
     if (problems.length) throw new BadRequestException(problems);
@@ -154,8 +157,8 @@ export class TaskPageService {
     attachments: { itemKey: string; mime: string; sizeBytes: number; bytes: Buffer }[],
     now: Date,
   ): Promise<SubmitResult> {
-    const state = await tx.checkIn.findUniqueOrThrow({ where: { id: checkInId }, select: { state: true } });
-    if (state.state !== 'ANSWERED') throw new LinkInactive();
+    const state = await tx.checkIn.findUniqueOrThrow({ where: { id: checkInId }, select: { state: true, closesAt: true } });
+    if (!keepsSecondAnswer(state, now)) throw new LinkInactive();
     const profile = await tx.patientPortalProfile.findUnique({ where: { patientId: principal.patientId }, select: { phoneE164: true } });
     const phoneE164 = profile?.phoneE164 ?? '';
     await tx.patientMessage.create({

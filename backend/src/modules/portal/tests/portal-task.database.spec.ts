@@ -6,7 +6,7 @@ import { resolve } from 'path';
 import sharp from 'sharp';
 import { gate } from '../../../shared/testing/interleave';
 import { FollowUpsService } from '../../follow-ups/follow-ups.service';
-import { deriveTaskToken, hashTaskToken } from '../../follow-ups/task-link';
+import { deriveTaskToken, hashTaskToken, revokeTaskLinks } from '../../follow-ups/task-link';
 import { PatientPortalService } from '../../patients/portal/patient-portal.service';
 import { syncPatientPhone } from '../../patients/portal/portal-profile';
 import { VisitsService } from '../../visits/visits.service';
@@ -119,6 +119,19 @@ databaseTests('Task links and the patient task page on PostgreSQL', () => {
     expect(message.body).toContain('severity: 7');
     expect(message.attachments).toHaveLength(1);
     expect(await db.attentionItem.findMany({ where: { patientId: patient.id } })).toMatchObject([{ kind: 'PATIENT_MESSAGE', state: 'OPEN' }]);
+  });
+
+  it('PP-38/PP-42: a second submit is kept until the check-in closes, then gets the uniform inactive answer', async () => {
+    const { patient, checkInId, token } = await openLink();
+    await tasks.submit(await principalFor(token), { token, checkInId, ...answer(3) } as any);
+    const { closesAt } = await db.checkIn.findUniqueOrThrow({ where: { id: checkInId } });
+    const late = await principalFor(token);
+    await expect(tasks.submit(late, { token, checkInId, ...answer(5) } as any, new Date(closesAt.getTime() - 1))).resolves.toEqual({ status: 'already-answered' });
+    await expect(tasks.submit(late, { token, checkInId, ...answer(6) } as any, closesAt)).rejects.toBeInstanceOf(LinkInactive);
+    expect(await db.patientMessage.count({ where: { patientId: patient.id } })).toBe(1);
+
+    await revokeTaskLinks(db as any, [patient.id]);
+    await expect(principalFor(token)).rejects.toBeInstanceOf(LinkInactive);
   });
 
   it('PP-42: two concurrent submits leave one response and one kept message', async () => {
