@@ -5773,9 +5773,9 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   </div>
                 )}
               </div>
-              {followUpPlanSlot && <div className="md:col-span-2">{followUpPlanSlot}</div>}
             </div>
             </fieldset>
+            {followUpPlanSlot && <div>{followUpPlanSlot}</div>}
 
             <div data-rx-actions className="sticky -bottom-4 z-20 flex items-center justify-between gap-3 border-t bg-background pb-4 pt-2 md:-bottom-6 md:pb-6">
               <div className="text-sm text-muted-foreground">Total items: {validItems.length} • Total qty: {totalQuantity}</div>
