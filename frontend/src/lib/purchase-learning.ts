@@ -61,8 +61,8 @@ export function parseLearningWeeks(response: unknown): LearningWeek[] {
     const week = record(entry);
     if (typeof week.weekStart !== 'string') return [];
     const lines = finite(week.lines) ?? 0;
-    const touches = finite(week.touches) ?? 0;
-    const per100 = finite(week.touchesPer100) ?? (lines > 0 ? (touches / lines) * 100 : null);
+    const touches = finite(week.reviewerTouches) ?? 0;
+    const per100 = finite(week.touchesPer100Lines) ?? (lines > 0 ? (touches / lines) * 100 : null);
     return [{ weekStart: week.weekStart, lines, touches, per100 }];
   });
 }

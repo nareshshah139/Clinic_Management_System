@@ -104,7 +104,7 @@ describe('Purchase OCR learning', () => {
 
   it('applies a lesson after two independent corrections on two invoices', () => {
     expect(supplierLesson([example({ invoiceId: 'inv-1' }), example({ invoiceId: 'inv-2', committedAt: at(20) })])).toEqual({
-      key: `product:${GSTIN}:${KEY}`, field: 'product', supplierGstin: GSTIN, rawKey: KEY, finalValue: 'Dolo 650mg Tablet',
+      key: `product:${GSTIN}:${KEY}`, field: 'product', supplierGstin: GSTIN, rawKey: KEY, rawValue: 'DOLO-650 TAB', finalValue: 'Dolo 650mg Tablet',
       drugId: 'drug-dolo', independent: 2, total: 2, invoices: 2, firstAt: at(0), lastAt: at(20), tier: 'APPLY', alternatives: [],
     });
     expect(supplierLesson([example({ invoiceId: 'inv-1' }), example({ invoiceId: 'inv-1', slot: 'doc-1:r1:1', committedAt: at(1) })])?.tier).toBe('SUGGEST');
@@ -232,10 +232,10 @@ describe('Purchase OCR learning', () => {
       example({ invoiceId: 'd', provenance: 'LESSON_KEPT', origin: 'AUTOMATIC', committedAt: at(12) }),
     ];
     const summary = summarizeLearningMetrics(rows);
-    expect(summary.totals).toEqual({ lines: 5, reviewedLines: 4, reviewerTouches: 2, touchesPer100Lines: 50, rawCorrectionRate: 80,
+    expect(summary.totals).toEqual({ lines: 5, reviewedLines: 4, reviewerTouches: 2, touchesPer100Lines: 40, rawCorrectionRate: 80,
       invoices: 4, automaticInvoices: 1, autoCommitRate: 25, lessonsKept: 2, lessonsOverridden: 1, overrideRate: 33.3 });
     expect(summary.weeks.map(week => [week.weekStart, week.reviewedLines, week.touchesPer100Lines, week.autoCommitRate])).toEqual([
-      ['2026-01-05', 4, 50, 0], ['2026-01-12', 0, null, 100],
+      ['2026-01-05', 4, 50, 0], ['2026-01-12', 0, 0, 100],
     ]);
     expect(summary.bySupplier.map(row => [row.weekStart, row.supplierGstin, row.lines])).toEqual([['2026-01-05', GSTIN, 4], ['2026-01-12', GSTIN, 1]]);
   });

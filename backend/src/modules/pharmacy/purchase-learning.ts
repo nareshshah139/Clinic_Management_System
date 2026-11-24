@@ -48,6 +48,7 @@ export interface Lesson {
   field: LearnableField;
   supplierGstin: string;
   rawKey: string;
+  rawValue: string;
   finalValue: string;
   drugId?: string;
   independent: number;
@@ -339,7 +340,7 @@ function deriveLesson(key: string, group: LearningExample[], currentDrugs?: Map<
   const alternatives = [...groupBy(ordered.filter(example => valueOf(example) !== leading && ['HUMAN_CORRECTED', 'LESSON_KEPT', 'OCR_KEPT'].includes(example.provenance)), valueOf).values()]
     .map(examples => ({ finalValue: examples[examples.length - 1].finalValue || '', ...(examples[0].drugId ? { drugId: examples[0].drugId } : {}), support: examples.length }));
   return {
-    key, field, supplierGstin, rawKey, finalValue: newest.finalValue || '', ...(newest.drugId ? { drugId: newest.drugId } : {}),
+    key, field, supplierGstin, rawKey, rawValue: newest.rawValue || '', finalValue: newest.finalValue || '', ...(newest.drugId ? { drugId: newest.drugId } : {}),
     independent: independent.length, total, invoices, firstAt, lastAt, tier, alternatives,
   };
 }
@@ -439,6 +440,7 @@ type MetricExample = Pick<LearningExample, 'invoiceId' | 'slot' | 'field' | 'sup
 
 function metricSummary(examples: MetricExample[]) {
   const human = examples.filter(example => example.origin === 'HUMAN_REVIEW');
+  const lines = examples.filter(example => example.field === 'product').length;
   const humanLines = human.filter(example => example.field === 'product').length;
   const touches = human.filter(example => ['HUMAN_CORRECTED', 'LESSON_OVERRIDDEN'].includes(example.provenance)).length;
   const kept = examples.filter(example => example.provenance === 'LESSON_KEPT').length;
@@ -447,10 +449,10 @@ function metricSummary(examples: MetricExample[]) {
   const automatic = new Set(examples.filter(example => example.origin === 'AUTOMATIC').map(example => example.invoiceId));
   const rawChanged = examples.filter(example => !sameValue(example.field, example.rawValue, example.finalValue)).length;
   return {
-    lines: examples.filter(example => example.field === 'product').length,
+    lines,
     reviewedLines: humanLines,
     reviewerTouches: touches,
-    touchesPer100Lines: rate(touches, humanLines),
+    touchesPer100Lines: rate(touches, lines),
     rawCorrectionRate: rate(rawChanged, examples.length),
     invoices: invoices.size,
     automaticInvoices: automatic.size,

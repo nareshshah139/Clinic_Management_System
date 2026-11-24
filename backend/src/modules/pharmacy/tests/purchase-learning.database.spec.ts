@@ -177,7 +177,7 @@ databaseTests('Purchase OCR learning with real PostgreSQL', () => {
     expect(await prisma.inventoryItem.count({ where: { batchNumber: 'B-LEARN-8' } })).toBe(0);
 
     const metrics = await service.learningMetrics(branchId, {});
-    expect(metrics.totals).toEqual({ lines: 7, reviewedLines: 6, reviewerTouches: 3, touchesPer100Lines: 50, rawCorrectionRate: 43.8,
+    expect(metrics.totals).toEqual({ lines: 7, reviewedLines: 6, reviewerTouches: 3, touchesPer100Lines: 42.9, rawCorrectionRate: 43.8,
       invoices: 7, automaticInvoices: 1, autoCommitRate: 14.3, lessonsKept: 4, lessonsOverridden: 1, overrideRate: 20 });
     expect(metrics.activeLessons).toEqual({ SUGGEST: 0, APPLY: 0, TRUSTED: 0 });
   }, 60000);
