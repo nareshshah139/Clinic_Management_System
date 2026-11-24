@@ -8,7 +8,7 @@ import { PatientPortalService } from '../../patients/portal/patient-portal.servi
 import { SendPassService, LAPSE_MS } from '../send-pass.service';
 import { WhatsAppSender } from '../whatsapp-sender';
 import { enqueueOutbound } from '../outbox';
-import { hashCode } from '../number-confirmation';
+import { confirmByCode, hashCode, MAX_CODE_ATTEMPTS } from '../number-confirmation';
 import { startFakeMeta } from './fake-meta';
 import { AppointmentsService } from '../../appointments/appointments.service';
 
@@ -165,6 +165,61 @@ databaseTests('Durable outbound WhatsApp messages on PostgreSQL against a fake M
     await pass.runPass(NOON);
     expect((await messages()).map((r) => r.state)).toEqual(['EXPIRED', 'EXPIRED']);
     expect(meta.calls).toHaveLength(0);
+  });
+
+  it('PP-04: parallel wrong guesses spend at most five attempts, and then even the right code is refused until a new code is sent', async () => {
+    const p = await register('9876577771');
+    await portal.recordConsent(p.id, 'A', 'agreed', 'rec');
+    await db.portalOtpChallenge.updateMany({ where: { phoneE164: '+919876577771' }, data: { codeHash: hashCode('+919876577771', '424242') } });
+    const results = await Promise.all(Array.from({ length: 12 }, () => db.$transaction((tx) => confirmByCode(tx, '+919876577771', '000000'))));
+    expect(results.filter((r) => r === 'wrong')).toHaveLength(MAX_CODE_ATTEMPTS);
+    expect(results.filter((r) => r === 'locked')).toHaveLength(12 - MAX_CODE_ATTEMPTS);
+    expect((await db.portalOtpChallenge.findFirstOrThrow({ where: { phoneE164: '+919876577771' } })).attempts).toBe(MAX_CODE_ATTEMPTS);
+    await expect(portal.confirmWithCode(p.id, 'A', '424242')).rejects.toThrow();
+    expect((await profile(p.id)).consentState).toBe('PENDING');
+    await pass.runPass(NOON);
+    await portal.recordConsent(p.id, 'A', 'agreed', 'rec');
+    await pass.runPass(NOON);
+    await portal.confirmWithCode(p.id, 'A', meta.calls.at(-1)!.body.template.components[0].parameters[1].text);
+    expect((await profile(p.id)).consentState).toBe('OPTED_IN');
+  });
+
+  it('PP-13: an archive that starts while the pass is deciding waits for it, and an archive that commits first suppresses the send', async () => {
+    const p = await register('9876577772');
+    await optIn(p.id);
+    await care(p.id, 'REVIEW_REMINDER', `race:${p.id}`);
+    let release!: () => void;
+    let locked!: () => void;
+    const archiveHeld = new Promise<void>((r) => { locked = r; });
+    const archiving = db.$transaction(async (tx) => {
+      await tx.patient.update({ where: { id: p.id }, data: { isArchived: true } });
+      locked();
+      await new Promise<void>((r) => { release = r; });
+    }, { timeout: 20_000 });
+    await archiveHeld;
+    const passing = pass.runPass(NOON);
+    await new Promise((r) => setTimeout(r, 300));
+    expect(meta.calls).toHaveLength(0);
+    release();
+    await archiving;
+    await passing;
+    expect((await messages())[0]).toMatchObject({ state: 'SUPPRESSED', outcome: 'archived' });
+    expect(meta.calls).toHaveLength(0);
+  });
+
+  it('PP-13: a confirmation for an appointment that was moved, or whose slot has started, expires instead of sending the old time', async () => {
+    const p = await register('9876577773');
+    await optIn(p.id);
+    const moved = await appointment(p.id, '2099-11-30');
+    const started = await appointment(p.id, '2099-11-24');
+    const kept = await appointment(p.id, '2099-11-30');
+    for (const a of [moved, started, kept]) {
+      await enqueueOutbound(db, { dedupeKey: `appointment-confirmation:${a.id}`, purpose: 'APPOINTMENT_CONFIRMATION', patientId: p.id, toE164: '+919876577773', templateKey: 'appointment_confirmation', params: { whatsapp: { kind: 'text', text: 'Booked' }, booked: { date: a.date.toISOString().slice(0, 10), slot: a.slot } }, subjectType: 'APPOINTMENT', subjectId: a.id });
+    }
+    await db.appointment.update({ where: { id: moved.id }, data: { slot: '16:00-16:30' } });
+    await pass.runPass(NOON);
+    const state = async (id: string) => (await db.outboundMessage.findUniqueOrThrow({ where: { dedupeKey: `appointment-confirmation:${id}` } })).state;
+    expect([await state(moved.id), await state(started.id), await state(kept.id)]).toEqual(['EXPIRED', 'EXPIRED', 'SENT']);
   });
 
   it('PP-14: care messages wait for 09:00 Kolkata; confirmations go out at night', async () => {

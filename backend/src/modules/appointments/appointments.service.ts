@@ -325,7 +325,7 @@ export class AppointmentsService {
       patientId: appointment.patientId,
       toE164: profile.phoneE164,
       templateKey: 'appointment_confirmation',
-      params: { whatsapp, language: profile.preferredLanguage },
+      params: { whatsapp, language: profile.preferredLanguage, booked: { date: appointment.date.toISOString().slice(0, 10), slot: appointment.slot } },
       subjectType: 'APPOINTMENT',
       subjectId: appointment.id,
     });

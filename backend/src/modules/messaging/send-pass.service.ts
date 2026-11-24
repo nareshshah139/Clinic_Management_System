@@ -153,12 +153,17 @@ export class SendPassService {
     return { kind: 'send' };
   }
 
-  async subjectIsCurrent(tx: Tx, row: Pick<OutboundMessage, 'subjectType' | 'subjectId'>, now: Date): Promise<boolean> {
+  async subjectIsCurrent(tx: Tx, row: Pick<OutboundMessage, 'subjectType' | 'subjectId' | 'params'>, now: Date): Promise<boolean> {
     if (!row.subjectType) return true;
     if (row.subjectType === 'APPOINTMENT' && row.subjectId) {
-      const appt = await tx.appointment.findUnique({ where: { id: row.subjectId }, select: { status: true, date: true } });
+      const appt = await tx.appointment.findUnique({ where: { id: row.subjectId }, select: { status: true, date: true, slot: true } });
       if (!appt || !['SCHEDULED', 'CONFIRMED'].includes(appt.status)) return false;
-      return appt.date.toISOString().slice(0, 10) >= kolkataDay(now);
+      const day = appt.date.toISOString().slice(0, 10);
+      const booked = (row.params as { booked?: { date?: string; slot?: string } } | null)?.booked;
+      if (booked && (booked.date !== day || booked.slot !== appt.slot)) return false;
+      const start = /^(\d{2}):(\d{2})/.exec(appt.slot ?? '');
+      if (start) return new Date(`${day}T${start[1]}:${start[2]}:00+05:30`) > now;
+      return day >= kolkataDay(now);
     }
     return false;
   }
