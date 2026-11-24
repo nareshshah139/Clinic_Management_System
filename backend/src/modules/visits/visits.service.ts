@@ -6,7 +6,7 @@ import { CreateVisitDto, UpdateVisitDto, CompleteVisitDto } from './dto/create-v
 import { QueryVisitsDto, PatientVisitHistoryDto, DoctorVisitsDto } from './dto/query-visit.dto';
 import { Language, Prisma } from '@prisma/client';
 import { join, posix as pathPosix } from 'path';
-import { anchorDay, requirePlanVersion, startTrack, stopTracks } from '../follow-ups/tracks';
+import { anchorDay, lockLivePatient, requirePlanVersion, startTrack, stopTracks } from '../follow-ups/tracks';
 import { randomBytes } from 'crypto';
 import * as fs from 'fs';
 
@@ -558,6 +558,7 @@ export class VisitsService {
       },
     });
       if (planChanged && row.status === 'COMPLETED' && row.completedAt) {
+        await lockLivePatient(tx, row.patientId);
         await stopTracks(tx, { visitId: id }, 'plan-changed', actorId ?? null);
         if (updateVisitDto.followUpPlanVersionId) {
           await startTrack(tx, { visitId: id, patientId: row.patientId, planVersionId: updateVisitDto.followUpPlanVersionId, anchorDay: anchorDay(row.completedAt) });

@@ -17,6 +17,15 @@ export async function requirePlanVersion(tx: Tx | PrismaClient, planVersionId: s
 }
 
 /**
+ * Locks the patient row FOR SHARE so a staff archive, which locks the patient before its tracks,
+ * cannot miss a new track. Callers that stop tracks before starting one take this lock first.
+ */
+export async function lockLivePatient(tx: Tx, patientId: string): Promise<boolean> {
+  const [patient] = await tx.$queryRaw<{ isArchived: boolean }[]>`SELECT "isArchived" FROM patients WHERE id = ${patientId} FOR SHARE`;
+  return !!patient && !patient.isArchived;
+}
+
+/**
  * @cc [owner:nareshshah139,label:integrity] track-with-its-check-ins
  * A track MUST be created with every check-in of its plan version in the caller's transaction,
  * which already holds the visit row lock; the partial unique index keeps one track that is not
@@ -24,9 +33,7 @@ export async function requirePlanVersion(tx: Tx | PrismaClient, planVersionId: s
  */
 export async function startTrack(tx: Tx, input: { visitId: string; patientId: string; planVersionId: string; anchorDay: string }) {
   const version = await requirePlanVersion(tx, input.planVersionId);
-  // FOR SHARE orders this against a staff archive, whose stop would otherwise miss this track.
-  const [patient] = await tx.$queryRaw<{ isArchived: boolean }[]>`SELECT "isArchived" FROM patients WHERE id = ${input.patientId} FOR SHARE`;
-  if (!patient || patient.isArchived) return null;
+  if (!(await lockLivePatient(tx, input.patientId))) return null;
   const { steps } = version.content as unknown as PlanContent;
   const track = await tx.followUpTrack.create({
     data: { visitId: input.visitId, patientId: input.patientId, planVersionId: version.id, anchorDate: input.anchorDay },

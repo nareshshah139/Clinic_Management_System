@@ -187,6 +187,17 @@ databaseTests('Follow-up plans, tracks and the scheduler pass on PostgreSQL agai
       expect(await tracks({ visitId: v.id })).toEqual([]);
     });
 
+    it('PP-29: a staff archive and a plan change at once both succeed and leave no live track', async () => {
+      for (let round = 0; round < 5; round++) {
+        const { p, v } = await completed();
+        await Promise.all([
+          new PatientsService(db as any, {} as any, {} as any).archive(p.id, 'A', 'own'),
+          visits.update(v.id, { version: v.version, followUpPlanVersionId: otherPlanVersionId } as any, 'A', 'doc'),
+        ]);
+        expect((await tracks({ visitId: v.id })).filter((t) => t.state !== 'STOPPED')).toEqual([]);
+      }
+    });
+
     it('PP-26: lists the plan picker and active tracks, and a doctor stop is idempotent under concurrency', async () => {
       const { p } = await completed();
       expect((await followUps.listPlans()).map((x) => x.key)).toEqual(['skin-two-week', 'treatment-four-week']);
