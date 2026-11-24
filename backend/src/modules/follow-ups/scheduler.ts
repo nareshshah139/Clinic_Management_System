@@ -7,6 +7,7 @@ import { CHECK_IN_MOVES } from './lifecycle';
 import { addDays, closeAfterOpening, kolkataAt } from './schedule';
 import { deriveTaskToken, hashTaskToken } from './task-link';
 import { completeTrackIfDone } from './tracks';
+import { auditAttentionUpsert } from '../messaging/attention';
 
 type Db = PrismaClient | Prisma.TransactionClient;
 const BATCH = 500;
@@ -195,10 +196,12 @@ export async function closeEndedCheckIns(db: PrismaClient, now: Date): Promise<n
           ? await tx.outboundMessage.count({ where: { subjectType: TASK_LINK_SUBJECT, subjectId: c.taskLink.linkId, state: { in: [...DELIVERED] } } })
           : 0;
         const reason = delivered ? 'missed:message-delivered' : 'missed:no-message-delivered';
-        await tx.$executeRaw`
+        const written = await tx.$queryRaw<{ id: string; inserted: boolean }[]>`
           INSERT INTO "attention_items" ("id", "kind", "state", "priority", "subjectKey", "patientId", "branchId", "reason", "lastEventAt", "createdAt", "updatedAt")
           VALUES (${`att_${randomUUID()}`}, 'MISSED_CHECK_IN', 'OPEN', 'NORMAL', ${`check-in:${c.id}`}, ${c.track.patientId}, ${c.track.patient.branchId}, ${reason}, ${now}, ${now}, ${now})
-          ON CONFLICT ("kind", "subjectKey") WHERE "state" <> 'RESOLVED' DO NOTHING`;
+          ON CONFLICT ("kind", "subjectKey") WHERE "state" <> 'RESOLVED' DO NOTHING
+          RETURNING "id", (xmax = 0) AS "inserted"`;
+        await auditAttentionUpsert(tx, written, [], ['branchId', 'kind', 'lastEventAt', 'patientId', 'priority', 'reason', 'state', 'subjectKey']);
       }
       await completeTrackIfDone(tx, c.trackId, now);
     });

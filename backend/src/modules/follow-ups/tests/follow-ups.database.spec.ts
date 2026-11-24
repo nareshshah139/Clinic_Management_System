@@ -332,6 +332,9 @@ databaseTests('Follow-up plans, tracks and the scheduler pass on PostgreSQL agai
         [told.p.id, 'missed:message-delivered'],
         [accepted.p.id, 'missed:no-message-delivered'],
       ].sort());
+      const audits = await db.auditLog.findMany({ where: { entity: 'AttentionItem', entityId: { in: items.map((i) => i.id) } } });
+      expect(audits.map((a) => [a.entityId, a.action, a.actorKind, a.oldValues]).sort()).toEqual(items.map((i) => [i.id, 'CREATE', 'system', null]).sort());
+      for (const a of audits) expect(JSON.parse(a.newValues!)).toEqual({ fields: ['branchId', 'kind', 'lastEventAt', 'patientId', 'priority', 'reason', 'state', 'subjectKey'] });
     });
 
     it('PP-34: queues one review reminder the day before a review appointment naming date, time and doctor', async () => {
