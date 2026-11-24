@@ -795,7 +795,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const pagedInstanceRef = useRef<any>(null); // Store paged.js instance for cleanup
   const isPrintingRef = useRef(false);
   const previewPrintHostRef = useRef<HTMLDivElement | null>(null);
-  const previewPrintCleanupTimeoutRef = useRef<number | null>(null);
   const pagedJsPreloadedRef = useRef(false);
   const prevPreviewOpenRef = useRef(previewOpen);
   // Refs to track previous values for change detection to prevent unnecessary refreshes
@@ -3402,10 +3401,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       document.body.classList.remove('prescription-preview-printing');
     }
     removePreviewPrintHost();
-    if (previewPrintCleanupTimeoutRef.current !== null) {
-      window.clearTimeout(previewPrintCleanupTimeoutRef.current);
-      previewPrintCleanupTimeoutRef.current = null;
-    }
   }, [removePreviewPrintHost]);
 
   const printPreviewInPlace = useCallback(async () => {
@@ -3441,10 +3436,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     };
 
     window.addEventListener('afterprint', handleAfterPrint);
-    previewPrintCleanupTimeoutRef.current = window.setTimeout(() => {
-      window.removeEventListener('afterprint', handleAfterPrint);
-      cleanupPreviewPrintMode();
-    }, 3000);
 
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {

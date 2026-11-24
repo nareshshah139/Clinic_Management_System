@@ -986,3 +986,26 @@ it('re-paginates the open preview when the print format or a page break changes'
   await settlePreviewPagination();
   await waitFor(() => expect(paged().querySelector('.pb-before-page')).toHaveTextContent(/^Rx1\. Amoxicillin/));
 });
+
+it('keeps the print layout until the browser reports printing finished', async () => {
+  paginateSourceContent = true;
+  localStorage.setItem('rxDraft:slow-print:slow-visit', JSON.stringify({ items: [rxDrug('Amoxicillin')] }));
+  const print = jest.spyOn(window, 'print').mockImplementation(() => {});
+  const createRx = jest.spyOn(apiClient, 'createPrescription').mockResolvedValue({ id: 'slow-rx' } as any);
+  try {
+    render(<PrescriptionBuilder patientId="slow-print" visitId="slow-visit" doctorId="doctor" onBeforeExport={async () => 'slow-visit'} />);
+    await screen.findByDisplayValue('Amoxicillin');
+    await openPreview();
+    await settlePreviewPagination();
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: /^Print$/ })));
+    await waitFor(() => expect(print).toHaveBeenCalledTimes(1));
+    await act(async () => { jest.advanceTimersByTime(60_000); });
+    expect(document.getElementById('prescription-print-host')).toHaveTextContent('Amoxicillin');
+    act(() => { window.dispatchEvent(new Event('afterprint')); });
+    expect(document.getElementById('prescription-print-host')).toBeNull();
+  } finally {
+    print.mockRestore();
+    createRx.mockRestore();
+    localStorage.removeItem('rxDraft:slow-print:slow-visit');
+  }
+});
