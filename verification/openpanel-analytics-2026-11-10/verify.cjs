@@ -31,7 +31,12 @@ const HOSTILE = [
   'auth_token',
   'Linaé',
   'Patient Details',
+  'PortalTaskTokenValue0000000000000000000000',
+  'cmcheckin',
+  'itchy at night',
+  'Symptom check',
 ];
+const PORTAL_TOKEN = 'PortalTaskTokenValue0000000000000000000000';
 
 const records = () =>
   fs
@@ -79,10 +84,25 @@ async function settle(page) {
   await page.goto(`${APP}/login?next=/dashboard/patients/${PATIENT}`);
   await settle(page);
 
+  const beforePortal = toCollector.length;
+  const portalPage = await context.newPage();
+  portalPage.on('request', (request) => {
+    if (request.url().startsWith('http://localhost:4010')) toCollector.push(request.url());
+  });
+  await portalPage.goto(`${APP}/p/t#${PORTAL_TOKEN}`);
+  await portalPage.getByText('Hello Asha').waitFor();
+  await portalPage.getByLabel('7', { exact: true }).check({ force: true });
+  await portalPage.getByLabel('Anything else?').fill('itchy at night');
+  await portalPage.getByRole('button', { name: 'Send answers' }).click();
+  await portalPage.getByText('The clinic has your answers').waitFor();
+  await settle(portalPage);
+  const portalCollectorRequests = toCollector.length - beforePortal;
+
   await browser.close();
 
   const seen = records();
-  const result = { mode, requestsToCollector: toCollector.length, recorded: seen.length, referrerPolicy };
+  const result = { mode, requestsToCollector: toCollector.length, recorded: seen.length, referrerPolicy, portalCollectorRequests };
+  assert.strictEqual(portalCollectorRequests, 0, '/p pages contacted the analytics collector');
 
   if (mode === 'unconfigured') {
     assert.strictEqual(toCollector.length, 0, 'unconfigured build contacted the collector');

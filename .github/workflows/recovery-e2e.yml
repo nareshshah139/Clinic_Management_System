@@ -52,11 +52,18 @@ jobs:
           RECOVERY_E2E_DATABASE_URL: postgresql://recovery_test:recovery_test@127.0.0.1:5432/clinic_recovery
           RECOVERY_E2E_BROWSER_EXECUTABLE: /usr/bin/google-chrome
         run: node verification/inventory-state-clarity-fix-2026-10-25/check_prior_browser.cjs --chromium
+      - name: Expired portal link leaves no token in URLs or storage (PP-36)
+        env:
+          RECOVERY_E2E_DATABASE_URL: postgresql://recovery_test:recovery_test@127.0.0.1:5432/clinic_recovery
+          RECOVERY_E2E_BROWSER_EXECUTABLE: /usr/bin/google-chrome
+        run: node e2e/portal/expired-link.cjs
       - name: Upload recovery results and screenshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: recovery-e2e-${{ github.run_id }}-${{ github.run_attempt }}
-          path: output/diagnostics/recovery-e2e/
+          path: |
+            output/diagnostics/recovery-e2e/
+            output/diagnostics/portal-e2e/
           if-no-files-found: error
           retention-days: 14

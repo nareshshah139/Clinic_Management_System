@@ -6,6 +6,7 @@ This check drives the real frontend in a browser and records every request that 
 
 - `servers.cjs` starts a stand-in OpenPanel collector on port 4010 and a stub backend on port 4000. The collector appends each request to `collector.jsonl`. The stub backend signs in one staff member whose profile has a name, email and phone number.
 - `verify.cjs` opens five dashboard screens whose URLs carry a patient ID, a patient name, a phone number, a visit ID and an OAuth code. It then asserts on what the collector received.
+- It then opens the patient task page `/p/t#<token>`, answers with typed text and submits. The `/p` routes mount no analytics, so the check fails if the collector receives any request from that page, or if the task token, a check-in ID, the answer text or a question reaches the collector at all.
 
 ## Run it
 
@@ -33,6 +34,10 @@ node verification/openpanel-analytics-2026-11-10/verify.cjs unconfigured
 
 - `configured` passed. The collector received 9 requests: 4 `identify` payloads (one per full page load) and 5 `screen_view` payloads. `collector-configured.jsonl` holds them verbatim.
 - `unconfigured` passed with 0 requests.
+
+## Result on 2026-11-24 (patient task page added)
+
+- `configured` passed. The collector again received 9 requests, all from dashboard screens; the `/p/t` load, answer and submit sent it 0 (`portalCollectorRequests`).
 
 ## What it does not cover
 

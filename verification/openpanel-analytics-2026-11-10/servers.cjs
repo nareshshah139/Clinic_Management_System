@@ -62,6 +62,24 @@ http
     if (url === '/auth/me') return json(200, { id: STAFF.id, role: STAFF.role, branchId: STAFF.branchId });
     if (url === `/users/${STAFF.id}`) return json(200, STAFF);
     if (url === '/auth/logout') return json(200, { ok: true });
+    if (url === '/portal/task/questions')
+      return json(200, {
+        clinic: 'Linae Skin Clinic',
+        firstName: 'Asha',
+        language: 'EN',
+        checkIns: [
+          {
+            id: 'cmcheckin000000000000001',
+            doctor: 'Dr. Ravi Kumar',
+            title: { EN: 'Symptom check', TE: 'Symptom check', HI: 'Symptom check' },
+            items: [
+              { key: 'severity', type: 'scale', prompt: { EN: 'How bad is it?', TE: 'How bad is it?', HI: 'How bad is it?' }, required: true, min: 0, max: 10 },
+              { key: 'note', type: 'text', prompt: { EN: 'Anything else?', TE: 'Anything else?', HI: 'Anything else?' }, required: false },
+            ],
+          },
+        ],
+      });
+    if (url === '/portal/task/responses') return json(200, { status: 'saved', urgent: false });
     return json(404, { message: 'stub backend has no such resource' });
   })
   .listen(4000, () => console.log('backend stub on 4000'));

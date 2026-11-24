@@ -64,6 +64,7 @@ prod-backup*.list
 /output/diagnostics/partner-recovery/
 
 /output/diagnostics/recovery-e2e/
+/output/diagnostics/portal-e2e/
 output/stack/
 output/verify-clinic/
 .claude/worktrees/
