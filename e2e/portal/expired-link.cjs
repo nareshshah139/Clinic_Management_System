@@ -35,12 +35,15 @@ async function ready(url, proc, seconds = 300) {
   assert(executable && fs.existsSync(executable), "RECOVERY_E2E_BROWSER_EXECUTABLE must point at Chrome");
   fs.mkdirSync(out, { recursive: true });
   const schema = `portal_e2e_${randomUUID().replaceAll("-", "")}`;
+  const prismaCli = backReq.resolve("prisma/build/index.js");
+  const schemaFile = path.join(root, "backend/prisma/schema.prisma");
+  execFileSync(process.execPath, [prismaCli, "generate", "--schema", schemaFile], { stdio: "pipe", env: { ...process.env, PRISMA_GENERATE_SKIP_AUTOINSTALL: "1" } });
   const admin = new (backReq("@prisma/client").PrismaClient)({ datasourceUrl: url.toString() });
   await admin.$executeRawUnsafe(`CREATE SCHEMA "${schema}"`);
   owned.push(async () => { await admin.$executeRawUnsafe(`DROP SCHEMA "${schema}" CASCADE`); await admin.$disconnect(); });
   url.searchParams.set("schema", schema);
   const env = { ...process.env, DATABASE_URL: url.toString(), JWT_SECRET: "portal-e2e-jwt", PORTAL_LINK_SECRET: "portal-e2e-link-secret", CLINIC_NAME: "Linae Skin Clinic", NODE_ENV: "test" };
-  execFileSync(process.execPath, [backReq.resolve("prisma/build/index.js"), "db", "push", "--skip-generate", "--schema", path.join(root, "backend/prisma/schema.prisma")], { stdio: "pipe", env });
+  execFileSync(process.execPath, [prismaCli, "db", "push", "--skip-generate", "--schema", schemaFile], { stdio: "pipe", env });
 
   const backend = fork(path.join(__dirname, "app.cjs"), [], { env, stdio: ["ignore", "inherit", "inherit", "ipc"] });
   owned.push(async () => backend.kill());
