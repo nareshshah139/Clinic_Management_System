@@ -1,0 +1,20 @@
+---
+title: "Inbound WhatsApp message (code)"
+---
+stateDiagram-v2
+  state "Nothing open" as s0
+  state "Open: patient" as s1
+  state "Open: phone" as s2
+  state "Open: patient, phone" as s3
+  [*] --> s0
+  s0 --> s1: a message arrives
+  s0 --> s2: a message arrives
+  s1 --> s0: staff resolve the item
+  s1 --> s3: a message arrives
+  s2 --> s0: staff resolve the item
+  s2 --> s3: a message arrives
+  s3 --> s1: staff resolve the item
+  s3 --> s2: staff resolve the item
+  classDef breaks fill:#fde2dd,stroke:#b3261e,stroke-width:2px
+  classDef stuck fill:#fdf0d5,stroke:#a35a05,stroke-width:2px,stroke-dasharray:5 3
+  classDef breaksAndStuck fill:#fde2dd,stroke:#a35a05,stroke-width:2px,stroke-dasharray:5 3
