@@ -127,12 +127,11 @@ describe('portal records page (PP-61, PP-63, PP-65, PP-60)', () => {
     expect(posts.map((b) => b.body)).toEqual(['Friday?', 'Friday at 10?']);
     expect(posts[0].clientKey).not.toBe(posts[1].clientKey);
 
-    const reload = jest.fn();
-    Object.defineProperty(window, 'location', { configurable: true, value: { ...window.location, reload } });
     fireEvent.change(screen.getByLabelText('Write to the clinic'), { target: { value: 'For Asha' } });
     fetchMock.mockReturnValueOnce(json(200, { ...SESSION, chosen: 'r2' }));
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Send' })));
-    expect(reload).toHaveBeenCalled();
+    expect(screen.getByTestId('send-error')).toHaveTextContent('Another person was chosen in another window');
+    expect(screen.getByLabelText('Write to the clinic')).toHaveValue('For Asha');
     expect(fetchMock.mock.calls.filter(([url, init]) => url === '/api/portal/records/messages' && init.method === 'POST')).toHaveLength(2);
   });
 
@@ -148,8 +147,7 @@ describe('portal records page (PP-61, PP-63, PP-65, PP-60)', () => {
     const item = { drugName: 'Clobetasol', frequency: 'BD', dosePattern: '1-0-1', applicationAmount: '1 FTU', washOffAfterMinutes: 30, taperSchedule: 'Halve weekly', pulseRegimen: 'Week 1 of 4' };
     await signedIn({ ...HOME, latestPrescription: { ...HOME.latestPrescription, items: [item] } });
     const text = screen.getByTestId('prescription').textContent!;
-    expect(text).toContain('1-0-1');
-    expect(text).not.toContain('BD');
+    expect(text).toContain('1-0-1 · BD');
     ['1 FTU', '30 min', 'Halve weekly', 'Week 1 of 4'].forEach((part) => expect(text).toContain(part));
   });
 

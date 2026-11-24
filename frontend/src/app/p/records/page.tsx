@@ -103,7 +103,7 @@ export default function PortalRecordsPage() {
       {data?.view === 'appointments' && <Appointments lang={lang} upcoming={data.upcoming} />}
       {data?.view === 'visits' && <Visits lang={lang} visits={data.visits} />}
       {data?.view === 'check-ins' && <CheckIns lang={lang} checkIns={data.checkIns} />}
-      {data?.view === 'messages' && <Messages lang={lang} chosen={session.chosen} messages={data.messages} onSent={(messages) => setData({ view: 'messages', messages })} onSignedOut={leave} onProfileChanged={() => window.location.reload()} />}
+      {data?.view === 'messages' && <Messages lang={lang} chosen={session.chosen} messages={data.messages} onSent={(messages) => setData({ view: 'messages', messages })} onSignedOut={leave} />}
       <footer className="flex flex-col gap-2 border-t pt-4">
         <Button type="button" variant="outline" onClick={() => void out(false)}>{t(lang, 'signOut')}</Button>
         <Button type="button" variant="ghost" onClick={() => void out(true)}>{t(lang, 'signOutEverywhere')}</Button>
@@ -162,7 +162,8 @@ function Appointments({ lang, upcoming }: { lang: Lang; upcoming: Appointment[] 
 const rxLine = (item: Prescription['items'][number]) =>
   [
     [item.drugName, item.dosage !== undefined ? `${item.dosage}${item.dosageUnit ?? ''}` : ''].filter(Boolean).join(' '),
-    item.dosePattern ?? item.frequency,
+    item.dosePattern,
+    item.frequency !== item.dosePattern ? item.frequency : undefined,
     item.duration !== undefined ? `${item.duration} ${String(item.durationUnit ?? '').toLowerCase()}`.trim() : '',
     item.route,
     item.timing,
@@ -240,7 +241,7 @@ function Thread({ lang, messages }: { lang: Lang; messages: Message[] }) {
   );
 }
 
-function Messages({ lang, chosen, messages, onSent, onSignedOut, onProfileChanged }: { lang: Lang; chosen: string | null; messages: Message[]; onSent: (m: Message[]) => void; onSignedOut: () => void; onProfileChanged: () => void }) {
+function Messages({ lang, chosen, messages, onSent, onSignedOut }: { lang: Lang; chosen: string | null; messages: Message[]; onSent: (m: Message[]) => void; onSignedOut: () => void }) {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<StringKey | null>(null);
@@ -253,7 +254,7 @@ function Messages({ lang, chosen, messages, onSent, onSignedOut, onProfileChange
     setError(null);
     // The session's chosen profile is shared by every tab; refuse to file this under someone else.
     const now = await getSession();
-    if (now.ok && now.data.chosen !== chosen) { setSending(false); return onProfileChanged(); }
+    if (now.ok && now.data.chosen !== chosen) { setSending(false); return setError('profileChanged'); }
     const r = await sendMessage(text, key.current);
     setSending(false);
     if (!r.ok) return r.reason === 'signed-out' ? onSignedOut() : setError('offline');
