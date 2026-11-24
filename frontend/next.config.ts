@@ -47,7 +47,7 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        source: "/:path*",
+        source: "/((?!p/|p$).*)",
         headers: [
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
         ],
