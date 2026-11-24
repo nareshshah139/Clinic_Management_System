@@ -52,4 +52,41 @@ describe('AppointmentBookingDialog', () => {
       slot: '10:00-10:30',
     }));
   });
+
+  it('books the dragged span, not a stale or default 30 minutes', async () => {
+    const { rerender } = render(<AppointmentBookingDialog {...baseProps} open={false} slot="" />);
+    rerender(<AppointmentBookingDialog {...baseProps} open slot="10:00-10:50" />);
+
+    expect(screen.getByText('50 minutes')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Confirm Booking'));
+
+    await waitFor(() => expect(baseProps.onConfirm).toHaveBeenCalled());
+    expect(baseProps.onConfirm).toHaveBeenCalledWith(expect.objectContaining({ slot: '10:00-10:50' }));
+  });
+
+  it('takes the duration of the next slot when reopened after a different one', async () => {
+    const { rerender } = render(<AppointmentBookingDialog {...baseProps} slot="10:00-10:45" />);
+    rerender(<AppointmentBookingDialog {...baseProps} open={false} slot="" />);
+    rerender(<AppointmentBookingDialog {...baseProps} open slot="11:00-11:10" />);
+
+    fireEvent.click(screen.getByText('Confirm Booking'));
+
+    await waitFor(() => expect(baseProps.onConfirm).toHaveBeenCalled());
+    expect(baseProps.onConfirm).toHaveBeenCalledWith(expect.objectContaining({ slot: '11:00-11:10' }));
+  });
+
+  it('lets a procedure room be chosen from the keyboard', async () => {
+    Element.prototype.scrollIntoView = jest.fn();
+    const { apiClient } = jest.requireMock('@/lib/api');
+    apiClient.getRooms.mockResolvedValueOnce({ rooms: [{ id: 'r1', name: 'Laser Room', type: 'PROCEDURE', capacity: 1, isActive: true }] });
+    render(<AppointmentBookingDialog {...baseProps} />);
+    fireEvent.click(screen.getByRole('combobox', { name: /Appointment Type/ }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Procedure' }));
+
+    const room = await screen.findByRole('button', { name: 'Laser Room, available' });
+    fireEvent.keyDown(room, { key: 'Enter' });
+
+    expect(room).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('Confirm Booking').closest('button')).toBeEnabled();
+  });
 });

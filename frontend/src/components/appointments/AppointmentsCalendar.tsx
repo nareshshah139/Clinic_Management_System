@@ -100,7 +100,6 @@ export default function AppointmentsCalendar({
   const [bookingDialogOpen, setBookingDialogOpen] = useState<boolean>(false);
   const [pendingBooking, setPendingBooking] = useState<SlotChoice | null>(null);
   const [quickCreateOpen, setQuickCreateOpen] = useState<boolean>(false);
-  const [autoPromptedForSearch, setAutoPromptedForSearch] = useState<boolean>(false);
 
   const cleanupTimeouts = useMemo(() => createCleanupTimeouts(), []);
 
@@ -280,14 +279,7 @@ export default function AppointmentsCalendar({
         lastName: p.lastName || p.name?.split(' ').slice(1).join(' ') || '',
       }));
       setPatients(matches);
-      if (matches.length === 0 && !autoPromptedForSearch) {
-        setQuickCreateOpen(true);
-        setAutoPromptedForSearch(true);
-      }
-      if (matches.length > 0) {
-        setQuickCreateOpen(false);
-        setAutoPromptedForSearch(false);
-      }
+      if (matches.length > 0) setQuickCreateOpen(false);
       setSearchingPatients(false);
     } catch (error) {
       if (!isCurrent()) return;
@@ -304,7 +296,6 @@ export default function AppointmentsCalendar({
       cancelPatientSearch();
       setPatients([]);
       setQuickCreateOpen(false);
-      setAutoPromptedForSearch(false);
       setSearchingPatients(false);
       return;
     }
@@ -601,7 +592,6 @@ export default function AppointmentsCalendar({
                       setSelectedPatient(p);
                       setPatients([]);
                       setQuickCreateOpen(false);
-                      setAutoPromptedForSearch(false);
                     }}
                   >
                     {p.firstName} {p.lastName} — {p.phone}
@@ -616,14 +606,14 @@ export default function AppointmentsCalendar({
               <div className="flex items-center justify-between">
                 <span>No matching patients found.</span>
                 <Button variant="outline" size="sm" onClick={() => setQuickCreateOpen(true)}>
-                  + Add "{patientSearch}" as a new patient
+                  + Create new patient "{patientSearch}"
                 </Button>
               </div>
             </div>
           )}
           {patientSearch && !patients.length && !quickCreateOpen && !selectedPatientId && !searchingPatients && (
             <div className="text-xs text-muted-foreground">
-              Tip: enter patient name and phone, then use "Add" to create a new record instantly.
+              Tip: enter patient name and phone, then use "Create new patient" to create a new record instantly.
             </div>
           )}
 
@@ -696,13 +686,7 @@ export default function AppointmentsCalendar({
 
       <PatientQuickCreateDialog
         open={quickCreateOpen}
-        onOpenChange={(open: boolean) => {
-          setQuickCreateOpen(open);
-          if (!open && !selectedPatientId) {
-            setPatientSearch('');
-            setAutoPromptedForSearch(false);
-          }
-        }}
+        onOpenChange={setQuickCreateOpen}
         initialName={patientSearch}
         onPatientCreated={(patient) => {
           cancelPatientSearch();
@@ -711,7 +695,6 @@ export default function AppointmentsCalendar({
           setPatientSearch(`${patientName(patient)} — ${patient.phone ?? ''}`.trim());
           setPatients([]);
           setQuickCreateOpen(false);
-          setAutoPromptedForSearch(false);
         }}
       />
     </>

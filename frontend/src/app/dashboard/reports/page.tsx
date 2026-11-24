@@ -2,12 +2,15 @@
 
 import { displayClinicDate, displayCalendarDate } from '@/lib/date-display';
 import { PageHeader } from '@/components/ui/page-header';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { useToast } from '@/hooks/use-toast';
+import { getErrorMessage } from '@/lib/utils';
+import { REPORT_EXPORT_TYPE, averageAgeFromBrackets } from '@/lib/reports-model';
 import { QuickGuide } from '@/components/common/QuickGuide';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
@@ -25,16 +28,18 @@ import {
   Building2,
   Stethoscope,
   ShoppingCart,
+  ChevronDown,
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { paymentModeLabel } from '@/lib/clinic-payment-modes';
 import { addDays } from '@/lib/date-ranges';
 import { clinicToday } from '@/components/pharmacy/pharmacy-report-model';
 import { LOW_STOCK_DEFINITION, UPCOMING_DEFINITION } from '@/lib/clinic-counts';
+import type { ReportTab } from '@/lib/reports-model';
 import { enumLabel } from '@/lib/labels';
 import type { StatusVariant } from '@/lib/status-variants';
 
-type ReportType = 'revenue' | 'patients' | 'doctors' | 'appointments' | 'inventory' | 'payments';
+type ReportType = ReportTab;
 type ExportFormat = 'JSON' | 'CSV' | 'PDF' | 'EXCEL';
 
 interface ReportData {
@@ -242,7 +247,10 @@ function SystemAlertsBand({ counts }: { counts: AlertCounts }) {
 }
 
 export default function ReportsPage() {
+  const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<{ message: string; forbidden: boolean } | null>(null);
+  const requestSeq = useRef(0);
   const [selectedReport, setSelectedReport] = useState<ReportType>('revenue');
   const [dateRange, setDateRange] = useState(() => {
     const today = clinicToday();
@@ -302,8 +310,11 @@ export default function ReportsPage() {
   }, []);
 
   const generateReport = useCallback(async () => {
+    const seq = ++requestSeq.current;
     try {
       setLoading(true);
+      setLoadError(null);
+      setReportData(prev => ({ ...prev, [selectedReport]: undefined }));
       let response;
       
       const params = {
@@ -349,11 +360,19 @@ export default function ReportsPage() {
           response = null;
       }
 
+      if (seq !== requestSeq.current) return;
       setReportData(prev => ({ ...prev, [selectedReport]: response }));
     } catch (error) {
-      console.error('Error generating report:', error);
+      if (seq !== requestSeq.current) return;
+      const forbidden = (error as { status?: number })?.status === 403;
+      setLoadError({
+        forbidden,
+        message: forbidden
+          ? "You don't have access to this report. Ask an admin to grant it."
+          : getErrorMessage(error) || 'The report could not be loaded.',
+      });
     } finally {
-      setLoading(false);
+      if (seq === requestSeq.current) setLoading(false);
     }
   }, [selectedReport, dateRange]);
 
@@ -365,7 +384,7 @@ export default function ReportsPage() {
   const exportReport = async (format: ExportFormat) => {
     try {
       const params = {
-        reportType: selectedReport.toUpperCase(),
+        reportType: REPORT_EXPORT_TYPE[selectedReport],
         exportFormat: format,
         parameters: {
           startDate: dateRange.startDate,
@@ -385,7 +404,7 @@ export default function ReportsPage() {
         document.body.removeChild(link);
       }
     } catch (error) {
-      console.error('Error exporting report:', error);
+      toast({ variant: 'destructive', title: 'Could not export the report', description: getErrorMessage(error) });
     }
   };
 
@@ -520,6 +539,7 @@ export default function ReportsPage() {
   const renderPatientsReport = () => {
     const data = reportData.patients;
     if (!data) return null;
+    const averageAge = averageAgeFromBrackets(data.ageGroupBreakdown);
 
     return (
       <div className="space-y-6">
@@ -568,9 +588,7 @@ export default function ReportsPage() {
                   <p className="text-sm text-muted-foreground">Avg Age</p>
                 </div>
                 <p className="text-2xl font-bold">
-                  {data.ageGroupBreakdown ? 
-                    Math.round(data.ageGroupBreakdown.reduce((acc: number, group: AgeGroupBreakdown) => acc + (group.count * parseFloat(group.ageGroup.split('-')[0] || '0')), 0) / data.totalPatients) 
-                    : 0}
+                  {averageAge ?? '—'}
                 </p>
               </div>
             </CardContent>
@@ -1100,6 +1118,17 @@ export default function ReportsPage() {
       );
     }
 
+    if (loadError) {
+      return (
+        <div role="alert" className="text-center py-8 space-y-3">
+          <AlertCircle className="h-12 w-12 text-destructive mx-auto" aria-hidden="true" />
+          <p className="font-medium">{loadError.forbidden ? 'Access denied' : 'Could not load this report'}</p>
+          <p className="text-muted-foreground">{loadError.message}</p>
+          {!loadError.forbidden && <Button variant="outline" onClick={generateReport}>Retry</Button>}
+        </div>
+      );
+    }
+
     const currentData = reportData[selectedReport];
     if (!currentData) {
       return (
@@ -1211,17 +1240,20 @@ export default function ReportsPage() {
                   <Button onClick={generateReport} disabled={loading}>
                     {loading ? 'Generating...' : 'Generate Report'}
                   </Button>
-                  <Select onValueChange={(format: ExportFormat) => exportReport(format)}>
-                    <SelectTrigger className="w-32" aria-label="Export report">
-                      <SelectValue placeholder="Export" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="JSON">JSON</SelectItem>
-                      <SelectItem value="CSV">CSV</SelectItem>
-                      <SelectItem value="PDF">PDF</SelectItem>
-                      <SelectItem value="EXCEL">Excel</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" aria-label="Export report">
+                        Export
+                        <ChevronDown aria-hidden="true" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onSelect={() => exportReport('JSON')}>JSON</DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => exportReport('CSV')}>CSV</DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => exportReport('PDF')}>PDF</DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => exportReport('EXCEL')}>Excel</DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </CardHeader>
               <CardContent>

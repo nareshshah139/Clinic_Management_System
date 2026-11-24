@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { useDashboardUser } from '@/components/layout/dashboard-user-context';
 import { SignOffDialog } from './SignOffDialog';
 import { BatchLine, Difference, Split } from './count-parts';
-import { countPath, countSummary, differ, failureOf, failureMessage, itemCount, parseCount, type CountDetail, type CountLine } from './count-model';
+import { countPath, countSummary, differ, failureOf, failureMessage, itemCount, parseCount, quantity, unitName, type CountDetail, type CountLine } from './count-model';
 
 type Entry = { count: string; note: string };
 type SaveState = 'saved' | 'saving' | 'failed';
@@ -32,7 +32,17 @@ export function sheetLine(line: CountLine, entry: Entry): CountLine {
  * arrow keys move between counted fields; Enter on the last one moves to Sign off. The difference
  * shows as soon as a quantity is typed, and every change saves without a button.
  */
-export function CountSheet({ detail, onSigned, onStale }: { detail: CountDetail; onSigned: (detail: CountDetail) => void; onStale: (message: string) => void }) {
+export function CountSheet({
+  detail,
+  onSigned,
+  onStale,
+  onUnsavedChange,
+}: {
+  detail: CountDetail;
+  onSigned: (detail: CountDetail) => void;
+  onStale: (message: string) => void;
+  onUnsavedChange?: (unsaved: boolean) => void;
+}) {
   const { user } = useDashboardUser();
   const [entries, setEntries] = useState<Record<string, Entry>>(() => Object.fromEntries(detail.lines.map((line) => [line.id, entryOf(line)])));
   const [saveState, setSaveState] = useState<SaveState>('saved');
@@ -88,7 +98,7 @@ export function CountSheet({ detail, onSigned, onStale }: { detail: CountDetail;
   flushRef.current = flush;
 
   useEffect(() => {
-    const first = detail.lines.findIndex((line) => line.physicalStock === null);
+    const first = detail.lines.findIndex((line) => line.physicalStock === null || line.retype);
     inputs.current[first < 0 ? 0 : first]?.focus();
   }, [detail.lines]);
   useEffect(
@@ -128,6 +138,18 @@ export function CountSheet({ detail, onSigned, onStale }: { detail: CountDetail;
   const figures = countSummary(lines);
   const invalid = server.lines.filter((line) => parseCount(entries[line.id]?.count ?? '') === 'invalid').map((line) => line.id);
 
+  const unsaved = saveState === 'failed' || invalid.length > 0;
+  useEffect(() => {
+    onUnsavedChange?.(unsaved);
+    return () => onUnsavedChange?.(false);
+  }, [unsaved, onUnsavedChange]);
+  useEffect(() => {
+    if (!unsaved) return;
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [unsaved]);
+
   const startSignOff = async () => {
     setPrompt('');
     const unfinished = lines.filter((line) => line.physicalStock === null).map((line) => line.id);
@@ -156,7 +178,7 @@ export function CountSheet({ detail, onSigned, onStale }: { detail: CountDetail;
       <div role="list" aria-label="Batches to count" className="flex flex-col rounded-lg border border-border">
         <div
           aria-hidden="true"
-          className="hidden gap-x-3 rounded-t-lg bg-muted px-3 py-2 text-sm font-semibold sm:grid sm:grid-cols-[minmax(12rem,2.4fr)_minmax(5rem,1fr)_4.5rem_6.5rem_minmax(7.5rem,1.2fr)_minmax(9rem,1.8fr)]"
+          className="hidden gap-x-3 rounded-t-lg bg-muted px-3 py-2 text-sm font-semibold sm:grid sm:grid-cols-[minmax(12rem,2.4fr)_minmax(5rem,1fr)_6rem_6.5rem_minmax(7.5rem,1.2fr)_minmax(9rem,1.8fr)]"
         >
           <span>Item</span>
           <span>Location</span>
@@ -177,7 +199,7 @@ export function CountSheet({ detail, onSigned, onStale }: { detail: CountDetail;
               key={line.id}
               role="listitem"
               className={cn(
-                'grid grid-cols-3 items-start gap-x-3 sm:items-center gap-y-1.5 border-t border-border px-3 py-2.5 first:border-t-0 sm:grid-cols-[minmax(12rem,2.4fr)_minmax(5rem,1fr)_4.5rem_6.5rem_minmax(7.5rem,1.2fr)_minmax(9rem,1.8fr)] sm:py-2 sm:first-of-type:border-t-0',
+                'grid grid-cols-3 items-start gap-x-3 sm:items-center gap-y-1.5 border-t border-border px-3 py-2.5 first:border-t-0 sm:grid-cols-[minmax(12rem,2.4fr)_minmax(5rem,1fr)_6rem_6.5rem_minmax(7.5rem,1.2fr)_minmax(9rem,1.8fr)] sm:py-2 sm:first-of-type:border-t-0',
                 (bad || flagged) && 'bg-destructive-soft/40',
               )}
             >
@@ -190,14 +212,14 @@ export function CountSheet({ detail, onSigned, onStale }: { detail: CountDetail;
               </div>
               <div className="text-sm sm:text-right">
                 <span className="block text-xs sm:sr-only">System</span>
-                <span className="whitespace-nowrap tabular-nums">{line.systemStock ?? '—'}</span>
+                <span className="whitespace-nowrap tabular-nums">{quantity(line.systemStock, line.unit)}</span>
               </div>
               <div>
                 <label htmlFor={`count-${line.id}`} className="block text-xs sm:sr-only">
                   Counted
                   <span className="sr-only">
                     {' '}
-                    quantity of {line.name}, batch {line.batchNumber || 'not recorded'}
+                    quantity of {line.name}, batch {line.batchNumber || 'not recorded'}, in {unitName(line.unit)}
                   </span>
                 </label>
                 <Input
@@ -216,6 +238,7 @@ export function CountSheet({ detail, onSigned, onStale }: { detail: CountDetail;
                   onBlur={() => void flush()}
                   className="h-10 w-full max-w-28 px-2 text-right text-base tabular-nums md:text-base"
                 />
+                <span className="mt-0.5 block text-xs">{unitName(line.unit)}</span>
                 {hint && (
                   <span id={errorId} className={cn('mt-0.5 block text-xs', bad || flagged ? 'text-destructive-text' : 'text-warning-text')}>
                     {hint}

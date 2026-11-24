@@ -238,6 +238,7 @@ export function PharmacyInventoryStarterImport({
   const clearFile = () => {
     setSelectedFile(null);
     setSummary(null);
+    setPreview(null);
     if (inputRef.current) inputRef.current.value = "";
   };
 
@@ -290,7 +291,9 @@ export function PharmacyInventoryStarterImport({
               <td>
                 {r.minStockLevel} / {r.maxStockLevel}
               </td>
-              <td className="text-destructive">{r.error || "Ready"}</td>
+              <td className={r.error ? "text-destructive" : "text-success-text"}>
+                {r.error || "Ready"}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -579,6 +582,7 @@ export function PharmacyInventoryStarterImport({
             </div>
           )}
         </div>
+        {previewTable && <div className="xl:col-span-2">{previewTable}</div>}
       </CardContent>
     </Card>
   );

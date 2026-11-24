@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -27,6 +27,15 @@ export function BillDiscountInput({
   const id = useId();
   const [kind, setKind] = useState<BillDiscountKind>(value?.kind ?? 'PERCENT');
   const [text, setText] = useState(textOf(value));
+
+  useEffect(() => {
+    if (!value) {
+      setText((current) => (Number(current) > 0 ? '' : current));
+      return;
+    }
+    setKind(value.kind);
+    setText((current) => (Number(current) === value.value ? current : String(value.value)));
+  }, [value]);
 
   const emit = (nextKind: BillDiscountKind, nextText: string) => {
     const amount = Number(nextText);

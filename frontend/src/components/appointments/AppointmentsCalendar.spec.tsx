@@ -44,16 +44,16 @@ describe('AppointmentsCalendar booking flow', () => {
     await bookIn('Scheduled', '10:00-10:30');
     await waitFor(() => expect(createAppointment).toHaveBeenCalledTimes(1));
     expect(createAppointment.mock.calls[0][0]).toEqual({
-      doctorId: 'd1', patientId: 'p1', date: '2099-01-01', slot: '10:00-10:15', visitType: 'OPD', roomId: undefined, notes: undefined, calendar: 'SCHEDULED',
+      doctorId: 'd1', patientId: 'p1', date: '2099-01-01', slot: '10:00-10:30', visitType: 'OPD', roomId: undefined, notes: undefined, calendar: 'SCHEDULED',
     });
   });
 
   it('books a free time in the Confirmed column into the Confirmed calendar and says so', async () => {
-    createAppointment.mockResolvedValueOnce({ id: 'apt-2', slot: '14:00-14:15', patient: { name: 'Synthetic Patient' } });
+    createAppointment.mockResolvedValueOnce({ id: 'apt-2', slot: '14:00-14:30', patient: { name: 'Synthetic Patient' } });
     await bookIn('Confirmed', '14:00-14:30');
     await waitFor(() => expect(createAppointment).toHaveBeenCalledTimes(1));
-    expect(createAppointment.mock.calls[0][0]).toMatchObject({ slot: '14:00-14:15', calendar: 'CONFIRMED' });
-    expect((await screen.findByText('Appointment Successfully Booked!')).parentElement).toHaveTextContent('Synthetic Patient scheduled for 14:00-14:15 in the Confirmed calendar');
+    expect(createAppointment.mock.calls[0][0]).toMatchObject({ slot: '14:00-14:30', calendar: 'CONFIRMED' });
+    expect((await screen.findByText('Appointment Successfully Booked!')).parentElement).toHaveTextContent('Synthetic Patient scheduled for 14:00-14:30 in the Confirmed calendar');
   });
 });
 

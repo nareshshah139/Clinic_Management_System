@@ -45,13 +45,17 @@ const QUICK_PATIENT_VOICE_IDS = {
   consultationType: 'quick-patient-consultation',
 };
 
+const PHONE_LIKE = /^\+?[\d\s\-()]*\d[\d\s\-()]*$/;
+
 function parseInitialValues(initialName?: string, initialPhone?: string): Partial<QuickCreateFormState> {
   const defaults: Partial<QuickCreateFormState> = {};
 
   if (initialName) {
     const [namePartRaw] = initialName.split('—');
     const namePart = namePartRaw?.trim() ?? '';
-    if (namePart) {
+    if (PHONE_LIKE.test(namePart)) {
+      if (!initialPhone) initialPhone = namePart;
+    } else if (namePart) {
       const nameBits = namePart.split(/\s+/).filter(Boolean);
       defaults.firstName = nameBits[0] ?? '';
       defaults.lastName = nameBits.slice(1).join(' ');
@@ -85,7 +89,7 @@ export default function PatientQuickCreateDialog({
     lastName: defaults.lastName ?? '',
     phone: defaults.phone ?? '',
     age: '',
-    gender: 'OTHER',
+    gender: '',
     email: '',
     abhaId: '',
     consultationType: 'OFFLINE',
@@ -106,7 +110,7 @@ export default function PatientQuickCreateDialog({
         lastName: '',
         phone: '',
         age: '',
-        gender: 'OTHER',
+        gender: '',
         email: '',
         abhaId: '',
         consultationType: 'OFFLINE',
@@ -118,6 +122,7 @@ export default function PatientQuickCreateDialog({
     const validationErrors: string[] = [];
     if (!form.firstName.trim()) validationErrors.push('First name is required');
     if (!form.phone.trim()) validationErrors.push('Phone number is required');
+    if (!form.gender) validationErrors.push('Gender is required');
     // Date of birth is now optional
     return validationErrors;
   };

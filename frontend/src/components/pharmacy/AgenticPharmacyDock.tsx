@@ -2,6 +2,7 @@
 
 import { pharmacyChatTitle, pharmacyProposalLabel } from "@/lib/pharmacy-agent-display";
 import { Spinner } from '@/components/ui/spinner';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import {
   useCallback,
   useEffect,
@@ -145,6 +146,7 @@ export function AgenticPharmacyDock() {
   const [selectedAttachmentIds, setSelectedAttachmentIds] = useState<string[]>(
     [],
   );
+  const [confirm, confirmDialog] = useConfirm();
   const [creating, setCreating] = useState(false);
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -411,8 +413,26 @@ export function AgenticPharmacyDock() {
     }
   };
 
-  const applyProposal = async (proposalId: string) => {
+  const applyProposal = async (proposal: AgentProposal) => {
     if (reviewing) return;
+    const proposalId = proposal.id;
+    if (proposal.riskLevel !== "LOW") {
+      const confirmed = await confirm({
+        title: `Apply "${proposal.title}"?`,
+        description: (
+          <>
+            <span className="block">
+              {pharmacyProposalLabel("risk", proposal.riskLevel)}. This changes
+              pharmacy records.
+            </span>
+            <ActionDetails actions={proposal.actions} />
+          </>
+        ),
+        confirmLabel: "Apply changes",
+        destructive: proposal.riskLevel === "HIGH",
+      });
+      if (!confirmed) return;
+    }
     setReviewing(true);
     try {
       const response = await apiClient.applyPharmacyAgentProposal<{
@@ -720,7 +740,7 @@ export function AgenticPharmacyDock() {
                     key={proposal.id}
                     proposal={proposal}
                     reviewing={reviewing}
-                    onApply={() => void applyProposal(proposal.id)}
+                    onApply={() => void applyProposal(proposal)}
                     onReject={() => void rejectProposal(proposal.id)}
                   />
                 ))}
@@ -729,7 +749,7 @@ export function AgenticPharmacyDock() {
             {sending && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Spinner className="h-4 w-4 " />
-                Codex is working
+                Assistant is working
               </div>
             )}
           </div>
@@ -846,7 +866,7 @@ export function AgenticPharmacyDock() {
                   key={proposal.id}
                   proposal={proposal}
                   reviewing={reviewing}
-                  onApply={() => void applyProposal(proposal.id)}
+                  onApply={() => void applyProposal(proposal)}
                   onReject={() => void rejectProposal(proposal.id)}
                 />
               ))
@@ -854,6 +874,7 @@ export function AgenticPharmacyDock() {
           </div>
         </div>
       </div>
+      {confirmDialog}
     </section>
   );
 }
@@ -1083,6 +1104,67 @@ function ThreadListItem({
   );
 }
 
+const humanize = (key: string) =>
+  key
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .trim()
+    .replace(/^./, (c) => c.toUpperCase());
+
+const displayValue = (value: unknown): string => {
+  if (value === null || value === undefined || value === "") return "-";
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+};
+
+function actionFields(action: AgentAction): Array<[string, string]> {
+  const source =
+    action.preview && Object.keys(action.preview).length > 0
+      ? action.preview
+      : action.input;
+  const fields: Array<[string, string]> = [];
+  if (action.targetId) fields.push(["Record", action.targetId]);
+  for (const [key, value] of Object.entries(source ?? {})) {
+    fields.push([humanize(key), displayValue(value)]);
+  }
+  return fields;
+}
+
+function ActionDetails({
+  actions,
+  bare = false,
+}: {
+  actions: AgentAction[];
+  bare?: boolean;
+}) {
+  return (
+    <div className={bare ? "mt-1" : "mt-2 space-y-2 text-left"}>
+      {actions.map((action) => {
+        const fields = actionFields(action);
+        if (fields.length === 0 && bare) return null;
+        return (
+          <div key={action.id}>
+            {!bare && (
+              <div className="font-medium text-foreground">
+                {pharmacyProposalLabel("action", action.actionType)} (
+                {pharmacyProposalLabel("target", action.targetType)})
+              </div>
+            )}
+            <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
+              {fields.map(([label, value]) => (
+                <div key={label} className="contents">
+                  <dt className="text-muted-foreground">{label}</dt>
+                  <dd className="min-w-0 break-words text-foreground">{value}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function ProposalCard({
   proposal,
   reviewing,
@@ -1134,6 +1216,7 @@ function ProposalCard({
               </span>
               <span className="text-muted-foreground">{pharmacyProposalLabel("target", action.targetType)}</span>
             </div>
+            <ActionDetails actions={[action]} bare />
             {action.permissionRequired && (
               <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
                 <ShieldCheck className="h-3 w-3" />

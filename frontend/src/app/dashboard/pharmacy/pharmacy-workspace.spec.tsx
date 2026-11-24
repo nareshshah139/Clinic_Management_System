@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { PharmacyWorkspace } from './pharmacy-workspace';
 import { apiClient } from '@/lib/api';
 
@@ -14,7 +14,14 @@ jest.mock('@/components/layout/dashboard-user-context', () => ({
 jest.mock('@/lib/api', () => ({ apiClient: { get: jest.fn() } }));
 jest.mock('@/components/common/QuickGuide', () => ({ QuickGuide: () => null }));
 jest.mock('@/components/pharmacy/PackageBrowser', () => ({ PackageBrowser: () => null }));
-jest.mock('@/components/pharmacy/PharmacyPackageCreator', () => ({ PharmacyPackageCreator: () => null }));
+jest.mock('@/components/pharmacy/PharmacyPackageCreator', () => ({
+  PharmacyPackageCreator: ({ onCreated, onCancel }: { onCreated?: () => void; onCancel?: () => void }) => (
+    <div>
+      <button onClick={() => onCancel?.()}>Cancel</button>
+      <button onClick={() => onCreated?.()}>Create Package</button>
+    </div>
+  ),
+}));
 jest.mock('@/components/pharmacy/PartnerDailySync', () => ({ PartnerDailySync: () => null }));
 jest.mock('@/components/pharmacy/PharmacyCounterCockpit', () => ({
   PharmacyCounterCockpit: ({ onOpenBilling }: { onOpenBilling?: () => void }) => (
@@ -76,6 +83,17 @@ it('loads no desk figures on the counter, for any role', async () => {
   render(<PharmacyWorkspace />);
   expect(await screen.findByRole('region', { name: 'Counter cockpit' })).toBeInTheDocument();
   expect([asked().includes('/auth/me'), figuresAsked()]).toEqual([true, 0]);
+});
+
+it.each(['Cancel', 'Create Package'])('closes the create-package dialog on %s', async (action) => {
+  section = 'desk';
+  role = 'PHARMACIST';
+  render(<PharmacyWorkspace />);
+  await screen.findByText('₹1240.00');
+  fireEvent.click(screen.getByRole('button', { name: /Create package/ }));
+  expect(await screen.findByText('Create treatment package')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: action }));
+  await waitFor(() => expect(screen.queryByText('Create treatment package')).toBeNull());
 });
 
 it.each([

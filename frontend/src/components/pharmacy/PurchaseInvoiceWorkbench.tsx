@@ -67,6 +67,7 @@ import {
 import { usePurchasePermissions } from "@/hooks/usePurchasePermissions";
 import { previewPurchaseTerms, applyPurchaseTerms, undoPurchaseTerms, type SharedTerms, type SharedTermPreview } from "@/lib/purchase-invoice-batch";
 import { apiClient } from "@/lib/api";
+import { handleUnauthorizedRedirect } from "@/lib/authRedirect";
 import { getErrorMessage } from "@/lib/utils";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -2250,9 +2251,9 @@ function PurchaseInvoiceEditor({
       );
 
       if (!attemptCurrent(attempt)) return;
-      if (response.status === 401 && typeof window !== "undefined") {
-        const next = window.location.pathname + window.location.search;
-        window.location.href = `/login?next=${encodeURIComponent(next)}`;
+      if (response.status === 401) {
+        handleUnauthorizedRedirect(response);
+        setError("Your session expired. Sign in again, then retry the upload.");
         return;
       }
 
@@ -3582,7 +3583,7 @@ function PurchaseInvoiceEditor({
       )}
       {recovery?.kind === 'stale' && !comparison && !unknownStockInvoiceId && <Button variant="outline" disabled={busy || !access.read} onClick={reloadSavedInvoice}>Compare with saved version</Button>}
       {comparison && !unknownStockInvoiceId && <div className="space-y-3" aria-label="Compare with saved invoice">
-        {comparison.saved.status === 'REVIEWED' && <label className="block text-sm">Reason to reopen saved review<Input value={reopenReason} onChange={event => setReopenReason(event.target.value)} disabled={busy} /></label>}
+        {comparison.saved.status === 'REVIEWED' && <label className="block text-sm">Reason to reopen saved review<Input data-purchase-local-controls value={reopenReason} onChange={event => setReopenReason(event.target.value)} disabled={busy} /></label>}
         <h4 className="font-semibold">Compare with saved invoice</h4>
         <p className="text-sm">Your attempted entry is unchanged. Applying corrections keeps the saved invoice number, supplier identity, original documents and inward receipt link. Saved invoice {comparison.saved.invoiceNumber} is {purchaseInvoiceStatusLabel(comparison.saved).toLowerCase()}.</p>
         {comparison.saved.workflowReceiptId && <p className="text-sm">This bill belongs to an inward receipt. Its receipt link stays with this saved bill and stock must not be received again.</p>}
@@ -3716,7 +3717,7 @@ function PurchaseInvoiceEditor({
               {committing && <Spinner className="h-4 w-4 " />}
               {activeInvoice.workflowReceiptId ? "Post bill" : "Add stock"}
             </Button>
-            {canReopenReview && <><label className="text-sm">Reason to reopen review<Input aria-label="Reason to reopen review" value={reopenReason} onChange={event => setReopenReason(event.target.value)} disabled={busy} /></label><Button variant="outline" onClick={reopenReviewedInvoice} disabled={busy || !reopenReason.trim()}>{reopeningReview ? "Reopening review…" : "Reopen review and fix products"}</Button></>}
+            {canReopenReview && <><label className="text-sm">Reason to reopen review<Input data-purchase-local-controls aria-label="Reason to reopen review" value={reopenReason} onChange={event => setReopenReason(event.target.value)} disabled={busy} /></label><Button variant="outline" onClick={reopenReviewedInvoice} disabled={busy || !reopenReason.trim()}>{reopeningReview ? "Reopening review…" : "Reopen review and fix products"}</Button></>}
           </>
         ) : canReview && !access.commit && !access.create ? (
           <Button onClick={reviewInvoice} disabled={busy}>Mark Reviewed</Button>
@@ -3879,7 +3880,7 @@ function PurchaseInvoiceEditor({
             <p>Choose the posted receipt for these goods. Removing a receipt link will make this bill add stock when posted.</p>
             <div className="flex flex-wrap items-end gap-2">
               <label>Receipt reference
-                <input className="ml-2 rounded-md border p-2" value={receiptSearch} onChange={e => setReceiptSearch(e.target.value)} />
+                <input data-purchase-local-controls className="ml-2 rounded-md border p-2" value={receiptSearch} onChange={e => setReceiptSearch(e.target.value)} />
               </label>
               <Button type="button" variant="outline" disabled={busy} onClick={async () => {
                 try {
@@ -4078,7 +4079,7 @@ function PurchaseInvoiceEditor({
 
         {!showIntakeHome && !activeInvoice && recentInvoices}
         {!showIntakeHome && <details><summary className="cursor-pointer text-sm">Review status guide</summary><ReviewLegend /></details>}
-        {!showIntakeHome && stockAdded && <PurchaseReviewSummary
+        {!showIntakeHome && <PurchaseReviewSummary
           hasContent={hasDraftContent}
           stockReceivedEarlier={linkedReceipt}
           saved={activeInvoice?.status === "REVIEWED"} committed={stockAdded} cancelled={activeInvoice?.status === "CANCELLED"} unknown={stockStatusUnknown}
@@ -4103,14 +4104,14 @@ function PurchaseInvoiceEditor({
             {showDelegatedRecovery && <div className="space-y-3">
               <p className="text-sm">Use the reference from the original operator's handoff. Recovery checks the exact invoice or stops unfinished work. Unknown historical stock stays locked for physical reconciliation.</p>
               <label className="block">Import attempt ID
-                <input className="mt-1 block w-full rounded-md border p-2" value={delegatedRecovery.attemptId} disabled={resolvingImport || !!importAttemptId} onChange={event => setDelegatedRecovery(current => ({ ...current, attemptId: event.target.value }))} />
+                <input data-purchase-local-controls className="mt-1 block w-full rounded-md border p-2" value={delegatedRecovery.attemptId} disabled={resolvingImport || !!importAttemptId} onChange={event => setDelegatedRecovery(current => ({ ...current, attemptId: event.target.value }))} />
               </label>
               <label className="block">Original operator ID (optional)
-                <input className="mt-1 block w-full rounded-md border p-2" value={delegatedRecovery.originalActorId} disabled={resolvingImport} onChange={event => setDelegatedRecovery(current => ({ ...current, originalActorId: event.target.value }))} />
+                <input data-purchase-local-controls className="mt-1 block w-full rounded-md border p-2" value={delegatedRecovery.originalActorId} disabled={resolvingImport} onChange={event => setDelegatedRecovery(current => ({ ...current, originalActorId: event.target.value }))} />
               </label>
               <p className="text-sm">If the attempt has not registered yet, enter the original operator ID exactly as shown in their handoff.</p>
               <label className="block">Recovery reason
-                <textarea className="mt-1 block w-full rounded-md border p-2" value={delegatedRecovery.reason} maxLength={500} disabled={resolvingImport} onChange={event => setDelegatedRecovery(current => ({ ...current, reason: event.target.value }))} />
+                <textarea data-purchase-local-controls className="mt-1 block w-full rounded-md border p-2" value={delegatedRecovery.reason} maxLength={500} disabled={resolvingImport} onChange={event => setDelegatedRecovery(current => ({ ...current, reason: event.target.value }))} />
               </label>
               {access.read && access.create && access.review ? <Button type="button" disabled={resolvingImport || extracting || !delegatedRecovery.attemptId.trim() || !delegatedRecovery.reason.trim()} onClick={recoverDelegatedImport}>Recover import outcome</Button>
                 : <p>A colleague with purchase read, create and review access can recover this import using these details.</p>}
@@ -5117,12 +5118,12 @@ function PurchaseInvoiceEditor({
                                         completes.
                                       </p>
                                     ))}
-                                  {!status && <PurchaseManualMatchSearch
+                                  {!status && <div data-purchase-local-controls><PurchaseManualMatchSearch
                                     key={`manual-match:${line?.localId || match.lineIndex}`}
                                     lineNumber={match.lineIndex + 1}
                                     disabled={busy || masterConfirming !== null}
                                     onSelect={drug => { void confirmMasterLine(match, "MATCH_EXISTING", { drug, score: 0, confidence: "LOW" }); }}
-                                  />}
+                                  /></div>}
                                 </div>
                               );
                             })}

@@ -178,6 +178,9 @@ export const batchCount = (n: number) => plural(n, 'batch', 'batches');
 export const people = (n: number) => plural(n, 'person', 'people');
 export const differ = (n: number) => `${n} ${n === 1 ? 'differs' : 'differ'}`;
 
+export const unitName = (unit: string | null | undefined) => (unit ? unit.toLowerCase() : 'units');
+export const quantity = (n: number | null, unit: string | null | undefined) => (n === null ? '—' : `${n} ${unitName(unit)}`);
+
 export const signedUnits = (n: number) => (n > 0 ? `+${n}` : n < 0 ? `−${-n}` : '0');
 export const signedRupees = (n: number) => (n > 0 ? `+${formatRupees(n)}` : n < 0 ? `−${formatRupees(-n)}` : formatRupees(0));
 

@@ -929,3 +929,154 @@ it('names the resolved doctor in the toolbar and the signature block of an unsav
     expect(get).not.toHaveBeenCalledWith('/users/doctor-abcdef123');
   } finally { get.mockRestore(); }
 });
+
+it('reports a failed interaction check instead of an all-clear, and shows the result on Retry', async () => {
+  const check = jest.spyOn(apiClient, 'previewDrugInteractions')
+    .mockRejectedValueOnce(new Error('offline'))
+    .mockResolvedValueOnce({ interactions: [{ drug1: 'Isotretinoin', drug2: 'Doxycycline', severity: 'MAJOR', description: 'Raised intracranial pressure' }] });
+  try {
+    render(<PrescriptionBuilder patientId="ix-patient" visitId={null} doctorId="doctor" standalone />);
+    await openPreview();
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Interactions' })));
+    const dialog = await screen.findByRole('dialog', { name: 'Interaction Summary' });
+    expect(within(dialog).getByRole('alert')).toHaveTextContent('Couldn’t check interactions. This is not an all-clear.');
+    expect(within(dialog).queryByText('No interactions found.')).toBeNull();
+    await act(async () => fireEvent.click(within(dialog).getByRole('button', { name: 'Retry' })));
+    expect(within(dialog).getByText('Isotretinoin × Doxycycline')).toBeInTheDocument();
+    expect(within(dialog).queryByRole('alert')).toBeNull();
+  } finally { check.mockRestore(); }
+});
+
+it('closes the print preview with Close and offers no toggle that reopens it', async () => {
+  render(<PrescriptionBuilder patientId="close-patient" visitId={null} doctorId="doctor" standalone />);
+  const preview = async () => {
+    await openPreview();
+    return document.getElementById('pagedjs-container')!.closest('[role="dialog"]') as HTMLElement;
+  };
+  let dialog = await preview();
+  expect(within(dialog).queryByRole('button', { name: /Live Preview/ })).toBeNull();
+  const closeCount = within(dialog).getAllByRole('button', { name: 'Close' }).length;
+  expect(closeCount).toBe(2);
+  for (let index = 0; index < closeCount; index++) {
+    if (index > 0) dialog = await preview();
+    await act(async () => fireEvent.click(within(dialog).getAllByRole('button', { name: 'Close' })[index]));
+    await act(async () => { jest.advanceTimersByTime(400); });
+    expect(document.getElementById('pagedjs-container')).toBeNull();
+  }
+});
+
+it('re-paginates the open preview when the print format or a page break changes', async () => {
+  paginateSourceContent = true;
+  localStorage.setItem('rxDraft:format-patient:standalone', JSON.stringify({ items: [rxDrug('Amoxicillin', { instructions: 'After food' })] }));
+  render(<PrescriptionBuilder patientId="format-patient" visitId={null} doctorId="doctor" standalone />);
+  await screen.findByDisplayValue('Amoxicillin');
+  await openPreview();
+  await settlePreviewPagination();
+  expect(printedRows()).toEqual([['Amoxicillin', '1-0-0', '—', '5 days', 'After food']]);
+
+  fireEvent.click(screen.getAllByRole('combobox', { name: 'Print format' }).at(-1)!);
+  fireEvent.click(await screen.findByRole('option', { name: 'Text' }));
+  await settlePreviewPagination();
+  const paged = () => document.getElementById('pagedjs-container')!;
+  await waitFor(() => expect(paged().querySelector('.rx-row')).toHaveTextContent('1. Amoxicillin 1 tablet — once daily × 5 days — After food'));
+  expect(paged().querySelector('.doctor-signature-block')).not.toBeNull();
+
+  expect(paged().querySelector('.pb-before-page')).toBeNull();
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Break before Rx' }));
+  await settlePreviewPagination();
+  await waitFor(() => expect(paged().querySelector('.pb-before-page')).toHaveTextContent(/^Rx1\. Amoxicillin/));
+});
+
+it('keeps the print layout until the browser reports printing finished', async () => {
+  paginateSourceContent = true;
+  localStorage.setItem('rxDraft:slow-print:slow-visit', JSON.stringify({ items: [rxDrug('Amoxicillin')] }));
+  const print = jest.spyOn(window, 'print').mockImplementation(() => {});
+  const createRx = jest.spyOn(apiClient, 'createPrescription').mockResolvedValue({ id: 'slow-rx' } as any);
+  try {
+    render(<PrescriptionBuilder patientId="slow-print" visitId="slow-visit" doctorId="doctor" onBeforeExport={async () => 'slow-visit'} />);
+    await screen.findByDisplayValue('Amoxicillin');
+    await openPreview();
+    await settlePreviewPagination();
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: /^Print$/ })));
+    await waitFor(() => expect(print).toHaveBeenCalledTimes(1));
+    await act(async () => { jest.advanceTimersByTime(60_000); });
+    expect(document.getElementById('prescription-print-host')).toHaveTextContent('Amoxicillin');
+    act(() => { window.dispatchEvent(new Event('afterprint')); });
+    expect(document.getElementById('prescription-print-host')).toBeNull();
+  } finally {
+    print.mockRestore();
+    createRx.mockRestore();
+    localStorage.removeItem('rxDraft:slow-print:slow-visit');
+  }
+});
+
+it('shows the grid, rulers, frames and safe margin in the preview only, never in print or PDF', async () => {
+  paginateSourceContent = true;
+  localStorage.setItem('rxDraft:aids-patient:aids-visit', JSON.stringify({ items: [rxDrug('Amoxicillin')] }));
+  const print = jest.spyOn(window, 'print').mockImplementation(() => {});
+  const click = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+  const createRx = jest.spyOn(apiClient, 'createPrescription').mockResolvedValue({ id: 'aids-rx' } as any);
+  const patchRx = jest.spyOn(apiClient, 'patch').mockResolvedValue({ id: 'aids-rx' });
+  const overlayMarks = (root: Element | null) => {
+    const inlineStyles = Array.from(root?.querySelectorAll('[style]') ?? []).map(element => element.getAttribute('style')).join(';');
+    return ['background-size', 'dashed', 'outline: 2mm solid'].filter(mark => inlineStyles.includes(mark));
+  };
+  mockPdfOutput.mockClear();
+  try {
+    render(
+      <PrescriptionBuilder
+        patientId="aids-patient" visitId="aids-visit" doctorId="doctor" onBeforeExport={async () => 'aids-visit'}
+        designAids={{ enabled: true, showGrid: true, showRulers: true, snapToGrid: false, gridSizePx: 8, nudgeStepPx: 1 }}
+        frames={{ enabled: true, headerHeightMm: 30, footerHeightMm: 20 }}
+        bleedSafe={{ enabled: true, safeMarginMm: 7.56 }}
+      />,
+    );
+    await screen.findByDisplayValue('Amoxicillin');
+    await openPreview();
+    await settlePreviewPagination();
+    expect(overlayMarks(document.getElementById('pagedjs-container'))).toEqual(['background-size', 'dashed', 'outline: 2mm solid']);
+
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: /^Print$/ })));
+    await waitFor(() => expect(print).toHaveBeenCalledTimes(1));
+    const host = document.getElementById('prescription-print-host');
+    expect(host).toHaveTextContent('Amoxicillin');
+    expect(overlayMarks(host)).toEqual([]);
+    act(() => { window.dispatchEvent(new Event('afterprint')); });
+
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Download PDF' })));
+    await waitFor(() => expect(mockPdfOutput).toHaveBeenCalledTimes(1));
+    const pdf = mockPdfOutput.mock.calls[0][0] as Element;
+    expect(pdf).toHaveTextContent('Amoxicillin');
+    expect(overlayMarks(pdf)).toEqual([]);
+  } finally {
+    print.mockRestore(); click.mockRestore(); createRx.mockRestore(); patchRx.mockRestore();
+    localStorage.removeItem('rxDraft:aids-patient:aids-visit');
+  }
+});
+
+it('shares a new visit by WhatsApp and Email using the patient record, with the Indian country code', async () => {
+  paginateSourceContent = true;
+  localStorage.setItem('rxDraft:share-patient:share-visit', JSON.stringify({ items: [rxDrug('Amoxicillin')] }));
+  const open = jest.spyOn(window, 'open').mockImplementation(() => null);
+  const click = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+  const createRx = jest.spyOn(apiClient, 'createPrescription').mockResolvedValue({ id: 'share-rx' } as any);
+  const patchRx = jest.spyOn(apiClient, 'patch').mockResolvedValue({ id: 'share-rx' });
+  const share = jest.spyOn(apiClient, 'sharePrescriptionPreview').mockResolvedValue({});
+  const patient = { id: 'share-patient', name: 'Synthetic Patient', phone: '098765 43210', email: 'synthetic@example.test' };
+  try {
+    render(<PrescriptionBuilder patientId="share-patient" patient={patient as any} visitId="share-visit" doctorId="doctor" onBeforeExport={async () => 'share-visit'} />);
+    await screen.findByDisplayValue('Amoxicillin');
+    await openPreview();
+    await settlePreviewPagination();
+
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'PDF via WhatsApp' })));
+    await waitFor(() => expect(open).toHaveBeenCalledWith(`https://wa.me/919876543210?text=${encodeURIComponent('Hi, please find your prescription attached.')}`, '_blank'));
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Email' })).toBeEnabled());
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Email' })));
+    await waitFor(() => expect(share).toHaveBeenCalledWith('share-rx', expect.any(File), expect.objectContaining({ channel: 'EMAIL', to: 'synthetic@example.test' })));
+  } finally {
+    open.mockRestore(); click.mockRestore(); createRx.mockRestore(); patchRx.mockRestore(); share.mockRestore();
+    localStorage.removeItem('rxDraft:share-patient:share-visit');
+  }
+});

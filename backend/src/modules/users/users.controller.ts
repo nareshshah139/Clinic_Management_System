@@ -194,13 +194,13 @@ export class UsersController {
   @Patch(':id')
   @Roles(...MANAGE)
   updateUser(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto, @Request() req: AuthenticatedRequest) {
-    return this.usersService.updateUser(id, updateUserDto, req.user.branchId);
+    return this.usersService.updateUser(id, updateUserDto, req.user.branchId, req.user.id);
   }
 
   @Delete(':id')
   @Roles(...MANAGE)
   deleteUser(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
-    return this.usersService.deleteUser(id, req.user.branchId);
+    return this.usersService.deleteUser(id, req.user.branchId, req.user.id);
   }
 
   @Post(':id/change-password')
@@ -218,7 +218,7 @@ export class UsersController {
   @Patch(':id/role')
   @Roles(...MANAGE)
   assignRole(@Param('id') id: string, @Body() assignRoleDto: AssignRoleDto, @Request() req: AuthenticatedRequest) {
-    return this.usersService.assignRole(id, assignRoleDto, req.user.branchId);
+    return this.usersService.assignRole(id, assignRoleDto, req.user.branchId, req.user.id);
   }
 
   @Get(':id/permissions')
@@ -236,6 +236,6 @@ export class UsersController {
   @Patch(':id/status')
   @Roles(...MANAGE)
   updateUserStatus(@Param('id') id: string, @Body() userStatusDto: UserStatusDto, @Request() req: AuthenticatedRequest) {
-    return this.usersService.updateUserStatus(id, userStatusDto, req.user.branchId);
+    return this.usersService.updateUserStatus(id, userStatusDto, req.user.branchId, req.user.id);
   }
 }

@@ -1126,7 +1126,7 @@ export function PharmacyInvoiceBuilderFixed({
         quantity: 1,
         unitPrice: getDrugUnitPrice(drug),
         discountPercent: 0,
-        taxPercent: 18, // Default GST
+        taxPercent: getDrugGstRate(drug),
         discountAmount: 0,
         taxAmount: 0,
         totalAmount: 0,
@@ -2129,6 +2129,7 @@ export function PharmacyInvoiceBuilderFixed({
     setInvoiceData(EMPTY_FIELDS);
     invoiceItemsRef.current = [];
     setItems([]);
+    setBillDiscount(null);
     setPrescriptionData(null);
     setSelectedPatient(null);
     setSelectedDoctor(null);

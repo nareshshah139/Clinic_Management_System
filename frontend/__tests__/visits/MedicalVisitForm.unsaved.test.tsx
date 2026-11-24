@@ -78,3 +78,15 @@ it('reopens a visit saved in this browser as saved', async () => {
   expect(screen.queryByText('Unsaved changes')).not.toBeInTheDocument();
   expect(leavePrompted()).toBe(false);
 });
+
+it('tells the page when it holds changes not yet saved to the visit', async () => {
+  const unsaved: boolean[] = [];
+  render(<MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v" userRole="ADMIN" onUnsavedChange={(value) => unsaved.push(value)} />);
+  await flush(); await flush();
+  expect(unsaved.at(-1)).toBe(false);
+  fireEvent.change(screen.getByLabelText('Clinical note'), { target: { value: 'Itchy plaques' } });
+  await flush();
+  expect(unsaved.at(-1)).toBe(true);
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save Draft' })); });
+  expect(unsaved.at(-1)).toBe(false);
+});

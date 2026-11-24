@@ -95,11 +95,12 @@ interface Props {
   doctorName?: string;
   userRole?: string;
   visitNumber?: number;
-  visitDate?: string; // ISO string; falls back to today if not provided
+  visitDate?: string; // clinic day (YYYY-MM-DD); keys a walk-in's local draft until the visit is created
   appointmentId?: string;
   appointmentData?: { patient?: VisitPatientSummary } | null;
   initialVisitId?: string;
   onVisitIdChange?: (visitId: string | null) => void;
+  onUnsavedChange?: (unsaved: boolean) => void;
   identity?: ReactNode;
   doctorControl?: ReactNode;
   visitActions?: ReactNode;
@@ -238,7 +239,7 @@ const ROLE_PERMISSIONS = {
  * New visits default to In-person. Tele-video saves and exports MUST be blocked
  * until consent is checked; visit recovery MUST restore the consultation choice.
  */
-function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'DOCTOR', visitNumber = 1, visitDate, appointmentId, appointmentData, initialVisitId, onVisitIdChange, identity, doctorControl, visitActions, patient, doctorRecord, initialVisitSnapshot, onDiscardLocalDraft }: Props & { initialVisitSnapshot?: VisitDetails; onDiscardLocalDraft: (saved: VisitDetails) => void }) {
+function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'DOCTOR', visitNumber = 1, visitDate, appointmentId, appointmentData, initialVisitId, onVisitIdChange, onUnsavedChange, identity, doctorControl, visitActions, patient, doctorRecord, initialVisitSnapshot, onDiscardLocalDraft }: Props & { initialVisitSnapshot?: VisitDetails; onDiscardLocalDraft: (saved: VisitDetails) => void }) {
   const visitVersionRef = useRef<number | undefined>(undefined);
   const restoredDraftVersion = useRef<number | undefined>(undefined);
   const automaticSaveBlocked = useRef(false);
@@ -432,7 +433,11 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
   const [loadingHistory, setLoadingHistory] = useState(false);
 
   const [saving, setSaving] = useState(false);
+  const [historyExpanded, setHistoryExpanded] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'unsaved' | 'autosaving' | 'saved' | 'saving' | 'error'>('idle');
+  useEffect(() => {
+    onUnsavedChange?.(saveStatus !== 'idle' && saveStatus !== 'saved');
+  }, [saveStatus, onUnsavedChange]);
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
@@ -1003,11 +1008,14 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
           });
           clearAutoSaveTimer();
         } else {
-          toast({
-            variant: 'warning',
-            title: 'Auto-save failed',
-            description: getErrorMessage(error) || 'We will retry shortly.',
-          });
+          if (!autoSaveFailureNotifiedRef.current) {
+            autoSaveFailureNotifiedRef.current = true;
+            toast({
+              variant: 'warning',
+              title: 'Auto-save failed',
+              description: getErrorMessage(error) || 'We will retry shortly.',
+            });
+          }
           clearAutoSaveTimer();
           if (retryAllowed) {
             autoSaveTimerRef.current = window.setTimeout(() => {
@@ -1260,7 +1268,6 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
 
     hasUnsavedChangesRef.current = true;
     setSaveStatus(automaticSaveBlocked.current ? 'error' : 'unsaved');
-    autoSaveFailureNotifiedRef.current = false;
     const changed = persistDraftToStorage();
     if (changed) {
       scheduleAutoSave();
@@ -1752,11 +1759,11 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
   return (
     <div className="min-w-0 space-y-4">
       <div data-visit-bar className="sticky -top-4 z-30 -mx-4 space-y-1.5 border-b bg-background px-4 py-1.5 md:-top-6 md:-mx-6 md:px-6">
-        <div className="flex items-center justify-between gap-x-4">
-          <div className="flex min-w-0 flex-1 items-center gap-x-3">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5">
+          <div className="flex min-w-64 flex-1 items-center gap-x-3">
             {identity}
           </div>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs text-muted-foreground" role="status" aria-live="polite">
               {editMode === 'locked' ? 'Completed. Read only.' : <>
               {editMode === 'amending' && 'Editing a completed visit. '}
@@ -1807,13 +1814,20 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
             </NativeSelect>
           </div>
           {patientDetails?.allergies && (
-            <span className="inline-flex max-w-xs items-center gap-1 truncate rounded-md border border-destructive-border bg-destructive-soft px-2 py-1 text-xs font-medium text-destructive-text" title={patientDetails.allergies}>
-              <AlertTriangle className="size-3.5 shrink-0" aria-hidden="true" />
-              <span className="truncate">Allergies: {patientDetails.allergies}</span>
+            <span className="inline-flex max-w-full items-start gap-1 rounded-md border border-destructive-border bg-destructive-soft px-2 py-1 text-xs font-medium text-destructive-text">
+              <AlertTriangle className="mt-px size-3.5 shrink-0" aria-hidden="true" />
+              <span className="min-w-0 break-words">Allergies: {patientDetails.allergies}</span>
             </span>
           )}
           {patientDetails?.medicalHistory && (
-            <span className="max-w-xs truncate text-xs text-muted-foreground" title={patientDetails.medicalHistory}>History: {patientDetails.medicalHistory}</span>
+            <button
+              type="button"
+              aria-expanded={historyExpanded}
+              onClick={() => setHistoryExpanded((expanded) => !expanded)}
+              className={`text-left text-xs text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-foreground ${historyExpanded ? 'max-w-full whitespace-pre-wrap break-words' : 'max-w-xs truncate'}`}
+            >
+              History: {patientDetails.medicalHistory}
+            </button>
           )}
           <div className="ml-auto flex items-center gap-3">
             <span className="inline-flex items-center gap-2 text-sm text-muted-foreground">
