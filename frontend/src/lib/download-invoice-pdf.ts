@@ -1,3 +1,5 @@
+import { pdfFileName } from '@/lib/pdf-file-name';
+
 /**
  * @cc [owner:nareshshah139,label:product] printable-invoice-pdf
  * The download MUST contain the supplied document's printable body and omit no-print controls.
@@ -7,7 +9,10 @@
  * @cc [owner:nareshshah139,label:reliability] invoice-pdf-modern-colors
  * Unsupported computed theme colors MUST be resolved in the render clone without changing the live page.
  */
-export async function downloadInvoicePdf(sourceDocument: Document, invoiceNumber: string): Promise<void> {
+export async function downloadInvoicePdf(
+  sourceDocument: Document,
+  { invoiceNumber, patientName, date }: { invoiceNumber: string; patientName?: string | null; date?: string | Date | null },
+): Promise<void> {
   const source = sourceDocument.body.cloneNode(true) as HTMLElement;
   source.querySelectorAll('.no-print, script, iframe, object, embed').forEach(element => element.remove());
   [source, ...Array.from(source.querySelectorAll('*'))].forEach(element => {
@@ -30,10 +35,9 @@ export async function downloadInvoicePdf(sourceDocument: Document, invoiceNumber
   document.body.appendChild(host);
   try {
     const { default: html2pdf } = await import('html2pdf.js');
-    const safeNumber = invoiceNumber.replace(/[^a-zA-Z0-9._-]/g, '_') || 'invoice';
     await html2pdf().set({
       margin: 0,
-      filename: `pharmacy-invoice-${safeNumber}.pdf`,
+      filename: pdfFileName(`Invoice ${invoiceNumber || 'draft'}`, patientName, date),
       image: { type: 'jpeg', quality: 0.98 },
       html2canvas: {
         scale: 2, useCORS: true, letterRendering: true,

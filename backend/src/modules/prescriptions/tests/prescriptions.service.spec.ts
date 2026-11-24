@@ -819,7 +819,7 @@ describe('PrescriptionsService', () => {
 
       const result = await service.generatePrescriptionPdf('prescription-123', mockBranchId, {});
 
-      expect(result.fileName).toBe('prescription-prescription-123.pdf');
+      expect(result.fileName).toBe('Prescription - John Doe - 2026-01-01.pdf');
       expect(result.fileSize).toBeGreaterThan(0);
       expect(Buffer.from(result.fileUrl.split(',')[1], 'base64').subarray(0, 4).toString()).toBe('%PDF');
       expect(mockPrisma.prescriptionPrintEvent.create).toHaveBeenCalledWith({

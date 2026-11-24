@@ -26,7 +26,7 @@ function clinicServer(status: 'COMPLETED' | 'IN_PROGRESS') {
   const calls: string[] = [];
   const reply = (code: number, body: unknown) => ({ ok: code < 400, status: code, headers: { get: (name: string) => (name.toLowerCase() === 'content-type' ? 'application/json' : null) }, json: async () => body, text: async () => JSON.stringify(body) });
   const visit = {
-    id: 'v1', version: 4, status, patientId: 'p', doctorId: 'd',
+    id: 'v1', version: 4, status, createdAt: '2026-11-23T20:00:00Z', patientId: 'p', doctorId: 'd',
     patient: { id: 'p', name: 'Synthetic Patient', phone: '+91 90000 00000', email: 'patient@example.test' },
     doctor: { id: 'd', firstName: 'Priya', lastName: 'Menon' },
     complaints: [{ complaint: 'Acne' }], diagnosis: [{ diagnosis: 'Acne vulgaris' }], history: {}, exam: {},
@@ -90,7 +90,7 @@ it('prints, downloads, emails and sends by WhatsApp the saved prescription of a 
   act(() => { window.dispatchEvent(new Event('afterprint')); });
 
   await press(dialog, 'Download PDF');
-  await waitFor(() => expect(downloads).toEqual(['prescription-rx1.pdf']), { timeout: 10_000 });
+  await waitFor(() => expect(downloads).toEqual(['Prescription - Synthetic Patient - 2026-11-24.pdf']), { timeout: 10_000 });
 
   await press(dialog, 'PDF via WhatsApp');
   await waitFor(() => expect(opened).toEqual(['https://wa.me/919000000000?text=Hi%2C%20please%20find%20your%20prescription%20attached.']), { timeout: 10_000 });

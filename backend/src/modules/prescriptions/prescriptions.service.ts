@@ -15,6 +15,7 @@ const DOCTOR_OWNED_ASSET_TYPES: readonly string[] = ['SIGNATURE', 'LETTERHEAD'];
 import { PrismaService } from '../../shared/database/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PharmacyPrescriptionQueueService } from '../pharmacy/pharmacy-prescription-queue.service';
+import { pdfFileName } from '../../common/pdf-file-name';
 import { 
   CreatePrescriptionDto, 
   UpdatePrescriptionDto, 
@@ -1431,7 +1432,7 @@ export class PrescriptionsService {
     doc.fontSize(9).text('Signature', { align: 'right' });
     doc.end();
     const pdfBuffer = await finish;
-    return { pdfBuffer, fileName: `prescription-${prescriptionId}.pdf` };
+    return { pdfBuffer, fileName: pdfFileName('Prescription', prescription.visit.patient.name, prescription.visit.createdAt || prescription.createdAt) };
   }
 
   // SERVER-SIDE PDF RENDERING (basic pdfkit layout)
@@ -1482,8 +1483,10 @@ export class PrescriptionsService {
     if (!['EMAIL', 'WHATSAPP'].includes(body.channel) || typeof body.to !== 'string' || !body.to.trim()) {
       throw new BadRequestException('Choose a sharing channel and recipient.');
     }
-    const prescription = await this.prisma.prescription.findFirst({ where: { id: prescriptionId, visit: { deletedAt: null, patient: { branchId } } }, select: { id: true } });
+    const prescription = await this.prisma.prescription.findFirst({ where: { id: prescriptionId, visit: { deletedAt: null, patient: { branchId } } },
+      select: { id: true, createdAt: true, visit: { select: { createdAt: true, patient: { select: { name: true } } } } } });
     if (!prescription) throw new NotFoundException('Prescription not found');
+    return prescription;
   }
 
   /**
@@ -1500,11 +1503,11 @@ export class PrescriptionsService {
    */
   async sharePrescriptionPreview(prescriptionId: string, branchId: string,
     body: { channel: 'EMAIL'|'WHATSAPP'; to: string; message?: string }, file?: Express.Multer.File) {
-    await this.requireSharePrescription(prescriptionId, branchId, body);
+    const prescription = await this.requireSharePrescription(prescriptionId, branchId, body);
     if (!file?.buffer?.length || file.buffer.length > 15 * 1024 * 1024 || file.mimetype !== 'application/pdf' || file.buffer.subarray(0, 5).toString() !== '%PDF-') {
       throw new BadRequestException('A valid prescription PDF up to 15 MB is required.');
     }
-    const fileName = `prescription-${prescriptionId}.pdf`;
+    const fileName = pdfFileName('Prescription', prescription.visit.patient.name, prescription.visit.createdAt || prescription.createdAt);
     if (body.channel === 'EMAIL') {
       await this.notifications.sendEmail({ to: body.to, subject: 'Your Prescription', text: body.message || 'Your prescription is attached.',
         attachments: [{ filename: fileName, content: file.buffer, contentType: 'application/pdf' }] });

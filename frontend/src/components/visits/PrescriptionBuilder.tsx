@@ -46,6 +46,7 @@ import { billHref } from '@/components/pharmacy/sales/sales-bill-model';
 import { AddRowBelowButton, RemoveRowButton, WrappingTextField, insertBlankBelow, rowDescription, rxLayout, rxSelect, rxStock } from './rx-table';
 import { loadPatientHistory, visitEntries } from './usePatientHistory';
 import { prescriptionLabel } from '@/lib/prescription-labels';
+import { pdfFileName } from '@/lib/pdf-file-name';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 // ID format validation is relaxed; backend accepts string IDs (cuid/uuid/custom)
 
@@ -1204,6 +1205,10 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     ? { medicine: '2 1 0%', frequency: '0.9 1 0%', timing: '0.9 1 0%', duration: '0.7 1 0%', instructions: '2.4 1 0%' }
     : { medicine: '2 1 0%', frequency: '1 1 0%', timing: '1 1 0%', duration: '0.85 1 0%', instructions: '2 1 0%' };
   const patientName = useMemo(() => visitData?.patient?.name || patientData?.name || '—', [visitData, patientData]);
+  const prescriptionPdfName = useMemo(
+    () => pdfFileName('Prescription', visitData?.patient?.name || patientData?.name, visitData?.createdAt || new Date()),
+    [visitData, patientData],
+  );
   const patientCodeDisplay = useMemo(() => visitData?.patient?.patientCode || patientData?.patientCode || '', [visitData, patientData]);
   const reviewDateDisplay = useMemo(() => {
     if (!reviewDate) return '';
@@ -6413,7 +6418,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                             const blobUrl = URL.createObjectURL(pdfBlob);
                             const a = document.createElement('a');
                             a.href = blobUrl;
-                            a.download = `prescription-${saved.documentId}.pdf`;
+                            a.download = prescriptionPdfName;
                             document.body.appendChild(a);
                             a.click();
                             a.remove();
@@ -6659,7 +6664,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                               const saved = await saveBeforeExport();
                               if (!saved?.prescriptionId) return;
                               const pdfBlob = await renderPreviewPdf();
-                              const file = new File([pdfBlob], `prescription-${saved.documentId}.pdf`, { type: 'application/pdf' });
+                              const file = new File([pdfBlob], prescriptionPdfName, { type: 'application/pdf' });
                               await apiClient.sharePrescriptionPreview(saved.prescriptionId, file, { channel: 'EMAIL', to, message: 'Your prescription is attached.' });
                               toast({ title: 'Email sent', description: 'Prescription PDF sent by email.' });
                             } catch (e) {
@@ -6688,7 +6693,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                                 return;
                               }
                               toast({ title: 'Generating PDF…', description: 'Preparing prescription for WhatsApp.' });
-                              const fileName = `prescription-${saved.documentId}.pdf`;
+                              const fileName = prescriptionPdfName;
                               const pdfBlob = await renderPreviewPdf();
 
                               try { if (prescId) await apiClient.recordPrescriptionPrintEvent(prescId, { eventType: 'WHATSAPP_SHARE' }); } catch {}
