@@ -26,6 +26,9 @@ import type { InventoryItemRequest, InventoryItemRequestStatus, PendingApprovalR
 export type DoctorLetterhead = { id: string; url: string; source: 'uploaded' | 'bundled' };
 
 const INVENTORY_EDITOR_REQUEST = /^\/inventory\/workspace\/(documents(\/by-request)?(\/[^/?#]+(\/(resolve|transition))?)?|reconciliation\/counts\/[^/?#]+)$/;
+const LONG_RUNNING_REQUEST = /^\/(prescriptions\/[^/?#]+\/(pdf|share)|pharmacy\/purchase-invoices\/[^/?#]+\/process|visits\/(translate|([^/?#]+\/)?transcribe(\/[^/?#]+)?)|auth\/backup)([?#]|$)/;
+const DEFAULT_TIMEOUT_MS = 30000;
+const LONG_RUNNING_TIMEOUT_MS = 120000;
 
 export class ApiClient {
   private baseURL: string;
@@ -139,9 +142,11 @@ export class ApiClient {
 
   /**
    * @cc [owner:nareshshah139,label:reliability] bounded-clinical-request
-   * Patient, visit and prescription save endpoints use a 30-second timeout unless explicitly overridden.
-   * Upload, transcription and export subroutes retain their own timeouts. Only safe methods
-   * or mutations explicitly marked retryable may retry; deterministic 4xx responses never retry.
+   * Every request times out after 30 seconds unless explicitly overridden. Uploads, PDF rendering
+   * and sharing, translation, transcription, invoice processing, backups and inventory editor
+   * mutations get 120 seconds. A caller's own abort signal cancels the request without a retry.
+   * Only safe methods or mutations explicitly marked retryable may retry; deterministic 4xx
+   * responses never retry.
    */
   private async performRequest<T>(
     endpoint: string,
@@ -165,18 +170,19 @@ export class ApiClient {
     // response instead of applying the mutation twice.
     const maxRetries = isSafeMethod || extra?.retryUnsafe ? 2 : 0;
 
+    const callerSignal = options.signal;
+    const timeoutMs = extra?.timeoutMs && extra.timeoutMs > 0 ? extra.timeoutMs :
+      options.body instanceof FormData || LONG_RUNNING_REQUEST.test(endpoint) ||
+        (!isSafeMethod && INVENTORY_EDITOR_REQUEST.test(endpoint)) ? LONG_RUNNING_TIMEOUT_MS : DEFAULT_TIMEOUT_MS;
+
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       extra?.onAttempt();
       baseHeaders['X-Request-Attempt'] = String(attempt + 1);
       const controller = new AbortController();
-      const timeoutMs = extra?.timeoutMs && extra.timeoutMs > 0 ? extra.timeoutMs :
-        ['POST', 'PATCH', 'PUT'].includes(method) &&
-          /^\/(patients|visits|prescriptions)(\/[^/?#]+)?(\/complete)?([?#]|$)/.test(endpoint) ? 30000 :
-        INVENTORY_EDITOR_REQUEST.test(endpoint) ? (isSafeMethod ? 30000 : 120000) : undefined;
-      let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
-      if (timeoutMs) {
-        timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
-      }
+      const abortFromCaller = () => controller.abort();
+      if (callerSignal?.aborted) controller.abort();
+      callerSignal?.addEventListener('abort', abortFromCaller);
+      const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
 
       try {
         let response: Response;
@@ -190,6 +196,7 @@ export class ApiClient {
           extra?.onResponse(response);
         } catch (err: any) {
           if (err?.name === 'AbortError') {
+            if (callerSignal?.aborted) throw err;
             if (attempt < maxRetries) {
               const backoffMs = Math.min(3000, 500 * Math.pow(2, attempt));
               await new Promise((r) => setTimeout(r, backoffMs));
@@ -304,7 +311,8 @@ export class ApiClient {
           throw apiErr;
         }
       } finally {
-        if (timeoutHandle) clearTimeout(timeoutHandle);
+        clearTimeout(timeoutHandle);
+        callerSignal?.removeEventListener('abort', abortFromCaller);
       }
     }
 
