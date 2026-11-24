@@ -592,7 +592,7 @@ export class VisitsController {
     if (res) {
       res.set({
         'Content-Type': contentType,
-        'Cache-Control': 'public, max-age=31536000, immutable',
+        'Cache-Control': 'private, no-store',
       });
     }
     return new StreamableFile(data);
@@ -1034,5 +1034,32 @@ export class VisitsController {
       );
       throw new ServiceUnavailableException('Translation failed');
     }
+  }
+}
+
+/**
+ * @cc [owner:nareshshah139,label:security] legacy-uploads-need-staff-session
+ * Files under /uploads MUST be served only to signed-in clinic staff, through the branch check in
+ * VisitsService.getLegacyUploadBinary, and MUST NOT be stored by any cache.
+ */
+@ApiTags('Visits')
+@ApiBearerAuth()
+@Controller('uploads')
+@Roles(...CLINIC_STAFF_ROLES)
+export class LegacyUploadsController {
+  constructor(private readonly visitsService: VisitsService) {}
+
+  @Get('*path')
+  async getLegacyUpload(
+    @Param('path') path: string[] | string,
+    @Request() req: AuthenticatedRequest,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { data, contentType } = await this.visitsService.getLegacyUploadBinary(
+      `/uploads/${Array.isArray(path) ? path.join('/') : path}`,
+      req.branchId ?? req.user.branchId,
+    );
+    res.set({ 'Content-Type': contentType, 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' });
+    return new StreamableFile(data);
   }
 }

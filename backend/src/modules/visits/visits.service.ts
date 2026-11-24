@@ -18,6 +18,10 @@ import * as fs from 'fs';
  * @cc [owner:nareshshah139,label:product] read-without-mutation
  * Read operations MUST NOT rewrite clinical documents or advance updatedAt.
  */
+const LEGACY_IMAGE_TYPES: Record<string, string> = {
+  '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif',
+};
+
 @Injectable()
 export class VisitsService {
   constructor(private prisma: PrismaService) {}
@@ -1204,6 +1208,37 @@ export class VisitsService {
     return { data: Buffer.from(att.data as unknown as ArrayBuffer), contentType: att.contentType };
   }
   
+  /**
+   * @cc [owner:nareshshah139,label:security] legacy-upload-branch-scope
+   * A legacy file under /uploads MUST be returned only for a visit photo recorded on a live visit
+   * whose patient is in the branch, or a draft photo of a patient in the branch. Any other path,
+   * including traversal, other upload folders and non-image files, MUST get 404.
+   */
+  async getLegacyUploadBinary(requestPath: string, branchId: string) {
+    const notFound = () => new NotFoundException('File not found');
+    if (!branchId || typeof requestPath !== 'string' || requestPath.includes('\\')) throw notFound();
+    const normalized = pathPosix.normalize(`/${requestPath.replace(/^\/+/, '')}`);
+    const contentType = LEGACY_IMAGE_TYPES[pathPosix.extname(normalized).toLowerCase()];
+    const visitPhoto = /^\/uploads\/visits\/[A-Za-z0-9._-]+$/.test(normalized);
+    const draftPhoto = /^\/uploads\/patients\/([A-Za-z0-9_-]+)\/([A-Za-z0-9_-]+)\/[A-Za-z0-9._-]+$/.exec(normalized);
+    if (!contentType || (!visitPhoto && !draftPhoto)) throw notFound();
+    if (visitPhoto) {
+      const visit = await this.prisma.visit.findFirst({
+        where: { deletedAt: null, patient: { branchId }, attachments: { contains: JSON.stringify(normalized) } },
+        select: { attachments: true },
+      });
+      if (!visit || !this.safeParse<string[]>(visit.attachments as any, []).includes(normalized)) throw notFound();
+    } else {
+      const patient = await this.prisma.patient.findFirst({ where: { id: draftPhoto![1], branchId }, select: { id: true } });
+      if (!patient) throw notFound();
+    }
+    try {
+      return { data: await fs.promises.readFile(join(process.cwd(), normalized.slice(1))), contentType };
+    } catch {
+      throw notFound();
+    }
+  }
+
   async deleteDraftAttachment(patientId: string, dateStr: string, attachmentId: string, branchId: string) {
     await this.authorizeDraftPatient(patientId, branchId);
     const att = await (this.prisma as any).draftAttachment.findFirst({ where: { id: attachmentId, patientId, dateStr }, select: { id: true } });

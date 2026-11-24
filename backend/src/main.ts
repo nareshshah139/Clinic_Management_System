@@ -3,8 +3,6 @@ import { CORS_OPTIONS } from './shared/cors-origins';
 import { Logger } from '@nestjs/common';
 import { ExpressAdapter, type NestExpressApplication } from '@nestjs/platform-express';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
-import * as express from 'express';
-import { join } from 'path';
 import { diagnosticValidationPipe, installHttpObservability } from './shared/logging/http-observability';
 import { configureRequestBody } from './shared/http/request-body';
 
@@ -30,9 +28,6 @@ async function bootstrap() {
     configureRequestBody(app);
     app.enableCors(CORS_OPTIONS);
     app.useGlobalPipes(diagnosticValidationPipe());
-
-    // Serve uploads
-    app.use('/uploads', express.static(join(process.cwd(), 'uploads')));
 
     // Swagger setup
     const config = new DocumentBuilder()
@@ -65,9 +60,6 @@ async function bootstrap() {
   app.enableCors(CORS_OPTIONS);
   app.useGlobalPipes(diagnosticValidationPipe());
   app.enableShutdownHooks();
-
-  // Serve uploads
-  app.use('/uploads', express.static(join(process.cwd(), 'uploads')));
 
   // Swagger setup
   const config = new DocumentBuilder()
