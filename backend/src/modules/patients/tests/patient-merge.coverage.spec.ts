@@ -72,6 +72,7 @@ async function modelsRepointedByMerge(): Promise<Set<string>> {
           return {};
         },
         findMany: async () => [],
+        findFirst: async () => null,
         update: async () => ({}),
         updateMany: async ({ where, data }: any) => {
           if (where?.patientId === duplicate.id && data?.patientId === kept.id)
@@ -129,6 +130,7 @@ describe('Patient merge covers every patient-linked model', () => {
       'labOrder',
       'newInvoice',
       'outboundMessage',
+      'patientMessage',
       'patientPortalProfile',
       'pharmacyInvoice',
       'referral',

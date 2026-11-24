@@ -225,7 +225,9 @@ export class PatientDeduplicationService {
       tx.experimentAssignment.updateMany({ where: { patientId: duplicate.id }, data: { patientId: canonical.id } }),
       tx.outboundMessage.updateMany({ where: { patientId: duplicate.id }, data: { patientId: canonical.id } }),
       tx.attentionItem.updateMany({ where: { patientId: duplicate.id }, data: { patientId: canonical.id } }),
+      tx.patientMessage.updateMany({ where: { patientId: duplicate.id }, data: { patientId: canonical.id } }),
     ]);
+    await this.mergeMessageItems(tx, canonical.id, duplicate.id);
 
     await this.mergePortalProfiles(tx, canonical, duplicate.id);
 
@@ -247,6 +249,20 @@ export class PatientDeduplicationService {
    * Merging two patients MUST leave one portal profile on the kept patient where an opt-out on
    * either row wins and a disabled portal on either row wins; the duplicate's profile is removed.
    */
+  /** Keeps one open PATIENT_MESSAGE item for the kept patient (PP-21). */
+  private async mergeMessageItems(tx: Prisma.TransactionClient, keptId: string, duplicateId: string) {
+    const keptKey = `patient:${keptId}`;
+    const duplicateKey = `patient:${duplicateId}`;
+    const keptOpen = await tx.attentionItem.findFirst({ where: { kind: 'PATIENT_MESSAGE', subjectKey: keptKey, state: { not: 'RESOLVED' } } });
+    if (keptOpen) {
+      await tx.attentionItem.updateMany({
+        where: { kind: 'PATIENT_MESSAGE', subjectKey: duplicateKey, state: { not: 'RESOLVED' } },
+        data: { state: 'RESOLVED', resolvedAt: new Date(), reason: 'merged' },
+      });
+    }
+    await tx.attentionItem.updateMany({ where: { kind: 'PATIENT_MESSAGE', subjectKey: duplicateKey }, data: { subjectKey: keptKey } });
+  }
+
   private async mergePortalProfiles(tx: Prisma.TransactionClient, keptPatient: Patient, duplicateId: string) {
     const keptId = keptPatient.id;
     const [kept, dup] = await Promise.all([

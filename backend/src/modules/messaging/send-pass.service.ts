@@ -19,6 +19,8 @@ export const LEASE_MS = 2 * 60 * 1000;
 export const BATCH = 50;
 export const MAX_ATTEMPTS = 5;
 export const RETRY_MS = 5 * 60 * 1000;
+const RECEIPT_STATE: Record<string, 'SENT' | 'DELIVERED' | 'READ' | 'FAILED'> = { sent: 'SENT', delivered: 'DELIVERED', read: 'READ', failed: 'FAILED' };
+const RECEIPT_RANK: Record<string, number> = { SENT: 1, DELIVERED: 2, READ: 3 };
 export const LAPSE_MS = 365 * 24 * 3600 * 1000;
 const DELIVERED_STATES = ['SENT', 'DELIVERED', 'READ'] as const;
 
@@ -50,13 +52,55 @@ export class SendPassService {
 
   async runPass(now = new Date()) {
     const lapsed = await this.lapseStaleConsent(now);
+    const receipts = await this.applyPendingReceipts(now);
     const leased = await this.lease(now);
     const counts: Record<string, number> = {};
     for (const row of leased) {
       const outcome = await this.sendOne(row.id, now);
       counts[outcome] = (counts[outcome] ?? 0) + 1;
     }
-    return { lapsed, leased: leased.length, ...counts };
+    return { lapsed, receipts, leased: leased.length, ...counts };
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:integrity] receipts-in-any-order
+   * A receipt MUST move its row only forward through SENT, DELIVERED and READ; a failed receipt
+   * marks a sent row FAILED and opens a delivery-failure item for a current subject. A receipt
+   * whose row is not committed yet is applied by a later pass.
+   */
+  async applyReceipt(tx: Tx, status: any, now: Date): Promise<boolean> {
+    const id = status?.id ? String(status.id) : null;
+    if (!id) return true;
+    const row = await tx.outboundMessage.findUnique({ where: { providerMessageId: id } });
+    if (!row) return false;
+    const next = RECEIPT_STATE[String(status?.status)];
+    if (!next) return true;
+    if (next === 'FAILED') {
+      if (row.state === 'FAILED' || !(RECEIPT_RANK[row.state] > 0)) return true;
+      const code = status?.errors?.[0]?.code;
+      const reason = `receipt-failed${code ? `:${code}` : ''}`;
+      await tx.outboundMessage.update({ where: { id: row.id }, data: { state: 'FAILED', outcome: reason, settledAt: now } });
+      if (await this.subjectIsCurrent(tx, row, now)) await openDeliveryFailure(tx, row, reason, now);
+      return true;
+    }
+    if ((RECEIPT_RANK[row.state] ?? 0) > 0 && RECEIPT_RANK[next] > RECEIPT_RANK[row.state]) {
+      await tx.outboundMessage.update({ where: { id: row.id }, data: { state: next, settledAt: now } });
+    }
+    return true;
+  }
+
+  async applyPendingReceipts(now: Date): Promise<number> {
+    const pending = await this.prisma.inboundWhatsAppEvent.findMany({ where: { kind: 'status', appliedAt: null }, orderBy: { receivedAt: 'asc' }, take: BATCH });
+    let applied = 0;
+    for (const event of pending) {
+      const done = await this.prisma.$transaction(async (tx) => {
+        if (!(await this.applyReceipt(tx, event.payload, now))) return false;
+        await tx.inboundWhatsAppEvent.update({ where: { id: event.id }, data: { appliedAt: now } });
+        return true;
+      });
+      if (done) applied++;
+    }
+    return applied;
   }
 
   /** Leases due rows (and rows whose lease ran out), care rows first by spec order. */
@@ -127,6 +171,10 @@ export class SendPassService {
   }
 
   async decide(tx: Tx, row: OutboundMessage, now: Date): Promise<Decision> {
+    if (row.purpose === P.ACKNOWLEDGEMENT) {
+      const optedOut = await tx.patientPortalProfile.count({ where: { phoneE164: row.toE164, consentState: WhatsAppConsentState.OPTED_OUT } });
+      if (optedOut) return { kind: 'suppress', reason: 'consent-opted_out' };
+    }
     if (row.purpose === P.NUMBER_CONFIRMATION) {
       const waiting = await tx.patientPortalProfile.count({
         where: { phoneE164: row.toE164, consentState: WhatsAppConsentState.PENDING, portalEnabled: true, patient: { isArchived: false } },

@@ -16,9 +16,11 @@ import { PermissionsGuard } from './permissions.guard';
 const PUBLIC_ROUTES = [
   'GET /',
   'GET /health',
+  'GET /webhooks/whatsapp',
   'POST /auth/login',
   'POST /auth/logout',
   'POST /auth/reset-password',
+  'POST /webhooks/whatsapp',
 ];
 
 const srcRoot = path.resolve(__dirname, '..', '..');

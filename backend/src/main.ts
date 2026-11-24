@@ -25,6 +25,7 @@ async function bootstrap() {
     const app = await NestFactory.create<NestExpressApplication>(
       mod.AppMinimalModule,
       new ExpressAdapter(),
+      { rawBody: true },
     );
     installHttpObservability(app);
     configureRequestBody(app);
@@ -59,6 +60,7 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(
     mod.AppModule,
     new ExpressAdapter(),
+    { rawBody: true },
   );
   installHttpObservability(app);
   configureRequestBody(app);

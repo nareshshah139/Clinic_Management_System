@@ -331,6 +331,7 @@ model Patient {
   portalProfile    PatientPortalProfile?
   outboundMessages OutboundMessage[]
   attentionItems   AttentionItem[]
+  patientMessages  PatientMessage[]
 
   // Back-relations
   experimentAssignments ExperimentAssignment[]
@@ -2373,6 +2374,54 @@ model PortalOtpChallenge {
 
   @@index([phoneE164, purpose, createdAt])
   @@map("portal_otp_challenges")
+}
+
+model InboundWhatsAppEvent {
+  id              String    @id @default(cuid())
+  providerEventId String    @unique
+  kind            String
+  payload         Json
+  appliedAt       DateTime?
+  receivedAt      DateTime  @default(now())
+
+  @@index([kind, appliedAt])
+  @@map("inbound_whatsapp_events")
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum MessageAssignment {
+  EXACT
+  SUGGESTED
+  CONFIRMED
+  UNASSIGNED
+}
+
+model PatientMessage {
+  id                String            @id @default(cuid())
+  patientId         String?
+  phoneE164         String
+  direction         MessageDirection
+  channel           String            @default("WHATSAPP")
+  kind              String
+  body              String?
+  mediaId           String?
+  mediaMime         String?
+  providerMessageId String?           @unique
+  replyToOutboundId String?
+  assignment        MessageAssignment
+  assignedById      String?
+  authorKind        String
+  readAt            DateTime?
+  createdAt         DateTime          @default(now())
+  patient           Patient?          @relation(fields: [patientId], references: [id], onDelete: SetNull)
+
+  @@index([patientId, createdAt])
+  @@index([phoneE164, createdAt])
+  @@map("patient_messages")
 }
 
 enum AttentionKind {

@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { OutboundMessage, Prisma } from '@prisma/client';
 
 type Tx = Prisma.TransactionClient;
@@ -15,4 +16,14 @@ export async function openDeliveryFailure(tx: Tx, row: OutboundMessage, reason: 
     VALUES (${`att_${row.id}_${now.getTime()}`}, 'DELIVERY_FAILURE', 'OPEN', ${subjectKey}, ${row.patientId}, ${row.toE164}, ${patient?.branchId ?? null}, ${reason}, ${now}, ${now}, ${now})
     ON CONFLICT ("kind", "subjectKey") WHERE "state" <> 'RESOLVED'
     DO UPDATE SET "lastEventAt" = EXCLUDED."lastEventAt", "reason" = EXCLUDED."reason", "updatedAt" = EXCLUDED."updatedAt"`;
+}
+
+/** One open PATIENT_MESSAGE item per patient, or per number when the sender is not known (PP-21). */
+export async function openPatientMessageItem(tx: Tx, who: { patientId: string | null; phoneE164: string; branchId: string | null }, now: Date) {
+  const subjectKey = who.patientId ? `patient:${who.patientId}` : `phone:${who.phoneE164}`;
+  await tx.$executeRaw`
+    INSERT INTO "attention_items" ("id", "kind", "state", "subjectKey", "patientId", "phoneE164", "branchId", "reason", "lastEventAt", "createdAt", "updatedAt")
+    VALUES (${`att_${randomUUID()}`}, 'PATIENT_MESSAGE', 'OPEN', ${subjectKey}, ${who.patientId}, ${who.phoneE164}, ${who.branchId}, 'new-message', ${now}, ${now}, ${now})
+    ON CONFLICT ("kind", "subjectKey") WHERE "state" <> 'RESOLVED'
+    DO UPDATE SET "lastEventAt" = EXCLUDED."lastEventAt", "updatedAt" = EXCLUDED."updatedAt"`;
 }

@@ -12,6 +12,7 @@ export type OutboundRequest = {
   subjectType?: string | null;
   subjectId?: string | null;
   notBefore?: Date;
+  createdAt?: Date;
 };
 
 /**

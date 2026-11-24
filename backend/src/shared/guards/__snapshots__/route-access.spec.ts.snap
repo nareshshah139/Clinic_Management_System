@@ -259,6 +259,7 @@ GET /visits/photos/draft/:patientId/:dateStr/:attachmentId | roles: OWNER,ADMIN,
 GET /visits/statistics | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /visits/transcribe/health | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /voice-fill/status | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
+GET /webhooks/whatsapp | public
 GET /whatsapp/templates | roles: ADMIN,DOCTOR | permissions: -
 PATCH /appointments/:id | roles: ADMIN,DOCTOR,NURSE,RECEPTION | permissions: appointments:update
 PATCH /appointments/rooms/:roomId | roles: ADMIN,DOCTOR | permissions: rooms:manage
@@ -461,6 +462,7 @@ POST /visits/transcribe/speakers | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEP
 POST /visits/translate | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 POST /voice-fill/:form | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST | permissions: -
 POST /voice-fill/:form/text | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST | permissions: -
+POST /webhooks/whatsapp | public
 POST /whatsapp/templates | roles: ADMIN,DOCTOR | permissions: -
 POST /whatsapp/templates/:id/test | roles: ADMIN,DOCTOR | permissions: -
 POST /whatsapp/templates/generate | roles: ADMIN,DOCTOR | permissions: -

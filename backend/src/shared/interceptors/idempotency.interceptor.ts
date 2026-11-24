@@ -48,10 +48,16 @@ export class IdempotencyInterceptor implements NestInterceptor {
    * Requests without an authenticated user MUST NOT replay each other's responses. Today they all
    * share an empty user id. This is a target obligation, not a pass claim.
    */
+  /**
+   * @cc [owner:nareshshah139,label:privacy] idempotency-skips-portal-and-webhooks
+   * Requests under /portal and /webhooks MUST run the handler without reading or writing the
+   * idempotency store, so no patient-facing response body is ever stored.
+   */
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
     const http = context.switchToHttp();
     const req = http.getRequest<Request>();
     const res = http.getResponse<Response>();
+    if (/^\/(portal|webhooks)(\/|$)/.test(req.path || '')) return next.handle();
 
     const method = (req.method || 'GET').toUpperCase();
     const supported = new Set(['POST', 'PATCH', 'PUT', 'DELETE']);
