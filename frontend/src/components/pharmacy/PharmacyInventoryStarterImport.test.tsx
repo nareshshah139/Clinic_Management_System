@@ -212,3 +212,17 @@ it("preserves the previous summary when a retry response does not confirm the im
     screen.getByRole("button", { name: "Check import outcome" }),
   ).toBeEnabled();
 });
+
+it("shows the preview in the full uploader, marks Ready rows as success, and drops it on Remove", async () => {
+  const { container } = render(<PharmacyInventoryStarterImport />);
+  fireEvent.change(container.querySelector("input[type=file]")!, {
+    target: { files: [new File(["test"], "stock.xlsx")] },
+  });
+  fireEvent.click(screen.getByRole("button", { name: /^Preview import$/i }));
+  expect(await screen.findByText("Synthetic cream")).toBeInTheDocument();
+  const ready = screen.getByText("Ready");
+  expect(ready).toHaveClass("text-success-text");
+  expect(ready).not.toHaveClass("text-destructive");
+  fireEvent.click(screen.getByRole("button", { name: /remove/i }));
+  expect(screen.queryByText("Synthetic cream")).not.toBeInTheDocument();
+});
