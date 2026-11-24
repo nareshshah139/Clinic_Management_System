@@ -317,6 +317,20 @@ it('reopens a visit completed in this browser as saved when its prescription rec
   await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/^Editing a completed visit\. Unsaved changes$/));
 });
 
+it('reads an edit as unsaved when the visit itself cannot be loaded', async () => {
+  clinicServer('IN_PROGRESS', { saved: false, record: [] });
+  const answer = global.fetch;
+  const notFound = { ok: false, status: 404, headers: { get: () => 'application/json' }, json: async () => ({ message: 'Visit not found' }), text: async () => 'Visit not found' };
+  global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => (
+    String(input) === '/api/visits/v1' && (init?.method || 'GET') === 'GET' ? notFound : answer(input, init)
+  )) as unknown as typeof fetch;
+  render(<MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v1" userRole="DOCTOR" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Add Row' }, { timeout: 20_000 }));
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 500)); });
+  fireEvent.change(screen.getAllByPlaceholderText('Search medicine name...')[0], { target: { value: MINOCYCLINE } });
+  await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/^Unsaved changes$/));
+});
+
 it('still shows an unsaved edit to a completed visit as unsaved after the page is reloaded mid-edit', async () => {
   clinicServer('COMPLETED');
   const first = render(<MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v1" userRole="DOCTOR" />);
