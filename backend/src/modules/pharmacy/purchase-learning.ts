@@ -212,7 +212,7 @@ const fingerprint = (line: PairableLine) => normalizedIdentity(line.batchNumber)
 
 const groupBy = <T>(values: T[], key: (value: T) => string) => values.reduce((groups, value) => {
   const id = key(value);
-  if (id) groups.set(id, [...(groups.get(id) || []), value]);
+  if (id) groups.get(id)?.push(value) ?? groups.set(id, [value]);
   return groups;
 }, new Map<string, T[]>());
 
@@ -291,7 +291,7 @@ export function buildOutcomeExamples(input: {
  */
 export function deriveLessons(examples: LearningExample[], currentDrugs?: Map<string, CatalogueDrug>): Lesson[] {
   const groups = new Map<string, LearningExample[]>();
-  const add = (key: string, example: LearningExample) => groups.set(key, [...(groups.get(key) || []), example]);
+  const add = (key: string, example: LearningExample) => groups.get(key)?.push(example) ?? groups.set(key, [example]);
   for (const example of examples) {
     if (example.revokedAt || example.origin !== 'HUMAN_REVIEW' || example.provenance === 'CATALOGUE' || !Object.hasOwn(FIELD_POLICY, example.field)) continue;
     add(lessonKey(example.field, example.supplierGstin, example.rawKey), example);
