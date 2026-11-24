@@ -40,6 +40,8 @@ import {
 } from "./PurchaseProductDetails";
 import { PurchaseManualMatchSearch } from "./PurchaseManualMatchSearch";
 import { PurchaseSupplierReview } from "./PurchaseSupplierReview";
+import { PurchaseLearnedChips } from "./PurchaseLearnedChip";
+import { isLearnedFlag, parseLearnedCorrections, readLearnedCorrections, serializeLearnedCorrections, undoLearnedCorrection, withoutLearnedFlag, learnedFormKey, type LearnedCorrection } from "@/lib/purchase-learning";
 import { AgreedTermHint, AgreedTermsPanel, useAgreedTerms } from "./AgreedTerms";
 import { PurchaseOcrChecklist } from "./PurchaseOcrChecklist";
 import { PurchaseReviewSummary } from "./PurchaseReviewSummary";
@@ -144,6 +146,7 @@ type LineForm = {
   productKind?: PurchaseProductCatalog["productKind"];
   ocrSourceRef?: string;
   ocrLineKey?: string;
+  learnedCorrections?: string;
   localId: string;
   serialNumber: string;
   productName: string;
@@ -253,6 +256,7 @@ type ExtractedPurchaseLine = Partial<{
   productKind: PurchaseProductCatalog["productKind"];
   ocrSourceRef: string;
   ocrLineKey: string;
+  learnedCorrections: unknown;
   serialNumber: number | string;
   productName: string;
   manufacturer: string;
@@ -280,6 +284,7 @@ type ExtractedPurchaseLine = Partial<{
 type ExtractedPurchaseDraft = Partial<HeaderForm> &
   Partial<{
     ocrFlags: string[];
+    learnedCorrections: unknown;
     items: ExtractedPurchaseLine[];
     sourceDocumentId: string;
   }>;
@@ -841,6 +846,7 @@ function lineFromExtracted(
     ...base,
     ocrSourceRef: item.ocrSourceRef,
     ocrLineKey: item.ocrLineKey,
+    learnedCorrections: serializeLearnedCorrections(parseLearnedCorrections(item.learnedCorrections)),
     productKind: item.productKind,
     serialNumber: formString(item.serialNumber, String(index + 1)),
     productName: formString(item.productName),
@@ -1189,6 +1195,7 @@ function PurchaseInvoiceEditor({
   };
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [headerFlags, setHeaderFlags] = useState("");
+  const [headerLearned, setHeaderLearned] = useState<LearnedCorrection[]>([]);
   const [ocrFiles, setOcrFiles] = useState<File[]>([]);
   const [additionalSourceIds, setAdditionalSourceIds] = useState<string[]>([]);
   const [ocrFile, setOcrFile] = useState<File | null>(null);
@@ -1513,6 +1520,35 @@ function PurchaseInvoiceEditor({
     setLines(current => current.map(row => row.localId === localId ? { ...next, ocrFlags: review.flags.join(', ') } : row));
   };
 
+  const dropLearnedCheck = (scope: string, field: LearnedCorrection["field"]) => {
+    const key = learnedFormKey(field);
+    setCheckedOcr((current) => {
+      const entry = current[scope]?.[key];
+      if (!entry) return current;
+      const flags = entry.flags.filter((raw) => !isLearnedFlag(raw, field));
+      const { [key]: _dropped, ...rest } = current[scope];
+      return { ...current, [scope]: flags.length ? { ...rest, [key]: { ...entry, flags } } : rest };
+    });
+  };
+
+  const undoLineLearning = (localId: string, correction: LearnedCorrection) => {
+    invalidatePending();
+    setManualReviewCandidateId(null);
+    setMasterMatches([]);
+    setMasterStatuses({});
+    dropLearnedCheck(localId, correction.field);
+    setLines((current) => current.map((row) => row.localId === localId ? undoLearnedCorrection(row, correction, "ocrFlags") : row));
+  };
+
+  const undoHeaderLearning = (correction: LearnedCorrection) => {
+    invalidatePending();
+    setManualReviewCandidateId(null);
+    dropLearnedCheck("header", correction.field);
+    setHeader((current) => ({ ...current, [learnedFormKey(correction.field)]: correction.from }));
+    setHeaderFlags((current) => withoutLearnedFlag(current, correction.field));
+    setHeaderLearned((current) => current.filter((entry) => entry.field !== correction.field));
+  };
+
   const addLine = () => {
     invalidatePending();
     setManualReviewCandidateId(null);
@@ -1588,6 +1624,7 @@ function PurchaseInvoiceEditor({
     setOriginalAmounts(null);
     setSourceDocument(null);
     setHeaderFlags("");
+    setHeaderLearned([]);
     setHeader(defaultHeader());
     setLines([emptyLine(1)]);
     setOcrFile(null);
@@ -1623,6 +1660,7 @@ function PurchaseInvoiceEditor({
     setRevisionChecking(false);
     recoveredInvoiceId.current = null;
     recoveredRevision.current = null;
+    setHeaderLearned(parseLearnedCorrections(draft.learnedCorrections));
     setHeaderFlags(
       purchaseBlockingIssues(draft.ocrFlags || extraction?.flags || []).join(
         ", ",
@@ -4507,6 +4545,7 @@ function PurchaseInvoiceEditor({
                             </details>
                           </section>
                         )}
+                        <PurchaseLearnedChips corrections={headerLearned} label="Supplier learned corrections" disabled={savedFormLocked || busy} onUndo={undoHeaderLearning} />
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           {!showSupplierReview && (
                             <>
@@ -5194,6 +5233,7 @@ function PurchaseInvoiceEditor({
                             </div>
                                                           <div className="space-y-3 px-4 pb-4">
                                 <AgreedTermHint term={agreedTerms.termFor(index)} line={line} />
+                                <PurchaseLearnedChips corrections={readLearnedCorrections(line.learnedCorrections)} label={`Line ${index + 1} learned corrections`} disabled={savedFormLocked || busy} onUndo={correction => undoLineLearning(line.localId, correction)} />
                                 {batchOpen && <label className="flex items-center gap-2 text-sm"><input data-purchase-local-controls type="checkbox" disabled={batchDisabled} checked={selectedRows.includes(line.localId)} onChange={event => selectBatchRows(event.target.checked ? [...currentSelectedRows, line.localId] : currentSelectedRows.filter(id => id !== line.localId))} />Select line {index + 1} for shared terms</label>}
                                 <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
 <Field id={`${line.localId}-product`} label="Product" value={line.productName} className="col-span-2" onChange={event => updateLine(line.localId, "productName", event.target.value)} />
