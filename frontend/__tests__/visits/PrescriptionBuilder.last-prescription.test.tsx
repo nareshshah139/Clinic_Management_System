@@ -24,6 +24,7 @@ const history = [
     doctor: { firstName: 'Asha', lastName: 'Rao', name: 'Asha Rao' },
     prescriptionItems: [
       { drugName: 'Tab Doxycycline 100mg', dosePattern: '1-0-1', frequency: 'TWICE_DAILY', timing: 'AFTER_FOOD', duration: 14, durationUnit: 'DAYS', instructions: 'Avoid sun exposure' },
+      { drugName: 'Cap Itraconazole 100mg', frequency: 'ONCE_DAILY', timing: 'AFTER_FOOD', duration: 7, durationUnit: 'DAYS', instructions: 'After food' },
     ],
   },
 ];
@@ -46,7 +47,7 @@ it('shows the last saved prescription read-only while the medicines table stays 
   renderVisit();
   const panel = await screen.findByRole('region', { name: 'Last prescription' });
   expect(panel.textContent).toBe(
-    'Last prescription10 Oct 2026 • Asha RaoCopy to this prescriptionTab Doxycycline 100mg • 1-0-1 • after food • 14 days • Avoid sun exposure',
+    'Last prescription10 Oct 2026 • Asha RaoCopy to this prescriptionTab Doxycycline 100mg • 1-0-1 • after food • 14 days • Avoid sun exposureCap Itraconazole 100mg • once daily • after food • 7 days',
   );
   expect(screen.queryByDisplayValue('Tab Doxycycline 100mg')).toBeNull();
   expect(within(panel).queryByText(/Cetirizine/)).toBeNull();

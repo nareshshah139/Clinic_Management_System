@@ -5346,7 +5346,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                         <li key={`${m.drugName}-${i}`} className="break-words">
                           <span className="font-medium">{m.drugName}</span>
                           {[m.dosePattern || String(m.frequency || '').replace(/_/g, ' ').toLowerCase(), m.timing ? String(m.timing).replace(/_/g, ' ').toLowerCase() : '', m.duration !== '' && m.duration != null ? `${m.duration} ${String(m.durationUnit || '').toLowerCase()}` : '', m.instructions || '']
-                            .filter(Boolean).map((part) => ` • ${part}`).join('')}
+                            .filter((part, idx, parts) => part && parts.findIndex((p) => p.toLowerCase() === part.toLowerCase()) === idx).map((part) => ` • ${part}`).join('')}
                         </li>
                       ))}
                     </ul>
