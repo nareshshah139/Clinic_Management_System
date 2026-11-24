@@ -276,6 +276,7 @@ PATCH /inventory/workspace/reconciliation/counts/:id | roles: OWNER,ADMIN,MANAGE
 PATCH /inventory/workspace/settings | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 PATCH /inventory/workspace/stock/:id | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 PATCH /patients/:id | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
+PATCH /patients/:id/portal | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 PATCH /pharmacy/dispense-tasks/:taskId/lines/:lineId | roles: OWNER,ADMIN,MANAGER,DOCTOR,PHARMACIST,RECEPTION | permissions: -
 PATCH /pharmacy/dispense-tasks/:taskId/status | roles: OWNER,ADMIN,MANAGER,DOCTOR,PHARMACIST,RECEPTION | permissions: -
 PATCH /pharmacy/invoices/:id | roles: ADMIN,PHARMACIST | permissions: pharmacy:invoice:update
@@ -371,6 +372,7 @@ POST /patients/:id/link-user | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION
 POST /patients/:id/send-appointment-reminder | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 POST /patients/:id/unarchive | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 POST /patients/:id/unlink-user | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
+POST /patients/:id/whatsapp-consent | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 POST /pharmacy/1mg/check-inventory | roles: OWNER,ADMIN,MANAGER,DOCTOR,PHARMACIST,RECEPTION | permissions: -
 POST /pharmacy/1mg/orders | roles: OWNER,ADMIN,MANAGER,DOCTOR,PHARMACIST,RECEPTION | permissions: -
 POST /pharmacy/1mg/orders/:id/confirm | roles: OWNER,ADMIN,MANAGER,DOCTOR,PHARMACIST,RECEPTION | permissions: -
