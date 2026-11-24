@@ -186,6 +186,8 @@ GET /pharmacy/purchase-invoices/documents | roles: ADMIN,PHARMACIST,DOCTOR,RECEP
 GET /pharmacy/purchase-invoices/documents/:documentId | roles: ADMIN,PHARMACIST,DOCTOR,RECEPTION | permissions: pharmacy:purchase-invoice:read|inventory:po:read
 GET /pharmacy/purchase-invoices/documents/:documentId/pages/:page | roles: ADMIN,PHARMACIST,DOCTOR,RECEPTION | permissions: pharmacy:purchase-invoice:read|inventory:po:read
 GET /pharmacy/purchase-invoices/documents/:documentId/source-map | roles: ADMIN,PHARMACIST,DOCTOR,RECEPTION | permissions: pharmacy:purchase-invoice:read|inventory:po:read
+GET /pharmacy/purchase-invoices/learning/lessons | roles: ADMIN,PHARMACIST,DOCTOR,RECEPTION | permissions: pharmacy:purchase-invoice:read|inventory:po:read
+GET /pharmacy/purchase-invoices/learning/metrics | roles: ADMIN,PHARMACIST,DOCTOR,RECEPTION | permissions: pharmacy:purchase-invoice:read|inventory:po:read
 GET /pharmacy/purchase-invoices/master-products | roles: ADMIN,PHARMACIST,RECEPTION | permissions: pharmacy:purchase-invoice:create|inventory:po:create
 GET /pharmacy/purchase-invoices/suppliers | roles: ADMIN,PHARMACIST,DOCTOR,RECEPTION | permissions: pharmacy:purchase-invoice:create|inventory:po:create|pharmacy:purchase-invoice:read|inventory:po:read
 GET /pharmacy/purchase-ledger/aging | roles: ADMIN,PHARMACIST,ACCOUNTANT,DOCTOR | permissions: pharmacy:purchase-ledger:read
@@ -401,6 +403,7 @@ POST /pharmacy/purchase-invoices/:id/reject | roles: ADMIN,PHARMACIST,RECEPTION 
 POST /pharmacy/purchase-invoices/:id/reopen-review | roles: ADMIN,PHARMACIST,RECEPTION | permissions: pharmacy:purchase-invoice:create|inventory:po:create & pharmacy:purchase-invoice:review|inventory:po:update
 POST /pharmacy/purchase-invoices/documents/:documentId/source-map | roles: ADMIN,PHARMACIST,RECEPTION | permissions: pharmacy:purchase-invoice:read|inventory:po:read & pharmacy:purchase-invoice:create|inventory:po:create
 POST /pharmacy/purchase-invoices/drafts | roles: ADMIN,PHARMACIST,RECEPTION | permissions: pharmacy:purchase-invoice:create|inventory:po:create
+POST /pharmacy/purchase-invoices/learning/lessons/forget | roles: ADMIN,PHARMACIST,RECEPTION | permissions: pharmacy:purchase-invoice:review|inventory:po:update
 POST /pharmacy/purchase-invoices/master-confirmations | roles: ADMIN,PHARMACIST,RECEPTION | permissions: pharmacy:purchase-invoice:create|inventory:po:create
 POST /pharmacy/purchase-invoices/master-matches | roles: ADMIN,PHARMACIST,RECEPTION | permissions: pharmacy:purchase-invoice:create|inventory:po:create|pharmacy:purchase-invoice:review|inventory:po:update
 POST /pharmacy/purchase-invoices/ocr/extract | roles: ADMIN,PHARMACIST,RECEPTION | permissions: pharmacy:purchase-invoice:create|inventory:po:create
