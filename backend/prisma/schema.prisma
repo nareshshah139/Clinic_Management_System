@@ -334,6 +334,8 @@ model Patient {
   patientMessages  PatientMessage[]
   followUpTracks   FollowUpTrack[]
   portalTaskLinks  PortalTaskLink[]
+  portalSessions   PortalSession[]
+  portalAccessEvents PortalAccessEvent[]
 
   // Back-relations
   experimentAssignments ExperimentAssignment[]
@@ -2334,6 +2336,7 @@ enum OutboundMessagePurpose {
   ACKNOWLEDGEMENT
   OPT_OUT_CONFIRMATION
   STAFF_REPLY
+  PORTAL_SIGN_IN_CODE
 }
 
 model OutboundMessage {
@@ -2366,6 +2369,7 @@ model OutboundMessage {
 
 enum PortalOtpPurpose {
   CONFIRM_NUMBER
+  SIGN_IN
 }
 
 model PortalOtpChallenge {
@@ -3145,4 +3149,63 @@ model PortalTaskLinkCheckIn {
 
   @@id([linkId, checkInId])
   @@map("portal_task_link_check_ins")
+}
+
+/// One confirmed phone number that has signed in to the portal (PP-58). It owns no patient: the
+/// profiles on the number are listed again on every request (PP-61).
+model PortalIdentity {
+  id           String              @id @default(cuid())
+  phoneE164    String              @unique
+  lastSignInAt DateTime?
+  createdAt    DateTime            @default(now())
+  sessions     PortalSession[]
+  accessEvents PortalAccessEvent[]
+
+  @@map("portal_identities")
+}
+
+/// One sign-in. Only the token's hash is stored; a consumed code yields at most one session (PP-56, PP-58).
+model PortalSession {
+  id                String         @id @default(cuid())
+  tokenHash         String         @unique
+  identityId        String
+  challengeId       String         @unique
+  patientId         String?
+  lastActiveAt      DateTime       @default(now())
+  idleExpiresAt     DateTime
+  absoluteExpiresAt DateTime
+  revokedAt         DateTime?
+  revokeReason      String?
+  createdAt         DateTime       @default(now())
+  identity          PortalIdentity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  patient           Patient?       @relation(fields: [patientId], references: [id], onDelete: SetNull)
+
+  @@index([identityId])
+  @@index([patientId])
+  @@map("portal_sessions")
+}
+
+enum PortalAccessKind {
+  SIGN_IN
+  PROFILE_CHOICE
+  RECORD_VIEW
+  SIGN_OUT
+  SIGN_OUT_EVERYWHERE
+}
+
+/// Append-only: each sign-in, profile choice and record view (PP-66).
+model PortalAccessEvent {
+  id         String           @id @default(cuid())
+  identityId String
+  sessionId  String?
+  patientId  String?
+  kind       PortalAccessKind
+  view       String?
+  createdAt  DateTime         @default(now())
+  identity   PortalIdentity   @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  patient    Patient?         @relation(fields: [patientId], references: [id], onDelete: SetNull)
+
+  @@index([identityId, createdAt])
+  @@index([patientId, createdAt])
+  @@map("portal_access_events")
 }

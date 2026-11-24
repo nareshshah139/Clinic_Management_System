@@ -80,6 +80,8 @@ describe('PatientDeduplicationService', () => {
     patientMessage: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
     followUpTrack: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
     portalTaskLink: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+    portalAccessEvent: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+    portalSession: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
     patientPortalProfile: { findUnique: jest.fn().mockResolvedValue(null) },
   });
 

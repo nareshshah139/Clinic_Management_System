@@ -1,0 +1,30 @@
+---
+title: "PortalAccess.tla (code)"
+---
+stateDiagram-v2
+  state "Signed out" as s0
+  state "Link reads questions" as s1
+  state "Signed in, no profile chosen" as s2
+  state "Reading as the chosen profile" as s3
+  state "Signed in with a profile" as s4
+  [*] --> s0
+  s0 --> s1: task link opened
+  s0 --> s2: code consumed
+  s1 --> s0: check-in moves / code consumed / code sent, mistyped or expired / session ends / staff change
+  s1 --> s2: check-in moves / code consumed / code sent, mistyped or expired / staff change
+  s1 --> s3: profile chosen / records read
+  s1 --> s4: check-in moves / code consumed / code sent, mistyped or expired / staff change
+  s2 --> s0: session ends
+  s2 --> s1: task link opened
+  s2 --> s3: profile chosen
+  s3 --> s0: session ends / staff change
+  s3 --> s1: task link opened
+  s3 --> s2: code consumed
+  s3 --> s4: check-in moves / code consumed / code sent, mistyped or expired / staff change
+  s4 --> s0: session ends / staff change
+  s4 --> s1: task link opened
+  s4 --> s2: code consumed
+  s4 --> s3: profile chosen / records read
+  classDef breaks fill:#fde2dd,stroke:#b3261e,stroke-width:2px
+  classDef stuck fill:#fdf0d5,stroke:#a35a05,stroke-width:2px,stroke-dasharray:5 3
+  classDef breaksAndStuck fill:#fde2dd,stroke:#a35a05,stroke-width:2px,stroke-dasharray:5 3

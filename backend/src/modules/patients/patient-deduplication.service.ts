@@ -3,6 +3,7 @@ import { Cron } from '@nestjs/schedule';
 import { Patient, Prisma } from '@prisma/client';
 import { combineProfiles } from './portal/portal-profile';
 import { toE164 } from './portal/phone-e164';
+import { revokePatientSessions } from '../portal/session';
 import { PrismaService } from '../../shared/database/prisma.service';
 
 type DuplicatePatientCandidate = {
@@ -231,7 +232,9 @@ export class PatientDeduplicationService {
       tx.patientMessage.updateMany({ where: { patientId: duplicate.id }, data: { patientId: canonical.id } }),
       tx.followUpTrack.updateMany({ where: { patientId: duplicate.id }, data: { patientId: canonical.id } }),
       tx.portalTaskLink.updateMany({ where: { patientId: duplicate.id }, data: { patientId: canonical.id } }),
+      tx.portalAccessEvent.updateMany({ where: { patientId: duplicate.id }, data: { patientId: canonical.id } }),
     ]);
+    await revokePatientSessions(tx, duplicate.id, 'merged');
     await this.mergeMessageItems(tx, canonical.id, duplicate.id);
 
     await this.mergePortalProfiles(tx, canonical, duplicate.id);

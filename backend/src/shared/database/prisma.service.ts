@@ -39,7 +39,7 @@ function redactSensitiveFields<T>(input: T): T {
  */
 export const NAMES_ONLY_AUDIT_MODELS = new Set<string>(['PatientPortalProfile', 'PortalOtpChallenge', 'OutboundMessage', 'InboundWhatsAppEvent', 'PatientMessage', 'AttentionItem',
   'Instrument', 'InstrumentVersion', 'FollowUpPlan', 'FollowUpPlanVersion', 'FollowUpTrack', 'CheckIn', 'CheckInResponse',
-  'ResponseAttachment', 'PortalTaskLink', 'PortalTaskLinkCheckIn']);
+  'ResponseAttachment', 'PortalTaskLink', 'PortalTaskLinkCheckIn', 'PortalIdentity', 'PortalSession', 'PortalAccessEvent']);
 
 type ActorContext = { userId?: string | null; actorKind?: AuditActorKind } | undefined;
 

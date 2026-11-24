@@ -5,6 +5,7 @@ import { PrismaService, auditRawWrite } from '../../shared/database/prisma.servi
 import { WhatsAppNotConfiguredError, WhatsAppRejectedError, WhatsAppSender, WhatsAppUnavailableError } from './whatsapp-sender';
 import { renderTemplate } from './templates';
 import { CARE_PRIORITY, inSendWindow, isCare, kolkataDay, kolkataDayBounds, needsConsent, nextDayWindowStart, nextWindowStart } from './send-policy';
+import { numberCanSignIn } from '../portal/session';
 import { requestNumberConfirmation } from './number-confirmation';
 import { openDeliveryFailure } from './attention';
 import { staffReplyStatus } from './staff-reply';
@@ -103,7 +104,7 @@ export class SendPassService {
       const code = status?.errors?.[0]?.code;
       const reason = `receipt-failed${code ? `:${code}` : ''}`;
       await tx.outboundMessage.update({ where: { id: row.id }, data: { state: 'FAILED', outcome: reason, settledAt: now } });
-      if (await this.subjectIsCurrent(tx, row, now)) await openDeliveryFailure(tx, row, reason, now);
+      if (row.purpose !== P.PORTAL_SIGN_IN_CODE && (await this.subjectIsCurrent(tx, row, now))) await openDeliveryFailure(tx, row, reason, now);
       return true;
     }
     if ((RECEIPT_RANK[row.state] ?? 0) > 0 && RECEIPT_RANK[next] > RECEIPT_RANK[row.state]) {
@@ -209,7 +210,8 @@ export class SendPassService {
       }
       const reason = e instanceof WhatsAppRejectedError ? `rejected:${e.status}:${e.code}` : e instanceof WhatsAppUnavailableError ? 'unavailable:gave-up' : 'error';
       await tx.outboundMessage.update({ where: { id: row.id }, data: { state: 'FAILED', attempts, outcome: reason, settledAt: now, leaseUntil: null } });
-      if (await this.subjectIsCurrent(tx, row, now)) await openDeliveryFailure(tx, row, reason, now);
+      // A failed sign-in code is not staff work: the patient asks for another (no SMS fallback).
+      if (row.purpose !== P.PORTAL_SIGN_IN_CODE && (await this.subjectIsCurrent(tx, row, now))) await openDeliveryFailure(tx, row, reason, now);
       return 'failed';
     }
   }
@@ -223,6 +225,10 @@ export class SendPassService {
     if (row.purpose === P.ACKNOWLEDGEMENT) {
       const optedOut = await tx.patientPortalProfile.count({ where: { phoneE164: row.toE164, consentState: WhatsAppConsentState.OPTED_OUT } });
       if (optedOut) return { kind: 'suppress', reason: 'consent-opted_out' };
+    }
+    if (row.purpose === P.PORTAL_SIGN_IN_CODE) {
+      if (!(row.params as { code?: unknown } | null)?.code) return { kind: 'suppress', reason: 'code-withdrawn' };
+      if (!(await numberCanSignIn(tx, row.toE164))) return { kind: 'suppress', reason: 'number-cannot-sign-in' };
     }
     if (row.purpose === P.NUMBER_CONFIRMATION) {
       const waiting = await tx.patientPortalProfile.count({
@@ -264,6 +270,10 @@ export class SendPassService {
     }
     if (row.subjectType === TASK_LINK_SUBJECT && row.subjectId) return taskLinkIsCurrent(tx, row.subjectId);
     if (row.subjectType === 'PATIENT_MESSAGE') return true;
+    if (row.subjectType === 'PORTAL_OTP' && row.subjectId) {
+      const challenge = await tx.portalOtpChallenge.findUnique({ where: { id: row.subjectId }, select: { consumedAt: true, expiresAt: true } });
+      return !!challenge && !challenge.consumedAt && challenge.expiresAt > now;
+    }
     return false;
   }
 

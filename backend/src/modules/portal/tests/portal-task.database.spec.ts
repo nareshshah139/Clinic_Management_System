@@ -1,3 +1,4 @@
+import { Reflector } from '@nestjs/core';
 import { Logger } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import { execFileSync } from 'child_process';
@@ -44,8 +45,8 @@ databaseTests('Task links and the patient task page on PostgreSQL', () => {
     return { patient: p, checkInId: first.id, token };
   };
   const principalFor = async (token: string, client: PrismaClient = db): Promise<TaskLinkPrincipal> => {
-    const req: any = { body: { token } };
-    await new PortalGuard(client as any).canActivate({ switchToHttp: () => ({ getRequest: () => req }) } as any);
+    const req: any = { body: { token }, method: 'POST', headers: { origin: 'https://portal.test' } };
+    await new PortalGuard(client as any, new Reflector(), {} as any).canActivate({ switchToHttp: () => ({ getRequest: () => req }), getHandler: () => principalFor } as any);
     return req[PRINCIPAL];
   };
   const answer = (severity: number, withPhoto = false) => ({
@@ -55,7 +56,7 @@ databaseTests('Task links and the patient task page on PostgreSQL', () => {
 
   beforeAll(async () => {
     Logger.overrideLogger(false);
-    Object.assign(process.env, { PORTAL_LINK_SECRET: 'test-link-secret', CLINIC_NAME: 'Linae Skin Clinic', CLINIC_PHONE: '+91 40 5555 0100' });
+    Object.assign(process.env, { PORTAL_BASE_URL: 'https://portal.test', PORTAL_LINK_SECRET: 'test-link-secret', CLINIC_NAME: 'Linae Skin Clinic', CLINIC_PHONE: '+91 40 5555 0100' });
     const url = new URL(process.env.PORTAL_TASK_TEST_DATABASE_URL!);
     if (!['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) throw new Error('Tests require local PostgreSQL');
     url.searchParams.set('schema', 'public');

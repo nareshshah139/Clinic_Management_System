@@ -4,6 +4,7 @@ import { PrismaService } from '../../../shared/database/prisma.service';
 import { ensureProfile, nextConsent } from './portal-profile';
 import { CodeResult, confirmByCode, requestNumberConfirmation } from '../../messaging/number-confirmation';
 import { revokeTaskLinks } from '../../follow-ups/task-link';
+import { revokePatientSessions } from '../../portal/session';
 
 @Injectable()
 export class PatientPortalService {
@@ -63,13 +64,16 @@ export class PatientPortalService {
   /**
    * @cc [owner:nareshshah139,label:security] portal-switch-revokes
    * Disabling the portal for one patient MUST take effect at once: in the same transaction every
-   * session and task link of that patient is revoked once those tables exist (Release 1b/1c).
+   * session and task link of that patient is revoked (PP-09).
    */
   async setPortalEnabled(patientId: string, branchId: string, enabled: boolean) {
     await this.loadPatient(patientId, branchId);
     return this.prisma.$transaction(async (tx) => {
       await ensureProfile(tx, patientId);
-      if (!enabled) await revokeTaskLinks(tx, [patientId]);
+      if (!enabled) {
+        await revokeTaskLinks(tx, [patientId]);
+        await revokePatientSessions(tx, patientId, 'portal-disabled');
+      }
       return tx.patientPortalProfile.update({ where: { patientId }, data: { portalEnabled: enabled } });
     });
   }

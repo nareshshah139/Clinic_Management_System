@@ -13,6 +13,10 @@ const combinedByMerge: Record<string, string> = {
     'one profile per patient: the merge folds the duplicate profile into the kept one (opt-out and a disabled portal win) and deletes it',
 };
 
+const revokedByMerge: Record<string, string> = {
+  PortalSession: 'the sessions whose chosen patient is the duplicate are revoked; the patient signs in again and picks the kept profile',
+};
+
 const knownGaps: Record<string, string> = {
   PharmacyDispenseTask:
     'patientId has no Prisma relation, so dispense tasks stay on the archived duplicate',
@@ -33,6 +37,8 @@ function patientLinkedModels(models: readonly Model[]): string[] {
     .map((model) => model.name)
     .sort();
 }
+
+const revoked = new Set<string>();
 
 const delegateFor = (modelName: string) =>
   modelName[0].toLowerCase() + modelName.slice(1);
@@ -77,6 +83,7 @@ async function modelsRepointedByMerge(): Promise<Set<string>> {
         updateMany: async ({ where, data }: any) => {
           if (where?.patientId === duplicate.id && data?.patientId === kept.id)
             repointed.add(delegate);
+          if (where?.patientId === duplicate.id && data?.revokedAt) revoked.add(delegate);
           return { count: 0 };
         },
       };
@@ -106,6 +113,7 @@ const unaccounted = (linked: string[], repointed: Set<string>) =>
       !repointed.has(delegateFor(name)) &&
       !(name in reviewedExclusions) &&
       !(name in combinedByMerge) &&
+      !(name in revokedByMerge) &&
       !(name in knownGaps),
   );
 
@@ -134,10 +142,17 @@ describe('Patient merge covers every patient-linked model', () => {
       'patientMessage',
       'patientPortalProfile',
       'pharmacyInvoice',
+      'portalAccessEvent',
       'portalTaskLink',
       'referral',
       'visit',
     ]);
+  });
+
+  it('revokes the sessions that chose the duplicate (PP-10)', async () => {
+    revoked.clear();
+    await modelsRepointedByMerge();
+    expect([...revoked]).toEqual(Object.keys(revokedByMerge).map(delegateFor));
   });
 
   it('keeps the exclusion and known-gap lists honest', async () => {

@@ -11,6 +11,7 @@ const BODY: Record<string, string[]> = {
   check_in_opened: ['clinic'],
   check_in_reminder: ['clinic'],
   review_reminder: ['clinic', 'date', 'time', 'doctor'],
+  portal_sign_in_code: ['code'],
 };
 
 /**
@@ -31,6 +32,10 @@ export function renderTemplate(templateKey: string, params: Record<string, any>)
   if (URL_BUTTON_TEMPLATES.has(templateKey)) {
     if (!params.linkId) throw new Error(`${templateKey} needs a task link`);
     components.push({ type: 'button', sub_type: 'url', index: '0', parameters: [{ type: 'text', text: deriveTaskToken(String(params.linkId)) }] });
+  }
+  if (templateKey === 'portal_sign_in_code') {
+    // WhatsApp authentication templates repeat the code as the copy-code button parameter.
+    components.push({ type: 'button', sub_type: 'url', index: '0', parameters: [{ type: 'text', text: String(params.code ?? '') }] });
   }
   if (params.payload) {
     components.push({ type: 'button', sub_type: 'quick_reply', index: '0', parameters: [{ type: 'payload', payload: String(params.payload) }] });

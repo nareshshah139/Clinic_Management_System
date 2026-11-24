@@ -1,6 +1,7 @@
 import { Language, Prisma, WhatsAppConsentState } from '@prisma/client';
 import { toE164 } from './phone-e164';
 import { revokeTaskLinks } from '../../follow-ups/task-link';
+import { revokePatientSessions } from '../../portal/session';
 
 type Tx = Prisma.TransactionClient;
 
@@ -39,7 +40,8 @@ function storesSameNumber(raw: string, phoneE164: string | null) {
 /**
  * @cc [owner:nareshshah139,label:security] phone-change-resets-consent
  * Writing a patient's phone MUST, in the same transaction, store the E.164 number derived from it,
- * and when that number changes, set consent to NOT_ASKED and clear the confirmation.
+ * and when that number changes, set consent to NOT_ASKED, clear the confirmation, and revoke the
+ * patient's sessions and task links (PP-07).
  */
 export async function syncPatientPhone(tx: Tx, patientId: string, phone: string) {
   const phoneE164 = toE164(phone);
@@ -49,6 +51,7 @@ export async function syncPatientPhone(tx: Tx, patientId: string, phone: string)
   }
   if (current.phoneE164 === phoneE164 || storesSameNumber(phone, current.phoneE164)) return current;
   await revokeTaskLinks(tx, [patientId]);
+  await revokePatientSessions(tx, patientId, 'phone-changed');
   return tx.patientPortalProfile.update({
     where: { patientId },
     data: {

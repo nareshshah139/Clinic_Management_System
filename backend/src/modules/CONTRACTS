@@ -9,3 +9,5 @@ route accepts a patient id. LinkAnswersOnly: a task-link principal reads only th
 its OPEN check-ins and writes only their responses; it reads no stored answer.
 StaffCookieStaysStaff: a staff cookie or JWT never makes a portal principal, and a portal
 credential never authorises a staff route.
+A signed-in principal comes only from the __Host-portal_session cookie; a portal-patient
+principal names the profile the session chose, rebuilt from the confirmed number on every request.
