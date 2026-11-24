@@ -12,6 +12,7 @@ import * as bcrypt from 'bcryptjs';
 import request from 'supertest';
 import { exec } from 'child_process';
 import { AuthController } from '../auth.controller';
+import { DEFAULT_THROTTLE } from '../auth.module';
 import { AuthService } from '../auth.service';
 import { PasswordResetService } from '../password-reset.service';
 import { JwtStrategy, passwordStamp } from '../strategies/jwt.strategy';
@@ -81,7 +82,7 @@ describe('/auth access control', () => {
   const boot = async () => {
     const module = await Test.createTestingModule({
       imports: [
-        ThrottlerModule.forRoot([{ ttl: 60, limit: 10 }]),
+        ThrottlerModule.forRoot([DEFAULT_THROTTLE]),
         JwtModule.register({
           secret: 'synthetic-secret',
           signOptions: { expiresIn: '1h' },

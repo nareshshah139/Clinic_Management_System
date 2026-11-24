@@ -23,10 +23,7 @@ export class RequestContextInterceptor implements NestInterceptor {
 
     // Extract metadata
     const userId = (req as any)?.user?.userId ?? (req as any)?.user?.id ?? null;
-    const xff = (req.headers['x-forwarded-for'] as string | undefined)
-      ?.split(',')[0]
-      ?.trim();
-    const ipAddress = xff || (req as any).ip || null;
+    const ipAddress = req.ip || null;
     const userAgent = (req.headers['user-agent'] as string | undefined) || null;
 
     return new Observable((subscriber) => {

@@ -7,6 +7,7 @@ import * as express from 'express';
 import { join } from 'path';
 import { diagnosticValidationPipe, installHttpObservability } from './shared/logging/http-observability';
 import { configureRequestBody } from './shared/http/request-body';
+import { configureTrustProxy } from './shared/http/trust-proxy';
 
 // Ensure iconv-lite encodings are available at runtime (workaround for raw-body/iconv-lite packaging issues)
 import 'iconv-lite/encodings';
@@ -28,6 +29,7 @@ async function bootstrap() {
     );
     installHttpObservability(app);
     configureRequestBody(app);
+    configureTrustProxy(app);
     app.enableCors(CORS_OPTIONS);
     app.useGlobalPipes(diagnosticValidationPipe());
 
@@ -62,6 +64,7 @@ async function bootstrap() {
   );
   installHttpObservability(app);
   configureRequestBody(app);
+  configureTrustProxy(app);
   app.enableCors(CORS_OPTIONS);
   app.useGlobalPipes(diagnosticValidationPipe());
   app.enableShutdownHooks();
