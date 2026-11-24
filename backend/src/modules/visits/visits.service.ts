@@ -19,6 +19,17 @@ import * as fs from 'fs';
  * @cc [owner:nareshshah139,label:product] read-without-mutation
  * Read operations MUST NOT rewrite clinical documents or advance updatedAt.
  */
+/**
+ * Takes the patient FOR SHARE before the visit FOR UPDATE: staff archive and the duplicate merge
+ * lock the patient before its visits and tracks, so a completion or plan change must too.
+ */
+async function lockPatientThenVisit(tx: Prisma.TransactionClient, id: string): Promise<void> {
+  const rows = await tx.$queryRaw<{ patientId: string }[]>`SELECT "patientId" FROM visits WHERE id = ${id}`;
+  const patientId = Array.isArray(rows) ? rows[0]?.patientId : undefined;
+  if (patientId) await lockLivePatient(tx, patientId);
+  await tx.$queryRaw`SELECT id FROM visits WHERE id = ${id} FOR UPDATE`;
+}
+
 @Injectable()
 export class VisitsService {
   constructor(private prisma: PrismaService) {}
@@ -541,7 +552,7 @@ export class VisitsService {
     const inTransaction = <T>(work: (tx: Prisma.TransactionClient) => Promise<T>) =>
       planChanged && typeof (this.prisma as any).$transaction === 'function' ? this.prisma.$transaction(work) : work(this.prisma);
     const updatedVisit = await inTransaction(async tx => {
-      if (planChanged) await tx.$queryRaw`SELECT id FROM visits WHERE id = ${id} FOR UPDATE`;
+      if (planChanged) await lockPatientThenVisit(tx, id);
       const row = await tx.visit.update({
       where: { id, version: visit.version, deletedAt: null },
       data: { ...updateData, version: { increment: 1 } },
@@ -558,7 +569,6 @@ export class VisitsService {
       },
     });
       if (planChanged && row.status === 'COMPLETED' && row.completedAt) {
-        await lockLivePatient(tx, row.patientId);
         await stopTracks(tx, { visitId: id }, 'plan-changed', actorId ?? null);
         if (updateVisitDto.followUpPlanVersionId) {
           await startTrack(tx, { visitId: id, patientId: row.patientId, planVersionId: updateVisitDto.followUpPlanVersionId, anchorDay: anchorDay(row.completedAt) });
@@ -599,7 +609,7 @@ export class VisitsService {
    */
   async complete(id: string, input: CompleteVisitDto, branchId: string) {
     return this.prisma.$transaction(async tx => {
-      await tx.$queryRaw`SELECT id FROM visits WHERE id = ${id} FOR UPDATE`;
+      await lockPatientThenVisit(tx, id);
       const service = new VisitsService(tx as PrismaService);
       const visit = await service.findOne(id, branchId);
       if (visit.status === 'COMPLETED') return visit;
