@@ -223,10 +223,12 @@ export function WorklistItemDetailView({ itemId, currentUserId, onChanged, onClo
           if (state === 'FAILED' || state === 'SUPPRESSED') setError(`WhatsApp did not take the reply (${outcome ?? state.toLowerCase()}). Your text is kept; try again or log a call.`);
           else { setReply(''); setNotice('Reply sent.'); }
         }}>
-          <Label htmlFor="staff-reply">Reply on WhatsApp</Label>
+          <Label htmlFor="staff-reply">{item.reply.via === 'portal' ? 'Reply in the patient portal' : 'Reply on WhatsApp'}</Label>
           <Textarea id="staff-reply" value={reply} maxLength={4096} onChange={(e) => { setReply(e.target.value); replyKey.current = null; }} disabled={busy} />
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="text-xs text-muted-foreground">The WhatsApp reply window closes {displayClinicDateTime(item.reply.windowClosesAt)}.</span>
+            {item.reply.via === 'portal'
+              ? <span className="text-xs text-muted-foreground" data-testid="reply-via-portal">{item.reply.message}</span>
+              : <span className="text-xs text-muted-foreground">The WhatsApp reply window closes {displayClinicDateTime(item.reply.windowClosesAt)}.</span>}
             <Button type="submit" size="sm" disabled={busy || !reply.trim()}>Send reply</Button>
           </div>
         </form>

@@ -95,6 +95,19 @@ describe('item detail', () => {
     expect(api.replyToPatient.mock.calls[1][2]).toBe(api.replyToPatient.mock.calls[0][2]);
   });
 
+  it('with the window closed but the portal on, the reply goes to the portal and says so (PP-65)', async () => {
+    const portal = { ...base, reply: { canReply: true as const, via: 'portal' as const, message: 'The WhatsApp window is closed. Your reply goes to the patient portal, and the patient gets a WhatsApp notice to read it there.' } };
+    api.getWorklistItem.mockResolvedValue(portal);
+    api.replyToPatient.mockResolvedValue({ outcome: 'sent', delivery: { state: 'SENT', outcome: null }, item: portal });
+    render(<WorklistItemDetailView itemId="item1" currentUserId="doc" onChanged={jest.fn()} />);
+    expect(await screen.findByTestId('reply-via-portal')).toHaveTextContent('Your reply goes to the patient portal');
+    expect(screen.queryByText(/reply window closes/)).toBeNull();
+    fireEvent.change(screen.getByLabelText('Reply in the patient portal'), { target: { value: 'Come tomorrow' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send reply' }));
+    await screen.findByText('Reply sent.');
+    expect(api.replyToPatient).toHaveBeenCalledWith('item1', 'Come tomorrow', expect.stringMatching(/^reply-item1-/));
+  });
+
   it('with the window closed says why and offers "log a call" in place of the reply box', async () => {
     api.getWorklistItem.mockResolvedValue({ ...base, reply: { canReply: false, reason: 'window-closed', message: 'The patient has not written in the last 24 hours, so WhatsApp allows no free-text reply.' } });
     api.logPatientCall.mockResolvedValue({ ...base, reply: { canReply: false, reason: 'window-closed', message: 'x' } });

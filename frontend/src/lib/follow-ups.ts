@@ -71,7 +71,10 @@ export type WorklistItemDetail = WorklistItem & {
   response: ResponseView | null;
   earlierResponses: ResponseView[];
   thread: ThreadMessage[];
-  reply: { canReply: true; windowClosesAt: string } | { canReply: false; reason: string; message: string };
+  reply:
+    | { canReply: true; via?: 'whatsapp'; windowClosesAt: string }
+    | { canReply: true; via: 'portal'; message: string }
+    | { canReply: false; reason: string; message: string };
 };
 
 export type WaitingCheckIn = {
