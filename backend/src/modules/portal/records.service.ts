@@ -1,13 +1,13 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { MessageAssignment, Prisma } from '@prisma/client';
 import { PrismaService } from '../../shared/database/prisma.service';
+import { readUpcomingAppointments } from '../appointments/upcoming-appointments';
 import { openPatientMessageItem } from '../messaging/attention';
 import { InstrumentContent, Text } from '../follow-ups/content';
 import type { PortalPatientPrincipal } from './principal';
 
 export type RecordView = 'home' | 'appointments' | 'visits' | 'check-ins' | 'messages';
 
-const UPCOMING = ['SCHEDULED', 'CONFIRMED'] as const;
 const SHOWN_PRESCRIPTIONS = ['ACTIVE', 'COMPLETED', 'EXPIRED'] as const;
 const VISIBLE_ASSIGNMENTS: MessageAssignment[] = ['EXACT', 'CONFIRMED'];
 /** A call log is a staff note about the patient, not a message to them. */
@@ -74,20 +74,19 @@ export class PortalRecordsService {
     return this.prisma.portalAccessEvent.create({ data: { identityId: p.identityId, sessionId: p.sessionId, patientId: p.patientId, kind: 'RECORD_VIEW', view, createdAt: now } });
   }
 
-  private upcoming(patientId: string, now: Date, take?: number) {
-    const today = new Date(now.getTime() - (now.getTime() + 330 * 60_000) % 86_400_000);
-    return this.prisma.appointment.findMany({
-      where: { patientId, status: { in: [...UPCOMING] }, date: { gte: today } },
-      orderBy: [{ date: 'asc' }, { slot: 'asc' }],
-      take,
-      select: { date: true, slot: true, status: true, doctor: { select: { firstName: true, lastName: true } }, branch: { select: { name: true } } },
-    }).then((rows) => rows.map((a) => ({ date: a.date, slot: a.slot, status: a.status, doctor: doctorName(a.doctor), branch: a.branch.name })));
+  /** Same rule as the clinic's own "upcoming": not closed, and later than today's ended slots. */
+  private async upcoming(patientId: string, take = 100) {
+    const { rows } = await readUpcomingAppointments(this.prisma, { patientId }, take, {
+      doctor: { select: { firstName: true, lastName: true } },
+      branch: { select: { name: true } },
+    });
+    return rows.map((a) => ({ date: a.date, slot: a.slot, status: a.status, doctor: doctorName(a.doctor), branch: a.branch.name }));
   }
 
-  private async visitRows(patientId: string, take?: number) {
+  private async visitRows(patientId: string, take?: number, latestPrescription = false) {
     const visits = await this.prisma.visit.findMany({
-      where: { patientId, deletedAt: null },
-      orderBy: { createdAt: 'desc' },
+      where: { patientId, deletedAt: null, ...(latestPrescription && { prescription: { status: { in: [...SHOWN_PRESCRIPTIONS] } } }) },
+      orderBy: latestPrescription ? { prescription: { createdAt: 'desc' } } : { createdAt: 'desc' },
       take,
       select: {
         id: true, createdAt: true,
@@ -160,13 +159,13 @@ export class PortalRecordsService {
   async home(p: PortalPatientPrincipal, now = new Date()) {
     const patient = await this.prisma.patient.findUniqueOrThrow({ where: { id: p.patientId }, select: { name: true, branch: { select: { name: true } } } });
     const [next, visits, open, messages] = await Promise.all([
-      this.upcoming(p.patientId, now, 1),
-      this.visitRows(p.patientId, 10),
+      this.upcoming(p.patientId, 1),
+      this.visitRows(p.patientId, 1, true),
       this.checkInRows(p.patientId, { state: 'OPEN' }),
       this.thread(p.patientId, 3),
     ]);
     await this.viewed(p, 'home', now);
-    const latest = visits.find((v) => v.prescription);
+    const latest = visits[0];
     return {
       profile: { firstName: firstName(patient.name), branch: patient.branch.name },
       nextAppointment: next[0] ?? null,
@@ -177,7 +176,7 @@ export class PortalRecordsService {
   }
 
   async appointments(p: PortalPatientPrincipal, now = new Date()) {
-    const upcoming = await this.upcoming(p.patientId, now);
+    const upcoming = await this.upcoming(p.patientId);
     await this.viewed(p, 'appointments', now);
     return { upcoming };
   }

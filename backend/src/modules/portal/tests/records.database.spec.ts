@@ -143,6 +143,25 @@ databaseTests('Portal records and portal messages on PostgreSQL (PP-63 to PP-66)
     expect(everything).not.toMatch(/"(complaints|history|exam|diagnosis|plan|attachments|labOrders|invoices?|pharmacistNotes|clinicalData|price|hsnCode)"/);
   });
 
+  it('PP-63: upcoming follows the clinic rule (today\'s ended slots gone, checked-in still upcoming) and home shows the newest prescription however many visits came after', async () => {
+    const { patient, principal } = await signedIn('9800000007');
+    const ist = new Date(Date.now() + 330 * 60_000).toISOString().slice(0, 10);
+    const today = new Date(`${ist}T00:00:00.000Z`);
+    await db.appointment.create({ data: { patientId: patient.id, doctorId: 'doc', branchId: 'A', date: today, slot: '00:00-00:01', status: 'SCHEDULED' } });
+    await db.appointment.create({ data: { patientId: patient.id, doctorId: 'doc', branchId: 'A', date: today, slot: '23:58-23:59', status: 'CHECKED_IN' } as any });
+    const visit = (createdAt: Date) => db.visit.create({ data: { patientId: patient.id, doctorId: 'doc', complaints: '[]', createdAt } as any });
+    const older = await visit(new Date(Date.now() - 40 * DAY));
+    const old = await visit(new Date(Date.now() - 30 * DAY));
+    await db.prescription.create({ data: { visitId: old.id, status: 'ACTIVE', items: JSON.stringify([{ drugName: 'Written first' }]), createdAt: new Date(Date.now() - 30 * DAY) } });
+    await db.prescription.create({ data: { visitId: older.id, status: 'ACTIVE', items: JSON.stringify([{ drugName: 'Written last' }]), createdAt: new Date(Date.now() - 20 * DAY) } });
+    for (let i = 0; i < 11; i++) await visit(new Date(Date.now() - (10 - i) * 3600_000));
+
+    const home = await records.home(principal);
+    expect(home.nextAppointment).toMatchObject({ slot: '23:58-23:59', status: 'CHECKED_IN' });
+    expect((await records.appointments(principal)).upcoming.map((a) => a.slot)).toEqual(['23:58-23:59']);
+    expect(home.latestPrescription!.items).toEqual([{ drugName: 'Written last' }]);
+  });
+
   it('OwnDataOnly: a shared phone shows each profile only its own record', async () => {
     const mine = await signedIn('9800000002', 'A');
     const sibling = await signedIn('9800000002', 'B');
