@@ -106,6 +106,8 @@ export interface LearningDrug {
   isDiscontinued: boolean;
 }
 
+export type CatalogueDrug = Omit<LearningDrug, 'branchId' | 'isActive' | 'isDiscontinued'>;
+
 export interface LearningExample {
   invoiceId: string;
   slot: string;
@@ -178,7 +180,7 @@ export function parseLessonKey(key: string): { field: LearnableField; supplierGs
   return { field: field as LearnableField, supplierGstin, rawKey };
 }
 
-export const drugIdentity = (drug: Omit<LearningDrug, 'id' | 'branchId' | 'isActive' | 'isDiscontinued'>): DrugIdentity => ({
+export const drugIdentity = (drug: Omit<CatalogueDrug, 'id'>): DrugIdentity => ({
   name: drug.name, manufacturerName: drug.manufacturerName || '', packSizeLabel: drug.packSizeLabel || '',
   strength: drug.strength || '', dosageForm: drug.dosageForm || '', type: drug.type || '',
 });
@@ -244,7 +246,7 @@ type CommittedLine = PairableLine & { lineNumber: number; productName: string; m
 export function buildOutcomeExamples(input: {
   invoice: { id: string; branchId: string; distributorGstin: string; distributorName: string; items: CommittedLine[] };
   read: PurchaseOcrRead;
-  committed: Array<{ lineNumber: number; drug: Omit<LearningDrug, 'branchId' | 'isActive' | 'isDiscontinued'> }>;
+  committed: Array<{ lineNumber: number; drug: CatalogueDrug }>;
   origin: Origin;
   decidedBy: string;
   committedAt: Date;
@@ -289,7 +291,7 @@ export function buildOutcomeExamples(input: {
  * catalogue-derived outcomes MUST NOT count as support, a lesson that was applied and kept MUST
  * NOT count as independent evidence, and any later human contradiction MUST restart support.
  */
-export function deriveLessons(examples: LearningExample[], currentDrugs?: Map<string, Omit<LearningDrug, 'branchId' | 'isActive' | 'isDiscontinued'>>): Lesson[] {
+export function deriveLessons(examples: LearningExample[], currentDrugs?: Map<string, CatalogueDrug>): Lesson[] {
   const groups = new Map<string, LearningExample[]>();
   const add = (key: string, example: LearningExample) => groups.set(key, [...(groups.get(key) || []), example]);
   for (const example of examples) {
@@ -306,7 +308,7 @@ export function deriveLessons(examples: LearningExample[], currentDrugs?: Map<st
 const valueOf = (example: LearningExample) => example.field === 'product' && example.drugId
   ? `drug:${example.drugId}` : `text:${normalizedIdentity(example.finalValue)}`;
 
-function deriveLesson(key: string, group: LearningExample[], currentDrugs?: Map<string, Omit<LearningDrug, 'branchId' | 'isActive' | 'isDiscontinued'>>): Lesson | null {
+function deriveLesson(key: string, group: LearningExample[], currentDrugs?: Map<string, CatalogueDrug>): Lesson | null {
   const ordered = [...group].sort((a, b) => new Date(a.committedAt).getTime() - new Date(b.committedAt).getTime());
   const newest = ordered[ordered.length - 1];
   const leading = valueOf(newest);
