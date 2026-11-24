@@ -13,6 +13,14 @@ def state(v):
         return "Two live tracks on one visit"
     if any(t == "STOPPED" and c in ("SCHEDULED", "OPEN") for t, c in zip(tracks, cis)):
         return "Stopped track with a live check-in"
+    if v["badWrite"]:
+        return "Response written to a closed check-in"
+    if v["resp"] > 1:
+        return "Two responses on one check-in"
+    if v["lost"]:
+        return "Second submit lost"
+    if v["urgent"] and not v["flagItem"]:
+        return "Urgent response with no worklist item"
     if v["visit"] == "IN_PROGRESS":
         return "Visit in progress"
     live = [c for t, c in zip(tracks, cis) if t in ("ACTIVE", "COMPLETED")]
@@ -32,7 +40,10 @@ STEPS = {
     "SchedulerQueues": "the pass queues a message",
     "SchedulerSends": "the pass sends or settles the message",
     "SchedulerCloses": "the pass closes the window",
-    "PatientAnswers": "the patient answers",
+    "SubmitBegin": "the patient submits",
+    "SubmitCommit": "the submit commits",
+    "FlagLater": "the flag item is written",
+    "Publish": "a new instrument version is published",
     "TrackCompletes": "the track completes",
 }
 

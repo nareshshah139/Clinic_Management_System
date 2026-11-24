@@ -23,8 +23,21 @@ disabled portal, or the provider down.
 | `StopEndsCheckIns` | `stopLeavesOpen` |
 | `EveryCheckInEnds` | `openNeedsSend`, `closeNeedsSend` (open or close waits for a delivered message) |
 
-`code` is the code in this commit; it is the same model as `fixed`. Response rules
-(`OneResponsePerCheckIn`, `SecondAnswerNotLost`, `UrgentReachesWorklist`) belong to the task-page
-change that writes responses.
+The patient answers through a task link (PP-35 to PP-43, `portal/task.service.ts`). A submit reads,
+then writes in one transaction: `checkIn.updateMany(... state: 'OPEN')` moves the check-in to
+ANSWERED with its only response (pinned `instrumentVersionId`) and, when urgent, its `RESPONSE_FLAG`
+attention item; a submit that finds it ANSWERED is kept as a patient message with an open attention
+item. The link reaches the patient only in a sent message; two submits may race.
 
-Behaviour tests: `backend/src/modules/follow-ups/tests/follow-ups.database.spec.ts`.
+| Rule | Breaks in |
+| --- | --- |
+| `LinkAnswersOnly` | `answerAnyCheckIn` (writes to a missed or cancelled check-in) |
+| `OneResponsePerCheckIn` | `noStateGuard` (write trusts the earlier read) |
+| `SecondAnswerNotLost` | `dropSecond` (answers "already answered" and keeps nothing) |
+| `ResponsePinsVersion` | `pinLatest` (response takes the newest published version) |
+| `UrgentReachesWorklist` | `flagAfterCommit` (flag item written after the response commits) |
+
+`code` is the code in this commit; it is the same model as `fixed`.
+
+Behaviour tests: `backend/src/modules/follow-ups/tests/follow-ups.database.spec.ts`,
+`backend/src/modules/portal/tests/portal-task.database.spec.ts`.
