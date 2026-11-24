@@ -37,6 +37,7 @@ export default function RoomCalendar() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [gridMinutes, setGridMinutes] = useState<number>(30);
+  const [scheduleError, setScheduleError] = useState(false);
   const schedulesAbortRef = useRef<AbortController | null>(null);
   const fetchRoomsRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fetchSchedulesRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -48,11 +49,27 @@ export default function RoomCalendar() {
   const [tooltipLocked, setTooltipLocked] = useState<boolean>(false);
 
 
-  // Generate time grid from 8 AM to 8 PM using selected granularity (min 10 minutes)
+  const bookedRange = (() => {
+    let min = Number.POSITIVE_INFINITY;
+    let max = Number.NEGATIVE_INFINITY;
+    for (const schedule of Object.values(roomSchedules)) {
+      for (const apt of schedule.appointments) {
+        const [s, e] = (apt.slot || '').split('-');
+        if (!s || !e) continue;
+        min = Math.min(min, hhmmToMinutes(s));
+        max = Math.max(max, hhmmToMinutes(e));
+      }
+    }
+    return { min, max };
+  })();
+  const dayStart = Math.min(9 * 60, Math.floor(bookedRange.min / 60) * 60);
+  const dayEnd = Math.min(24 * 60, Math.max(18 * 60, Math.ceil(bookedRange.max / 60) * 60));
+  const dayTotal = Math.max(1, dayEnd - dayStart);
+
   const timeSlots = (() => {
     const slots: { label: string; startMin: number; endMin: number }[] = [];
-    const start = 9 * 60;
-    const end = 18 * 60;
+    const start = dayStart;
+    const end = dayEnd;
     const step = Math.max(10, Math.floor(gridMinutes));
     for (let m = start; m < end; m += step) {
       const startMin = m;
@@ -92,36 +109,27 @@ export default function RoomCalendar() {
       // Use clinic timezone (IST) date string to align with backend expectations
       const dateStr = getISTDateString(selectedDate);
       const schedules: Record<string, RoomSchedule> = {};
+      let failed = false;
       const results = await Promise.all(
         rooms.map(async (room) => {
           try {
             const schedule = await apiClient.getRoomSchedule(room.id, dateStr);
-            
-            return { 
-              id: room.id, 
-              schedule: schedule
-            };
+            return { id: room.id, schedule };
           } catch (error) {
             console.error(`Error fetching schedule for room ${room.id}:`, error);
-            return {
-              id: room.id,
-              schedule: {
-                roomId: room.id,
-                roomName: room.name,
-                roomType: room.type,
-                date: dateStr,
-                appointments: [],
-              } as RoomSchedule,
-            };
+            failed = true;
+            return { id: room.id, schedule: null };
           }
         })
       );
       for (const { id, schedule } of results) {
-        schedules[id] = schedule;
+        if (schedule) schedules[id] = schedule;
       }
       setRoomSchedules(schedules);
+      setScheduleError(failed);
     } catch (error: any) {
       console.error('Error fetching room schedules:', error?.message || error);
+      setScheduleError(true);
     } finally {
       setLoading(false);
     }
@@ -149,6 +157,11 @@ export default function RoomCalendar() {
       if (fetchSchedulesRef.current) clearTimeout(fetchSchedulesRef.current);
     };
   }, [selectedDate, rooms]);
+
+  const retrySchedules = () => {
+    setScheduleError(false);
+    fetchRoomSchedules();
+  };
 
   const [gridScroller, setGridScroller] = useState<HTMLDivElement | null>(null);
   const [moreRoomsRight, setMoreRoomsRight] = useState(false);
@@ -306,6 +319,13 @@ export default function RoomCalendar() {
         </div>
       </div>
 
+      {scheduleError && (
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-destructive-border bg-destructive-soft p-3 text-sm text-destructive-text">
+          <span>Could not load the room schedule. Rooms shown as free may be occupied.</span>
+          <Button variant="outline" size="sm" onClick={retrySchedules}>Retry</Button>
+        </div>
+      )}
+
       {/* Room Statistics */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
         <Card className="gap-0 py-0">
@@ -393,7 +413,7 @@ export default function RoomCalendar() {
               <div className="sticky left-0 z-20 bg-card" style={{ height: '80vh' }}>
                 {timeSlots.map((slot) => (
                   <div key={`gutter-${slot.label}`} className="absolute left-0 right-0 flex items-center pl-2 text-xs text-muted-foreground"
-                    style={{ top: `${((slot.startMin - 9*60) * 100) / (9*60)}%`, transform: 'translateY(-50%)' }}
+                    style={{ top: `${((slot.startMin - dayStart) * 100) / dayTotal}%`, transform: 'translateY(-50%)' }}
                     id={`time-${slot.label}`}
                   >
                     <Clock className="h-3 w-3 mr-1" />
@@ -404,9 +424,7 @@ export default function RoomCalendar() {
               {filteredRooms.map((room) => {
                 const schedule = roomSchedules[room.id];
                 const appointments = schedule?.appointments || [];
-                const dayStart = 9 * 60;
-                const dayEnd = 18 * 60;
-                const total = Math.max(1, dayEnd - dayStart);
+                const total = dayTotal;
                 const dateStr = getISTDateString(selectedDate);
                 const getColor = (vt: string, completed: boolean, slot: string) => {
                   const isPast = isSlotInPast(slot, dateStr);
