@@ -112,6 +112,15 @@ export function purchaseReviewIssue(raw: string, lineIndex?: number): PurchaseRe
   const body = line ? text.slice(line[0].length) : text;
   const prefix = index === undefined ? '' : `Line ${index + 1}: `;
   const base = { lineIndex: index, key: `${index ?? 'header'}:${body.toLowerCase()}` };
+  const learned = /learned_(product|manufacturer|distributor)_needs_confirmation/i.exec(body)?.[1].toLowerCase();
+  if (learned) {
+    const [field, label, target, subject] = learned === 'product' ? ['productName', 'learned product match', 'product', 'product name']
+      : learned === 'manufacturer' ? ['manufacturer', 'learned manufacturer match', 'manufacturer', 'manufacturer']
+      : ['distributorName', 'learned supplier match', 'distributor-name', 'supplier name'];
+    return { ...base, key: `${index ?? 'header'}:${field}:learned`, field, label, target,
+      message: `${prefix}Check the ${label}.`,
+      help: `The ${subject} was corrected using earlier reviews of bills from this supplier. Compare it with the original invoice. Use Undo on the learned note to go back to what was read, or edit it, then confirm this check.` };
+  }
   if (/\bexpired batch(?:es)?\b/i.test(body)) {
     return { ...base, key: `${index ?? 'header'}:expiryMonth:expired`, field: 'expiryMonth', label: 'expiry', target: 'expiry-month',
       message: prefix + body,
