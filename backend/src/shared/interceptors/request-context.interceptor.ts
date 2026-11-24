@@ -6,7 +6,14 @@ import {
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import type { Request } from 'express';
-import { RequestContextService } from '../context/request-context.service';
+import { AuditActorKind, RequestContextService } from '../context/request-context.service';
+
+/** Who a request acts for, by the route it reached: the WhatsApp webhook, staff, or nobody. */
+export function actorKindOf(path: string, userId: string | null): AuditActorKind {
+  const route = path.split('?')[0].replace(/^\/api(?=\/)/, '');
+  if (/^\/webhooks\/whatsapp(\/|$)/.test(route)) return 'webhook';
+  return userId ? 'staff' : 'system';
+}
 
 @Injectable()
 export class RequestContextInterceptor implements NestInterceptor {
@@ -33,6 +40,7 @@ export class RequestContextInterceptor implements NestInterceptor {
       return this.requestContext.run(
         {
           userId,
+          actorKind: actorKindOf(req.originalUrl ?? req.url ?? '', userId),
           ipAddress,
           userAgent,
           branchId: (req as any)?.user?.branchId ?? null,

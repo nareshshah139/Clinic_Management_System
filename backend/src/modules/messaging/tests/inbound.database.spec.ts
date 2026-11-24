@@ -11,6 +11,8 @@ import { JwtAuthGuard } from '../../../shared/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../shared/guards/roles.guard';
 import { PermissionsGuard } from '../../../shared/guards/permissions.guard';
 import { IdempotencyInterceptor } from '../../../shared/interceptors/idempotency.interceptor';
+import { RequestContextInterceptor } from '../../../shared/interceptors/request-context.interceptor';
+import { RequestContextService } from '../../../shared/context/request-context.service';
 import { diagnosticValidationPipe } from '../../../shared/logging/http-observability';
 import { configureRequestBody } from '../../../shared/http/request-body';
 import { WhatsAppWebhookController } from '../whatsapp-webhook.controller';
@@ -80,6 +82,8 @@ databaseTests('Inbound WhatsApp webhook on PostgreSQL against a fake Meta endpoi
         { provide: APP_GUARD, useClass: RolesGuard },
         { provide: APP_GUARD, useClass: PermissionsGuard },
         { provide: APP_INTERCEPTOR, useClass: IdempotencyInterceptor },
+        RequestContextService,
+        { provide: APP_INTERCEPTOR, useClass: RequestContextInterceptor },
       ],
     }).compile();
     app = moduleRef.createNestApplication({ rawBody: true });
@@ -153,6 +157,13 @@ databaseTests('Inbound WhatsApp webhook on PostgreSQL against a fake Meta endpoi
     ]);
     expect(await items()).toEqual([expect.objectContaining({ subjectKey: `patient:${p.id}`, patientId: p.id, state: 'OPEN', branchId: 'A' })]);
     expect((await db.patientPortalProfile.findUniqueOrThrow({ where: { patientId: p.id } })).lastSeenAt!.getTime()).toBeGreaterThan(new Date('2020-01-02').getTime());
+    const [item] = await items();
+    const audits = await db.auditLog.findMany({ where: { entity: 'AttentionItem', entityId: item.id }, orderBy: [{ timestamp: 'asc' }, { action: 'asc' }] });
+    expect(audits.map((a) => [a.action, a.actorKind, JSON.parse(a.newValues!)])).toEqual([
+      ['CREATE', 'webhook', { fields: ['branchId', 'kind', 'lastEventAt', 'patientId', 'phoneE164', 'reason', 'state', 'subjectKey'] }],
+      ['UPDATE', 'webhook', { fields: ['lastEventAt', 'updatedAt'] }],
+    ]);
+    expect(JSON.stringify(audits)).not.toContain('+919876500003');
   });
 
   it('PP-20: two patients on one number stay unassigned unless the message quotes an outbound message, which only suggests the patient', async () => {

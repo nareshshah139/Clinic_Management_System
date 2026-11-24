@@ -12,11 +12,11 @@ describe('PP-88 names-only audit actor kind', () => {
   it('audits a raw write with field names only and the actor kind of the request in flight', async () => {
     const rows: any[] = [];
     const client = { auditLog: { create: async (args: any) => rows.push(args.data) } };
-    await new RequestContextService().run({ userId: 'staff-1', ipAddress: '10.0.0.1', userAgent: 'x' }, () =>
+    await new RequestContextService().run({ userId: null, ipAddress: '10.0.0.1', userAgent: 'x', actorKind: 'webhook' }, () =>
       auditRawWrite(client, { entity: 'AttentionItem', entityId: 'att_1', action: 'CREATE', fields: ['reason', 'kind'] }));
     await auditRawWrite(client, { entity: 'OutboundMessage', entityId: 'msg_2', action: 'UPDATE', fields: ['state', 'leaseUntil'] });
     expect(rows).toEqual([
-      { userId: null, action: 'CREATE', entity: 'AttentionItem', entityId: 'att_1', actorKind: 'staff', oldValues: null, newValues: '{"fields":["kind","reason"]}' },
+      { userId: null, action: 'CREATE', entity: 'AttentionItem', entityId: 'att_1', actorKind: 'webhook', oldValues: null, newValues: '{"fields":["kind","reason"]}' },
       { userId: null, action: 'UPDATE', entity: 'OutboundMessage', entityId: 'msg_2', actorKind: 'system', oldValues: null, newValues: '{"fields":["leaseUntil","state"]}' },
     ]);
   });

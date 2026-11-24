@@ -1,7 +1,7 @@
 import { ExecutionContext } from '@nestjs/common';
 import { defer, firstValueFrom } from 'rxjs';
-import { RequestContextService } from '../context/request-context.service';
-import { RequestContextInterceptor } from './request-context.interceptor';
+import { RequestContextService, currentRequestContext } from '../context/request-context.service';
+import { RequestContextInterceptor, actorKindOf } from './request-context.interceptor';
 
 it('keeps each request context inside deferred handlers and their asynchronous work', async () => {
   const storage = new RequestContextService();
@@ -31,4 +31,18 @@ it('keeps each request context inside deferred handlers and their asynchronous w
     'second',
   ]);
   expect(storage.get()).toBeUndefined();
+});
+
+it('PP-88: names the actor kind from the route a request reached', async () => {
+  expect(actorKindOf('/api/webhooks/whatsapp', null)).toBe('webhook');
+  expect(actorKindOf('/webhooks/whatsapp?hub.mode=subscribe', null)).toBe('webhook');
+  expect(actorKindOf('/patients/p1/portal', 'staff-1')).toBe('staff');
+  expect(actorKindOf('/api/webhooks/whatsappx', null)).toBe('system');
+  expect(actorKindOf('/api/health', null)).toBe('system');
+
+  const storage = new RequestContextService();
+  const interceptor = new RequestContextInterceptor(storage);
+  const context = { switchToHttp: () => ({ getRequest: () => ({ originalUrl: '/api/webhooks/whatsapp', headers: {} }) }) } as ExecutionContext;
+  const seen = await firstValueFrom(interceptor.intercept(context, { handle: () => defer(async () => currentRequestContext()?.actorKind) }));
+  expect(seen).toBe('webhook');
 });
