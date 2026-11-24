@@ -37,7 +37,7 @@ function redactSensitiveFields<T>(input: T): T {
  * Audit entries for the patient-facing Access, Messaging, Follow-up and Studies tables MUST hold
  * only the row id, the action, the actor kind and the changed field names, never a field's value.
  */
-export const NAMES_ONLY_AUDIT_MODELS = new Set<string>(['PatientPortalProfile']);
+export const NAMES_ONLY_AUDIT_MODELS = new Set<string>(['PatientPortalProfile', 'PortalOtpChallenge', 'OutboundMessage', 'AttentionItem']);
 
 export function namesOnlyAuditValues(operation: string, args: any, ctx: { userId?: string | null } | undefined) {
   const data = Array.isArray(args?.data) ? args.data[0] : args?.data ?? (operation === 'upsert' ? { ...args?.create, ...args?.update } : undefined);

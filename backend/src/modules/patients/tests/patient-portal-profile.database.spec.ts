@@ -186,6 +186,14 @@ databaseTests('Patient phone, WhatsApp consent, language and portal switch on Po
         expect(Object.keys(JSON.parse(log.newValues!))).toEqual(['fields']);
       }
       expect(JSON.parse(logs[logs.length - 1].newValues!).fields).toEqual(expect.arrayContaining(['consentState', 'consentRecordedById']));
+      const code = String(((await db.outboundMessage.findFirstOrThrow({ where: { patientId: p.id } })).params as any).code);
+      const messaging = await db.auditLog.findMany({ where: { entity: { in: ['PortalOtpChallenge', 'OutboundMessage'] } } });
+      expect(messaging.length).toBeGreaterThan(0);
+      for (const log of messaging) {
+        expect(log.oldValues).toBeNull();
+        expect(log.newValues).not.toContain(code);
+        expect(Object.keys(JSON.parse(log.newValues!))).toEqual(['fields']);
+      }
     } finally {
       await audited.$disconnect();
       process.env.DATABASE_URL = previous;
