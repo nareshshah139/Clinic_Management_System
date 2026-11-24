@@ -22,6 +22,8 @@ import type {
 } from '@/lib/types';
 import { CheckCircle2 } from 'lucide-react';
 
+const STANDARD_DURATIONS = [10, 15, 20, 30, 45, 60, 90];
+
 interface AppointmentBookingDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -58,11 +60,18 @@ export default function AppointmentBookingDialog({
   const [fetchingSchedules, setFetchingSchedules] = useState(false);
   const [procedureName, setProcedureName] = useState<string>('');
   const [errors, setErrors] = useState<string[]>([]);
-  const [durationMinutes, setDurationMinutes] = useState<number>(() => {
-    // Default to the slot's current duration if provided, else 30
-    const initial = getSlotDurationMinutes(slot);
-    return initial > 0 ? initial : 30;
-  });
+  const slotDuration = () => {
+    const minutes = getSlotDurationMinutes(slot);
+    return minutes > 0 ? minutes : 30;
+  };
+  const [durationMinutes, setDurationMinutes] = useState<number>(slotDuration);
+  const [syncedSlot, setSyncedSlot] = useState<string | null>(open ? slot : null);
+  const openedSlot = open ? slot : null;
+  if (syncedSlot !== openedSlot) {
+    setSyncedSlot(openedSlot);
+    if (open) setDurationMinutes(slotDuration());
+  }
+  const durationOptions = Array.from(new Set([...STANDARD_DURATIONS, durationMinutes])).sort((a, b) => a - b);
 
   const derivedSlot = React.useMemo(() => {
     // slot is HH:MM-HH:MM; recompute end using durationMinutes and keep the start
@@ -163,6 +172,12 @@ export default function AppointmentBookingDialog({
     if (!schedule) return true;
     // Use overlap detection with the derived slot (so changing duration re-validates)
     return !schedule.appointments.some(apt => doTimeSlotsOverlap(apt.slot, slotTime));
+  };
+
+  const selectRoom = (roomId: string, isAvailable: boolean) => {
+    if (!isAvailable) return;
+    setSelectedRoomId(selectedRoomId === roomId ? '' : roomId);
+    setErrors([]);
   };
 
   const getRelevantRooms = () => {
@@ -273,12 +288,9 @@ export default function AppointmentBookingDialog({
                 <SelectValue placeholder="Select duration" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="15">15 minutes</SelectItem>
-                <SelectItem value="20">20 minutes</SelectItem>
-                <SelectItem value="30">30 minutes</SelectItem>
-                <SelectItem value="45">45 minutes</SelectItem>
-                <SelectItem value="60">60 minutes</SelectItem>
-                <SelectItem value="90">90 minutes</SelectItem>
+                {durationOptions.map((minutes) => (
+                  <SelectItem key={minutes} value={String(minutes)}>{minutes} minutes</SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground mt-1">Adjusts end time and validates room availability for the new duration.</p>
@@ -370,20 +382,25 @@ export default function AppointmentBookingDialog({
                     const conflictingAppointment = schedule?.appointments.find(apt => doTimeSlotsOverlap(apt.slot, derivedSlot));
                     
                     return (
-                      <Card 
-                        key={room.id} 
-                        className={`cursor-pointer transition-all ${
+                      <Card
+                        key={room.id}
+                        role="button"
+                        tabIndex={0}
+                        aria-pressed={selectedRoomId === room.id}
+                        aria-disabled={!isAvailable}
+                        aria-label={`${room.name}, ${isAvailable ? 'available' : 'occupied'}`}
+                        className={`cursor-pointer transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                           selectedRoomId === room.id 
                             ? 'ring-2 ring-info bg-info-soft'
                             : isAvailable 
                             ? 'hover:bg-accent'
                             : 'bg-destructive-soft border-destructive-border'
                         }`}
-                        onClick={() => {
-                          if (isAvailable) {
-                            setSelectedRoomId(selectedRoomId === room.id ? '' : room.id);
-                            setErrors([]); // Clear errors when selecting a room
-                          }
+                        onClick={() => selectRoom(room.id, isAvailable)}
+                        onKeyDown={(e) => {
+                          if (e.key !== 'Enter' && e.key !== ' ') return;
+                          e.preventDefault();
+                          selectRoom(room.id, isAvailable);
                         }}
                       >
                         <CardHeader className="pb-2">

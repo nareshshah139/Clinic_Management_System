@@ -149,6 +149,17 @@ export default function CalendarColumn({
     if (longPressTimer) clearTimeout(longPressTimer);
   }, [longPressTimer]);
 
+  useEffect(() => {
+    if (!selecting) return;
+    const abandon = () => {
+      setSelecting(false);
+      setSelectionStartIdx(null);
+      setSelectionEndIdx(null);
+    };
+    window.addEventListener('mouseup', abandon);
+    return () => window.removeEventListener('mouseup', abandon);
+  }, [selecting]);
+
   const blocks = useMemo(() => placeAppointments(appointments, timeline), [appointments, timeline]);
 
   const blockBackground = (apt: AppointmentInSlot) => {
@@ -478,11 +489,12 @@ export default function CalendarColumn({
               }}
             >
               {offersAction && (
-                <div
-                  role="button"
+                <button
+                  type="button"
                   aria-label={`${slotAction.kind === 'move' ? `Move to ${slot}` : `Book ${slot}`}${hasAny ? `, ${overlappingAppointments.length} of ${maxBookingsPerSlot} booked` : ''}`}
-                  onClick={() => {
-                    if (selecting || past) return;
+                  onClick={(e) => {
+                    if (past) return;
+                    if (slotAction.kind === 'book' && e.detail > 0) return;
                     if (slotAction.kind === 'move') {
                       onMove(moveSpan);
                       return;
@@ -494,6 +506,7 @@ export default function CalendarColumn({
                     if (freeSpan) onBook(freeSpan);
                   }}
                   title={slotAction.kind === 'move' ? `Move to ${moveSpan}` : freeSpan ? `Book ${freeSpan}` : 'Book'}
+                  className="block w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                   style={{
                     height: '1.75rem',
                     backgroundColor: isBookingInProgress ? 'var(--warning-border)' : 'var(--card)',
@@ -505,7 +518,7 @@ export default function CalendarColumn({
                       Overbook {overlappingAppointments.length}/{maxBookingsPerSlot}
                     </span>
                   )}
-                </div>
+                </button>
               )}
             </div>
           );
