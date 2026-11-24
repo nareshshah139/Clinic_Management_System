@@ -252,6 +252,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { QuickGuide } from '@/components/common/QuickGuide';
 import { UserRole } from '@cms/shared-types';
 import { resolveDefaultDoctorId } from '@/lib/default-visit-doctor';
+import { todayIst } from '@/lib/doctor-availability';
 import { VisitIdentityBar } from '@/components/visits/VisitIdentityBar';
 import { useRecordById, type RecordState } from '@/components/visits/useRecordById';
 import type {
@@ -969,7 +970,7 @@ function VisitsPageInner() {
       userRole={currentUserRole}
       patient={selectedPatient.status === 'ready' ? selectedPatient.record : null}
       doctorRecord={listedDoctor ?? null}
-      visitDate={new Date().toISOString()}
+      visitDate={todayIst()}
       appointmentId={activeAppointment?.id}
       appointmentData={activeAppointment}
       onVisitIdChange={setStartedVisitId}

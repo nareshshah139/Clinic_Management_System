@@ -18,10 +18,11 @@ jest.mock('@/lib/api', () => ({
     getAllPatientVisitHistory: jest.fn().mockResolvedValue([]),
   },
 }));
-jest.mock('@/components/visits/MedicalVisitForm', () => function Form({ patientId, doctorId, initialVisitId, appointmentId, identity }: { patientId: string; doctorId: string; initialVisitId?: string; appointmentId?: string; identity?: ReactNode }) {
+jest.mock('@/components/visits/MedicalVisitForm', () => function Form({ patientId, doctorId, initialVisitId, appointmentId, visitDate, identity }: { patientId: string; doctorId: string; initialVisitId?: string; appointmentId?: string; visitDate?: string; identity?: ReactNode }) {
   return (
     <div>
       <p data-testid="medical-form">{`Patient: ${patientId}, Doctor: ${doctorId}, Visit: ${initialVisitId ?? 'new'}, Appointment: ${appointmentId ?? 'none'}`}</p>
+      <p data-testid="draft-day">{visitDate}</p>
       {identity}
     </div>
   );
@@ -51,6 +52,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   jest.mocked(apiClient.getPatients).mockResolvedValue({ patients } as never);
   jest.mocked(apiClient.getPatient).mockImplementation(async (id: string) => patients.find((p) => p.id === id) as never);
+  jest.mocked(apiClient.getUser).mockImplementation(async (id: string) => doctors.find((d) => d.id === id) as never);
   jest.mocked(apiClient.get).mockImplementation(async (endpoint: string) => {
     if (endpoint === '/auth/me') return { id: 'doctor-me', role: UserRole.DOCTOR } as never;
     if (endpoint === '/visits/cvisitofasha000000000000001') return { id: 'cvisitofasha000000000000001', patient: { id: 'cpatientasha00000000000001' }, doctor: { id: 'doctor-me' } } as never;
@@ -82,4 +84,18 @@ it('opens the booked patient and doctor from a link that carries only the appoin
   expect(await screen.findByTestId('medical-form')).toHaveTextContent(
     'Patient: cpatientasha00000000000001, Doctor: doctor-booked, Visit: new, Appointment: capptasha0000000000000000001',
   );
+});
+
+it('keys a walk-in draft to the clinic day, so a reload later that day finds it', async () => {
+  jest.useFakeTimers({ advanceTimers: true });
+  jest.setSystemTime(new Date('2026-11-24T18:40:00Z'));
+  mockQuery = 'patientId=cpatientasha00000000000001';
+  const first = render(<VisitsPage />, { wrapper: LayoutSession });
+  expect(await screen.findByTestId('draft-day')).toHaveTextContent(/^2026-11-25$/);
+  first.unmount();
+
+  jest.setSystemTime(new Date('2026-11-24T19:15:00Z'));
+  render(<VisitsPage />, { wrapper: LayoutSession });
+  expect(await screen.findByTestId('draft-day')).toHaveTextContent(/^2026-11-25$/);
+  jest.useRealTimers();
 });

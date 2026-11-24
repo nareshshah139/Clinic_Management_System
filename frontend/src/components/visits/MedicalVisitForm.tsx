@@ -95,7 +95,7 @@ interface Props {
   doctorName?: string;
   userRole?: string;
   visitNumber?: number;
-  visitDate?: string; // ISO string; falls back to today if not provided
+  visitDate?: string; // clinic day (YYYY-MM-DD); keys a walk-in's local draft until the visit is created
   appointmentId?: string;
   appointmentData?: { patient?: VisitPatientSummary } | null;
   initialVisitId?: string;
