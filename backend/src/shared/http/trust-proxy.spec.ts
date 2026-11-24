@@ -9,6 +9,7 @@ import { DEFAULT_THROTTLE } from '../../modules/auth/auth.module';
 import { RequestContextService } from '../context/request-context.service';
 import { RequestContextInterceptor } from '../interceptors/request-context.interceptor';
 import { configureTrustProxy, trustProxyHops } from './trust-proxy';
+import { WindowThrottlerStorage } from './window-throttler-storage';
 
 @Controller('probe')
 class ProbeController {
@@ -28,7 +29,7 @@ describe('trusted proxy hops and the default throttle window', () => {
   beforeAll(async () => {
     delete process.env.TRUST_PROXY_HOPS;
     const module = await Test.createTestingModule({
-      imports: [ThrottlerModule.forRoot([DEFAULT_THROTTLE])],
+      imports: [ThrottlerModule.forRoot({ throttlers: [DEFAULT_THROTTLE], storage: new WindowThrottlerStorage() })],
       controllers: [ProbeController],
       providers: [
         RequestContextService,

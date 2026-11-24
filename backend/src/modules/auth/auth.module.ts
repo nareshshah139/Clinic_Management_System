@@ -7,6 +7,7 @@ import { AuthController } from './auth.controller';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { PasswordResetService } from './password-reset.service';
+import { WindowThrottlerStorage } from '../../shared/http/window-throttler-storage';
 
 /**
  * @cc [owner:nareshshah139,label:security] default-throttle-window
@@ -18,7 +19,7 @@ export const DEFAULT_THROTTLE = { ttl: 60_000, limit: 600 };
 
 @Module({
   imports: [
-    ThrottlerModule.forRoot([DEFAULT_THROTTLE]),
+    ThrottlerModule.forRoot({ throttlers: [DEFAULT_THROTTLE], storage: new WindowThrottlerStorage() }),
     PrismaModule,
     ConfigModule,
     JwtModule.registerAsync({
