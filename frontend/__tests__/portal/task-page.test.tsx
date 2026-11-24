@@ -45,7 +45,7 @@ describe('patient task page (PP-36, PP-40, PP-44, PP-45, PP-46)', () => {
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe('/api/portal/task/questions');
     expect(url).not.toContain(TOKEN);
-    expect(init).toMatchObject({ method: 'POST', credentials: 'omit', referrerPolicy: 'no-referrer', cache: 'no-store' });
+    expect(init).toMatchObject({ method: 'POST', credentials: 'omit', referrerPolicy: 'same-origin', cache: 'no-store' });
     expect(bodies()[0]).toEqual({ token: TOKEN });
     expect(screen.getByText('Linae Skin Clinic')).toBeInTheDocument();
     expect(screen.getByText(/Dr\. Meera Rao/)).toBeInTheDocument();
