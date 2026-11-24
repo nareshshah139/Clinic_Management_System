@@ -1,6 +1,6 @@
 ---
 name: verify-clinic
-description: Launch, drive and prove the Clinic Management System (Linaé) web UI on a real, isolated stack — Next.js frontend + NestJS API + a private Postgres schema — with Playwright. Use it whenever a change to inventory intake (Purchases → "Scan or enter bill", Import CSV, scan/OCR, opening stock) or any dashboard page must be shown working in the real app, or when asked whether a flow works consistently and with good UX. Ships a scripted end-to-end proof for manual purchase-bill intake (stock posting, duplicates, phone layout, double-click, read-back).
+description: Launch, drive and prove the Clinic Management System (Linaé) web UI on a real, isolated stack — Next.js frontend + NestJS API + a private Postgres schema — with Playwright. Use it whenever a change to inventory intake (Purchases → "Scan or enter bill", Import CSV, scan/OCR, opening stock) or any dashboard page must be shown working in the real app, or when asked whether a flow works consistently and with good UX. Ships scripted end-to-end proofs for manual purchase-bill intake (stock posting, duplicates, phone layout, double-click, read-back) and the follow-up loop (WhatsApp number confirmation, visit with a plan, scheduler check-in link via a fake Meta endpoint, patient photo answer at phone width, staff reply, worklist resolution, review reminder).
 ---
 
 # Verify the clinic app
@@ -88,6 +88,16 @@ const state = L.loadState("default");
 
 Stable handles for this app: route query params (`area`, `view`, `invoice`, `new`); element ids on the bill form (`#distributor-name`, `#distributor-gstin`, `#distributor-dl`, `#invoice-number`, `#invoice-date`, `#goods-date`, `#purchase-invoice-upload`, line inputs `input[id$="-product|-pack-size|-unit|-batch|-expiry-month|-expiry-year|-qty|-free-qty|-rate|-mrp|-hsn"]`); `aria-label`s such as `Product line N`, `Stock status`, `Invoice actions`, `Open bill <no>`; and accessible button names. Prefer these over coordinates and nth-child.
 
+**Scripted proof (Release 1b follow-up loop, fake WhatsApp):**
+
+```bash
+node .claude/skills/verify-clinic/scripts/fake-meta.cjs --name loop --advance-days 3 &   # prints FAKE META READY
+node .claude/skills/verify-clinic/scripts/launch.cjs --name loop --env-file output/verify-clinic/fake-meta/loop.env &
+NODE_PATH=~/pw/node_modules node .claude/skills/verify-clinic/scripts/drive-follow-up-loop.cjs --instance loop --fake loop
+```
+
+Reception confirms two numbers with the codes fake Meta received; the doctor completes one visit with "Two-week skin check" and one with a review date; the shifted scheduler clock opens the day-3 check-in and sends its link and the review reminder; the patient answers at 390px with a camera photo and a severity of 9; a signed inbound message gets an in-window staff reply; staff resolve both worklist items. It takes about 10 minutes because the send pass runs every 5. See [`features/follow-up-loop.md`](features/follow-up-loop.md).
+
 ## Evidence
 
 - Drivers write to `output/verify-clinic/evidence/<UTC-stamp>-<feature>/`: `summary.md` (pass/fail table, user-step counts, timings), `result.json` (every check, network writes, DB before and after, ledger rows) and numbered screenshots per step (`<run>-1-intake-home.png` … `<run>-4-stock-added.png`, `duplicate-refused-as-seen.png`, `readback-*.png`). Put ad-hoc evidence in the same tree.
@@ -120,5 +130,7 @@ All are in `.claude/skills/verify-clinic/scripts/` and run from the repo root.
 | `launch.cjs [--name N] [--env-file F]` | Boots an isolated stack (F adds backend env such as fake WhatsApp settings; the backend keeps raw bodies like `main.ts`), writes `output/verify-clinic/instances/N.json`, prints `READY`, and runs until stopped. Run it in the background. |
 | `doctor.cjs [--instance N]` | Read-only health check; exits 0 or 1. |
 | `drive-manual-bill.cjs [--instance N] [--only …]` | Scripted end-to-end proof of manual bill intake; exits 0 only if all checks pass. |
+| `fake-meta.cjs [--name F] [--advance-days D]` | Fake WhatsApp Cloud API: writes `output/verify-clinic/fake-meta/F.env` (Graph base URL, token, app secret, and a scheduler clock D IST days ahead at 10:00), records every send to `F.sends.jsonl`, and exports helpers that sign inbound webhook events. Start it before `launch.cjs --env-file`. |
+| `drive-follow-up-loop.cjs [--instance N] [--fake F] [--no-review-leg]` | Scripted Release 1b loop (see `features/follow-up-loop.md`); exits 0 only if all checks pass. |
 | `stop.cjs [--instance N]` | Tears down only what `launch.cjs` started. |
 | `lib.cjs` | Library, not a CLI: `loadState`, `openPage` (one login per role, cookie reuse), `recorder`, `sql` (read-only JSON rows from the instance schema), `evidenceDir`, `checker`. |

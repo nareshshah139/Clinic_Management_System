@@ -1,11 +1,11 @@
-# Clinic verification map — inventory intake
+# Clinic verification map
 
-This directory is the maintained source for verifying how stock gets into the clinic pharmacy's inventory. Read this index before driving the app, then follow the matching feature file as the recipe. Other dashboard areas (appointments, visits, billing) are not mapped yet. Add a file here when you verify one.
+This directory is the maintained source for verifying how stock gets into the clinic pharmacy's inventory, and the follow-up loop between a visit and the patient's WhatsApp check-in. Read this index before driving the app, then follow the matching feature file as the recipe. Other dashboard areas (appointments, billing) are not mapped yet. Add a file here when you verify one.
 
 ## Baseline preconditions
 
 - A stack launched by this skill (`scripts/launch.cjs`) with `doctor.cjs` reporting `DOCTOR OK`. Never drive the user's own dev server or a deployed URL.
-- Log in as `pharmacist` (Anil Deshmukh) unless a recipe says otherwise. That role has the seeded PHARMACIST permissions: create, review and commit purchase bills.
+- Log in as `pharmacist` (Anil Deshmukh) unless a recipe says otherwise (the follow-up loop uses `reception` and `doctor`). That role has the seeded PHARMACIST permissions: create, review and commit purchase bills.
 - The seeded schema has no suppliers, no products and no stock. Every product a recipe receives must either be created in the flow ("Create new item") or come from an earlier step of the same run.
 - Desktop viewport 1280×900; phone checks use 390×844 with `isMobile`.
 
@@ -34,3 +34,4 @@ Each feature file starts with an H1 title and one paragraph on the user-visible 
 - [Scan a bill (OCR)](./scan-bill.md): uploading a PDF or photos for extraction. Blocked in this stack, so only its failure UX can be verified here.
 - [Opening stock](./opening-stock.md): the Excel opening-stock import and the manual opening-stock document.
 - [Purchase bills and unfinished intake](./purchase-bills.md): the register where posted bills appear, and the "Recent invoices" list where saved drafts resume.
+- [Follow-up loop](./follow-up-loop.md): number confirmation, a visit with a follow-up plan, the scheduler's check-in link through a fake WhatsApp endpoint, the patient's photo answer at phone width, the staff reply and worklist resolution, plus the review reminder. **Scripted:** `drive-follow-up-loop.cjs` with `fake-meta.cjs`.
