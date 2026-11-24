@@ -161,16 +161,10 @@ CREATE UNIQUE INDEX "instruments_key_key" ON "instruments"("key");
 CREATE UNIQUE INDEX "instrument_versions_instrumentId_version_key" ON "instrument_versions"("instrumentId", "version");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "instrument_versions_instrumentId_contentHash_key" ON "instrument_versions"("instrumentId", "contentHash");
-
--- CreateIndex
 CREATE UNIQUE INDEX "follow_up_plans_key_key" ON "follow_up_plans"("key");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "follow_up_plan_versions_planId_version_key" ON "follow_up_plan_versions"("planId", "version");
-
--- CreateIndex
-CREATE UNIQUE INDEX "follow_up_plan_versions_planId_contentHash_key" ON "follow_up_plan_versions"("planId", "contentHash");
 
 -- CreateIndex
 CREATE INDEX "follow_up_tracks_visitId_idx" ON "follow_up_tracks"("visitId");

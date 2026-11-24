@@ -27,18 +27,16 @@ async function publish(
   const hash = contentHash(content);
   if (kind === 'instrument') {
     const parent = await tx.instrument.upsert({ where: { key }, create: { key }, update: {} });
-    const same = await tx.instrumentVersion.findUnique({ where: { instrumentId_contentHash: { instrumentId: parent.id, contentHash: hash } } });
-    if (same) return { kind, key, version: same.version, versionId: same.id, created: false };
     const last = await tx.instrumentVersion.findFirst({ where: { instrumentId: parent.id }, orderBy: { version: 'desc' } });
+    if (last?.contentHash === hash) return { kind, key, version: last.version, versionId: last.id, created: false };
     const row = await tx.instrumentVersion.create({
       data: { instrumentId: parent.id, version: (last?.version ?? 0) + 1, contentHash: hash, content: content as Prisma.InputJsonValue, createdById: actorId },
     });
     return { kind, key, version: row.version, versionId: row.id, created: true };
   }
   const parent = await tx.followUpPlan.upsert({ where: { key }, create: { key }, update: {} });
-  const same = await tx.followUpPlanVersion.findUnique({ where: { planId_contentHash: { planId: parent.id, contentHash: hash } } });
-  if (same) return { kind, key, version: same.version, versionId: same.id, created: false };
   const last = await tx.followUpPlanVersion.findFirst({ where: { planId: parent.id }, orderBy: { version: 'desc' } });
+  if (last?.contentHash === hash) return { kind, key, version: last.version, versionId: last.id, created: false };
   const row = await tx.followUpPlanVersion.create({
     data: { planId: parent.id, version: (last?.version ?? 0) + 1, contentHash: hash, content: content as Prisma.InputJsonValue, createdById: actorId },
   });
@@ -48,8 +46,9 @@ async function publish(
 /**
  * @cc [owner:nareshshah139,label:product] reviewed-plan-import
  * Instruments and plans MUST come only from the reviewed data files through the owner-only
- * import. Identical content is a no-op, changed content creates the next version, and a
- * published version is never changed (PP-24). Nothing is published if any file is refused.
+ * import. Content equal to the latest version is a no-op; any other content, even an older
+ * version's, publishes the next version, and a published version is never changed (PP-24).
+ * Nothing is published if any file is refused.
  */
 export async function importFollowUpData(tx: Tx, files: ReturnType<typeof readDataFiles>, actorId: string | null): Promise<ImportResult[]> {
   const problems = [...files.instruments.flatMap(instrumentProblems), ...files.plans.flatMap(planProblems)];

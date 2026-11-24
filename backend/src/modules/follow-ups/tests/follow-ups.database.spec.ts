@@ -119,6 +119,28 @@ databaseTests('Follow-up plans, tracks and the scheduler pass on PostgreSQL agai
       expect(plans.find((p) => p.key === 'treatment-four-week')).toMatchObject({ version: 2 });
     });
 
+    it('reimporting an older version\'s content publishes it as the next version (v1 -> v2 -> v1 content = v3)', async () => {
+      const v1 = await db.instrumentVersion.findFirstOrThrow({ where: { instrument: { key: 'treatment-check' }, version: 1 } });
+      const v2 = await db.instrumentVersion.findFirstOrThrow({ where: { instrument: { key: 'treatment-check' }, version: 2 } });
+      const original = readDataFiles();
+      const results = await Promise.all([
+        db.$transaction((tx) => importFollowUpData(tx, original, 'own')),
+        db.$transaction((tx) => importFollowUpData(tx, original, 'own')),
+      ]);
+      expect(results.flat().filter((r) => r.key === 'treatment-check' && r.created)).toHaveLength(1);
+      const v3 = await db.instrumentVersion.findFirstOrThrow({ where: { instrument: { key: 'treatment-check' }, version: 3 } });
+      expect(v3.contentHash).toBe(v1.contentHash);
+      expect(v3.content).toEqual(v1.content);
+      expect(await db.instrumentVersion.findUniqueOrThrow({ where: { id: v1.id } })).toEqual(v1);
+      expect(await db.instrumentVersion.findUniqueOrThrow({ where: { id: v2.id } })).toEqual(v2);
+      expect(await db.instrumentVersion.count({ where: { instrument: { key: 'treatment-check' } } })).toBe(3);
+      const plans = await followUps.listPlans();
+      expect(plans.find((p) => p.key === 'treatment-four-week')).toMatchObject({ version: 3 });
+      expect(plans.find((p) => p.key === 'skin-two-week')).toMatchObject({ version: 1 });
+      const again = await db.$transaction((tx) => importFollowUpData(tx, original, 'own'));
+      expect(again.every((r) => !r.created)).toBe(true);
+    });
+
     it('refuses a version that misses a Telugu or Hindi translation and publishes nothing', async () => {
       const before = await db.instrumentVersion.count();
       const broken = structuredClone(readDataFiles());

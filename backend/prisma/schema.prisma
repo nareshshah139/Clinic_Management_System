@@ -3009,7 +3009,6 @@ model InstrumentVersion {
   responses    CheckInResponse[]
 
   @@unique([instrumentId, version])
-  @@unique([instrumentId, contentHash])
   @@map("instrument_versions")
 }
 
@@ -3035,7 +3034,6 @@ model FollowUpPlanVersion {
   tracks      FollowUpTrack[]
 
   @@unique([planId, version])
-  @@unique([planId, contentHash])
   @@map("follow_up_plan_versions")
 }
 
