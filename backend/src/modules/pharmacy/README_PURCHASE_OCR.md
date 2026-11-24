@@ -157,6 +157,74 @@ Invoice reads accept `inventory:po:read`. Existing role and user
 permissions are combined without rewriting role records. Original-file storage
 requires the additive migration described above.
 
+## Learning from reviewed bills
+
+The OCR model is hosted and never retrained. The clinic's own review decisions
+correct its recurring misreads instead. Prompts and both reads are unchanged; they
+still receive only the original images.
+
+**What is stored.** After the second read, the raw machine read is saved once on the
+original document (`pharmacy_purchase_invoice_documents.ocrRead`) together with any
+lessons applied to it. Each extracted line gets an `ocrLineKey`
+(`<documentId>:<readId>:<index>`) that survives edits and saves, so a committed line
+can be paired with what the machine read. Lines without a key pair by a unique
+batch, expiry and quantity. Split, added and deleted lines teach nothing. When stock
+is committed, one immutable row per learnable field is written to
+`pharmacy_purchase_learning_examples` in the same transaction, recording the raw
+value, the committed value, who decided it (`HUMAN_REVIEW` or `AUTOMATIC`) and how:
+`OCR_KEPT`, `HUMAN_CORRECTED`, `LESSON_KEPT`, `LESSON_OVERRIDDEN` or `CATALOGUE`.
+
+**What is learnable.** Only identity spellings: the product (keyed by the read name
+and canonical pack, so a lesson never crosses packs), the manufacturer, and the
+supplier name for a GSTIN that belongs to one saved active supplier. GSTIN, invoice
+number and date, batch, expiry, quantities, money, pack, strength and HSN are facts
+of one bill and are never learned.
+
+**How lessons are derived.** Lessons are computed when needed from the examples,
+per supplier GSTIN, so retries cannot double count and a forget or product edit
+takes effect at once. Only unrevoked human-reviewed outcomes count. Automatic and
+catalogue outcomes never count, and a kept lesson adds to the total but is not
+independent evidence. A reviewer override, or a later human decision for a
+different value, restarts support.
+
+| Tier | Rule | Effect on the next bill |
+|---|---|---|
+| `SUGGEST` | 1 independent correction for this supplier, or 2 from different suppliers | Returned in `learning.suggestions`; the line is unchanged |
+| `APPLY` | 2 independent corrections on 2 invoices, newest decision agrees | Product, manufacturer and pack are filled from the master and the line gets the blocking flag `learned_product_needs_confirmation` (or `learned_manufacturer_needs_confirmation`, `learned_distributor_needs_confirmation`) |
+| `TRUSTED` | Product or supplier name only: `APPLY`, at least 5 kept or corrected outcomes over at least 14 days, never contradicted, and the product's name, manufacturer, pack, strength, form and type unchanged since | Filled with no flag; every other automatic gate still applies |
+
+Each application rechecks the current product: it must be active in the same branch,
+and strength, dosage form, pack and manufacturer must agree with the line as read.
+A failing check leaves the line as read. Applied lessons appear on the line or header
+as `learnedCorrections` and in `learning.applied` on extraction and import
+responses. The `OCR_EXTRACTED` audit lists applied lessons; `AUTOMATIC_REVIEWED`
+lists the trusted lessons a bill relied on. Set
+`PHARMACY_PURCHASE_TRUSTED_LESSONS=off` to treat trusted lessons as `APPLY`, which
+returns every learned product to human confirmation. Learning failures are logged and
+extraction continues without lessons; at commit only the pure outcome calculation
+may fail softly, never a database statement.
+
+Master-match suggestions (`POST /master-matches`, optional `supplierGstin`) also use
+learned names as aliases and add up to 12 points, shown as "chosen N× for this
+supplier", for the product chosen for the same spelling and pack.
+
+**Endpoints.**
+
+- `GET /pharmacy/purchase-invoices/learning/metrics?from&to` (read permission;
+  default last 8 weeks, `to` exclusive). Weekly totals and per-supplier rows:
+  reviewer touches per 100 reviewed OCR lines (`HUMAN_CORRECTED` plus
+  `LESSON_OVERRIDDEN`; this should fall), raw OCR correction rate, auto-commit rate,
+  override rate (`LESSON_OVERRIDDEN / (LESSON_KEPT + LESSON_OVERRIDDEN)`), and active
+  lessons by tier.
+- `GET /pharmacy/purchase-invoices/learning/lessons` (read permission).
+- `POST /pharmacy/purchase-invoices/learning/lessons/forget` with `{ lessonKey }`
+  (review permission). Revokes the lesson's examples and audits `LESSON_FORGOTTEN`.
+  The lesson returns only from new reviewed bills.
+
+Deploy migration `20261124100000_purchase_ocr_learning` (additive: one table, two
+nullable columns) before this backend and regenerate Prisma Client. Bills committed
+before it teach nothing because their raw read was not kept.
+
 ## Railway deployment
 
 Deploy both backend and frontend for the new endpoints, permission controls and

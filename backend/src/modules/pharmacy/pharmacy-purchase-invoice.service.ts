@@ -7,7 +7,7 @@ import { alignPurchaseSource, matchingSourceRows, readPurchaseSourcePages, Purch
 import { purchaseCatalogData, purchaseCatalogIssues, purchaseInventoryClassification, purchaseProductKind } from './purchase-product-catalog';
 import { canonicalPurchasePack, normalizedIdentity, verifyPurchaseRead } from './purchase-invoice-identity';
 import { AppliedLesson, applyLessonsToDraft, buildOcrRead, buildOutcomeExamples, CatalogueChange, CatalogueDrug, LearningExampleRow, lessonLookupKeys, Origin, pickOcrRead, productRawKey, PurchaseOcrRead } from './purchase-learning';
-import { loadPurchaseLearnedAliases, loadPurchaseLessons, recordPurchaseOutcome } from './purchase-learning.repository';
+import { forgetPurchaseLesson, listPurchaseLessons, loadPurchaseLearnedAliases, loadPurchaseLessons, purchaseLearningMetrics, recordPurchaseOutcome } from './purchase-learning.repository';
 import { PURCHASE_INVOICE_EXTRACTION_PROMPT, PURCHASE_INVOICE_VERIFICATION_PROMPT, PURCHASE_INVOICE_SOURCE_PROMPT, PURCHASE_INVOICE_OCR_PROMPT_VERSION } from './purchase-invoice-ocr.prompts';
 import {
   BadRequestException,
@@ -758,6 +758,26 @@ export class PharmacyPurchaseInvoiceService {
         extractedAt: new Date().toISOString(),
       },
     };
+  }
+
+  async learningMetrics(branchId: string, query: { from?: string; to?: string }) {
+    const to = query.to ? new Date(query.to) : new Date();
+    const from = query.from ? new Date(query.from) : new Date(to.getTime() - 56 * 24 * 60 * 60 * 1000);
+    if (!Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime()) || from > to) {
+      throw new BadRequestException('Choose a valid date range for OCR learning metrics.');
+    }
+    return purchaseLearningMetrics(this.prisma, branchId, { from, to });
+  }
+
+  async learningLessons(branchId: string) {
+    return { lessons: await listPurchaseLessons(this.prisma, branchId) };
+  }
+
+  async forgetLearningLesson(branchId: string, lessonKey: string, userId: string) {
+    const revokedExamples = await forgetPurchaseLesson(this.prisma, branchId, lessonKey, userId);
+    if (revokedExamples === null) throw new BadRequestException('Unknown OCR lesson.');
+    if (!revokedExamples) throw new NotFoundException('This OCR lesson is already forgotten or was never learned in this branch.');
+    return { lessonKey, revokedExamples };
   }
 
   /**

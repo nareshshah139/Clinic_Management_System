@@ -216,7 +216,6 @@ const groupBy = <T>(values: T[], key: (value: T) => string) => values.reduce((gr
   return groups;
 }, new Map<string, T[]>());
 
-/** Pairs each committed line with the machine read it came from. Split, added and deleted lines stay unpaired. */
 export function pairOcrLines<L extends PairableLine>(read: PurchaseOcrRead, lines: L[]): LinePairing<L>[] {
   const readByKey = new Map(read.items.map(item => [item.key, item]));
   const lineKeys = groupBy(lines, line => line.ocrLineKey || '');
@@ -235,7 +234,6 @@ export function pairOcrLines<L extends PairableLine>(read: PurchaseOcrRead, line
   return pairs;
 }
 
-/** Chooses the read whose line keys the committed lines carry, else the newest one. */
 export function pickOcrRead(reads: PurchaseOcrRead[], lines: PairableLine[]): PurchaseOcrRead | null {
   const used = (read: PurchaseOcrRead) => lines.filter(line => line.ocrLineKey?.split(':')[1] === read.readId).length;
   return reads.reduce<PurchaseOcrRead | null>((best, read) => !best || used(read) > used(best) ? read : best, null);
@@ -463,7 +461,6 @@ function metricSummary(examples: MetricExample[]) {
   };
 }
 
-/** Weekly (UTC Monday) learning outcomes, overall and per supplier GSTIN. */
 export function summarizeLearningMetrics(examples: MetricExample[]) {
   const byWeek = groupBy(examples, example => weekStart(new Date(example.committedAt)));
   const bySupplier = groupBy(examples, example => `${weekStart(new Date(example.committedAt))}|${example.supplierGstin}`);

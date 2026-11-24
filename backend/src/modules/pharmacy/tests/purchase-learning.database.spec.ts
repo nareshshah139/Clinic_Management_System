@@ -22,8 +22,8 @@ databaseTests('Purchase OCR learning with real PostgreSQL', () => {
   let userId: string;
   let read: any;
 
-  const ocrBill = (invoiceNumber: string, line: Record<string, unknown> = {}) => ({
-    distributorName: 'Learning Supplier', distributorGstin: GSTIN, distributorDlNo: 'DL-LEARN', invoiceNumber,
+  const ocrBill = (invoiceNumber: string, line: Record<string, unknown> = {}, header: Record<string, unknown> = {}) => ({
+    distributorName: 'Learning Supplier', distributorGstin: GSTIN, distributorDlNo: 'DL-LEARN', invoiceNumber, ...header,
     invoiceDate: '2026-01-01', billType: 'CASH', doctorNameOrRegNo: 'Synthetic Clinic', source: 'OCR',
     grossAmount: 300, taxableAmount: 300, totalCgst: 18, totalSgst: 18, totalIgst: 0, totalGst: 36, netPayable: 336, ocrFlags: [],
     items: [{
@@ -34,18 +34,18 @@ databaseTests('Purchase OCR learning with real PostgreSQL', () => {
     }],
   });
 
-  const importBill = async (invoiceNumber: string, line: Record<string, unknown> = {}): Promise<any> => {
-    read = ocrBill(invoiceNumber, line);
+  const importBill = async (invoiceNumber: string, line: Record<string, unknown> = {}, header: Record<string, unknown> = {}): Promise<any> => {
+    read = ocrBill(invoiceNumber, line, header);
     const buffer = await sharp(Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="800" height="60"><text x="10" y="30">Bill ${invoiceNumber}</text></svg>`)).png().toBuffer();
     const upload = { buffer, size: buffer.length, originalname: `${invoiceNumber}.png`, mimetype: 'image/png' } as Express.Multer.File;
     return service.importFromDocument(upload, branchId, userId, '2026-01-02', [], true);
   };
 
-  // The reviewer saves the editor's lines (keeping each line's ocrLineKey), checks the bill and adds stock.
   const reviewAndCommit = async (invoiceId: string, product: { name: string; manufacturerName: string; packSizeLabel: string }) => {
     const saved = await service.findOne(invoiceId, branchId);
     await service.updateDraft(invoiceId, {
-      ...ocrBill(saved.invoiceNumber), goodsReceivedDate: '2026-01-02', expectedUpdatedAt: saved.updatedAt.toISOString(),
+      ...ocrBill(saved.invoiceNumber, {}, { distributorName: saved.distributorName, distributorGstin: saved.distributorGstin }),
+      goodsReceivedDate: '2026-01-02', expectedUpdatedAt: saved.updatedAt.toISOString(),
       items: saved.items.map((item: any) => ({ ...item, productName: product.name, manufacturer: product.manufacturerName,
         packSize: product.packSizeLabel, ocrFlags: [] })),
     } as any, branchId, userId);
@@ -145,6 +145,8 @@ databaseTests('Purchase OCR learning with real PostgreSQL', () => {
         ['distributorName', 'OCR_KEPT', null], ['product', 'LESSON_KEPT', lessonKey],
       ]);
     }
+    expect((await service.learningLessons(branchId)).lessons.map(lesson => [lesson.key, lesson.tier, lesson.independent, lesson.total, lesson.invoices]))
+      .toEqual([[lessonKey, 'TRUSTED', 2, 5, 2]]);
 
     const humanCalls = () => ['updateDraft', 'markReviewed', 'commitStock', 'confirmMasterRecord']
       .map(method => (service as any)[method].mock?.calls.length ?? 0);
@@ -173,5 +175,31 @@ databaseTests('Purchase OCR learning with real PostgreSQL', () => {
     expect(afterOverride.learning).toEqual({ applied: [], suggestions: [] });
     expect(afterOverride.invoice.items[0]).toMatchObject({ productName: 'DOLO-650 TAB', ocrFlags: [] });
     expect(await prisma.inventoryItem.count({ where: { batchNumber: 'B-LEARN-8' } })).toBe(0);
+
+    const metrics = await service.learningMetrics(branchId, {});
+    expect(metrics.totals).toEqual({ lines: 7, reviewedLines: 6, reviewerTouches: 3, touchesPer100Lines: 50, rawCorrectionRate: 43.8,
+      invoices: 7, automaticInvoices: 1, autoCommitRate: 14.3, lessonsKept: 4, lessonsOverridden: 1, overrideRate: 20 });
+    expect(metrics.activeLessons).toEqual({ SUGGEST: 0, APPLY: 0, TRUSTED: 0 });
+  }, 60000);
+
+  it('forgets a lesson on request so the next bill is read as printed again', async () => {
+    const other = { distributorName: 'Other Supplier', distributorGstin: '36AAACO1234F1Z5' };
+    const line = { productName: 'CROCIN ADV 500', manufacturer: 'GSK', packSize: '20' };
+    const crocin = await prisma.drug.create({ data: { branchId, name: 'Crocin Advance 500mg Tablet', manufacturerName: 'GSK', packSizeLabel: '20',
+      price: 40, composition1: 'Paracetamol', category: 'Analgesic', dosageForm: 'Tablet', strength: '500mg' } });
+    for (const invoiceNumber of ['FORGET-1', 'FORGET-2']) await reviewAndCommit((await importBill(invoiceNumber, line, other)).invoice.id, crocin);
+    const lessonKey = `product:${other.distributorGstin}:crocin adv 500|20`;
+    const learned = await importBill('FORGET-3', line, other);
+    expect(learned.invoice.items[0]).toMatchObject({ productName: 'Crocin Advance 500mg Tablet', ocrFlags: ['learned_product_needs_confirmation'] });
+
+    expect(await service.forgetLearningLesson(branchId, lessonKey, userId)).toEqual({ lessonKey, revokedExamples: 2 });
+    const audit = await prisma.auditLog.findFirstOrThrow({ where: { entityId: lessonKey, action: 'LESSON_FORGOTTEN' } });
+    expect(JSON.parse(audit.newValues!)).toEqual({ branchId, lessonKey, revokedExamples: 2 });
+    expect((await service.learningLessons(branchId)).lessons.map(lesson => lesson.key)).not.toContain(lessonKey);
+
+    const forgotten = await importBill('FORGET-4', line, other);
+    expect(forgotten.learning).toEqual({ applied: [], suggestions: [] });
+    expect(forgotten.invoice.items[0]).toMatchObject({ productName: 'CROCIN ADV 500', ocrFlags: [] });
+    await expect(service.forgetLearningLesson(branchId, lessonKey, userId)).rejects.toThrow('already forgotten');
   }, 60000);
 });

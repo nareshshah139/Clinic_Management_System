@@ -65,7 +65,6 @@ export async function listPurchaseLessons(db: LearningDb, branchId: string) {
     .sort((a, b) => b.lastAt.getTime() - a.lastAt.getTime() || a.key.localeCompare(b.key));
 }
 
-/** Revokes every unrevoked example behind a lesson so it is derived from new decisions only. */
 export async function forgetPurchaseLesson(db: Pick<PrismaClient, '$transaction'>, branchId: string, key: string, userId: string) {
   const lesson = parseLessonKey(key);
   if (!lesson) return null;

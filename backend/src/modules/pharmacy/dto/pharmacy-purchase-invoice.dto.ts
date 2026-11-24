@@ -633,6 +633,19 @@ export class SuggestPharmacyPurchaseMasterMatchesDto {
   supplierGstin?: string;
 }
 
+export class QueryPurchaseLearningMetricsDto {
+  @IsOptional() @IsDateString() from?: string;
+  @IsOptional() @IsDateString() to?: string;
+}
+
+export class ForgetPurchaseLessonDto {
+  @ApiProperty({ description: 'Lesson key from GET learning/lessons' })
+  @IsString()
+  @MinLength(5)
+  @MaxLength(600)
+  lessonKey: string;
+}
+
 export class PurchaseProductCatalogDto {
   @IsIn(['MEDICINE', 'COSMETIC', 'CONSUMABLE'])
   productKind: 'MEDICINE' | 'COSMETIC' | 'CONSUMABLE';

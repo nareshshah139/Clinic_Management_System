@@ -45,6 +45,8 @@ import {
   CorrectPharmacyPurchaseSupplierGstinDto,
   PurchaseProductCatalogDto,
   SuggestPharmacyPurchaseMasterMatchesDto,
+  QueryPurchaseLearningMetricsDto,
+  ForgetPurchaseLessonDto,
 } from './dto/pharmacy-purchase-invoice.dto';
 
 const PURCHASE_OCR_UPLOAD_LIMIT_BYTES = (() => {
@@ -331,6 +333,7 @@ export class PharmacyPurchaseInvoiceController {
     return this.purchaseInvoiceService.suggestMasterMatches(
       dto.items,
       req.user.branchId,
+      dto.supplierGstin,
     );
   }
 
@@ -384,6 +387,30 @@ export class PharmacyPurchaseInvoiceController {
       query,
       req.user.branchId,
     );
+  }
+
+  @Get('learning/metrics')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.DOCTOR, UserRole.RECEPTION)
+  @Permissions(['pharmacy:purchase-invoice:read', 'inventory:po:read'])
+  @ApiOperation({ summary: 'Weekly OCR learning outcomes: reviewer touches per 100 lines, raw correction, automation and override rates' })
+  learningMetrics(@Query() query: QueryPurchaseLearningMetricsDto, @Request() req: any) {
+    return this.purchaseInvoiceService.learningMetrics(req.user.branchId, query);
+  }
+
+  @Get('learning/lessons')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.DOCTOR, UserRole.RECEPTION)
+  @Permissions(['pharmacy:purchase-invoice:read', 'inventory:po:read'])
+  @ApiOperation({ summary: 'List OCR corrections learned from reviewed bills in this branch' })
+  learningLessons(@Request() req: any) {
+    return this.purchaseInvoiceService.learningLessons(req.user.branchId);
+  }
+
+  @Post('learning/lessons/forget')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
+  @Permissions(['pharmacy:purchase-invoice:review', 'inventory:po:update'])
+  @ApiOperation({ summary: 'Forget a learned OCR correction; it is relearned only from new reviewed bills' })
+  forgetLearningLesson(@Body() dto: ForgetPurchaseLessonDto, @Request() req: any) {
+    return this.purchaseInvoiceService.forgetLearningLesson(req.user.branchId, dto.lessonKey, req.user.id);
   }
 
   @Get(':id')
