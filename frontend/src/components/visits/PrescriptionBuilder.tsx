@@ -849,7 +849,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const [breakBeforeFollowUp, setBreakBeforeFollowUp] = useState(false);
   const [breakBeforeSignature, setBreakBeforeSignature] = useState(false);
   const [avoidBreakInsideTables, setAvoidBreakInsideTables] = useState(true);
-  const [interactions, setInteractions] = useState<any[]>([]);
+  const [interactions, setInteractions] = useState<any[] | 'failed'>([]);
   const [confirmPharmacy, setConfirmPharmacy] = useState<{
     open: boolean;
     prescriptionId: string;
@@ -3363,12 +3363,11 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const openInteractions = useCallback(async () => {
     try {
       const res: any = await apiClient.previewDrugInteractions(items as any);
-      setInteractions(Array.isArray(res?.interactions) ? res.interactions : []);
-      setInteractionsOpen(true);
+      setInteractions(Array.isArray(res?.interactions) ? res.interactions : 'failed');
     } catch {
-      setInteractions([]);
-      setInteractionsOpen(true);
+      setInteractions('failed');
     }
+    setInteractionsOpen(true);
   }, [items]);
 
   const removePreviewPrintHost = useCallback(() => {
@@ -6732,7 +6731,12 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               <DialogDescription>Preview potential interactions based on current items.</DialogDescription>
             </DialogHeader>
             <div className="max-h-[60vh] overflow-auto text-sm">
-              {interactions.length === 0 ? (
+              {interactions === 'failed' ? (
+                <div role="alert" className="flex items-center justify-between gap-3 rounded-md border border-destructive-border bg-destructive-soft p-3 text-destructive-text">
+                  <span>Couldn’t check interactions. This is not an all-clear.</span>
+                  <Button size="sm" variant="outline" onClick={() => void openInteractions()}>Retry</Button>
+                </div>
+              ) : interactions.length === 0 ? (
                 <div className="text-muted-foreground">No interactions found.</div>
               ) : (
                 <ul className="space-y-2">

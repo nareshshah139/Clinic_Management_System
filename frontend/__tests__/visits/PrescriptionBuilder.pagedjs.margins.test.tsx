@@ -929,3 +929,20 @@ it('names the resolved doctor in the toolbar and the signature block of an unsav
     expect(get).not.toHaveBeenCalledWith('/users/doctor-abcdef123');
   } finally { get.mockRestore(); }
 });
+
+it('reports a failed interaction check instead of an all-clear, and shows the result on Retry', async () => {
+  const check = jest.spyOn(apiClient, 'previewDrugInteractions')
+    .mockRejectedValueOnce(new Error('offline'))
+    .mockResolvedValueOnce({ interactions: [{ drug1: 'Isotretinoin', drug2: 'Doxycycline', severity: 'MAJOR', description: 'Raised intracranial pressure' }] });
+  try {
+    render(<PrescriptionBuilder patientId="ix-patient" visitId={null} doctorId="doctor" standalone />);
+    await openPreview();
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Interactions' })));
+    const dialog = await screen.findByRole('dialog', { name: 'Interaction Summary' });
+    expect(within(dialog).getByRole('alert')).toHaveTextContent('Couldn’t check interactions. This is not an all-clear.');
+    expect(within(dialog).queryByText('No interactions found.')).toBeNull();
+    await act(async () => fireEvent.click(within(dialog).getByRole('button', { name: 'Retry' })));
+    expect(within(dialog).getByText('Isotretinoin × Doxycycline')).toBeInTheDocument();
+    expect(within(dialog).queryByRole('alert')).toBeNull();
+  } finally { check.mockRestore(); }
+});
