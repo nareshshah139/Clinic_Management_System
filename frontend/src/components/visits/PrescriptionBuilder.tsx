@@ -100,6 +100,8 @@ function restoreLegacyDosage<T>(dosage: T): T | '' {
 
 // Use centralized options from lib/frequency
 
+type LastPrescription = { visitId: string; date: number; doctorName: string | null; items: PrescriptionItemForm[] };
+
 interface PrescriptionItemForm extends RegimenRow {
   drugName: string;
   genericName?: string;
@@ -347,7 +349,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const [followUpInstructions, setFollowUpInstructions, hydrateFollowUpInstructions] = useClinicalState('', 'followUpInstructions', dirtyClinicalFields);
 
   const [items, setItems, hydrateItems] = useClinicalState<PrescriptionItemForm[]>([], 'items', dirtyClinicalFields);
-  const [loadingPrevMeds, setLoadingPrevMeds] = useState(false);
   const [customSections, setCustomSections, hydrateCustomSections] = useClinicalState<Array<{ id: string; title: string; content: string }>>([], 'customSections', dirtyClinicalFields);
   const [procedureMetrics, setProcedureMetrics, hydrateProcedureMetrics] = useClinicalState<{ device?: string; wavelengthNm?: number | ''; fluenceJcm2?: number | ''; spotSizeMm?: number | ''; pulseMs?: number | ''; shots?: number | ''; cooling?: string; area?: string; peelAgent?: string; peelConcentration?: string; peelContactTimeMin?: number | ''; frosting?: string; needleDepthMm?: string; passes?: number | ''; anesthetic?: string }>({}, 'procedureMetrics', dirtyClinicalFields);
 
@@ -652,6 +653,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     return removed;
   };
   const [patientHistoryForLearning, setPatientHistoryForLearning] = useState<any[]>([]);
+  const [lastPrescription, setLastPrescription] = useState<LastPrescription | null>(null);
   const [doctorPrescriptionsForLearning, setDoctorPrescriptionsForLearning] = useState<any[]>([]);
   const [learningSourcesStatus, setLearningSourcesStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [learningSourcesError, setLearningSourcesError] = useState('');
@@ -1937,67 +1939,46 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     return `${year}-${month}-${day}`;
   }, []);
 
-  const addPreviousMedications = async () => {
-    if (!patientId) {
+  const findLastPrescription = (visits: any[]): LastPrescription | null => {
+    const sorted = [...visits].sort((a, b) => encounterTime(b) - encounterTime(a));
+    for (const v of sorted) {
+      if (!v || v.id === visitId || !Array.isArray(v.prescriptionItems)) continue;
+      const mapped = v.prescriptionItems.map(mapPrevRxItem).filter(Boolean) as PrescriptionItemForm[];
+      if (!mapped.length) continue;
+      const doctorName = String(v.doctor?.name || `${v.doctor?.firstName || ''} ${v.doctor?.lastName || ''}`).trim();
+      return { visitId: v.id, date: encounterTime(v), doctorName: doctorName || null, items: mapped };
+    }
+    return null;
+  };
+
+  const copyLastPrescription = () => {
+    if (!lastPrescription) return;
+    const keyOf = (m: PrescriptionItemForm) => `${m.drugName.toLowerCase()}|${m.frequency}|${m.dosePattern || ''}|${m.timing || ''}|${m.duration}|${m.durationUnit}`;
+    const base = items.filter((it) => (it.drugName || '').trim());
+    const existingKeys = new Set(base.map(keyOf));
+    const merged = [...base];
+    let added = 0;
+    for (const m of lastPrescription.items) {
+      if (existingKeys.has(keyOf(m))) continue;
+      merged.push(clonePrescriptionItems([m])[0]);
+      existingKeys.add(keyOf(m));
+      added += 1;
+    }
+    if (!added) {
       toast({
         variant: 'warning',
-        title: 'Select a patient',
-        description: 'Choose a patient before importing previous medications.',
+        title: 'Already in this prescription',
+        description: 'Every medicine from the last prescription is already listed.',
       });
       return;
     }
-    setLoadingPrevMeds(true);
-    try {
-      const res = await apiClient.getAllPatientVisitHistory<any>(patientId);
-      const visits = normalizeHistoryResponse(res)
-        .sort((a, b) => {
-          const at = encounterTime(a);
-          const bt = encounterTime(b);
-          return bt - at; // newest first
-        });
-      const currentIndex = visits.findIndex((v) => v.id === visitId);
-      const previousVisits = currentIndex < 0 ? visits : visits.slice(currentIndex + 1);
-      const prevWithRx = previousVisits.find((v) => v && v.id !== visitId && Array.isArray((v as any).prescriptionItems) && (v as any).prescriptionItems.length > 0);
-      const rawItems: any[] = prevWithRx ? (prevWithRx as any).prescriptionItems : [];
-      const mapped = rawItems
-        .map(mapPrevRxItem)
-        .filter((it): it is PrescriptionItemForm => Boolean(it && (it as PrescriptionItemForm).drugName));
-      if (!mapped.length) {
-        toast({
-          variant: 'warning',
-          title: 'No previous medications found',
-          description: 'Could not find medications in the last visits for this patient.',
-        });
-        return;
-      }
-      setItems((prev) => {
-        const base = prev.filter((it) => (it.drugName || '').trim());
-        const existingKeys = new Set(base.map((it) => `${it.drugName.toLowerCase()}|${it.frequency}|${it.dosePattern || ''}|${it.timing || ''}|${it.duration}|${it.durationUnit}`));
-        const merged = [...base];
-        for (const m of mapped) {
-          const key = `${m.drugName.toLowerCase()}|${m.frequency}|${m.dosePattern || ''}|${m.timing || ''}|${m.duration}|${m.durationUnit}`;
-          if (!existingKeys.has(key)) {
-            merged.push(m);
-            existingKeys.add(key);
-          }
-        }
-        if (!hasTrailingBlank(merged)) merged.push(createBlankItem());
-        return merged;
-      });
-      toast({
-        variant: 'success',
-        title: 'Previous medications added',
-        description: `Added ${mapped.length} item${mapped.length === 1 ? '' : 's'} from the last visit.`,
-      });
-    } catch (e) {
-      toast({
-        variant: 'destructive',
-        title: 'Unable to load previous medications',
-        description: getErrorMessage(e) || 'Please try again.',
-      });
-    } finally {
-      setLoadingPrevMeds(false);
-    }
+    if (!hasTrailingBlank(merged)) merged.push(createBlankItem());
+    setItems(merged);
+    toast({
+      variant: 'success',
+      title: 'Last prescription copied',
+      description: `Added ${added} item${added === 1 ? '' : 's'} from the last prescription.`,
+    });
   };
 
   useEffect(() => {
@@ -2014,6 +1995,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     const loadLearningSources = async () => {
       if (!patientId && !doctorId) {
         setPatientHistoryForLearning([]);
+        setLastPrescription(null);
         setDoctorPrescriptionsForLearning([]);
         setLearningSourcesStatus('idle');
         setLearningSourcesError('');
@@ -2022,22 +2004,25 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
 
       setLearningSourcesStatus('loading');
       setLearningSourcesError('');
+      setLastPrescription(null);
 
       const [patientResult, doctorResult] = await Promise.allSettled([
-        patientId ? Promise.resolve(patientId).then(loadPatientHistory).then((entries) => visitEntries(entries).slice(0, 12)) : Promise.resolve([]),
+        patientId ? Promise.resolve(patientId).then(loadPatientHistory).then(visitEntries) : Promise.resolve([]),
         doctorId ? apiClient.get<any>(`/prescriptions/doctor/${doctorId}`, { limit: 60, page: 1 }) : Promise.resolve([]),
       ]);
 
       if (cancelled) return;
 
-      const nextPatientHistory = patientResult.status === 'fulfilled'
+      const allVisits = patientResult.status === 'fulfilled'
         ? normalizeHistoryResponse(patientResult.value)
         : [];
+      const nextPatientHistory = allVisits.slice(0, 12);
       const nextDoctorPrescriptions = doctorResult.status === 'fulfilled'
         ? normalizePrescriptionResponse(doctorResult.value)
         : [];
 
       setPatientHistoryForLearning(nextPatientHistory);
+      setLastPrescription(findLastPrescription(allVisits));
       setDoctorPrescriptionsForLearning(nextDoctorPrescriptions);
 
       if (patientResult.status === 'rejected' && doctorResult.status === 'rejected') {
@@ -5342,15 +5327,37 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                     </div>
                   </div>
                 )}
+                {learningSourcesStatus === 'loading' && !lastPrescription && (
+                  <div className="text-xs text-muted-foreground">Loading last prescription…</div>
+                )}
+                {lastPrescription && (
+                  <section aria-label="Last prescription" className="rounded-lg border border-border bg-muted/40 p-3 text-sm">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <h4 className="font-medium">Last prescription</h4>
+                        <p className="text-xs text-muted-foreground">
+                          {displayClinicDate(new Date(lastPrescription.date))}{lastPrescription.doctorName ? ` • ${lastPrescription.doctorName}` : ''}
+                        </p>
+                      </div>
+                      <Button size="sm" variant="outline" onClick={copyLastPrescription}>Copy to this prescription</Button>
+                    </div>
+                    <ul className="mt-2 space-y-1">
+                      {lastPrescription.items.map((m, i) => (
+                        <li key={`${m.drugName}-${i}`} className="break-words">
+                          <span className="font-medium">{m.drugName}</span>
+                          {[m.dosePattern || String(m.frequency || '').replace(/_/g, ' ').toLowerCase(), m.timing ? String(m.timing).replace(/_/g, ' ').toLowerCase() : '', m.duration !== '' && m.duration != null ? `${m.duration} ${String(m.durationUnit || '').toLowerCase()}` : '', m.instructions || '']
+                            .filter(Boolean).map((part) => ` • ${part}`).join('')}
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                )}
                 <div className="flex justify-between items-center">
                   <div className="text-sm text-muted-foreground">Total items: {items.length}</div>
                   <div className="flex gap-2">
                     {canAddDrugToDB && (
                       <Button size="sm" variant="ghost" onClick={openAddDrugDialog}>+ Add to Drug Database</Button>
                     )}
-                    <Button size="sm" variant="outline" onClick={addPreviousMedications} disabled={loadingPrevMeds}>
-                      {loadingPrevMeds ? 'Adding...' : 'Reuse last meds'}
-                    </Button>
                     <Button size="sm" variant="outline" onClick={addRowAndFocus}>Add Row</Button>
                   </div>
                 </div>
