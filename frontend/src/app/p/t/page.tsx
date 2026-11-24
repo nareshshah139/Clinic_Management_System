@@ -83,22 +83,27 @@ export default function TaskLinkPage() {
   if (phase.kind === 'inactive') return <p role="alert" data-testid="link-inactive">{t(lang, 'inactive')}</p>;
   if (!page) return null;
 
+  const urgentNotice = (results: SubmitResult[]) => {
+    const urgent = results.find((r) => r.status === 'saved' && r.urgent) as Extract<SubmitResult, { status: 'saved' }> | undefined;
+    if (!urgent) return null;
+    return (
+      <div role="alert" className="space-y-3 rounded-md border-2 border-destructive p-4" data-testid="urgent">
+        <p className="text-lg font-semibold">{t(lang, 'urgent')}</p>
+        {urgent.clinicPhone && (
+          <a className="inline-block rounded-md bg-destructive px-4 py-3 text-lg font-semibold text-destructive-foreground" href={`tel:${urgent.clinicPhone}`}>
+            {t(lang, 'call', { phone: urgent.clinicPhone })}
+          </a>
+        )}
+      </div>
+    );
+  };
+
   if (phase.kind === 'done') {
-    const urgent = phase.results.find((r) => r.status === 'saved' && r.urgent) as Extract<SubmitResult, { status: 'saved' }> | undefined;
     const already = phase.results.some((r) => r.status === 'already-answered');
     return (
       <section className="space-y-4" data-testid="confirmation">
         {languagePicker}
-        {urgent && (
-          <div role="alert" className="space-y-3 rounded-md border-2 border-destructive p-4" data-testid="urgent">
-            <p className="text-lg font-semibold">{t(lang, 'urgent')}</p>
-            {urgent.clinicPhone && (
-              <a className="inline-block rounded-md bg-destructive px-4 py-3 text-lg font-semibold text-destructive-foreground" href={`tel:${urgent.clinicPhone}`}>
-                {t(lang, 'call', { phone: urgent.clinicPhone })}
-              </a>
-            )}
-          </div>
-        )}
+        {urgentNotice(phase.results)}
         <p data-testid={already ? 'already-answered' : 'saved'}>{t(lang, already ? 'already' : 'thanks')}</p>
         <a className="underline" href="/p/records">{t(lang, 'records')}</a>
       </section>
@@ -112,13 +117,20 @@ export default function TaskLinkPage() {
         <p className="text-sm text-muted-foreground">{page.clinic}</p>
         <h1 className="text-xl font-semibold">{t(lang, 'hello', { name: page.firstName })}</h1>
       </header>
-      {page.checkIns.map((c) => (
+      {urgentNotice(Object.values(done))}
+      {page.checkIns.map((c) => done[c.id] ? (
+        <section key={c.id} className="space-y-2" aria-label={c.title[lang]} data-testid="check-in-sent">
+          <h2 className="text-lg font-semibold">{c.title[lang]}</h2>
+          <p>{t(lang, 'sentOne')}</p>
+        </section>
+      ) : (
         <section key={c.id} className="space-y-4" aria-label={c.title[lang]}>
           <p>{t(lang, 'intro', { doctor: c.doctor })}</p>
           <h2 className="text-lg font-semibold">{c.title[lang]}</h2>
           {c.items.map((item) => (
             <Question
               key={item.key}
+              group={`${c.id}:${item.key}`}
               item={item}
               lang={lang}
               value={answers[c.id]?.[item.key]}
@@ -138,6 +150,7 @@ export default function TaskLinkPage() {
 }
 
 function Question(props: {
+  group: string;
   item: TaskItem;
   lang: Lang;
   value: Answer | undefined;
@@ -161,7 +174,7 @@ function Question(props: {
         <div className="flex flex-wrap gap-2">
           {steps.map((n) => (
             <label key={n} className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-md border has-[:checked]:bg-primary has-[:checked]:text-primary-foreground">
-              <input className="sr-only" type="radio" name={item.key} value={n} checked={value === n} onChange={() => props.onAnswer(n)} />
+              <input className="sr-only" type="radio" name={props.group} value={n} checked={value === n} onChange={() => props.onAnswer(n)} />
               {n}
             </label>
           ))}
@@ -179,7 +192,7 @@ function Question(props: {
           <label key={o.value} className="flex min-h-11 items-center gap-3 rounded-md border px-3">
             <input
               type={multi ? 'checkbox' : 'radio'}
-              name={item.key}
+              name={props.group}
               value={o.value}
               checked={multi ? chosen.includes(o.value) : value === o.value}
               onChange={(e) => props.onAnswer(multi ? (e.target.checked ? [...chosen, o.value] : chosen.filter((v) => v !== o.value)) : o.value)}

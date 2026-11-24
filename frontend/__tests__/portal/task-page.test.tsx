@@ -70,6 +70,41 @@ describe('patient task page (PP-36, PP-40, PP-44, PP-45, PP-46)', () => {
     expect(bodies()[2]).toEqual({ token: TOKEN, checkInId: 'c1', answers: { severity: 7, note: 'itchy at night' }, photos: [] });
   });
 
+  const TWO = { ...PAGE, checkIns: [PAGE.checkIns[0], { ...PAGE.checkIns[0], id: 'c2', title: { EN: 'Second check-in', TE: 'రెండవ', HI: 'दूसरा' } }] };
+
+  it('gives each check-in its own answer group when two ask the same question', async () => {
+    fetchMock.mockReturnValueOnce(json(200, TWO));
+    render(<TaskLinkPage />);
+    await screen.findByText('Hello Asha');
+    const [first, second] = screen.getAllByLabelText('7');
+    fireEvent.click(first);
+    fireEvent.click(screen.getAllByLabelText('3')[1]);
+    expect(first).toBeChecked();
+    expect(second).not.toBeChecked();
+    expect(first.getAttribute('name')).not.toBe(second.getAttribute('name'));
+  });
+
+  it('after a partial save shows the urgent call notice, locks the saved check-in and sends only the rest', async () => {
+    fetchMock
+      .mockReturnValueOnce(json(200, TWO))
+      .mockReturnValueOnce(json(200, { status: 'saved', urgent: true, clinicPhone: '+91 40 5555 0100' }))
+      .mockReturnValueOnce(json(400, { message: ['severity is required'] }))
+      .mockReturnValueOnce(json(200, { status: 'saved', urgent: false }));
+    render(<TaskLinkPage />);
+    await screen.findByText('Hello Asha');
+    fireEvent.click(screen.getAllByLabelText('9')[0]);
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Send answers' })));
+    expect(await screen.findByTestId('submit-error')).toHaveTextContent('Please answer every required question.');
+    expect(screen.getByTestId('urgent')).toHaveTextContent('Call +91 40 5555 0100');
+    expect(screen.getByTestId('check-in-sent')).toHaveTextContent('How is your skin?');
+    expect(screen.getAllByLabelText('9')).toHaveLength(1);
+    fireEvent.click(screen.getByLabelText('2'));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Send answers' })));
+    expect(await screen.findByTestId('urgent')).toBeInTheDocument();
+    expect(screen.getByTestId('confirmation')).toBeInTheDocument();
+    expect(bodies().slice(1).map((b) => b.checkInId)).toEqual(['c1', 'c2', 'c2']);
+  });
+
   it('switches language on the page only, without storing it or asking the server', async () => {
     fetchMock.mockReturnValueOnce(json(200, PAGE));
     render(<TaskLinkPage />);

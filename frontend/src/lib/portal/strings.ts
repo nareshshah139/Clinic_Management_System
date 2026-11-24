@@ -16,6 +16,7 @@ const S = {
   photoTooLarge: { EN: 'This photo could not be used. Please try another.', TE: 'ఈ ఫోటోను ఉపయోగించలేకపోయాం. మరొకటి ప్రయత్నించండి.', HI: 'यह फ़ोटो इस्तेमाल नहीं हो सकी। कृपया दूसरी आज़माएँ।' },
   required: { EN: 'Required', TE: 'తప్పనిసరి', HI: 'ज़रूरी' },
   thanks: { EN: 'Thank you. The clinic has your answers.', TE: 'ధన్యవాదాలు. మీ జవాబులు క్లినిక్‌కు చేరాయి.', HI: 'धन्यवाद। आपके जवाब क्लिनिक को मिल गए हैं।' },
+  sentOne: { EN: 'Sent. The clinic has these answers.', TE: 'పంపాం. ఈ జవాబులు క్లినిక్‌కు చేరాయి.', HI: 'भेज दिया। ये जवाब क्लिनिक को मिल गए हैं।' },
   already: { EN: 'This check-in was already answered. We passed your new message to the clinic.', TE: 'ఈ చెక్-ఇన్‌కు ఇప్పటికే జవాబు ఇచ్చారు. మీ కొత్త సందేశాన్ని క్లినిక్‌కు పంపాం.', HI: 'इस चेक-इन का जवाब पहले ही दिया जा चुका है। आपका नया संदेश क्लिनिक को भेज दिया गया है।' },
   urgent: { EN: 'Please call the clinic now about your answer.', TE: 'మీ జవాబు గురించి దయచేసి ఇప్పుడే క్లినిక్‌కు కాల్ చేయండి.', HI: 'अपने जवाब के बारे में कृपया अभी क्लिनिक को फ़ोन करें।' },
   call: { EN: 'Call {phone}', TE: '{phone} కు కాల్ చేయండి', HI: '{phone} पर कॉल करें' },
