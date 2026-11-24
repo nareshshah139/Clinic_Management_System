@@ -1,5 +1,6 @@
 const MAX_BASE_LENGTH = 120;
 const HAS_LETTER_OR_DIGIT = /[\p{L}\p{N}]/u;
+const INVISIBLE_FORMAT_CHARS = /(?![\u200c\u200d])\p{Cf}/gu;
 const CALENDAR_DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 const clinicDayFormat = new Intl.DateTimeFormat('en-CA', {
@@ -11,6 +12,7 @@ const clinicDayFormat = new Intl.DateTimeFormat('en-CA', {
 
 function sanitizePart(value: string): string {
   return value
+    .replace(INVISIBLE_FORMAT_CHARS, '')
     .replace(/[\\/:*?"<>|\u0000-\u001f\u007f]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
