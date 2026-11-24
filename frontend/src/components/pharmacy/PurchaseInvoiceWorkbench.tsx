@@ -143,6 +143,7 @@ type HeaderForm = {
 type LineForm = {
   productKind?: PurchaseProductCatalog["productKind"];
   ocrSourceRef?: string;
+  ocrLineKey?: string;
   localId: string;
   serialNumber: string;
   productName: string;
@@ -170,6 +171,7 @@ type LineForm = {
 
 type PurchaseInvoiceItem = {
   ocrSourceRef?: string;
+  ocrLineKey?: string;
   id?: string;
   lineNumber: number;
   ocrConfidence?: number | null;
@@ -250,6 +252,7 @@ type PurchaseListResponse = {
 type ExtractedPurchaseLine = Partial<{
   productKind: PurchaseProductCatalog["productKind"];
   ocrSourceRef: string;
+  ocrLineKey: string;
   serialNumber: number | string;
   productName: string;
   manufacturer: string;
@@ -790,6 +793,7 @@ function buildDraftPayload(header: HeaderForm, lines: LineForm[]) {
       const amounts = calculateLine(line);
       return {
         ocrSourceRef: line.ocrSourceRef,
+        ocrLineKey: line.ocrLineKey,
         serialNumber: Number(line.serialNumber || index + 1),
         productName: line.productName.trim(),
         manufacturer: line.manufacturer.trim(),
@@ -836,6 +840,7 @@ function lineFromExtracted(
   return {
     ...base,
     ocrSourceRef: item.ocrSourceRef,
+    ocrLineKey: item.ocrLineKey,
     productKind: item.productKind,
     serialNumber: formString(item.serialNumber, String(index + 1)),
     productName: formString(item.productName),
