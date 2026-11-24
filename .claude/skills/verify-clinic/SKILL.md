@@ -25,6 +25,7 @@ Start an instance (keep it running in the background; it holds the stack until s
 ```bash
 node .claude/skills/verify-clinic/scripts/launch.cjs            # instance "default"
 node .claude/skills/verify-clinic/scripts/launch.cjs --name b   # a second, fully isolated instance
+node .claude/skills/verify-clinic/scripts/launch.cjs --env-file fake-meta.env   # extra backend env (KEY=VALUE lines), e.g. WHATSAPP_GRAPH_BASE_URL of a fake Meta server
 ```
 
 - **Ready signal:** stdout prints `READY <state-file> base=http://127.0.0.1:<port> api=http://127.0.0.1:<port> boot=<s>` (about 20s warm; the first boot also generates a Prisma client). The state file `output/verify-clinic/instances/<name>.json` holds `base`, `api`, `schema`, `branchId`, `gitHead` and the seeded `users`.
@@ -116,7 +117,7 @@ All are in `.claude/skills/verify-clinic/scripts/` and run from the repo root.
 | Script | What it does |
 |---|---|
 | `ensure-postgres.sh` | Starts the local Postgres and creates `clinic_stack`. Idempotent; needs root. |
-| `launch.cjs [--name N]` | Boots an isolated stack, writes `output/verify-clinic/instances/N.json`, prints `READY`, and runs until stopped. Run it in the background. |
+| `launch.cjs [--name N] [--env-file F]` | Boots an isolated stack (F adds backend env such as fake WhatsApp settings; the backend keeps raw bodies like `main.ts`), writes `output/verify-clinic/instances/N.json`, prints `READY`, and runs until stopped. Run it in the background. |
 | `doctor.cjs [--instance N]` | Read-only health check; exits 0 or 1. |
 | `drive-manual-bill.cjs [--instance N] [--only …]` | Scripted end-to-end proof of manual bill intake; exits 0 only if all checks pass. |
 | `stop.cjs [--instance N]` | Tears down only what `launch.cjs` started. |

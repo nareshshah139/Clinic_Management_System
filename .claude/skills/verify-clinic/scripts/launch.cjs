@@ -6,6 +6,10 @@ const root = path.resolve(__dirname, "../../../..");
 const { bootStack } = require(path.join(root, "scripts/stack/boot.cjs"));
 
 const name = (process.argv.includes("--name") ? process.argv[process.argv.indexOf("--name") + 1] : "default").replace(/[^A-Za-z0-9_-]/g, "_");
+const envFile = process.argv.includes("--env-file") ? process.argv[process.argv.indexOf("--env-file") + 1] : null;
+const extraEnv = envFile
+  ? Object.fromEntries(fs.readFileSync(envFile, "utf8").split("\n").map((l) => l.trim()).filter((l) => l && !l.startsWith("#")).map((l) => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1)]))
+  : {};
 const stateDir = path.join(root, "output/verify-clinic/instances");
 const stateFile = path.join(stateDir, `${name}.json`);
 
@@ -25,7 +29,7 @@ function replaceBootSignalHandlers(stop) {
     fs.rmSync(stateFile);
   }
   const started = Date.now();
-  const stack = await bootStack({ databaseUrl: process.env.STACK_DATABASE_URL || "postgresql://postgres:postgres@127.0.0.1:5432/clinic_stack", label: `verify-clinic-${name}` });
+  const stack = await bootStack({ databaseUrl: process.env.STACK_DATABASE_URL || "postgresql://postgres:postgres@127.0.0.1:5432/clinic_stack", label: `verify-clinic-${name}`, env: extraEnv });
   fs.mkdirSync(stateDir, { recursive: true });
   const state = {
     name, pid: process.pid, base: stack.base, api: stack.api, schema: stack.schema, branchId: stack.branch.id,

@@ -33,7 +33,7 @@ const { diagnosticValidationPipe, installHttpObservability } = source(
 );
 const { configureRequestBody } = source("shared/http/request-body");
 (async () => {
-  const app = await NestFactory.create(AppModule, new ExpressAdapter());
+  const app = await NestFactory.create(AppModule, new ExpressAdapter(), { rawBody: true });
   installHttpObservability(app);
   configureRequestBody(app);
   app.useGlobalPipes(diagnosticValidationPipe());
