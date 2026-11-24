@@ -7,15 +7,8 @@ import { AuthController } from './auth.controller';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { PasswordResetService } from './password-reset.service';
+import { DEFAULT_THROTTLE } from '../../shared/http/default-throttle';
 import { WindowThrottlerStorage } from '../../shared/http/window-throttler-storage';
-
-/**
- * @cc [owner:nareshshah139,label:security] default-throttle-window
- * Every route without its own limit MUST allow at most DEFAULT_THROTTLE.limit requests per
- * client address in a 60-second window (ttl is in milliseconds) and answer 429 with Retry-After
- * beyond it. Portal limits MUST NOT rely on this throttler.
- */
-export const DEFAULT_THROTTLE = { ttl: 60_000, limit: 600 };
 
 @Module({
   imports: [

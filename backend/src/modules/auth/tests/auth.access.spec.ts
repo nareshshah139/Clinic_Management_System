@@ -12,7 +12,7 @@ import * as bcrypt from 'bcryptjs';
 import request from 'supertest';
 import { exec } from 'child_process';
 import { AuthController } from '../auth.controller';
-import { DEFAULT_THROTTLE } from '../auth.module';
+import { DEFAULT_THROTTLE } from '../../../shared/http/default-throttle';
 import { AuthService } from '../auth.service';
 import { PasswordResetService } from '../password-reset.service';
 import { JwtStrategy, passwordStamp } from '../strategies/jwt.strategy';

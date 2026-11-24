@@ -5,7 +5,7 @@ import { Test } from '@nestjs/testing';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import type { Request } from 'express';
 import request from 'supertest';
-import { DEFAULT_THROTTLE } from '../../modules/auth/auth.module';
+import { DEFAULT_THROTTLE } from './default-throttle';
 import { RequestContextService } from '../context/request-context.service';
 import { RequestContextInterceptor } from '../interceptors/request-context.interceptor';
 import { configureTrustProxy, trustProxyHops } from './trust-proxy';
