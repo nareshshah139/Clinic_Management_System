@@ -31,6 +31,7 @@ const S = {
   codeRejected: { EN: 'That code did not work. Check it, or ask for a new one.', TE: 'ఆ కోడ్ పనిచేయలేదు. సరిచూడండి, లేదా కొత్తది అడగండి.', HI: 'यह कोड नहीं चला। जाँचें, या नया कोड माँगें।' },
   newCode: { EN: 'Use a different number or get a new code', TE: 'వేరే నంబర్ వాడండి లేదా కొత్త కోడ్ పొందండి', HI: 'दूसरा नंबर डालें या नया कोड लें' },
   busy: { EN: 'Too many tries. Please wait a few minutes and try again.', TE: 'చాలా ప్రయత్నాలు. కొన్ని నిమిషాలు ఆగి మళ్లీ ప్రయత్నించండి.', HI: 'बहुत सारी कोशिशें। कुछ मिनट रुककर फिर कोशिश करें।' },
+  signOutFailed: { EN: 'Could not sign you out. Check your connection and try again.', TE: 'సైన్ అవుట్ కాలేదు. కనెక్షన్ చూసి మళ్లీ ప్రయత్నించండి.', HI: 'साइन आउट नहीं हो सका। कनेक्शन देखकर फिर से कोशिश करें।' },
   offline: { EN: 'Could not reach the clinic. Please try again.', TE: 'క్లినిక్‌ను చేరుకోలేకపోయాం. మళ్లీ ప్రయత్నించండి.', HI: 'क्लिनिक तक नहीं पहुँच सके। कृपया फिर से कोशिश करें।' },
   whoIsThis: { EN: 'Who are you signing in for?', TE: 'ఎవరి కోసం సైన్ ఇన్ చేస్తున్నారు?', HI: 'आप किसके लिए साइन इन कर रहे हैं?' },
   switchProfile: { EN: 'Switch person', TE: 'వ్యక్తిని మార్చండి', HI: 'व्यक्ति बदलें' },

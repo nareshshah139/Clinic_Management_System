@@ -31,8 +31,8 @@ describe('portal records page (PP-61, PP-63, PP-65, PP-60)', () => {
     replace.mockClear();
   });
   const urls = () => fetchMock.mock.calls.map(([url, init]) => `${init.method} ${url}`);
-  const signedIn = async () => {
-    fetchMock.mockReturnValueOnce(json(200, SESSION)).mockReturnValueOnce(json(200, HOME));
+  const signedIn = async (home: unknown = HOME) => {
+    fetchMock.mockReturnValueOnce(json(200, SESSION)).mockReturnValueOnce(json(200, home));
     render(<PortalRecordsPage />);
     await screen.findByText('Next appointment');
   };
@@ -96,20 +96,61 @@ describe('portal records page (PP-61, PP-63, PP-65, PP-60)', () => {
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Messages' })));
     await screen.findByLabelText('Write to the clinic');
     fireEvent.change(screen.getByLabelText('Write to the clinic'), { target: { value: 'Can I come Friday?' } });
-    fetchMock.mockRejectedValueOnce(new TypeError('offline'));
+    fetchMock.mockReturnValueOnce(json(200, SESSION)).mockRejectedValueOnce(new TypeError('offline'));
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Send' })));
     expect(await screen.findByTestId('send-error')).toHaveTextContent('Could not reach the clinic');
     expect(screen.getByLabelText('Write to the clinic')).toHaveValue('Can I come Friday?');
     const reply = { id: 'm4', from: 'clinic', channel: 'PORTAL', body: 'Yes, Friday works', photo: false, at: '2026-11-22T06:00:00Z' };
-    fetchMock.mockReturnValueOnce(json(200, { messages: [...THREAD, { id: 'm3', from: 'patient', channel: 'PORTAL', body: 'Can I come Friday?', photo: false, at: '2026-11-22T05:00:00Z' }, reply] }));
+    fetchMock.mockReturnValueOnce(json(200, SESSION)).mockReturnValueOnce(json(200, { messages: [...THREAD, { id: 'm3', from: 'patient', channel: 'PORTAL', body: 'Can I come Friday?', photo: false, at: '2026-11-22T05:00:00Z' }, reply] }));
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Send' })));
     const thread = screen.getByTestId('thread');
     expect(within(thread).getByText('Yes, Friday works').closest('li')).toHaveAttribute('data-from', 'clinic');
     expect(screen.getByLabelText('Write to the clinic')).toHaveValue('');
-    const [first, second] = fetchMock.mock.calls.slice(-2).map(([url, init]) => ({ url, method: init.method, body: JSON.parse(init.body) }));
+    const [first, second] = fetchMock.mock.calls.filter(([url, init]) => url === '/api/portal/records/messages' && init.method === 'POST').map(([url, init]) => ({ url, method: init.method, body: JSON.parse(init.body) }));
     expect(first).toEqual(second);
     expect(first).toMatchObject({ url: '/api/portal/records/messages', method: 'POST', body: { body: 'Can I come Friday?' } });
     expect(first.body.clientKey).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
+  it('an edited message after a failed send gets a new key, and a profile chosen in another tab stops the send', async () => {
+    await signedIn();
+    fetchMock.mockReturnValueOnce(json(200, { messages: THREAD }));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Messages' })));
+    fireEvent.change(await screen.findByLabelText('Write to the clinic'), { target: { value: 'Friday?' } });
+    fetchMock.mockReturnValueOnce(json(200, SESSION)).mockRejectedValueOnce(new TypeError('offline'));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Send' })));
+    await screen.findByTestId('send-error');
+    fireEvent.change(screen.getByLabelText('Write to the clinic'), { target: { value: 'Friday at 10?' } });
+    fetchMock.mockReturnValueOnce(json(200, SESSION)).mockReturnValueOnce(json(200, { messages: THREAD }));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Send' })));
+    const posts = fetchMock.mock.calls.filter(([url, init]) => url === '/api/portal/records/messages' && init.method === 'POST').map(([, init]) => JSON.parse(init.body));
+    expect(posts.map((b) => b.body)).toEqual(['Friday?', 'Friday at 10?']);
+    expect(posts[0].clientKey).not.toBe(posts[1].clientKey);
+
+    const reload = jest.fn();
+    Object.defineProperty(window, 'location', { configurable: true, value: { ...window.location, reload } });
+    fireEvent.change(screen.getByLabelText('Write to the clinic'), { target: { value: 'For Asha' } });
+    fetchMock.mockReturnValueOnce(json(200, { ...SESSION, chosen: 'r2' }));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Send' })));
+    expect(reload).toHaveBeenCalled();
+    expect(fetchMock.mock.calls.filter(([url, init]) => url === '/api/portal/records/messages' && init.method === 'POST')).toHaveLength(2);
+  });
+
+  it('stays signed in and says so when the sign-out request never reaches the clinic', async () => {
+    await signedIn();
+    fetchMock.mockRejectedValueOnce(new TypeError('offline'));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Sign out' })));
+    expect(await screen.findByText('Could not sign you out. Check your connection and try again.')).toBeInTheDocument();
+    expect(replace).not.toHaveBeenCalledWith('/p');
+  });
+
+  it('a prescription line prefers the dose pattern and keeps amount, wash-off, taper and pulse details', async () => {
+    const item = { drugName: 'Clobetasol', frequency: 'BD', dosePattern: '1-0-1', applicationAmount: '1 FTU', washOffAfterMinutes: 30, taperSchedule: 'Halve weekly', pulseRegimen: 'Week 1 of 4' };
+    await signedIn({ ...HOME, latestPrescription: { ...HOME.latestPrescription, items: [item] } });
+    const text = screen.getByTestId('prescription').textContent!;
+    expect(text).toContain('1-0-1');
+    expect(text).not.toContain('BD');
+    ['1 FTU', '30 min', 'Halve weekly', 'Week 1 of 4'].forEach((part) => expect(text).toContain(part));
   });
 
   it('goes back to sign-in when the session is gone, and signs out here or everywhere (PP-60)', async () => {

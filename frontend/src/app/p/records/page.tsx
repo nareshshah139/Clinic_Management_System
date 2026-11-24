@@ -64,7 +64,9 @@ export default function PortalRecordsPage() {
   }
 
   async function out(everywhere: boolean) {
-    await signOut(everywhere);
+    const r = await signOut(everywhere);
+    // A sign-out the server never saw leaves the session alive, so stay and say so.
+    if (!r.ok && r.reason !== 'signed-out') return setError('signOutFailed');
     leave();
   }
 
@@ -101,7 +103,7 @@ export default function PortalRecordsPage() {
       {data?.view === 'appointments' && <Appointments lang={lang} upcoming={data.upcoming} />}
       {data?.view === 'visits' && <Visits lang={lang} visits={data.visits} />}
       {data?.view === 'check-ins' && <CheckIns lang={lang} checkIns={data.checkIns} />}
-      {data?.view === 'messages' && <Messages lang={lang} messages={data.messages} onSent={(messages) => setData({ view: 'messages', messages })} onSignedOut={leave} />}
+      {data?.view === 'messages' && <Messages lang={lang} chosen={session.chosen} messages={data.messages} onSent={(messages) => setData({ view: 'messages', messages })} onSignedOut={leave} onProfileChanged={() => window.location.reload()} />}
       <footer className="flex flex-col gap-2 border-t pt-4">
         <Button type="button" variant="outline" onClick={() => void out(false)}>{t(lang, 'signOut')}</Button>
         <Button type="button" variant="ghost" onClick={() => void out(true)}>{t(lang, 'signOutEverywhere')}</Button>
@@ -160,13 +162,18 @@ function Appointments({ lang, upcoming }: { lang: Lang; upcoming: Appointment[] 
 const rxLine = (item: Prescription['items'][number]) =>
   [
     [item.drugName, item.dosage !== undefined ? `${item.dosage}${item.dosageUnit ?? ''}` : ''].filter(Boolean).join(' '),
-    item.frequency ?? item.dosePattern,
+    item.dosePattern ?? item.frequency,
     item.duration !== undefined ? `${item.duration} ${String(item.durationUnit ?? '').toLowerCase()}`.trim() : '',
     item.route,
     item.timing,
+    item.dayPart,
     item.applicationSite,
+    item.applicationAmount,
+    item.washOffAfterMinutes !== undefined ? `${item.washOffAfterMinutes} min` : '',
     item.instructions,
     item.foodInstructions,
+    item.taperSchedule,
+    item.pulseRegimen,
   ].filter((part) => part !== undefined && part !== '').join(' · ');
 
 function PrescriptionBlock({ lang, rx }: { lang: Lang; rx: Prescription }) {
@@ -233,7 +240,7 @@ function Thread({ lang, messages }: { lang: Lang; messages: Message[] }) {
   );
 }
 
-function Messages({ lang, messages, onSent, onSignedOut }: { lang: Lang; messages: Message[]; onSent: (m: Message[]) => void; onSignedOut: () => void }) {
+function Messages({ lang, chosen, messages, onSent, onSignedOut, onProfileChanged }: { lang: Lang; chosen: string | null; messages: Message[]; onSent: (m: Message[]) => void; onSignedOut: () => void; onProfileChanged: () => void }) {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<StringKey | null>(null);
@@ -244,6 +251,9 @@ function Messages({ lang, messages, onSent, onSignedOut }: { lang: Lang; message
   async function send() {
     setSending(true);
     setError(null);
+    // The session's chosen profile is shared by every tab; refuse to file this under someone else.
+    const now = await getSession();
+    if (now.ok && now.data.chosen !== chosen) { setSending(false); return onProfileChanged(); }
     const r = await sendMessage(text, key.current);
     setSending(false);
     if (!r.ok) return r.reason === 'signed-out' ? onSignedOut() : setError('offline');
@@ -258,7 +268,7 @@ function Messages({ lang, messages, onSent, onSignedOut }: { lang: Lang; message
       <form className="space-y-2" onSubmit={(e) => { e.preventDefault(); void send(); }}>
         <label className="block space-y-1">
           <span className="font-medium">{t(lang, 'writeToClinic')}</span>
-          <Textarea maxLength={2000} value={text} onChange={(e) => setText(e.target.value)} />
+          <Textarea maxLength={2000} value={text} onChange={(e) => { setText(e.target.value); key.current = crypto.randomUUID(); }} />
         </label>
         <p className="text-sm text-muted-foreground">{t(lang, 'messageHint')}</p>
         {error && <p role="alert" className="text-destructive" data-testid="send-error">{t(lang, error)}</p>}
