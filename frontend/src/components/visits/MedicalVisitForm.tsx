@@ -433,6 +433,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
   const [loadingHistory, setLoadingHistory] = useState(false);
 
   const [saving, setSaving] = useState(false);
+  const [historyExpanded, setHistoryExpanded] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'unsaved' | 'autosaving' | 'saved' | 'saving' | 'error'>('idle');
   useEffect(() => {
     onUnsavedChange?.(saveStatus !== 'idle' && saveStatus !== 'saved');
@@ -1813,13 +1814,20 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
             </NativeSelect>
           </div>
           {patientDetails?.allergies && (
-            <span className="inline-flex max-w-xs items-center gap-1 truncate rounded-md border border-destructive-border bg-destructive-soft px-2 py-1 text-xs font-medium text-destructive-text" title={patientDetails.allergies}>
-              <AlertTriangle className="size-3.5 shrink-0" aria-hidden="true" />
-              <span className="truncate">Allergies: {patientDetails.allergies}</span>
+            <span className="inline-flex max-w-full items-start gap-1 rounded-md border border-destructive-border bg-destructive-soft px-2 py-1 text-xs font-medium text-destructive-text">
+              <AlertTriangle className="mt-px size-3.5 shrink-0" aria-hidden="true" />
+              <span className="min-w-0 break-words">Allergies: {patientDetails.allergies}</span>
             </span>
           )}
           {patientDetails?.medicalHistory && (
-            <span className="max-w-xs truncate text-xs text-muted-foreground" title={patientDetails.medicalHistory}>History: {patientDetails.medicalHistory}</span>
+            <button
+              type="button"
+              aria-expanded={historyExpanded}
+              onClick={() => setHistoryExpanded((expanded) => !expanded)}
+              className={`text-left text-xs text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-foreground ${historyExpanded ? 'max-w-full whitespace-pre-wrap break-words' : 'max-w-xs truncate'}`}
+            >
+              History: {patientDetails.medicalHistory}
+            </button>
           )}
           <div className="ml-auto flex items-center gap-3">
             <span className="inline-flex items-center gap-2 text-sm text-muted-foreground">
