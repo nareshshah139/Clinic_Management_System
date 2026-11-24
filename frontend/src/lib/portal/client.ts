@@ -25,7 +25,9 @@ async function post<T>(path: string, body: unknown): Promise<PortalResult<T>> {
       method: 'POST',
       credentials: 'omit',
       cache: 'no-store',
-      referrerPolicy: 'no-referrer',
+      // Not 'no-referrer': that makes the browser send Origin: null, which the portal refuses (PP-59).
+      // The token lives in the fragment, which no Referer ever carries.
+      referrerPolicy: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
