@@ -85,6 +85,12 @@ databaseTests('Patient phone, WhatsApp consent, language and portal switch on Po
     expect(await profile(p.id)).toMatchObject({ phoneE164: '+14155550101', consentState: 'PENDING' });
   });
 
+  it('PP-01: an 11-digit number typed without "+" (a Brazilian local mobile) stores no WhatsApp number and agreement is refused', async () => {
+    const p = await register('Ana Local', '11987654321');
+    expect(await profile(p.id)).toMatchObject({ phoneE164: null, consentState: 'NOT_ASKED' });
+    await expect(portal.recordConsent(p.id, 'A', 'agreed', 'rec')).rejects.toThrow('no phone number WhatsApp can use');
+  });
+
   it('PP-07: changing the phone resets consent to NOT_ASKED and clears confirmation; saving the same number keeps it', async () => {
     const p = await register('Esha', '9876500013');
     await db.patientPortalProfile.update({ where: { patientId: p.id }, data: { consentState: 'OPTED_IN', phoneConfirmedAt: new Date() } });

@@ -35,13 +35,18 @@ export const LANGUAGES = Object.values(Language);
  * Writing a patient's phone MUST, in the same transaction, store the E.164 number derived from it,
  * and when that number changes, set consent to NOT_ASKED and clear the confirmation.
  */
+// Patient.phone drops the "+", so re-saving an international number gives back its bare digits.
+function storesSameNumber(raw: string, phoneE164: string | null) {
+  return !!phoneE164 && !raw.trim().startsWith('+') && raw.replace(/\D/g, '') === phoneE164.slice(1);
+}
+
 export async function syncPatientPhone(tx: Tx, patientId: string, phone: string) {
   const phoneE164 = toE164(phone);
   const current = await tx.patientPortalProfile.findUnique({ where: { patientId } });
   if (!current) {
     return tx.patientPortalProfile.create({ data: { patientId, phoneE164 } });
   }
-  if (current.phoneE164 === phoneE164) return current;
+  if (current.phoneE164 === phoneE164 || storesSameNumber(phone, current.phoneE164)) return current;
   return tx.patientPortalProfile.update({
     where: { patientId },
     data: {
