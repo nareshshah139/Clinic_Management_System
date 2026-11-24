@@ -67,6 +67,7 @@ import {
 import { usePurchasePermissions } from "@/hooks/usePurchasePermissions";
 import { previewPurchaseTerms, applyPurchaseTerms, undoPurchaseTerms, type SharedTerms, type SharedTermPreview } from "@/lib/purchase-invoice-batch";
 import { apiClient } from "@/lib/api";
+import { handleUnauthorizedRedirect } from "@/lib/authRedirect";
 import { getErrorMessage } from "@/lib/utils";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -2250,9 +2251,9 @@ function PurchaseInvoiceEditor({
       );
 
       if (!attemptCurrent(attempt)) return;
-      if (response.status === 401 && typeof window !== "undefined") {
-        const next = window.location.pathname + window.location.search;
-        window.location.href = `/login?next=${encodeURIComponent(next)}`;
+      if (response.status === 401) {
+        handleUnauthorizedRedirect(response);
+        setError("Your session expired. Sign in again, then retry the upload.");
         return;
       }
 

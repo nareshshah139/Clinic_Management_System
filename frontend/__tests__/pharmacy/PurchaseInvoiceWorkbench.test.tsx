@@ -690,6 +690,20 @@ describe('PurchaseInvoiceWorkbench', () => {
     expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
   });
 
+  it('keeps the bill on screen and asks to sign in again when the scan upload gets a 401', async () => {
+    const { subscribeToSessionRecovery, getSessionState } = jest.requireActual('@/lib/authRedirect');
+    const unsubscribe = subscribeToSessionRecovery(() => {});
+    const before = window.location.href;
+    (global.fetch as jest.Mock).mockResolvedValue({ ok: false, status: 401, json: async () => ({}) });
+    render(<PurchaseInvoiceWorkbench />);
+    fireEvent.change(screen.getByLabelText('Upload invoice PDF or image'), { target: { files: [new File(['test'], 'invoice.jpg', { type: 'image/jpeg' })] } });
+    fireEvent.click(screen.getByRole('button', { name: 'Scan bill' }));
+    expect(await screen.findByText('Your session expired. Sign in again, then retry the upload.')).toBeVisible();
+    expect(window.location.href).toBe(before);
+    expect(getSessionState()).toBe('expired');
+    unsubscribe();
+  });
+
   it('keeps printed corrections independent and blocks unreconciled final submission', async () => {
     renderSavedInvoice();
     await editSelectedInvoice();
