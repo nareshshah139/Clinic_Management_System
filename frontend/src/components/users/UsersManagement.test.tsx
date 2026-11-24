@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import UsersManagement from './UsersManagement';
 import { apiClient } from '@/lib/api';
 
+jest.mock('@/components/layout/dashboard-user-context', () => ({ useDashboardUser: () => ({ user: { id: 'u-owner', role: 'OWNER' }, loading: false }) }));
 jest.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: jest.fn() }) }));
 jest.mock('@/lib/api', () => ({
   apiClient: {
