@@ -20,8 +20,8 @@ jest.mock('pagedjs', () => ({
 const doxycycline = { drugName: 'Doxycycline 100', dosage: 1, dosageUnit: 'TABLET', frequency: 'ONCE_DAILY', duration: 30, durationUnit: 'DAYS' };
 const MINOCYCLINE = 'Minocycline 50';
 
-function clinicServer(initialStatus: 'COMPLETED' | 'IN_PROGRESS', { prescriptionRefusal = '', saved = true } = {}) {
-  const server = { status: initialStatus, version: 4, saved, record: [doxycycline] as Array<{ drugName: string }>, writes: [] as string[] };
+function clinicServer(initialStatus: 'COMPLETED' | 'IN_PROGRESS', { prescriptionRefusal = '', saved = true, record = [doxycycline] as Array<{ drugName: string }> } = {}) {
+  const server = { status: initialStatus, version: 4, saved, record, writes: [] as string[] };
   const reply = (code: number, body: unknown) => ({ ok: code < 400, status: code, headers: { get: (name: string) => (name.toLowerCase() === 'content-type' ? 'application/json' : null) }, json: async () => body, text: async () => JSON.stringify(body) });
   const visit = () => ({
     id: 'v1', version: server.version, status: server.status, patientId: 'p', doctorId: 'd',
@@ -250,4 +250,48 @@ it('names the medicine missing a duration on Save changes and keeps the complete
   expect(screen.getByText('Changes not saved')).toBeInTheDocument();
   expect(server.record).toEqual([doxycycline]);
   expect(server.writes).toEqual(['PATCH /api/visits/v1']);
+});
+
+it('unlocks a completed visit with Edit visit as saved, and marks it unsaved only once the doctor edits', async () => {
+  const server = clinicServer('COMPLETED');
+  render(<MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v1" userRole="DOCTOR" />);
+  await lockedMedicine();
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 500)); });
+  fireEvent.click(screen.getByRole('button', { name: 'Edit visit' }));
+  expect(screen.getByRole('status')).toHaveTextContent(/^Editing a completed visit\. Saved$/);
+  fireEvent.change(screen.getByDisplayValue(doxycycline.drugName), { target: { value: MINOCYCLINE } });
+  await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/^Editing a completed visit\. Unsaved changes$/));
+  expect(server.writes).toEqual([]);
+});
+
+it('reopens a visit completed in this browser and unlocks it with Edit visit as saved', async () => {
+  const server = clinicServer('IN_PROGRESS', { saved: false, record: [] });
+  const first = render(<MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v1" userRole="DOCTOR" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Add Row' }, { timeout: 20_000 }));
+  fireEvent.change(screen.getAllByPlaceholderText('Search medicine name...')[0], { target: { value: MINOCYCLINE } });
+  fireEvent.change(screen.getByLabelText(`Duration for ${MINOCYCLINE}`), { target: { value: '5' } });
+  await completeVisit();
+  await waitFor(() => expect(server.status).toBe('COMPLETED'), { timeout: 10_000 });
+  first.unmount();
+  render(<MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v1" userRole="DOCTOR" />);
+  await screen.findByRole('button', { name: 'Edit visit' }, { timeout: 20_000 });
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 500)); });
+  fireEvent.click(screen.getByRole('button', { name: 'Edit visit' }));
+  expect(screen.getByRole('status')).toHaveTextContent(/^Editing a completed visit\. Saved$/);
+});
+
+it('still shows an unsaved edit to a completed visit as unsaved after the page is reloaded mid-edit', async () => {
+  clinicServer('COMPLETED');
+  const first = render(<MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v1" userRole="DOCTOR" />);
+  await lockedMedicine();
+  fireEvent.click(screen.getByRole('button', { name: 'Edit visit' }));
+  fireEvent.change(screen.getByLabelText('Follow-up instructions'), { target: { value: 'Review in 6 weeks' } });
+  await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/Unsaved changes$/));
+  first.unmount();
+  render(<MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v1" userRole="DOCTOR" />);
+  await screen.findByDisplayValue('Review in 6 weeks', {}, { timeout: 20_000 });
+  await lockedMedicine();
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 500)); });
+  fireEvent.click(screen.getByRole('button', { name: 'Edit visit' }));
+  expect(screen.getByRole('status')).toHaveTextContent(/^Editing a completed visit\. Unsaved changes$/);
 });
