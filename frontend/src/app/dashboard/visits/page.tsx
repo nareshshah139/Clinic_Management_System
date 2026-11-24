@@ -539,6 +539,7 @@ function VisitsPageInner() {
     try {
       const appointment = await apiClient.getAppointment<AppointmentWithVisit>(appointmentId);
       setAppointmentData(appointment);
+      setSelectedPatientId((current) => current || appointment.patientId);
     } catch (error) {
       console.error('Failed to fetch appointment data:', error);
       setAppointmentFailed(true);
@@ -584,10 +585,10 @@ function VisitsPageInner() {
 
   // Deep links open documentation; selecting a patient in setup keeps history accessible.
   useEffect(() => {
-    if (urlPatientId && selectedPatientId === urlPatientId && selectedDoctorId) {
+    if (appointmentPatientId && selectedPatientId === appointmentPatientId && selectedDoctorId) {
       setShowForm(true);
     }
-  }, [selectedPatientId, selectedDoctorId, urlPatientId]);
+  }, [selectedPatientId, selectedDoctorId, appointmentPatientId]);
 
   // Handle URL parameters for appointment linking
   useEffect(() => {
@@ -596,9 +597,9 @@ function VisitsPageInner() {
       if (urlDoctorId && isValidId(urlDoctorId)) {
         setChosenDoctorId(urlDoctorId);
       }
-      if (appointmentIdParam) {
-        void fetchAppointmentData(appointmentIdParam);
-      }
+    }
+    if (appointmentIdParam) {
+      void fetchAppointmentData(appointmentIdParam);
     }
   }, [appointmentIdParam, fetchAppointmentData, urlDoctorId, urlPatientId]);
 

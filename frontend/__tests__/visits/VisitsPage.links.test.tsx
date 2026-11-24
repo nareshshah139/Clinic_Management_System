@@ -70,3 +70,16 @@ it("starts a fresh visit for a newly chosen patient instead of reopening the lin
 
   expect(await screen.findByTestId('medical-form')).toHaveTextContent('Patient: cpatientbhavna000000000001, Doctor: doctor-me, Visit: new');
 });
+
+it('opens the booked patient and doctor from a link that carries only the appointment', async () => {
+  mockQuery = 'appointmentId=capptasha0000000000000000001';
+  jest.mocked(apiClient.getAppointment).mockResolvedValue({
+    id: 'capptasha0000000000000000001',
+    patientId: 'cpatientasha00000000000001',
+    doctorId: 'doctor-booked',
+  } as never);
+  render(<VisitsPage />, { wrapper: LayoutSession });
+  expect(await screen.findByTestId('medical-form')).toHaveTextContent(
+    'Patient: cpatientasha00000000000001, Doctor: doctor-booked, Visit: new, Appointment: capptasha0000000000000000001',
+  );
+});
