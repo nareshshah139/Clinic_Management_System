@@ -37,6 +37,7 @@ SELECT 'ppp_' || md5(p."id"), p."id",
     WHEN d ~ '^91[6-9][0-9]{9}$' THEN '+' || d
     WHEN d LIKE '91%' THEN NULL
     WHEN left(btrim(p."phone"), 1) = '+' AND d ~ '^[1-9][0-9]{7,14}$' THEN '+' || d
+    WHEN left(btrim(p."phone"), 1) <> '+' AND d ~ '^[1-9][0-9]{10,14}$' THEN '+' || d
     ELSE NULL
   END,
   CURRENT_TIMESTAMP

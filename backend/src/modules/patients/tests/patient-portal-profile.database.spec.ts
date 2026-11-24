@@ -77,6 +77,14 @@ databaseTests('Patient phone, WhatsApp consent, language and portal switch on Po
     expect((await profile(p.id)).preferredLanguage).toBe('HI');
   });
 
+  it('PP-07: saving an international patient again with the stored "+"-less phone keeps the number and consent', async () => {
+    const p = await register('Kiran Abroad', '+1 415 555 0101');
+    expect(p.phone).toBe('14155550101');
+    await portal.recordConsent(p.id, 'A', 'agreed', 'rec');
+    await patients.update(p.id, { phone: p.phone, email: 'kiran@example.test' } as any, 'A');
+    expect(await profile(p.id)).toMatchObject({ phoneE164: '+14155550101', consentState: 'PENDING' });
+  });
+
   it('PP-07: changing the phone resets consent to NOT_ASKED and clears confirmation; saving the same number keeps it', async () => {
     const p = await register('Esha', '9876500013');
     await db.patientPortalProfile.update({ where: { patientId: p.id }, data: { consentState: 'OPTED_IN', phoneConfirmedAt: new Date() } });
@@ -129,7 +137,7 @@ databaseTests('Patient phone, WhatsApp consent, language and portal switch on Po
   });
 
   it('PP-01: the migration backfills every existing patient with the same E.164 number toE164 derives', async () => {
-    const phones = ['9876511111', '098765-11112', '+91 98765 11113', '919876511114', '+1 415 555 0100', '4155550100', '12345', '+91 12345 67890'];
+    const phones = ['9876511111', '098765-11112', '+91 98765 11113', '919876511114', '+1 415 555 0100', '14155550100', '4155550100', '12345', '+91 12345 67890'];
     const ids: string[] = [];
     for (const [i, phone] of phones.entries()) ids.push((await db.patient.create({ data: { name: `Backfill ${i}`, gender: 'F', phone, branchId: 'A' } })).id);
     const sql = readFileSync(resolve('prisma/migrations/20261124100000_patient_portal_profile/migration.sql'), 'utf8');
