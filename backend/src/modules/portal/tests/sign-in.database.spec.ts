@@ -194,6 +194,11 @@ databaseTests('Portal sign-in, sessions and the profile picker on PostgreSQL (PP
     expect(await service.resolve(token, at(58))).not.toBeNull();
     expect(await service.resolve(token, at(89))).toBeNull();
 
+    // Every request counts, even one seconds after the last.
+    const busy = await signIn(phone, t0);
+    expect(await service.resolve(busy.token, new Date(t0.getTime() + 30_000))).not.toBeNull();
+    expect(await service.resolve(busy.token, new Date(t0.getTime() + 30_000 + 29.5 * 60_000))).not.toBeNull();
+
     const fresh = await signIn(phone, t0);
     for (let min = 25; min < 24 * 60; min += 25) expect(await service.resolve(fresh.token, at(min))).not.toBeNull();
     expect(await service.resolve(fresh.token, at(24 * 60))).toBeNull();

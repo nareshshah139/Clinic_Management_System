@@ -6,8 +6,6 @@ type Db = Prisma.TransactionClient | PrismaClient;
 export const SESSION_COOKIE = '__Host-portal_session';
 export const IDLE_MS = 30 * 60 * 1000;
 export const ABSOLUTE_MS = 24 * 3600 * 1000;
-/** Activity closer together than this does not rewrite the session row. */
-export const TOUCH_MS = 60 * 1000;
 
 /**
  * @cc [owner:nareshshah139,label:security] portal-session-cookie

@@ -7,7 +7,7 @@ import { hashCode } from '../messaging/number-confirmation';
 import { enqueueOutbound } from '../messaging/outbox';
 import { auditAttentionUpsert } from '../messaging/attention';
 import { SendPassService } from '../messaging/send-pass.service';
-import { ABSOLUTE_MS, IDLE_MS, TOUCH_MS, hashSessionToken, newSessionToken, numberCanSignIn, profileRef, profilesFor, sameRef } from './session';
+import { ABSOLUTE_MS, IDLE_MS, hashSessionToken, newSessionToken, numberCanSignIn, profileRef, profilesFor, sameRef } from './session';
 import type { PortalIdentityPrincipal } from './principal';
 
 type Tx = Prisma.TransactionClient;
@@ -189,10 +189,8 @@ export class SignInService {
       include: { identity: { select: { id: true, phoneE164: true } } },
     });
     if (!session || session.revokedAt || now >= session.idleExpiresAt || now >= session.absoluteExpiresAt) return null;
-    if (now.getTime() - session.lastActiveAt.getTime() >= TOUCH_MS) {
-      const idle = Math.min(now.getTime() + IDLE_MS, session.absoluteExpiresAt.getTime());
-      await this.prisma.portalSession.updateMany({ where: { id: session.id, revokedAt: null }, data: { lastActiveAt: now, idleExpiresAt: new Date(idle) } });
-    }
+    const idle = Math.min(now.getTime() + IDLE_MS, session.absoluteExpiresAt.getTime());
+    await this.prisma.portalSession.updateMany({ where: { id: session.id, revokedAt: null }, data: { lastActiveAt: now, idleExpiresAt: new Date(idle) } });
     const profiles = await profilesFor(this.prisma, session.identity.phoneE164);
     const chosen = session.patientId ? profiles.find((p) => p.patientId === session.patientId) ?? null : null;
     return { session, phoneE164: session.identity.phoneE164, profiles, chosen };
