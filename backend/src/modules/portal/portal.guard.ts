@@ -24,17 +24,20 @@ export class PortalGuard implements CanActivate {
         id: true,
         patientId: true,
         revokedAt: true,
-        patient: { select: { branchId: true } },
-        checkIns: { select: { checkInId: true, checkIn: { select: { state: true } } } },
+        patient: { select: { branchId: true, portalProfile: { select: { consentState: true, portalEnabled: true } } } },
+        checkIns: { select: { checkInId: true, checkIn: { select: { state: true, closesAt: true } } } },
       },
     });
     if (!link || link.revokedAt || !verifyTaskToken(token, link.id)) throw new LinkInactive();
+    const profile = link.patient.portalProfile;
+    if (!profile?.portalEnabled || profile.consentState === 'OPTED_OUT') throw new LinkInactive();
+    const now = new Date();
     const principal: TaskLinkPrincipal = {
       kind: 'task-link',
       linkId: link.id,
       patientId: link.patientId,
       branchId: link.patient.branchId,
-      checkInIds: link.checkIns.filter((c) => c.checkIn.state === 'OPEN').map((c) => c.checkInId),
+      checkInIds: link.checkIns.filter((c) => c.checkIn.state === 'OPEN' && now < c.checkIn.closesAt).map((c) => c.checkInId),
     };
     req[PRINCIPAL] = Object.freeze(principal);
     return true;

@@ -27,11 +27,17 @@ export type TaskPage = {
 
 export type SubmitResult = { status: 'saved'; urgent: false } | { status: 'saved'; urgent: true; clinicPhone: string } | { status: 'already-answered' };
 
-export const clinicPhone = () => process.env.CLINIC_PHONE || '';
+/** The patient's branch number, else the clinic-wide CLINIC_PHONE. */
+async function clinicPhone(tx: Tx, branchId: string): Promise<string> {
+  const branch = await tx.branch.findUnique({ where: { id: branchId }, select: { phone: true } });
+  return branch?.phone?.trim() || process.env.CLINIC_PHONE || '';
+}
 
 /** What a task-link holder can read and write; every method takes the guard's principal (PP-84). */
-/** A submit for an answered check-in is kept only until the check-in's window closes (PP-38, PP-42). */
-const keepsSecondAnswer = (c: { state: string; closesAt: Date }, now: Date) => c.state === 'ANSWERED' && now < c.closesAt;
+type Window = { state: string; closesAt: Date };
+/** A first answer, or a second one kept as a message, is taken only until the check-in's window closes (PP-38, PP-42). */
+const takesAnswer = (c: Window, now: Date) => (c.state === 'OPEN' || c.state === 'ANSWERED') && now < c.closesAt;
+const keepsSecondAnswer = (c: Window, now: Date) => c.state === 'ANSWERED' && now < c.closesAt;
 
 @Injectable()
 export class TaskPageService {
@@ -100,7 +106,7 @@ export class TaskPageService {
       where: { id: dto.checkInId, taskLink: { linkId: principal.linkId } },
       select: { id: true, trackId: true, state: true, closesAt: true, instrumentVersionId: true, instrumentVersion: { select: { content: true } } },
     });
-    if (!checkIn || !(checkIn.state === 'OPEN' || keepsSecondAnswer(checkIn, now))) throw new LinkInactive();
+    if (!checkIn || !takesAnswer(checkIn, now)) throw new LinkInactive();
     const content = checkIn.instrumentVersion.content as unknown as InstrumentContent;
     const problems = answerProblems(content, answers, photos.map((p) => p.itemKey));
     if (problems.length) throw new BadRequestException(problems);
@@ -114,8 +120,10 @@ export class TaskPageService {
     const attachments = images.map(({ itemKey, bytes }) => ({ itemKey, mime: 'image/jpeg', sizeBytes: bytes.length, bytes }));
 
     return this.prisma.$transaction(async (tx) => {
+      const live = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM portal_task_links WHERE id = ${principal.linkId} AND "revokedAt" IS NULL FOR SHARE`;
+      if (!live.length) throw new LinkInactive();
       const moved = await tx.checkIn.updateMany({
-        where: { id: checkIn.id, state: 'OPEN', taskLink: { linkId: principal.linkId } },
+        where: { id: checkIn.id, state: 'OPEN', closesAt: { gt: now }, taskLink: { linkId: principal.linkId } },
         data: { state: 'ANSWERED', endedAt: now },
       });
       if (moved.count === 0) return this.keepSecondSubmit(tx, principal, checkIn.id, answers, attachments, now);
@@ -145,7 +153,7 @@ export class TaskPageService {
         });
       }
       await completeTrackIfDone(tx, checkIn.trackId, now);
-      return flag === 'URGENT' ? { status: 'saved' as const, urgent: true as const, clinicPhone: clinicPhone() } : { status: 'saved' as const, urgent: false as const };
+      return flag === 'URGENT' ? { status: 'saved' as const, urgent: true as const, clinicPhone: await clinicPhone(tx, principal.branchId) } : { status: 'saved' as const, urgent: false as const };
     });
   }
 

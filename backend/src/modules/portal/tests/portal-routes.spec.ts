@@ -51,8 +51,8 @@ describe('portal routes (PP-37, PP-39, PP-83, PP-84, PP-86, StaffCookieStaysStaf
   const link = (id: string, revokedAt: Date | null, states: string[]) => {
     const token = deriveTaskToken(id);
     links.set(hashTaskToken(token), {
-      id, patientId: `patient-of-${id}`, revokedAt, patient: { branchId: 'A' },
-      checkIns: states.map((state, i) => ({ checkInId: `${id}-c${i}`, checkIn: { state } })),
+      id, patientId: `patient-of-${id}`, revokedAt, patient: { branchId: 'A', portalProfile: { consentState: 'OPTED_IN', portalEnabled: true } },
+      checkIns: states.map((state, i) => ({ checkInId: `${id}-c${i}`, checkIn: { state, closesAt: new Date(Date.now() + 86_400_000) } })),
     });
     return token;
   };

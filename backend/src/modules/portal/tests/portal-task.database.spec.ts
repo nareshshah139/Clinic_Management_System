@@ -134,6 +134,26 @@ databaseTests('Task links and the patient task page on PostgreSQL', () => {
     await expect(principalFor(token)).rejects.toBeInstanceOf(LinkInactive);
   });
 
+  it('PP-38: a first answer after the check-in closes gets the uniform inactive answer and leaves it for the missed pass', async () => {
+    const { checkInId, token } = await openLink();
+    const principal = await principalFor(token);
+    const { closesAt } = await db.checkIn.findUniqueOrThrow({ where: { id: checkInId } });
+    await expect(tasks.submit(principal, { token, checkInId, ...answer(3) } as any, closesAt)).rejects.toBeInstanceOf(LinkInactive);
+    expect(await db.checkIn.findUniqueOrThrow({ where: { id: checkInId } })).toMatchObject({ state: 'OPEN' });
+    expect(await db.checkInResponse.count({ where: { checkInId } })).toBe(0);
+    await db.checkIn.update({ where: { id: checkInId }, data: { closesAt: new Date(Date.now() - 1000) } });
+    expect((await principalFor(token)).checkInIds).toEqual([]);
+  });
+
+  it('PP-38: a link revoked after the guard let a submit in does not write', async () => {
+    const { patient, checkInId, token } = await openLink();
+    const principal = await principalFor(token);
+    await revokeTaskLinks(db as any, [patient.id]);
+    await expect(tasks.submit(principal, { token, checkInId, ...answer(3) } as any)).rejects.toBeInstanceOf(LinkInactive);
+    expect(await db.checkIn.findUniqueOrThrow({ where: { id: checkInId } })).toMatchObject({ state: 'OPEN' });
+    expect(await db.checkInResponse.count({ where: { checkInId } })).toBe(0);
+  });
+
   it('PP-42: two concurrent submits leave one response and one kept message', async () => {
     const { patient, checkInId, token } = await openLink();
     const principal = await principalFor(token);
@@ -162,6 +182,13 @@ databaseTests('Task links and the patient task page on PostgreSQL', () => {
   it('PP-44: an urgent answer and its RESPONSE_FLAG item commit together, or neither does', async () => {
     const { patient, checkInId, token } = await openLink();
     await expect(tasks.submit(await principalFor(token), { token, checkInId, ...answer(9) } as any)).resolves.toEqual({ status: 'saved', urgent: true, clinicPhone: '+91 40 5555 0100' });
+    const branchLine = await openLink();
+    await db.branch.update({ where: { id: 'A' }, data: { phone: '+91 40 5555 0200' } });
+    try {
+      await expect(tasks.submit(await principalFor(branchLine.token), { token: branchLine.token, checkInId: branchLine.checkInId, ...answer(9) } as any)).resolves.toEqual({ status: 'saved', urgent: true, clinicPhone: '+91 40 5555 0200' });
+    } finally {
+      await db.branch.update({ where: { id: 'A' }, data: { phone: null } });
+    }
     expect(await db.attentionItem.findMany({ where: { patientId: patient.id } })).toMatchObject([{ kind: 'RESPONSE_FLAG', priority: 'URGENT', state: 'OPEN', subjectKey: `check-in:${checkInId}` }]);
 
     const blocked = await openLink();
@@ -178,7 +205,7 @@ databaseTests('Task links and the patient task page on PostgreSQL', () => {
     expect(await db.checkInResponse.count({ where: { checkInId: theirs.checkInId } })).toBe(0);
   });
 
-  it('PP-38: portal off, opt-out and a phone change revoke the link at once', async () => {
+  it('PP-38: portal off, opt-out and a phone change revoke the link at once, and the guard refuses an opted-out or disabled profile however it got there', async () => {
     const portal = new PatientPortalService(db as any);
     const off = await openLink();
     await portal.setPortalEnabled(off.patient.id, 'A', false);
@@ -189,6 +216,12 @@ databaseTests('Task links and the patient task page on PostgreSQL', () => {
     const phone = await openLink();
     await db.$transaction((tx) => syncPatientPhone(tx, phone.patient.id, '9876543210'));
     await expect(principalFor(phone.token)).rejects.toBeInstanceOf(LinkInactive);
+    const optedOut = await openLink();
+    await db.patientPortalProfile.update({ where: { patientId: optedOut.patient.id }, data: { consentState: 'OPTED_OUT' } });
+    await expect(principalFor(optedOut.token)).rejects.toBeInstanceOf(LinkInactive);
+    const disabled = await openLink();
+    await db.patientPortalProfile.update({ where: { patientId: disabled.patient.id }, data: { portalEnabled: false } });
+    await expect(principalFor(disabled.token)).rejects.toBeInstanceOf(LinkInactive);
     const still = await openLink();
     await expect(principalFor(still.token)).resolves.toMatchObject({ patientId: still.patient.id, checkInIds: [still.checkInId] });
   });
