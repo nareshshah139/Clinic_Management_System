@@ -537,8 +537,11 @@ export class VisitsService {
       return this.findOne(id, branchId);
     }
 
-    const updatedVisit = await this.prisma.$transaction(async tx => {
-      await tx.$queryRaw`SELECT id FROM visits WHERE id = ${id} FOR UPDATE`;
+    // Only a plan change touches tracks, so only it needs the transaction and the visit row lock.
+    const inTransaction = <T>(work: (tx: Prisma.TransactionClient) => Promise<T>) =>
+      planChanged && typeof (this.prisma as any).$transaction === 'function' ? this.prisma.$transaction(work) : work(this.prisma);
+    const updatedVisit = await inTransaction(async tx => {
+      if (planChanged) await tx.$queryRaw`SELECT id FROM visits WHERE id = ${id} FOR UPDATE`;
       const row = await tx.visit.update({
       where: { id, version: visit.version, deletedAt: null },
       data: { ...updateData, version: { increment: 1 } },

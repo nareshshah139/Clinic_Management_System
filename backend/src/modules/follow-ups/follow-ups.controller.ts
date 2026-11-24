@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Post, Request, UseGuards } from '@nestjs/common';
+import { Controller, ForbiddenException, Get, Param, Post, Request, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
 import { CLINIC_STAFF_ROLES } from '../../shared/decorators/clinic-staff-roles';
@@ -6,7 +6,7 @@ import { Roles } from '../../shared/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
 import { FollowUpsService } from './follow-ups.service';
 
-type Req = { user: { id: string; branchId: string }; branchId?: string };
+type Req = { user: { id: string; branchId: string; role?: UserRole }; branchId?: string };
 
 @ApiTags('Follow-ups')
 @Controller('follow-ups')
@@ -18,11 +18,13 @@ export class FollowUpsController {
 
   /**
    * @cc [owner:nareshshah139,label:security] owner-only-plan-import
-   * Only an OWNER MAY import instruments and plans from the reviewed data files (PP-24).
+   * Only an OWNER MAY import instruments and plans from the reviewed data files (PP-24). The role
+   * gate lets ADMIN and DOCTOR through every role list, so the handler checks the role itself.
    */
   @Post('import')
   @Roles(UserRole.OWNER)
   importData(@Request() req: Req) {
+    if (req.user.role !== UserRole.OWNER) throw new ForbiddenException('Only the owner can import follow-up plans');
     return this.followUps.importData(req.user.id);
   }
 

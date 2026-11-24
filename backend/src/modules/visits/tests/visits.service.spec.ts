@@ -37,6 +37,9 @@ type PrismaServiceMock = {
     findMany: jest.Mock;
     count: jest.Mock;
   };
+  followUpTrack: {
+    findMany: jest.Mock;
+  };
 };
 
 const createPrismaMock = (): PrismaServiceMock => ({
@@ -70,6 +73,9 @@ const createPrismaMock = (): PrismaServiceMock => ({
   visitAttachment: {
     findMany: jest.fn().mockResolvedValue([]),
     count: jest.fn().mockResolvedValue(0),
+  },
+  followUpTrack: {
+    findMany: jest.fn().mockResolvedValue([]),
   },
 });
 
