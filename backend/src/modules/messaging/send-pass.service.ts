@@ -7,6 +7,7 @@ import { renderTemplate } from './templates';
 import { CARE_PRIORITY, inSendWindow, isCare, kolkataDay, kolkataDayBounds, needsConsent, nextDayWindowStart, nextWindowStart } from './send-policy';
 import { requestNumberConfirmation } from './number-confirmation';
 import { openDeliveryFailure } from './attention';
+import { staffReplyStatus } from './staff-reply';
 import { TASK_LINK_SUBJECT, closeEndedCheckIns, linkOpenedCheckIns, openDueCheckIns, queueCheckInReminders, queueReviewReminders, taskLinkIsCurrent } from '../follow-ups/scheduler';
 
 type Tx = Prisma.TransactionClient;
@@ -153,6 +154,15 @@ export class SendPassService {
     return rows.sort((a, b) => rank(a) - rank(b) || a.createdAt.getTime() - b.createdAt.getTime());
   }
 
+  /** Leases one queued row and sends it now, for a staff reply that should not wait for the pass. */
+  async sendNow(id: string, now = passClock()): Promise<string> {
+    const { count } = await this.prisma.outboundMessage.updateMany({
+      where: { id, state: 'QUEUED' },
+      data: { state: 'SENDING', leaseUntil: new Date(now.getTime() + LEASE_MS) },
+    });
+    return count ? this.sendOne(id, now) : 'skipped';
+  }
+
   async sendOne(id: string, now: Date): Promise<string> {
     return this.prisma.$transaction(
       async (tx) => {
@@ -205,6 +215,11 @@ export class SendPassService {
   }
 
   async decide(tx: Tx, row: OutboundMessage, now: Date): Promise<Decision> {
+    if (row.purpose === P.STAFF_REPLY) {
+      const reply = await staffReplyStatus(tx, row.patientId, now);
+      if (!reply.canReply) return { kind: 'suppress', reason: `reply-${reply.reason}` };
+      return reply.toE164 === row.toE164 ? { kind: 'send' } : { kind: 'suppress', reason: 'number-not-confirmed' };
+    }
     if (row.purpose === P.ACKNOWLEDGEMENT) {
       const optedOut = await tx.patientPortalProfile.count({ where: { phoneE164: row.toE164, consentState: WhatsAppConsentState.OPTED_OUT } });
       if (optedOut) return { kind: 'suppress', reason: 'consent-opted_out' };

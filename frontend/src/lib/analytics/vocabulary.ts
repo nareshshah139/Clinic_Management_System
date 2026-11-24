@@ -35,6 +35,7 @@ export const PAGE_ROUTES = [
   '/dashboard/appointments/google-callback',
   '/dashboard/billing',
   '/dashboard/fees',
+  '/dashboard/follow-ups',
   '/dashboard/inventory',
   '/dashboard/inventory-updates',
   '/dashboard/patients',

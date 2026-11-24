@@ -82,10 +82,10 @@ describe('Daily Collection in the main menu', () => {
 });
 
 it.each([
-  ['OWNER', ['Dashboard', 'Patients', 'Appointments', 'Visits', 'Procedures', 'Rooms', 'Sales', 'Inventory', 'Daily Collection', 'Pharmacy Report', 'Reports', 'Users', 'Fee list']],
-  ['MANAGER', ['Dashboard', 'Patients', 'Appointments', 'Visits', 'Procedures', 'Inventory', 'Daily Collection', 'Pharmacy Report', 'Reports', 'Users']],
-  ['NURSE', ['Dashboard', 'Patients', 'Appointments', 'Visits', 'Rooms']],
-  ['RECEPTION', ['Dashboard', 'Patients', 'Appointments', 'Rooms', 'Pharmacy Desk', 'Pharmacy Counter', 'Inventory']],
+  ['OWNER', ['Dashboard', 'Patients', 'Appointments', 'Visits', 'Follow-ups', 'Procedures', 'Rooms', 'Sales', 'Inventory', 'Daily Collection', 'Pharmacy Report', 'Reports', 'Users', 'Fee list']],
+  ['MANAGER', ['Dashboard', 'Patients', 'Appointments', 'Visits', 'Follow-ups', 'Procedures', 'Inventory', 'Daily Collection', 'Pharmacy Report', 'Reports', 'Users']],
+  ['NURSE', ['Dashboard', 'Patients', 'Appointments', 'Visits', 'Follow-ups', 'Rooms']],
+  ['RECEPTION', ['Dashboard', 'Patients', 'Appointments', 'Follow-ups', 'Rooms', 'Pharmacy Desk', 'Pharmacy Counter', 'Inventory']],
   ['ACCOUNTANT', ['Dashboard', 'Daily Collection', 'Pharmacy Report']],
 ])('gives %s only pages its grants open, so no page refuses it on load', (role, expected) => {
   mockRole = role as string;
@@ -111,4 +111,22 @@ it('fetches a menu route only when the pointer or keyboard reaches its link, not
   fireEvent.mouseEnter(within(nav).getByRole('link', { name: 'Patients' }));
   fireEvent.focus(within(nav).getByRole('link', { name: 'Appointments' }));
   expect(mockPrefetch.mock.calls).toEqual([['/dashboard/patients'], ['/dashboard/appointments']]);
+});
+
+describe('Follow-ups in the main menu (PP-47)', () => {
+  it.each([
+    ['DOCTOR', true], ['NURSE', true], ['RECEPTION', true], ['MANAGER', true], ['ADMIN', true], ['OWNER', true],
+    ['PHARMACIST', false], ['ACCOUNTANT', false],
+  ])('is offered to %s: %s, under Clinical', (role, shown) => {
+    mockRole = role as string;
+    render(<Sidebar />);
+    const nav = screen.getByRole('navigation', { name: 'Main navigation' });
+    const link = within(nav).queryByRole('link', { name: 'Follow-ups' });
+    expect(link?.getAttribute('href') ?? null).toBe(shown ? '/dashboard/follow-ups' : null);
+    if (shown) {
+      const texts = Array.from(nav.querySelectorAll('p, a')).map((el) => el.textContent);
+      expect(texts.indexOf('Follow-ups')).toBeGreaterThan(texts.indexOf('Clinical'));
+      expect(texts.indexOf('Follow-ups')).toBeLessThan(texts.indexOf('Pharmacy') === -1 ? Infinity : texts.indexOf('Pharmacy'));
+    }
+  });
 });

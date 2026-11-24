@@ -69,6 +69,7 @@ import { appointmentsHref } from '@/lib/appointments-link';
 import { reviewBookingMessage, type ReviewBooking } from '@/lib/review-booking';
 import { isUuid } from '@/lib/id';
 import { NativeSelect } from '@/components/ui/native-select';
+import { FollowUpPlanPicker } from '@/components/follow-ups/plan-picker';
 
 const VisitPhotos = dynamic<ComponentProps<typeof VisitPhotosPanel>>(() => import('@/components/visits/VisitPhotos'), {
   ssr: false,
@@ -321,6 +322,9 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
   const [systemics, setSystemics, hydrateSystemics] = useClinicalState<string>('', 'systemics', dirtyClinicalFields);
   const [counseling, setCounseling, hydrateCounseling] = useClinicalState<string>('', 'counseling', dirtyClinicalFields);
   const [reviewDate, setReviewDate, hydrateReviewDate] = useClinicalState<string>('', 'reviewDate', dirtyClinicalFields);
+  // '' is "No follow-up". Sent on save only once the doctor touches the picker, so an unloaded value never stops a track.
+  const [followUpPlanVersionId, setFollowUpPlanVersionId] = useState('');
+  const followUpPlanTouched = useRef(false);
   
   const [labSelections, setLabSelections, hydrateLabSelections] = useClinicalState<string[]>([], 'labSelections', dirtyClinicalFields);
   const [labResults, setLabResults, hydrateLabResults] = useClinicalState<LabResultsMap>({}, 'labResults', dirtyClinicalFields);
@@ -896,8 +900,9 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
       merged.consultationType = consultationType;
       merged.teleVideoConsent = teleVideoConsent;
     }
+    if (visitId && followUpPlanTouched.current) merged.followUpPlanVersionId = followUpPlanVersionId || null;
     return merged;
-  }, [dirtyClinicalFields.current, consultationType, teleVideoConsent, prescriptionClinical, labSelections, labResults, spotSize, assessment, complaints, counseling, dermDx, doctorId, fluence, passes, patientId, plan, procType, reviewDate, skinConcerns, skinType, subjective, systemics, topicals, currentVisitNumber, appointmentId, morphology, distribution, acneSeverity, itchScore, painScore, recordedSections, userRole, vitals, objective, visitId]);
+  }, [followUpPlanVersionId, dirtyClinicalFields.current, consultationType, teleVideoConsent, prescriptionClinical, labSelections, labResults, spotSize, assessment, complaints, counseling, dermDx, doctorId, fluence, passes, patientId, plan, procType, reviewDate, skinConcerns, skinType, subjective, systemics, topicals, currentVisitNumber, appointmentId, morphology, distribution, acneSeverity, itchScore, painScore, recordedSections, userRole, vitals, objective, visitId]);
 
   const latestPayload = useRef(buildPayload);
   latestPayload.current = buildPayload;
@@ -1161,6 +1166,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
         }
         if (visitVersionRef.current === undefined && !automaticSaveBlocked.current) visitVersionRef.current = res.version;
         if (res.status) setVisitStatus(res.status);
+        if (!followUpPlanTouched.current) setFollowUpPlanVersionId(res?.followUpPlanVersionId ?? '');
         setAmending(false);
         if (!latestDraftStateRef.current.consultationType) {
           setConsultationType(res?.consultationType === 'TELE_VIDEO' ? 'TELE_VIDEO' : 'IN_PERSON');
@@ -1495,6 +1501,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
           await syncPrescriptionRef.current?.((visit as VisitDetails).id);
           const completePayload: Record<string, unknown> = { version: visitVersionRef.current };
           if (reviewDate) completePayload.followUpDate = reviewDate;
+          completePayload.followUpPlanVersionId = followUpPlanVersionId || null;
           const completeId = (visit as VisitDetails).id;
           const idemKey = buildIdempotencyKey('POST', completeId, completePayload as any);
           const completedVisit = await apiClient.completeVisit(completeId, completePayload, { idempotencyKey: idemKey });
@@ -2107,6 +2114,15 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
                         if (typeof next.footerHeightMm === 'number') setFooterHeightMm(next.footerHeightMm);
                       }}
                       onChangeReviewDate={setReviewDate}
+                      followUpPlanSlot={
+                        <FollowUpPlanPicker
+                          patientId={patientId}
+                          value={followUpPlanVersionId}
+                          disabled={!canEdit}
+                          userRole={userRole}
+                          onChange={(next) => { followUpPlanTouched.current = true; setFollowUpPlanVersionId(next); }}
+                        />
+                      }
                       includeSections={rxIncludeSections}
                       onChangeIncludeSections={setRxIncludeSections}
                     />

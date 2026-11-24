@@ -21,6 +21,7 @@ import { Calendar, Users, ArrowLeft } from 'lucide-react';
 import { enumLabel } from '@/lib/labels';
 import { NativeSelect } from '@/components/ui/native-select';
 import { PatientWhatsAppCard } from '@/components/patients/patient-whatsapp';
+import { PatientFollowUpTimeline } from '@/components/follow-ups/timeline';
 
 type NextAppointment = { date: string; slot: string; doctor?: { firstName?: string; lastName?: string } | null };
 
@@ -264,9 +265,10 @@ export default function PatientDetailsPage() {
       <PatientProgressTracker patientId={id} />
 
       <Tabs defaultValue="info" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid h-auto w-full grid-cols-2 sm:grid-cols-4">
           <TabsTrigger value="info">Info</TabsTrigger>
           <TabsTrigger value="history">History</TabsTrigger>
+          <TabsTrigger value="follow-ups">Follow-ups</TabsTrigger>
           <TabsTrigger value="uploads">Uploads</TabsTrigger>
         </TabsList>
 
@@ -361,6 +363,10 @@ export default function PatientDetailsPage() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="follow-ups" className="mt-4">
+          <PatientFollowUpTimeline patientId={id} />
         </TabsContent>
 
         <TabsContent value="uploads" className="mt-4">

@@ -403,6 +403,64 @@ export class ApiClient {
     return this.patch(`/patients/${id}/portal`, { enabled });
   }
 
+  // Follow-ups worklist and clinic inbox
+  async getFollowUpPlans() {
+    return this.get<import('./follow-ups').FollowUpPlan[]>('/follow-ups/plans');
+  }
+
+  async getActiveFollowUpTracks(patientId: string) {
+    return this.get<import('./follow-ups').ActiveTrack[]>(`/follow-ups/patients/${patientId}/tracks`);
+  }
+
+  async stopFollowUpTrack(trackId: string) {
+    return this.post<{ stopped: boolean }>(`/follow-ups/tracks/${trackId}/stop`);
+  }
+
+  async getWorklistItems() {
+    return this.get<import('./follow-ups').WorklistItem[]>('/follow-ups/items');
+  }
+
+  async getWorklistItem(id: string) {
+    return this.get<import('./follow-ups').WorklistItemDetail>(`/follow-ups/items/${id}`);
+  }
+
+  async worklistAction(id: string, action: 'claim' | 'release' | 'read') {
+    return this.post<import('./follow-ups').WorklistItemDetail>(`/follow-ups/items/${id}/${action}`);
+  }
+
+  async resolveWorklistItem(id: string, code: string, note: string) {
+    return this.post<import('./follow-ups').WorklistItemDetail>(`/follow-ups/items/${id}/resolve`, { code, note });
+  }
+
+  async replyToPatient(id: string, body: string, idempotencyKey: string) {
+    return this.post<{ outcome: string; delivery: { state: string; outcome: string | null }; item: import('./follow-ups').WorklistItemDetail }>(
+      `/follow-ups/items/${id}/reply`, { body }, { idempotencyKey });
+  }
+
+  async logPatientCall(id: string, note: string) {
+    return this.post<import('./follow-ups').WorklistItemDetail>(`/follow-ups/items/${id}/log-call`, { note });
+  }
+
+  async assignPatientMessage(messageId: string, patientId: string) {
+    return this.post<{ messageId: string; patientId: string; itemId: string | null }>(`/follow-ups/messages/${messageId}/assign`, { patientId });
+  }
+
+  async confirmPatientMessage(messageId: string) {
+    return this.post<{ messageId: string; patientId: string }>(`/follow-ups/messages/${messageId}/confirm`);
+  }
+
+  async getWaitingCheckIns() {
+    return this.get<import('./follow-ups').WaitingCheckIn[]>('/follow-ups/waiting');
+  }
+
+  async getMessageThreads() {
+    return this.get<import('./follow-ups').MessageThread[]>('/follow-ups/threads');
+  }
+
+  async getFollowUpTimeline(patientId: string) {
+    return this.get<import('./follow-ups').PatientTimeline>(`/follow-ups/patients/${patientId}/timeline`);
+  }
+
   async archivePatient(id: string) {
     return this.post(`/patients/${id}/archive`, {});
   }

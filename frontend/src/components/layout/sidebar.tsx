@@ -28,6 +28,7 @@ import {
   ShoppingBag,
   FileBarChart,
   Wallet,
+  Inbox,
   ReceiptIndianRupee,
 } from "lucide-react";
 import { FEE_EDITOR_ROLES, FEE_LIST_PATH } from "@/components/appointments/appointment-billing-view";
@@ -42,6 +43,9 @@ type NavigationItem = {
   allowedRoles: string[];
   pharmacySection?: PharmacySidebarSection;
 };
+
+/** The roles the follow-up worklist admits (PP-47). */
+const FOLLOW_UP_ROLES = ["OWNER", "ADMIN", "MANAGER", "DOCTOR", "NURSE", "RECEPTION"];
 
 /** The roles GET /pharmacy/reports/:reportId admits, so neither report link leads to a refusal. */
 const PHARMACY_REPORT_ROLES = ["OWNER", "ADMIN", "MANAGER", "DOCTOR", "PHARMACIST", "ACCOUNTANT"];
@@ -84,6 +88,12 @@ const navigation: NavigationItem[] = [
     href: "/dashboard/visits",
     icon: Stethoscope,
     allowedRoles: ["OWNER", "ADMIN", "MANAGER", "DOCTOR", "NURSE"],
+  },
+  {
+    name: "Follow-ups", section: "Clinical",
+    href: "/dashboard/follow-ups",
+    icon: Inbox,
+    allowedRoles: FOLLOW_UP_ROLES,
   },
   {
     name: "Procedures", section: "Clinical",
