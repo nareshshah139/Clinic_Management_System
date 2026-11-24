@@ -5332,15 +5332,18 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   const count = lastPrescription.items.length;
                   return (
                     <section aria-label="Last prescription" className="rounded-lg border border-border bg-muted/40 text-sm">
-                      <button
-                        type="button"
-                        aria-expanded={open}
-                        onClick={() => setLastRxOpenId(open ? null : lastPrescription.visitId)}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium leading-5"
-                      >
-                        {open ? <ChevronDown className="h-4 w-4 shrink-0" aria-hidden="true" /> : <ChevronRight className="h-4 w-4 shrink-0" aria-hidden="true" />}
-                        <span className="min-w-0 break-words">{`Last prescription · ${displayClinicDate(new Date(lastPrescription.date))} · ${count} ${count === 1 ? 'medicine' : 'medicines'}`}</span>
-                      </button>
+                      <div className="flex items-center gap-2 pr-3">
+                        <button
+                          type="button"
+                          aria-expanded={open}
+                          onClick={() => setLastRxOpenId(open ? null : lastPrescription.visitId)}
+                          className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left text-sm font-medium leading-5"
+                        >
+                          {open ? <ChevronDown className="h-4 w-4 shrink-0" aria-hidden="true" /> : <ChevronRight className="h-4 w-4 shrink-0" aria-hidden="true" />}
+                          <span className="min-w-0 break-words">{`Last prescription · ${displayClinicDate(new Date(lastPrescription.date))} · ${count} ${count === 1 ? 'medicine' : 'medicines'}`}</span>
+                        </button>
+                        <Button size="sm" variant="outline" className="shrink-0" aria-label="Copy to this prescription" onClick={copyLastPrescription}>Copy</Button>
+                      </div>
                       {open && (
                         <div className="px-3 pb-2">
                           <ul className="space-y-1">
@@ -5352,7 +5355,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                               </li>
                             ))}
                           </ul>
-                          <Button size="sm" variant="outline" className="mt-2" onClick={copyLastPrescription}>Copy to this prescription</Button>
                         </div>
                       )}
                     </section>

@@ -46,17 +46,17 @@ const renderVisit = () => render(<PrescriptionBuilder patientId="p-last" visitId
 it('shows one collapsed line, expands to the medicines, and keeps the table empty', async () => {
   renderVisit();
   const panel = await screen.findByRole('region', { name: 'Last prescription' });
-  const header = within(panel).getByRole('button');
-  expect(panel.textContent).toBe('Last prescription · 10 Oct 2026 · 2 medicines');
+  const header = within(panel).getByRole('button', { expanded: false });
+  expect(panel.textContent).toBe('Last prescription · 10 Oct 2026 · 2 medicinesCopy');
   expect(header.getAttribute('aria-expanded')).toBe('false');
   expect(screen.queryByText(/Tab Doxycycline 100mg/)).toBeNull();
-  expect(screen.queryByRole('button', { name: 'Copy to this prescription' })).toBeNull();
+  expect(within(panel).getByRole('button', { name: 'Copy to this prescription' })).toBeTruthy();
   expect(screen.queryByDisplayValue('Tab Doxycycline 100mg')).toBeNull();
 
   fireEvent.click(header);
   expect(header.getAttribute('aria-expanded')).toBe('true');
   expect(panel.textContent).toBe(
-    'Last prescription · 10 Oct 2026 · 2 medicinesTab Doxycycline 100mg • 1-0-1 • after food • 14 days • Avoid sun exposureCap Itraconazole 100mg • once daily • after food • 7 daysCopy to this prescription',
+    'Last prescription · 10 Oct 2026 · 2 medicinesCopyTab Doxycycline 100mg • 1-0-1 • after food • 14 days • Avoid sun exposureCap Itraconazole 100mg • once daily • after food • 7 days',
   );
   expect(within(panel).queryByText(/Cetirizine/)).toBeNull();
   expect(screen.queryByDisplayValue('Tab Doxycycline 100mg')).toBeNull();
@@ -65,11 +65,15 @@ it('shows one collapsed line, expands to the medicines, and keeps the table empt
   expect(header.getAttribute('aria-expanded')).toBe('false');
 });
 
-it('copies the last prescription into the medicines table', async () => {
+it('copies the last prescription into the medicines table while collapsed', async () => {
   renderVisit();
   const panel = await screen.findByRole('region', { name: 'Last prescription' });
-  fireEvent.click(within(panel).getByRole('button'));
-  fireEvent.click(await screen.findByRole('button', { name: 'Copy to this prescription' }));
-  expect(await screen.findByDisplayValue('Tab Doxycycline 100mg')).toBeTruthy();
-  expect(await screen.findByDisplayValue('Cap Itraconazole 100mg')).toBeTruthy();
+  expect(within(panel).getByRole('button', { expanded: false })).toBeTruthy();
+  expect(screen.queryByText(/Tab Doxycycline 100mg/)).toBeNull();
+  fireEvent.click(within(panel).getByRole('button', { name: 'Copy to this prescription' }));
+  expect(
+    ((await screen.findByDisplayValue('Tab Doxycycline 100mg')) as HTMLInputElement).value,
+  ).toBe('Tab Doxycycline 100mg');
+  expect(((await screen.findByDisplayValue('Cap Itraconazole 100mg')) as HTMLInputElement).value).toBe('Cap Itraconazole 100mg');
+  expect(within(panel).getByRole('button', { expanded: false })).toBeTruthy();
 });
