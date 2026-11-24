@@ -1,4 +1,4 @@
-import { exposeTestTrigramOperator } from '../../../shared/testing/local-database';
+import { exposeTestTrigramOperator, replayOcrLearningMigration } from '../../../shared/testing/local-database';
 import {normalizePurchaseSource} from '../purchase-invoice-source';
 import { PrismaClient } from '@prisma/client';
 import { randomUUID, createHash } from 'crypto';
@@ -50,10 +50,7 @@ databaseTests('Automatic purchase intake with real PostgreSQL', () => {
     await prisma.$executeRawUnsafe('DROP TABLE "pharmacy_purchase_import_attempts"');
     const attemptMigration = readFileSync(path.resolve('prisma/migrations/20261024120000_purchase_import_recovery/migration.sql'), 'utf8');
     for (const sql of attemptMigration.split(';').filter(sql => sql.trim())) await prisma.$executeRawUnsafe(sql);
-    await prisma.$executeRawUnsafe('DROP TABLE "pharmacy_purchase_learning_examples"');
-    await prisma.$executeRawUnsafe('ALTER TABLE "pharmacy_purchase_invoice_items" DROP COLUMN "ocrLineKey"');
-    const learningMigration = readFileSync(path.resolve('prisma/migrations/20261124100000_purchase_ocr_learning/migration.sql'), 'utf8');
-    for (const sql of learningMigration.split(';').filter(sql => sql.replace(/--.*$/gm, '').trim())) await prisma.$executeRawUnsafe(sql);
+    await replayOcrLearningMigration(prisma);
     branchId = (await prisma.branch.create({ data: { name: 'Synthetic OCR Test', address: 'Synthetic' } })).id;
     userId = (await prisma.user.create({ data: {
       firstName: 'Synthetic', lastName: 'Operator', email: 'ocr-test@example.invalid', password: 'no-login-test-only',

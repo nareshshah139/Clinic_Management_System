@@ -1,14 +1,12 @@
-import { exposeTestTrigramOperator } from '../../../shared/testing/local-database';
+import { exposeTestTrigramOperator, replayOcrLearningMigration } from '../../../shared/testing/local-database';
 import { PrismaClient } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { execFileSync } from 'child_process';
 import * as path from 'path';
 import sharp from 'sharp';
-import { readFileSync } from 'fs';
 import { PharmacyPurchaseInvoiceService } from '../pharmacy-purchase-invoice.service';
 import { PrismaService } from '../../../shared/database/prisma.service';
 
-// Opt-in real PostgreSQL tests. Only the OCR read is replaced with synthetic extraction.
 const databaseTests = process.env.PURCHASE_AUTOMATION_TEST_DATABASE_URL ? describe : describe.skip;
 databaseTests('Purchase OCR learning with real PostgreSQL', () => {
   const GSTIN = '36AAACL1234F1Z5';
@@ -75,12 +73,7 @@ databaseTests('Purchase OCR learning with real PostgreSQL', () => {
     });
     prisma = new PrismaClient({ datasourceUrl: url.toString() });
     await exposeTestTrigramOperator(prisma);
-    // Exercise the additive deployment migration, rather than relying only on db push.
-    await prisma.$executeRawUnsafe('DROP TABLE "pharmacy_purchase_learning_examples"');
-    await prisma.$executeRawUnsafe('ALTER TABLE "pharmacy_purchase_invoice_documents" DROP COLUMN "ocrRead"');
-    await prisma.$executeRawUnsafe('ALTER TABLE "pharmacy_purchase_invoice_items" DROP COLUMN "ocrLineKey"');
-    const migration = readFileSync(path.resolve('prisma/migrations/20261124100000_purchase_ocr_learning/migration.sql'), 'utf8');
-    for (const statement of migration.split(';').filter(sql => sql.replace(/--.*$/gm, '').trim())) await prisma.$executeRawUnsafe(statement);
+    await replayOcrLearningMigration(prisma);
 
     branchId = (await prisma.branch.create({ data: { name: 'Synthetic Learning Branch', address: 'Synthetic' } })).id;
     userId = (await prisma.user.create({ data: {
@@ -162,7 +155,6 @@ databaseTests('Purchase OCR learning with real PostgreSQL', () => {
     expect(JSON.parse(automaticAudit.newValues!).trustedLessons).toEqual([{ slot: trusted.invoice.items[0].ocrLineKey, field: 'product',
       from: 'DOLO-650 TAB', to: 'Dolo 650mg Tablet', lessonKey, support: 5 }]);
 
-    // Below the automatic confidence gate the trusted lesson still pre-fills, and the reviewer picks another product.
     const overridden = await importBill('LEARN-7', { ocrConfidence: 0.95 });
     expect(overridden.automation.status).toBe('SAVED_FOR_REVIEW');
     expect(overridden.invoice.items[0]).toMatchObject({ productName: 'Dolo 650mg Tablet', ocrFlags: [] });

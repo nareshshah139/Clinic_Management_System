@@ -7,7 +7,7 @@ import { alignPurchaseSource, matchingSourceRows, readPurchaseSourcePages, Purch
 import { purchaseCatalogData, purchaseCatalogIssues, purchaseInventoryClassification, purchaseProductKind } from './purchase-product-catalog';
 import { canonicalPurchasePack, normalizedIdentity, verifyPurchaseRead } from './purchase-invoice-identity';
 import { AppliedLesson, applyLessonsToDraft, buildOcrRead, buildOutcomeExamples, CatalogueChange, CatalogueDrug, LearningExampleRow, lessonLookupKeys, Origin, pickOcrRead, productRawKey, PurchaseOcrRead } from './purchase-learning';
-import { forgetPurchaseLesson, listPurchaseLessons, loadPurchaseLearnedAliases, loadPurchaseLessons, purchaseLearningMetrics, recordPurchaseOutcome } from './purchase-learning.repository';
+import { forgetPurchaseLesson, LearnedBoosts, listPurchaseLessons, loadPurchaseLearnedAliases, loadPurchaseLessons, purchaseLearningMetrics, recordPurchaseOutcome } from './purchase-learning.repository';
 import { PURCHASE_INVOICE_EXTRACTION_PROMPT, PURCHASE_INVOICE_VERIFICATION_PROMPT, PURCHASE_INVOICE_SOURCE_PROMPT, PURCHASE_INVOICE_OCR_PROMPT_VERSION } from './purchase-invoice-ocr.prompts';
 import {
   BadRequestException,
@@ -376,7 +376,7 @@ export class PharmacyPurchaseInvoiceService {
           item.ocrSourceRef = indexes[index] === undefined ? undefined : `${sourceDocument.id}:${sourceMap!.rows[indexes[index]!].index}`;
         });
       }
-      const learned = await this.learnFromCommittedBills(extracted, sourceDocument.id, branchId);
+      const learned = await this.applyLearnedCorrections(extracted, sourceDocument.id, branchId);
       extracted.draft = learned.draft;
       await this.prisma.auditLog.create({ data: { entity: 'PharmacyPurchaseInvoiceDocument', entityId: sourceDocument.id,
         userId: sourceDocument.uploadedBy, action: 'OCR_EXTRACTED', newValues: JSON.stringify({ branchId, lineCount: extracted.draft.items.length, sourceMapAvailable: !!sourceMap,
@@ -392,11 +392,7 @@ export class PharmacyPurchaseInvoiceService {
     }
   }
 
-  /**
-   * Captures the raw read, then lets reviewed history correct it. Learning is optional: any failure
-   * leaves the enriched extraction untouched and records no read for this document.
-   */
-  private async learnFromCommittedBills(extracted: Awaited<ReturnType<PharmacyPurchaseInvoiceService['extractDocumentDraft']>>, documentId: string, branchId: string) {
+  private async applyLearnedCorrections(extracted: Awaited<ReturnType<PharmacyPurchaseInvoiceService['extractDocumentDraft']>>, documentId: string, branchId: string) {
     const learning: { applied: AppliedLesson[]; suggestions: AppliedLesson[] } = { applied: [], suggestions: [] };
     let read: PurchaseOcrRead | undefined;
     let draft = extracted.draft;
@@ -807,7 +803,7 @@ export class PharmacyPurchaseInvoiceService {
       loadReviewedProductAliases(this.prisma, branchId),
       loadPurchaseLearnedAliases(this.prisma, branchId, supplierGstin).catch(error => {
         this.logger.warn(`Learned purchase names unavailable: ${error instanceof Error ? error.message : 'unknown error'}`);
-        return { aliases: new Map<string, string[]>(), boosts: new Map<string, Map<string, number>>() };
+        return { aliases: new Map<string, string[]>(), boosts: new Map() as LearnedBoosts };
       }),
     ]);
     for (const [drugId, names] of learned.aliases) aliases.set(drugId, [...new Set([...(aliases.get(drugId) || []), ...names])]);

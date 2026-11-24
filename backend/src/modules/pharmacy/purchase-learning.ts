@@ -140,11 +140,7 @@ export const productRawKey = (line: { productName?: string; packSize?: string; p
 type LineSource = { productName?: string; manufacturer?: string; packSize?: string; packUnitType?: string };
 type HeaderSource = { distributorName?: string };
 
-/**
- * Facts of one bill (GSTIN, invoice number/date, batch, expiry, quantities, money, pack,
- * strength, HSN) are never learnable: only these identity spellings are.
- */
-const LINE_FIELDS = {
+const LEARNABLE_LINE_FIELDS = {
   product: { rawKey: productRawKey, read: (line: LineSource) => line.productName },
   manufacturer: {
     rawKey: (line: LineSource) => {
@@ -155,7 +151,7 @@ const LINE_FIELDS = {
   },
 } satisfies Record<string, { rawKey(line: LineSource): string; read(line: LineSource): string | undefined }>;
 
-const HEADER_FIELDS = {
+const LEARNABLE_HEADER_FIELDS = {
   distributorName: { rawKey: (header: HeaderSource) => normalizedIdentity(header.distributorName), read: (header: HeaderSource) => header.distributorName },
 } satisfies Record<string, { rawKey(header: HeaderSource): string; read(header: HeaderSource): string | undefined }>;
 
@@ -272,14 +268,14 @@ export function buildOutcomeExamples(input: {
   for (const { read: raw, line } of pairOcrLines(read, invoice.items)) {
     const drug = drugs.get(line.lineNumber);
     if (!drug) continue;
-    record(raw.key, 'product', LINE_FIELDS.product.rawKey(raw), LINE_FIELDS.product.read(raw), drug.name, { id: drug.id, ...drugIdentity(drug) });
-    // A learned product mapping also sets the master's manufacturer; that is not evidence about the manufacturer spelling.
-    if (!applied(raw.key, 'product')) {
-      record(raw.key, 'manufacturer', LINE_FIELDS.manufacturer.rawKey(raw), LINE_FIELDS.manufacturer.read(raw), line.manufacturer || undefined);
+    record(raw.key, 'product', LEARNABLE_LINE_FIELDS.product.rawKey(raw), LEARNABLE_LINE_FIELDS.product.read(raw), drug.name, { id: drug.id, ...drugIdentity(drug) });
+    const manufacturerCameFromLearnedProduct = !!applied(raw.key, 'product');
+    if (!manufacturerCameFromLearnedProduct) {
+      record(raw.key, 'manufacturer', LEARNABLE_LINE_FIELDS.manufacturer.rawKey(raw), LEARNABLE_LINE_FIELDS.manufacturer.read(raw), line.manufacturer || undefined);
     }
   }
   if (normalizedIdentity(read.header.distributorGstin) === normalizedIdentity(supplierGstin)) {
-    record('header', 'distributorName', HEADER_FIELDS.distributorName.rawKey(read.header), HEADER_FIELDS.distributorName.read(read.header), invoice.distributorName);
+    record('header', 'distributorName', LEARNABLE_HEADER_FIELDS.distributorName.rawKey(read.header), LEARNABLE_HEADER_FIELDS.distributorName.read(read.header), invoice.distributorName);
   }
   return rows;
 }
@@ -365,8 +361,8 @@ export function learnedProductFits(line: LearningLine, drug: LearningDrug, branc
 
 export function lessonLookupKeys(draft: LearningDraft): string[] {
   return [...new Set([
-    ...draft.items.flatMap(line => [LINE_FIELDS.product.rawKey(line), LINE_FIELDS.manufacturer.rawKey(line)]),
-    HEADER_FIELDS.distributorName.rawKey(draft),
+    ...draft.items.flatMap(line => [LEARNABLE_LINE_FIELDS.product.rawKey(line), LEARNABLE_LINE_FIELDS.manufacturer.rawKey(line)]),
+    LEARNABLE_HEADER_FIELDS.distributorName.rawKey(draft),
   ].filter(Boolean))];
 }
 
@@ -394,7 +390,7 @@ export function applyLessonsToDraft<D extends LearningDraft>(
 
   const items = draft.items.map(line => {
     if (!line.ocrLineKey) return line;
-    const product = find('product', LINE_FIELDS.product.rawKey(line));
+    const product = find('product', LEARNABLE_LINE_FIELDS.product.rawKey(line));
     const drug = product?.drugId ? drugs.get(product.drugId) : undefined;
     if (product && drug && learnedProductFits(line, drug, options.branchId)) {
       const entry = decide(product, line.ocrLineKey, line.productName, drug.name, drug.id);
@@ -404,7 +400,7 @@ export function applyLessonsToDraft<D extends LearningDraft>(
         learnedCorrections: [...(line.learnedCorrections || []), correction(entry)],
       };
     }
-    const manufacturer = find('manufacturer', LINE_FIELDS.manufacturer.rawKey(line));
+    const manufacturer = find('manufacturer', LEARNABLE_LINE_FIELDS.manufacturer.rawKey(line));
     if (manufacturer && !sameValue('manufacturer', line.manufacturer, manufacturer.finalValue)) {
       const entry = decide(manufacturer, line.ocrLineKey, line.manufacturer || '', manufacturer.finalValue);
       if (entry) return {
@@ -417,7 +413,7 @@ export function applyLessonsToDraft<D extends LearningDraft>(
 
   let header: Partial<LearningDraft> = {};
   const supplier = options.supplier;
-  const distributor = find('distributorName', HEADER_FIELDS.distributorName.rawKey(draft));
+  const distributor = find('distributorName', LEARNABLE_HEADER_FIELDS.distributorName.rawKey(draft));
   if (distributor && supplier && normalizedIdentity(supplier.gstNumber) === normalizedIdentity(supplierGstin)
       && sameValue('distributorName', distributor.finalValue, supplier.name) && !sameValue('distributorName', draft.distributorName, supplier.name)) {
     const entry = decide(distributor, 'header', draft.distributorName, supplier.name);

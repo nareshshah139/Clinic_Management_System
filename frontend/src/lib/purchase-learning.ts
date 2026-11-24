@@ -96,11 +96,6 @@ export function readLearnedCorrections(serialized?: string): LearnedCorrection[]
   }
 }
 
-/**
- * Undo restores the value the OCR read and drops the learned confirmation flag. The caller still
- * owns the invoice: this never touches amounts, batch or any other field. Line forms keep every
- * value as a string, so the remaining corrections stay serialized.
- */
 export function undoLearnedCorrection<T extends { learnedCorrections?: string }>(
   row: T & Record<string, unknown>, correction: LearnedCorrection, flagsKey: string,
 ): T {

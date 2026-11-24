@@ -33,19 +33,16 @@ export async function loadPurchaseLessons(db: LearningDb, branchId: string, supp
   return { lessons: deriveLessons(examples, drugs).filter(lesson => lesson.supplierGstin === gstin || lesson.supplierGstin === '*'), drugs };
 }
 
-/**
- * Learned names extend search recall only; ranking and match safety still decide. Boosts are keyed
- * by the learned product key so a choice made for one spelling never lifts unrelated lines.
- */
+export type LearnedBoosts = Map<string, Map<string, number>>;
+
 export async function loadPurchaseLearnedAliases(db: LearningDb, branchId: string, supplierGstin?: string) {
   const lessons = deriveLessons(await humanExamples(db, branchId, { field: 'product' }));
   const aliases = new Map<string, string[]>();
-  const boosts = new Map<string, Map<string, number>>();
+  const boosts: LearnedBoosts = new Map();
   const gstin = supplierGstin?.trim().toUpperCase();
   for (const lesson of lessons) {
-    if (!lesson.drugId) continue;
-    const name = lesson.rawKey.split('|')[0];
-    aliases.set(lesson.drugId, [...new Set([...(aliases.get(lesson.drugId) || []), name])]);
+    if (!lesson.drugId || !lesson.rawValue) continue;
+    aliases.set(lesson.drugId, [...new Set([...(aliases.get(lesson.drugId) || []), lesson.rawValue])]);
     if (gstin && lesson.supplierGstin === gstin) {
       boosts.set(lesson.rawKey, new Map([...(boosts.get(lesson.rawKey) || []), [lesson.drugId, lesson.total]]));
     }
