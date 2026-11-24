@@ -30,16 +30,16 @@ export function nextConsent(from: WhatsAppConsentState, event: ConsentEvent['kin
 export const CONSENT_STATES = Object.values(WhatsAppConsentState);
 export const LANGUAGES = Object.values(Language);
 
-/**
- * @cc [owner:nareshshah139,label:security] phone-change-resets-consent
- * Writing a patient's phone MUST, in the same transaction, store the E.164 number derived from it,
- * and when that number changes, set consent to NOT_ASKED and clear the confirmation.
- */
 // Patient.phone drops the "+", so re-saving an international number gives back its bare digits.
 function storesSameNumber(raw: string, phoneE164: string | null) {
   return !!phoneE164 && !raw.trim().startsWith('+') && raw.replace(/\D/g, '') === phoneE164.slice(1);
 }
 
+/**
+ * @cc [owner:nareshshah139,label:security] phone-change-resets-consent
+ * Writing a patient's phone MUST, in the same transaction, store the E.164 number derived from it,
+ * and when that number changes, set consent to NOT_ASKED and clear the confirmation.
+ */
 export async function syncPatientPhone(tx: Tx, patientId: string, phone: string) {
   const phoneE164 = toE164(phone);
   const current = await tx.patientPortalProfile.findUnique({ where: { patientId } });
