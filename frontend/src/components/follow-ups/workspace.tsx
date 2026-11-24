@@ -142,7 +142,7 @@ export function FollowUpsWorkspace() {
         <div className={cn('min-w-0', selected && 'hidden lg:block')}>{list}</div>
         {selected ? (
           <div className="min-w-0 rounded-lg border border-border p-4">
-            <WorklistItemDetailView itemId={selected} currentUserId={user?.id} onChanged={refresh} onClose={() => navigate({ item: null })} />
+            <WorklistItemDetailView key={selected} itemId={selected} currentUserId={user?.id} onChanged={refresh} onClose={() => navigate({ item: null })} />
           </div>
         ) : (
           <p className="hidden text-sm text-muted-foreground lg:block">Choose an item to see the answers and the messages.</p>
