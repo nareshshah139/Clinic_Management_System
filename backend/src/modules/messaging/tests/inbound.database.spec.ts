@@ -225,16 +225,22 @@ databaseTests('Inbound WhatsApp webhook on PostgreSQL against a fake Meta endpoi
     expect(await db.patientMessage.count({ where: { phoneE164: '+919876500011' } })).toBe(0);
   });
 
-  it('PP-16: receipts apply in any order, only forward; a receipt before its row is applied by the next pass; a failed receipt reaches staff', async () => {
+  it('PP-16: receipts apply in any order, only forward; a receipt before its row is applied by the next pass even behind 60 unmatched ones; receipts unmatched for an hour stop being retried; a failed receipt reaches staff', async () => {
     const p = await patient('+919876500012');
     const status = (id: string, s: string, extra: Record<string, unknown> = {}) => envelope({ statuses: [{ id, status: s, recipient_id: '919876500012', timestamp: '1', ...extra }] });
     await post(status('wamid.out.early', 'delivered'));
     const early = await db.inboundWhatsAppEvent.findUniqueOrThrow({ where: { providerEventId: 'status:wamid.out.early:delivered' } });
     expect(early.appliedAt).toBeNull();
+    await db.inboundWhatsAppEvent.update({ where: { id: early.id }, data: { receivedAt: new Date(NOON.getTime() - 60_000) } });
+    const unmatched = (n: number, ageMs: number, tag: string) => db.inboundWhatsAppEvent.createMany({ data: Array.from({ length: n }, (_, i) => ({ providerEventId: `status:wamid.staff.${tag}${i}:delivered`, kind: 'status', payload: { id: `wamid.staff.${tag}${i}`, status: 'delivered' }, receivedAt: new Date(NOON.getTime() - ageMs) })) });
+    await unmatched(60, 30 * 60_000, 'recent');
+    await unmatched(5, 2 * 60 * 60_000, 'old');
     await enqueueOutbound(db, { dedupeKey: `r:${p.id}`, purpose: 'APPOINTMENT_CONFIRMATION', patientId: p.id, toE164: '+919876500012', templateKey: 'patient_message_ack', params: {} });
     await db.outboundMessage.update({ where: { dedupeKey: `r:${p.id}` }, data: { state: 'SENT', providerMessageId: 'wamid.out.early' } });
     expect(await pass.runPass(NOON)).toMatchObject({ receipts: 1 });
     expect((await db.outboundMessage.findUniqueOrThrow({ where: { dedupeKey: `r:${p.id}` } })).state).toBe('DELIVERED');
+    expect(await db.inboundWhatsAppEvent.count({ where: { providerEventId: { startsWith: 'status:wamid.staff.old' }, appliedAt: null } })).toBe(0);
+    expect(await db.inboundWhatsAppEvent.count({ where: { providerEventId: { startsWith: 'status:wamid.staff.recent' }, appliedAt: null } })).toBe(60);
     await post(status('wamid.out.early', 'read'));
     await post(status('wamid.out.early', 'sent'));
     expect((await db.outboundMessage.findUniqueOrThrow({ where: { dedupeKey: `r:${p.id}` } })).state).toBe('READ');

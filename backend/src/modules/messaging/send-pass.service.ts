@@ -17,6 +17,7 @@ type Decision =
 
 export const LEASE_MS = 2 * 60 * 1000;
 export const BATCH = 50;
+export const RECEIPT_MATCH_MS = 60 * 60 * 1000;
 export const MAX_ATTEMPTS = 5;
 export const RETRY_MS = 5 * 60 * 1000;
 const RECEIPT_STATE: Record<string, 'SENT' | 'DELIVERED' | 'READ' | 'FAILED'> = { sent: 'SENT', delivered: 'DELIVERED', read: 'READ', failed: 'FAILED' };
@@ -90,7 +91,10 @@ export class SendPassService {
   }
 
   async applyPendingReceipts(now: Date): Promise<number> {
-    const pending = await this.prisma.inboundWhatsAppEvent.findMany({ where: { kind: 'status', appliedAt: null }, orderBy: { receivedAt: 'asc' }, take: BATCH });
+    // Receipts for staff-started sends never find a row; stop retrying them once a row could no longer be committing.
+    const horizon = new Date(now.getTime() - RECEIPT_MATCH_MS);
+    await this.prisma.inboundWhatsAppEvent.updateMany({ where: { kind: 'status', appliedAt: null, receivedAt: { lt: horizon } }, data: { appliedAt: now } });
+    const pending = await this.prisma.inboundWhatsAppEvent.findMany({ where: { kind: 'status', appliedAt: null }, orderBy: { receivedAt: 'desc' }, take: BATCH });
     let applied = 0;
     for (const event of pending) {
       const done = await this.prisma.$transaction(async (tx) => {
