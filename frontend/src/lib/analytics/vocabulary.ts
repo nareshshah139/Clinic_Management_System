@@ -53,6 +53,7 @@ export const PAGE_ROUTES = [
   '/dashboard/stock-predictions',
   '/dashboard/users',
   '/dashboard/visits',
+  '/p',
   '/p/records',
   '/p/t',
 ] as const;
