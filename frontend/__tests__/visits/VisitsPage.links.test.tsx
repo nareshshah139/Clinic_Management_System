@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import VisitsPage from '@/app/dashboard/visits/page';
 import { useEffect, useState, type ReactNode } from 'react';
 import { DashboardUserProvider } from '@/components/layout/dashboard-user-context';
@@ -18,9 +18,10 @@ jest.mock('@/lib/api', () => ({
     getAllPatientVisitHistory: jest.fn().mockResolvedValue([]),
   },
 }));
-jest.mock('@/components/visits/MedicalVisitForm', () => function Form({ patientId, doctorId, initialVisitId, appointmentId, visitDate, identity }: { patientId: string; doctorId: string; initialVisitId?: string; appointmentId?: string; visitDate?: string; identity?: ReactNode }) {
+jest.mock('@/components/visits/MedicalVisitForm', () => function Form({ patientId, doctorId, initialVisitId, appointmentId, visitDate, identity, onUnsavedChange }: { patientId: string; doctorId: string; initialVisitId?: string; appointmentId?: string; visitDate?: string; identity?: ReactNode; onUnsavedChange?: (unsaved: boolean) => void }) {
   return (
     <div>
+      <button type="button" onClick={() => onUnsavedChange?.(true)}>Type a note</button>
       <p data-testid="medical-form">{`Patient: ${patientId}, Doctor: ${doctorId}, Visit: ${initialVisitId ?? 'new'}, Appointment: ${appointmentId ?? 'none'}`}</p>
       <p data-testid="draft-day">{visitDate}</p>
       {identity}
@@ -98,4 +99,22 @@ it('keys a walk-in draft to the clinic day, so a reload later that day finds it'
   render(<VisitsPage />, { wrapper: LayoutSession });
   expect(await screen.findByTestId('draft-day')).toHaveTextContent(/^2026-11-25$/);
   jest.useRealTimers();
+});
+
+it('asks before Back to Setup leaves a visit with unsaved changes', async () => {
+  mockQuery = 'patientId=cpatientasha00000000000001';
+  render(<VisitsPage />, { wrapper: LayoutSession });
+  await screen.findByTestId('medical-form');
+  fireEvent.click(screen.getByRole('button', { name: 'Type a note' }));
+
+  fireEvent.click(screen.getByRole('button', { name: 'Back to Setup' }));
+  expect(await screen.findByRole('alertdialog', { name: 'Leave with unsaved changes?' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+  expect(screen.getByTestId('medical-form')).toHaveTextContent('Patient: cpatientasha00000000000001');
+
+  fireEvent.click(screen.getByRole('button', { name: 'Back to Setup' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Leave anyway' }));
+  expect(await screen.findByRole('button', { name: 'Start Visit Documentation' })).toBeInTheDocument();
+  expect(screen.queryByTestId('medical-form')).not.toBeInTheDocument();
 });

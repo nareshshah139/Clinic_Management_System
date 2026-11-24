@@ -100,6 +100,7 @@ interface Props {
   appointmentData?: { patient?: VisitPatientSummary } | null;
   initialVisitId?: string;
   onVisitIdChange?: (visitId: string | null) => void;
+  onUnsavedChange?: (unsaved: boolean) => void;
   identity?: ReactNode;
   doctorControl?: ReactNode;
   visitActions?: ReactNode;
@@ -238,7 +239,7 @@ const ROLE_PERMISSIONS = {
  * New visits default to In-person. Tele-video saves and exports MUST be blocked
  * until consent is checked; visit recovery MUST restore the consultation choice.
  */
-function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'DOCTOR', visitNumber = 1, visitDate, appointmentId, appointmentData, initialVisitId, onVisitIdChange, identity, doctorControl, visitActions, patient, doctorRecord, initialVisitSnapshot, onDiscardLocalDraft }: Props & { initialVisitSnapshot?: VisitDetails; onDiscardLocalDraft: (saved: VisitDetails) => void }) {
+function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'DOCTOR', visitNumber = 1, visitDate, appointmentId, appointmentData, initialVisitId, onVisitIdChange, onUnsavedChange, identity, doctorControl, visitActions, patient, doctorRecord, initialVisitSnapshot, onDiscardLocalDraft }: Props & { initialVisitSnapshot?: VisitDetails; onDiscardLocalDraft: (saved: VisitDetails) => void }) {
   const visitVersionRef = useRef<number | undefined>(undefined);
   const restoredDraftVersion = useRef<number | undefined>(undefined);
   const automaticSaveBlocked = useRef(false);
@@ -433,6 +434,9 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
 
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'unsaved' | 'autosaving' | 'saved' | 'saving' | 'error'>('idle');
+  useEffect(() => {
+    onUnsavedChange?.(saveStatus !== 'idle' && saveStatus !== 'saved');
+  }, [saveStatus, onUnsavedChange]);
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
 

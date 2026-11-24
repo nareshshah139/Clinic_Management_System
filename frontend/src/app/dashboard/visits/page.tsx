@@ -253,6 +253,7 @@ import { QuickGuide } from '@/components/common/QuickGuide';
 import { UserRole } from '@cms/shared-types';
 import { resolveDefaultDoctorId } from '@/lib/default-visit-doctor';
 import { todayIst } from '@/lib/doctor-availability';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import { VisitIdentityBar } from '@/components/visits/VisitIdentityBar';
 import { useRecordById, type RecordState } from '@/components/visits/useRecordById';
 import type {
@@ -464,6 +465,8 @@ function VisitsPageInner() {
   const [appointmentFailed, setAppointmentFailed] = useState(false);
   const [startedVisitId, setStartedVisitId] = useState<string | null>(null);
   const [resumedVisitPatientId, setResumedVisitPatientId] = useState<string | null>(null);
+  const [visitUnsaved, setVisitUnsaved] = useState(false);
+  const [confirm, confirmDialog] = useConfirm();
 
   const searchParams = useSearchParams();
   const urlPatientId = searchParams.get('patientId');
@@ -687,6 +690,16 @@ function VisitsPageInner() {
   const pickPatient = (id: string) => {
     if (id !== selectedPatientId) setStartedVisitId(null);
     setSelectedPatientId(id);
+  };
+
+  const leaveVisit = async (leave: () => void) => {
+    if (visitUnsaved && !(await confirm({
+      title: 'Leave with unsaved changes?',
+      description: 'Your latest changes are not saved to the visit yet. Stay and choose Save Draft to keep them on the record.',
+      confirmLabel: 'Leave anyway',
+      destructive: true,
+    }))) return;
+    leave();
   };
 
   const startNewVisit = () => {
@@ -974,11 +987,13 @@ function VisitsPageInner() {
       appointmentId={activeAppointment?.id}
       appointmentData={activeAppointment}
       onVisitIdChange={setStartedVisitId}
+      onUnsavedChange={setVisitUnsaved}
       initialVisitId={resumedVisitId || (activeAppointment?.visit && 'id' in activeAppointment.visit ? activeAppointment.visit.id : undefined)}
       identity={
         <>
           <h1 className="sr-only">Visit Documentation</h1>
-          <Button variant="ghost" size="icon" className="-ml-2 h-8 w-8" aria-label="Back to Setup" title="Back to setup" onClick={() => setShowForm(false)}>
+          {confirmDialog}
+          <Button variant="ghost" size="icon" className="-ml-2 h-8 w-8" aria-label="Back to Setup" title="Back to setup" onClick={() => void leaveVisit(() => setShowForm(false))}>
             <ArrowLeft className="h-4 w-4" aria-hidden="true" />
           </Button>
           <VisitIdentityBar className="min-w-0 truncate" patient={selectedPatient} doctor={selectedDoctor} appointment={activeAppointment} hideDoctor />
@@ -1009,7 +1024,7 @@ function VisitsPageInner() {
         </div>
       }
       visitActions={activeAppointment ? (
-        <DropdownMenuItem onSelect={() => window.history.back()}>
+        <DropdownMenuItem onSelect={() => void leaveVisit(() => window.history.back())}>
           <Calendar className="mr-2 h-4 w-4" aria-hidden="true" />
           Back to calendar
         </DropdownMenuItem>
