@@ -144,7 +144,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       try {
         await base.auditLog.create({
           data: namesOnly ? {
-            userId: ctx?.userId ?? null,
+            userId: null,
             action: String(operation).toUpperCase(),
             entity: model,
             entityId: entityId ?? 'UNKNOWN',

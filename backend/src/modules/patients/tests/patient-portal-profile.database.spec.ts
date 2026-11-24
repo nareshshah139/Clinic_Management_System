@@ -146,6 +146,7 @@ databaseTests('Patient phone, WhatsApp consent, language and portal switch on Po
       for (const log of logs) {
         expect(log.oldValues).toBeNull();
         expect(log.actorKind).toBe('staff');
+        expect(log.userId).toBeNull();
         expect(log.newValues).not.toContain('+919876522222');
         expect(log.newValues).not.toContain('PENDING');
         expect(Object.keys(JSON.parse(log.newValues!))).toEqual(['fields']);
