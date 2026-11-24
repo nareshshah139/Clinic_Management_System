@@ -1,5 +1,6 @@
 import { Language, Prisma, WhatsAppConsentState } from '@prisma/client';
 import { toE164 } from './phone-e164';
+import { revokeTaskLinks } from '../../follow-ups/task-link';
 
 type Tx = Prisma.TransactionClient;
 
@@ -47,6 +48,7 @@ export async function syncPatientPhone(tx: Tx, patientId: string, phone: string)
     return tx.patientPortalProfile.create({ data: { patientId, phoneE164 } });
   }
   if (current.phoneE164 === phoneE164 || storesSameNumber(phone, current.phoneE164)) return current;
+  await revokeTaskLinks(tx, [patientId]);
   return tx.patientPortalProfile.update({
     where: { patientId },
     data: {

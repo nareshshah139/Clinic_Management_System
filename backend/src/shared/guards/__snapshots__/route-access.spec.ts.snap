@@ -69,6 +69,7 @@ GET /drugs/dosage-forms | roles: ADMIN,PHARMACIST,DOCTOR | permissions: pharmacy
 GET /drugs/inventory-change-requests | roles: ADMIN,PHARMACIST,DOCTOR | permissions: pharmacy:drug:inventory-change:read
 GET /drugs/manufacturers | roles: ADMIN,PHARMACIST,DOCTOR | permissions: pharmacy:drug:manufacturers
 GET /drugs/statistics | roles: ADMIN,PHARMACIST | permissions: pharmacy:drug:statistics
+GET /follow-ups/attachments/:id | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /follow-ups/patients/:patientId/tracks | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /follow-ups/plans | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /google-calendar/auth-url | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
@@ -424,6 +425,8 @@ POST /pharmacy/purchase-ledger/payments/:id/reallocate | roles: ADMIN,PHARMACIST
 POST /pharmacy/purchase-ledger/payments/:id/reverse | roles: ADMIN,PHARMACIST,ACCOUNTANT,DOCTOR | permissions: pharmacy:purchase-ledger:write
 POST /pharmacy/reports/daily-collection/:day/counts | roles: OWNER,ADMIN,MANAGER,PHARMACIST,DOCTOR | permissions: pharmacy:compliance:audit
 POST /pharmacy/trade-terms/lookup | roles: OWNER,ADMIN,DOCTOR,PHARMACIST,RECEPTION,MANAGER,ACCOUNTANT | permissions: -
+POST /portal/task/questions | public
+POST /portal/task/responses | public
 POST /prescriptions | roles: DOCTOR,ADMIN,OWNER | permissions: -
 POST /prescriptions/:id/pdf | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 POST /prescriptions/:id/print-events | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -

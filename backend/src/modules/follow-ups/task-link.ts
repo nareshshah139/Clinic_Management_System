@@ -1,4 +1,5 @@
 import { createHash, createHmac, timingSafeEqual } from 'crypto';
+import { Prisma } from '@prisma/client';
 
 function linkSecret(): string {
   const secret = process.env.PORTAL_LINK_SECRET || process.env.JWT_SECRET;
@@ -29,4 +30,15 @@ export function verifyTaskToken(token: string, linkId: string): boolean {
 /** The one place that turns a token into the URL a patient opens. */
 export function taskLinkUrl(token: string): string {
   return `${(process.env.PORTAL_BASE_URL ?? '').replace(/\/$/, '')}/p/t#${token}`;
+}
+
+/**
+ * @cc [owner:nareshshah139,label:security] task-link-revocation
+ * Turning the portal off, opting out, or changing the phone number MUST revoke, in the same
+ * transaction, every unrevoked task link of the affected patients (PP-38).
+ */
+export async function revokeTaskLinks(tx: Prisma.TransactionClient, patientIds: string[], now = new Date()): Promise<number> {
+  if (!patientIds.length) return 0;
+  const { count } = await tx.portalTaskLink.updateMany({ where: { patientId: { in: patientIds }, revokedAt: null }, data: { revokedAt: now } });
+  return count;
 }

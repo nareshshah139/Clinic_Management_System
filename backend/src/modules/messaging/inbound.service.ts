@@ -7,6 +7,7 @@ import { enqueueOutbound } from './outbox';
 import { openPatientMessageItem } from './attention';
 import { isStopWord } from './stop-words';
 import { SendPassService } from './send-pass.service';
+import { revokeTaskLinks } from '../follow-ups/task-link';
 
 type Tx = Prisma.TransactionClient;
 const DAY_MS = 24 * 3600 * 1000;
@@ -128,6 +129,8 @@ export class InboundWhatsAppService {
    * confirmation, and MUST queue one opt-out confirmation only when it changed someone.
    */
   private async optOut(tx: Tx, from: string, eventId: string, now: Date) {
+    const onNumber = await tx.patientPortalProfile.findMany({ where: { phoneE164: from }, select: { patientId: true } });
+    await revokeTaskLinks(tx, onNumber.map((p) => p.patientId), now);
     const { count } = await tx.patientPortalProfile.updateMany({
       where: { phoneE164: from, consentState: { not: 'OPTED_OUT' } },
       data: { consentState: 'OPTED_OUT', phoneConfirmedAt: null, consentMethod: 'whatsapp-stop', consentRecordedAt: now, consentRecordedById: null },

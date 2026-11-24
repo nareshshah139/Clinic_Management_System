@@ -32,6 +32,22 @@ export class FollowUpsService {
     });
   }
 
+  /** A response or patient-message photo, when its patient belongs to the caller's branch. */
+  async attachment(id: string, branchId: string): Promise<Buffer> {
+    const row = await this.prisma.responseAttachment.findFirst({
+      where: {
+        id,
+        OR: [
+          { response: { checkIn: { track: { patient: { branchId } } } } },
+          { patientMessage: { patient: { branchId } } },
+        ],
+      },
+      select: { bytes: true },
+    });
+    if (!row) throw new NotFoundException('Attachment not found');
+    return Buffer.from(row.bytes);
+  }
+
   async activeTracks(patientId: string, branchId: string) {
     const patient = await this.prisma.patient.findFirst({ where: { id: patientId, branchId }, select: { id: true } });
     if (!patient) throw new NotFoundException('Patient not found');

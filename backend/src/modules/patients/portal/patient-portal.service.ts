@@ -3,6 +3,7 @@ import { WhatsAppConsentState } from '@prisma/client';
 import { PrismaService } from '../../../shared/database/prisma.service';
 import { ensureProfile, nextConsent } from './portal-profile';
 import { CodeResult, confirmByCode, requestNumberConfirmation } from '../../messaging/number-confirmation';
+import { revokeTaskLinks } from '../../follow-ups/task-link';
 
 @Injectable()
 export class PatientPortalService {
@@ -33,6 +34,7 @@ export class PatientPortalService {
           ...(to === WhatsAppConsentState.OPTED_OUT ? { phoneConfirmedAt: null } : {}),
         },
       });
+      if (to === WhatsAppConsentState.OPTED_OUT) await revokeTaskLinks(tx, [patientId]);
       if (to === WhatsAppConsentState.PENDING && profile.phoneE164) {
         await requestNumberConfirmation(tx, profile.phoneE164, updated.preferredLanguage, patientId);
       }
@@ -67,6 +69,7 @@ export class PatientPortalService {
     await this.loadPatient(patientId, branchId);
     return this.prisma.$transaction(async (tx) => {
       await ensureProfile(tx, patientId);
+      if (!enabled) await revokeTaskLinks(tx, [patientId]);
       return tx.patientPortalProfile.update({ where: { patientId }, data: { portalEnabled: enabled } });
     });
   }

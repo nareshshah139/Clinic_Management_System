@@ -1,4 +1,5 @@
-import { Controller, ForbiddenException, Get, Param, Post, Request, UseGuards } from '@nestjs/common';
+import { Controller, ForbiddenException, Get, Param, Post, Request, Res, UseGuards } from '@nestjs/common';
+import type { Response } from 'express';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
 import { CLINIC_STAFF_ROLES } from '../../shared/decorators/clinic-staff-roles';
@@ -42,5 +43,17 @@ export class FollowUpsController {
   @Roles(UserRole.DOCTOR, UserRole.ADMIN, UserRole.OWNER)
   stopTrack(@Param('id') id: string, @Request() req: Req) {
     return this.followUps.stopTrack(id, req.branchId ?? req.user.branchId, req.user.id);
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:security] attachment-serving-headers
+   * A patient photo MUST be served only to signed-in clinic staff of the patient's branch, as
+   * image/jpeg with Cache-Control: private, no-store and X-Content-Type-Options: nosniff (PP-87).
+   */
+  @Get('attachments/:id')
+  async attachment(@Param('id') id: string, @Request() req: Req, @Res() res: Response) {
+    const bytes = await this.followUps.attachment(id, req.branchId ?? req.user.branchId);
+    res.set({ 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff', 'Content-Disposition': 'inline' });
+    res.send(bytes);
   }
 }

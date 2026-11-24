@@ -20,6 +20,8 @@ const PUBLIC_ROUTES = [
   'POST /auth/login',
   'POST /auth/logout',
   'POST /auth/reset-password',
+  'POST /portal/task/questions',
+  'POST /portal/task/responses',
   'POST /webhooks/whatsapp',
 ];
 
