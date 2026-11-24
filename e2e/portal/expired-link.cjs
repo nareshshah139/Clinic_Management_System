@@ -42,7 +42,8 @@ async function ready(url, proc, seconds = 300) {
   await admin.$executeRawUnsafe(`CREATE SCHEMA "${schema}"`);
   owned.push(async () => { await admin.$executeRawUnsafe(`DROP SCHEMA "${schema}" CASCADE`); await admin.$disconnect(); });
   url.searchParams.set("schema", schema);
-  const env = { ...process.env, DATABASE_URL: url.toString(), JWT_SECRET: "portal-e2e-jwt", PORTAL_LINK_SECRET: "portal-e2e-link-secret", CLINIC_NAME: "Linae Skin Clinic", NODE_ENV: "test" };
+  const nextPort = await port();
+  const env = { ...process.env, DATABASE_URL: url.toString(), JWT_SECRET: "portal-e2e-jwt", PORTAL_LINK_SECRET: "portal-e2e-link-secret", PORTAL_BASE_URL: `http://127.0.0.1:${nextPort}`, CLINIC_NAME: "Linae Skin Clinic", NODE_ENV: "test" };
   execFileSync(process.execPath, [prismaCli, "db", "push", "--skip-generate", "--schema", schemaFile], { stdio: "pipe", env });
 
   const backend = fork(path.join(__dirname, "app.cjs"), [], { env, stdio: ["ignore", "inherit", "inherit", "ipc"] });
@@ -60,7 +61,6 @@ async function ready(url, proc, seconds = 300) {
   fs.symlinkSync(path.join(root, "frontend/node_modules"), path.join(frontend, "node_modules"));
   fs.symlinkSync(path.join(root, "node_modules"), path.join(temp, "node_modules"));
   fs.symlinkSync(path.join(root, "shared-types"), path.join(temp, "shared-types"));
-  const nextPort = await port();
   const next = spawn(process.execPath, [frontReq.resolve("next/dist/bin/next"), "dev", "--hostname", "127.0.0.1", "--port", String(nextPort)], {
     cwd: frontend, env: { ...process.env, NEXT_PUBLIC_API_PROXY: `http://127.0.0.1:${apiPort}/`, NEXT_TELEMETRY_DISABLED: "1" }, stdio: ["ignore", fs.openSync(path.join(out, "frontend.log"), "w"), fs.openSync(path.join(out, "frontend.log"), "a")],
   });
@@ -110,7 +110,7 @@ async function ready(url, proc, seconds = 300) {
     assert(!/script-src[^;]*(https?:|\*|'unsafe-inline')/.test(csp), `${kind}: CSP allows a foreign or inline script`);
     assert.equal(doc.headers()["referrer-policy"], "no-referrer");
     // DevTools cannot read this proxied body, so replay the browser's request byte for byte.
-    const replay = await fetch(`${base}/api/portal/task/questions`, { method: "POST", headers: { "Content-Type": "application/json" }, body: carrying[0].body });
+    const replay = await fetch(`${base}/api/portal/task/questions`, { method: "POST", headers: { "Content-Type": "application/json", Origin: base }, body: carrying[0].body });
     assert.equal(replay.status, 404);
     answers.push(JSON.stringify({ headers: [...replay.headers].filter(([k]) => !["date", "x-request-id", "etag", "keep-alive", "connection"].includes(k)), body: await replay.text() }));
     result.links[kind] = { requests: requests.length, tokenBodies: carrying.length, storageKeys: state.storage.length, cookies: cookies.length, status: responses[0].status, shown: state.text };
