@@ -1200,8 +1200,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     : { medicine: '2 1 0%', frequency: '1 1 0%', timing: '1 1 0%', duration: '0.85 1 0%', instructions: '2 1 0%' };
   const patientName = useMemo(() => visitData?.patient?.name || patientData?.name || '—', [visitData, patientData]);
   const prescriptionPdfName = useMemo(
-    () => pdfFileName('Prescription', patientName, visitData?.createdAt || new Date()),
-    [patientName, visitData?.createdAt],
+    () => pdfFileName('Prescription', visitData?.patient?.name || patientData?.name, visitData?.createdAt || new Date()),
+    [visitData, patientData],
   );
   const patientCodeDisplay = useMemo(() => visitData?.patient?.patientCode || patientData?.patientCode || '', [visitData, patientData]);
   const reviewDateDisplay = useMemo(() => {

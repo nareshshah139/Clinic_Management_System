@@ -19,9 +19,21 @@ describe('pdfFileName', () => {
     expect(pdfFileName('Prescription', 'प्रिया शर्मा', '2026-11-24')).toBe('Prescription - प्रिया शर्मा - 2026-11-24.pdf');
   });
 
-  it('drops placeholder names and missing or invalid dates', () => {
+  it('keeps real names that look like placeholder words', () => {
+    expect(pdfFileName('Prescription', 'Na', '2026-11-24')).toBe('Prescription - Na - 2026-11-24.pdf');
+    expect(pdfFileName('Prescription', 'NA', '2026-11-24')).toBe('Prescription - NA - 2026-11-24.pdf');
+    expect(pdfFileName('Prescription', 'Null', '2026-11-24')).toBe('Prescription - Null - 2026-11-24.pdf');
+    expect(pdfFileName('Prescription', 'N/A', '2026-11-24')).toBe('Prescription - N A - 2026-11-24.pdf');
+  });
+
+  it('drops names with no letter or digit, and missing or invalid dates', () => {
     expect(pdfFileName('Prescription', '—', '2026-11-24')).toBe('Prescription - 2026-11-24.pdf');
-    expect(pdfFileName('Prescription', 'N/A', null)).toBe('Prescription.pdf');
+    expect(pdfFileName('Prescription', '-', '2026-11-24')).toBe('Prescription - 2026-11-24.pdf');
+    expect(pdfFileName('Prescription', '...', '2026-11-24')).toBe('Prescription - 2026-11-24.pdf');
+    expect(pdfFileName('Prescription', '', '2026-11-24')).toBe('Prescription - 2026-11-24.pdf');
+    expect(pdfFileName('Prescription', null, '2026-11-24')).toBe('Prescription - 2026-11-24.pdf');
+    expect(pdfFileName('Prescription', '\u200b', '2026-11-24')).toBe('Prescription - 2026-11-24.pdf');
+    expect(pdfFileName('Prescription', '—', null)).toBe('Prescription.pdf');
     expect(pdfFileName('Invoice INV-1', undefined, 'not a date')).toBe('Invoice INV-1.pdf');
   });
 
