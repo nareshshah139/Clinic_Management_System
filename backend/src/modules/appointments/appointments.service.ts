@@ -1,6 +1,9 @@
 import { displayCalendarDate } from '../../common/date-display';
+import { enqueueOutbound } from '../messaging/outbox';
+import { WhatsAppPayload } from '../messaging/whatsapp-sender';
 import {
   Injectable,
+  Logger,
   BadRequestException,
   NotFoundException,
   ConflictException,
@@ -98,6 +101,8 @@ function assertStatusEdit(from: AppointmentStatus, to: AppointmentStatus) {
  */
 @Injectable()
 export class AppointmentsService {
+  private readonly logger = new Logger(AppointmentsService.name);
+
   constructor(
     private prisma: PrismaService,
     @Optional()
@@ -216,8 +221,6 @@ export class AppointmentsService {
       let useTemplate = false;
       let templateName: string | undefined;
       let templateLanguage: string | undefined;
-      let waOverrideToken: string | undefined;
-      let waOverridePhoneId: string | undefined;
       const meta = this.parseMetadataRecord(doctorSettings?.metadata);
       allowWhatsApp = !!meta?.whatsappAutoConfirmAppointments;
       useTemplate = !!meta?.whatsappUseTemplate;
@@ -228,15 +231,6 @@ export class AppointmentsService {
       templateLanguage =
         typeof meta?.whatsappTemplateLanguage === 'string'
           ? meta.whatsappTemplateLanguage
-          : undefined;
-      // Optional per-doctor credential overrides
-      waOverrideToken =
-        typeof meta?.whatsappAccessToken === 'string'
-          ? meta.whatsappAccessToken
-          : undefined;
-      waOverridePhoneId =
-        typeof meta?.whatsappPhoneNumberId === 'string'
-          ? meta.whatsappPhoneNumberId
           : undefined;
 
       const doctorName =
@@ -260,12 +254,8 @@ export class AppointmentsService {
           })
           .catch(() => void 0);
       }
-      // WhatsApp (only if doctor opted in)
-      if (allowWhatsApp && appointment.patient?.phone) {
-        // Format phone number as E.164 for WhatsApp (add + prefix if not present)
-        const e164 = appointment.patient.phone.startsWith('+')
-          ? appointment.patient.phone
-          : `+${appointment.patient.phone}`;
+      // WhatsApp (only if doctor opted in): queued, sent from the clinic number by the send pass
+      if (allowWhatsApp) {
         const touchpoint = 'appointment_confirmation';
         const template =
           useTemplate && this.whatsappTemplates
@@ -303,14 +293,12 @@ export class AppointmentsService {
               }
             : { text: template?.contentText || summary };
 
-        this.notifications
-          .sendWhatsApp({
-            toPhoneE164: e164,
-            overrideToken: waOverrideToken,
-            overridePhoneId: waOverridePhoneId,
-            ...whatsappPayload,
-          })
-          .catch(() => void 0);
+        await this.queueWhatsAppConfirmation(
+          appointment,
+          whatsappPayload.template
+            ? { kind: 'template', name: whatsappPayload.template.name, language: whatsappPayload.template.language, components: whatsappPayload.template.components }
+            : { kind: 'text', text: whatsappPayload.text ?? summary },
+        ).catch((e) => this.logger.warn(`appointment confirmation not queued: ${(e as Error).name}`));
       }
     }
 
@@ -318,6 +306,29 @@ export class AppointmentsService {
     void this.googleCalendar
       ?.syncAppointmentEvent(appointment.id, callerUserId)
       .catch(() => void 0);
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:integrity] appointment-confirmation-outbox
+   * The automated booking confirmation MUST go out as an OutboundMessage from the clinic number,
+   * checked at send time like every automated message; staff-started sends are unchanged.
+   */
+  private async queueWhatsAppConfirmation(appointment: BookedAppointment, whatsapp: WhatsAppPayload) {
+    const profile = await this.prisma.patientPortalProfile.findUnique({
+      where: { patientId: appointment.patientId },
+      select: { phoneE164: true, preferredLanguage: true },
+    });
+    if (!profile?.phoneE164) return;
+    await enqueueOutbound(this.prisma, {
+      dedupeKey: `appointment-confirmation:${appointment.id}`,
+      purpose: 'APPOINTMENT_CONFIRMATION',
+      patientId: appointment.patientId,
+      toE164: profile.phoneE164,
+      templateKey: 'appointment_confirmation',
+      params: { whatsapp, language: profile.preferredLanguage },
+      subjectType: 'APPOINTMENT',
+      subjectId: appointment.id,
+    });
   }
 
   notifyCancelled(id: string, callerUserId?: string) {

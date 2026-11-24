@@ -373,6 +373,7 @@ POST /patients/:id/send-appointment-reminder | roles: OWNER,ADMIN,MANAGER,DOCTOR
 POST /patients/:id/unarchive | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 POST /patients/:id/unlink-user | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 POST /patients/:id/whatsapp-consent | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
+POST /patients/:id/whatsapp-consent/confirm | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 POST /pharmacy/1mg/check-inventory | roles: OWNER,ADMIN,MANAGER,DOCTOR,PHARMACIST,RECEPTION | permissions: -
 POST /pharmacy/1mg/orders | roles: OWNER,ADMIN,MANAGER,DOCTOR,PHARMACIST,RECEPTION | permissions: -
 POST /pharmacy/1mg/orders/:id/confirm | roles: OWNER,ADMIN,MANAGER,DOCTOR,PHARMACIST,RECEPTION | permissions: -

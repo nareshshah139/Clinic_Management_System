@@ -395,6 +395,10 @@ export class ApiClient {
     return this.post(`/patients/${id}/whatsapp-consent`, { action });
   }
 
+  async confirmWhatsAppNumber(id: string, code: string) {
+    return this.post(`/patients/${id}/whatsapp-consent/confirm`, { code });
+  }
+
   async setPatientPortalEnabled(id: string, enabled: boolean) {
     return this.patch(`/patients/${id}/portal`, { enabled });
   }

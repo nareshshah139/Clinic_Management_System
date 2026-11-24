@@ -1,7 +1,7 @@
 import { AppointmentsService } from './appointments.service';
 import { VisitType } from '@prisma/client';
 
-describe('AppointmentsService WhatsApp flow', () => {
+describe('AppointmentsService WhatsApp flow (PP-18: automated confirmation goes through OutboundMessage)', () => {
   const patientRecord = {
     id: 'patient-1',
     name: 'Alice Patient',
@@ -46,6 +46,10 @@ describe('AppointmentsService WhatsApp flow', () => {
           .mockResolvedValue({ name: 'Downtown Clinic', phone: '9988776655' }),
       },
       patient: { findFirst: jest.fn().mockResolvedValue(patientRecord) },
+      patientPortalProfile: {
+        findUnique: jest.fn().mockResolvedValue({ phoneE164: '+919999999999', preferredLanguage: 'TE' }),
+      },
+      outboundMessage: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },
       user: {
         findFirst: jest.fn().mockResolvedValue(doctorRecord),
         findUnique: jest.fn().mockResolvedValue({
@@ -84,7 +88,12 @@ describe('AppointmentsService WhatsApp flow', () => {
     resolveActiveTemplate: jest.fn(),
   });
 
-  it('uses WhatsApp template with components when available', async () => {
+  const queued = (prisma: any) => {
+    expect(prisma.outboundMessage.createMany).toHaveBeenCalledTimes(1);
+    return prisma.outboundMessage.createMany.mock.calls[0][0].data[0];
+  };
+
+  it('queues the doctor template with components for the patient E.164 number and never calls sendWhatsApp', async () => {
     const { prisma } = makePrisma();
     const notifications = makeNotifications();
     const templates = makeTemplates();
@@ -101,9 +110,17 @@ describe('AppointmentsService WhatsApp flow', () => {
     );
     await svc.create(baseDto as any, 'branch-1');
 
-    expect(notifications.sendWhatsApp).toHaveBeenCalledTimes(1);
-    const payload = notifications.sendWhatsApp.mock.calls[0][0];
-    expect(payload.toPhoneE164).toBe('+9999999999');
+    expect(notifications.sendWhatsApp).not.toHaveBeenCalled();
+    const row = queued(prisma);
+    expect(row).toMatchObject({
+      dedupeKey: 'appointment-confirmation:appt-1',
+      purpose: 'APPOINTMENT_CONFIRMATION',
+      patientId: 'patient-1',
+      toE164: '+919999999999',
+      subjectType: 'APPOINTMENT',
+      subjectId: 'appt-1',
+    });
+    const payload = { template: row.params.whatsapp };
     expect(payload.template.name).toBe('appt_template');
     expect(payload.template.components?.[0]?.parameters?.[0]?.text).toBe(
       'Alice Patient',
@@ -139,7 +156,7 @@ describe('AppointmentsService WhatsApp flow', () => {
     );
     await svc.create(baseDto as any, 'branch-1');
 
-    const payload = notifications.sendWhatsApp.mock.calls[0][0];
+    const payload = { template: queued(prisma).params.whatsapp };
     expect(
       payload.template.components?.[0]?.parameters?.map(
         (param: any) => param.text,
@@ -165,8 +182,19 @@ describe('AppointmentsService WhatsApp flow', () => {
     );
     await svc.create(baseDto as any, 'branch-1');
 
-    expect(notifications.sendWhatsApp).toHaveBeenCalledTimes(1);
-    const payload = notifications.sendWhatsApp.mock.calls[0][0];
+    expect(notifications.sendWhatsApp).not.toHaveBeenCalled();
+    const payload = queued(prisma).params.whatsapp;
+    expect(payload).toMatchObject({ kind: 'text' });
     expect(payload.text).toContain('Appointment confirmed with Dr. John Doe');
+  });
+
+  it('queues nothing when the patient has no usable WhatsApp number', async () => {
+    const { prisma } = makePrisma();
+    prisma.patientPortalProfile.findUnique.mockResolvedValue({ phoneE164: null, preferredLanguage: 'EN' });
+    const notifications = makeNotifications();
+    const svc = new AppointmentsService(prisma as any, notifications as any, makeTemplates() as any);
+    await svc.create(baseDto as any, 'branch-1');
+    expect(prisma.outboundMessage.createMany).not.toHaveBeenCalled();
+    expect(notifications.sendWhatsApp).not.toHaveBeenCalled();
   });
 });

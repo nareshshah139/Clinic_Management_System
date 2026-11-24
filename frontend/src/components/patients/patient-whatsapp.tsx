@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { NativeSelect } from '@/components/ui/native-select';
+import { Input } from '@/components/ui/input';
 
 export type PreferredLanguage = 'EN' | 'TE' | 'HI';
 export type WhatsAppConsentState = 'NOT_ASKED' | 'PENDING' | 'OPTED_IN' | 'OPTED_OUT';
@@ -37,6 +38,7 @@ export function PatientWhatsAppCard({ patientId, profile: initial, phone }: { pa
   const [profile, setProfile] = useState<PortalProfile>(initial ?? DEFAULT_PROFILE);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [code, setCode] = useState('');
 
   const run = async (action: () => Promise<unknown>) => {
     setBusy(true);
@@ -81,6 +83,22 @@ export function PatientWhatsAppCard({ patientId, profile: initial, phone }: { pa
             Patient refused
           </Button>
         </div>
+        {profile.consentState === 'PENDING' && (
+          <form className="flex flex-wrap items-center gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void run(async () => {
+                const next = await apiClient.confirmWhatsAppNumber(patientId, code);
+                setCode('');
+                return next;
+              });
+            }}>
+            <label htmlFor="whatsapp-code" className="text-muted-foreground">Code from the clinic&apos;s WhatsApp message:</label>
+            <Input id="whatsapp-code" className="w-28" inputMode="numeric" autoComplete="one-time-code" maxLength={6}
+              value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))} />
+            <Button size="sm" type="submit" disabled={busy || code.length !== 6}>Confirm number</Button>
+          </form>
+        )}
         <div className="flex flex-wrap items-center gap-2">
           <label htmlFor="whatsapp-language" className="text-muted-foreground">Preferred language:</label>
           <NativeSelect id="whatsapp-language" className="w-40" value={profile.preferredLanguage} disabled={busy}

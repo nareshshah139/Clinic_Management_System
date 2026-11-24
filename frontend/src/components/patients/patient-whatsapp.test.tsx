@@ -5,7 +5,7 @@ import { PatientWhatsAppCard } from './patient-whatsapp';
 import { apiClient } from '@/lib/api';
 
 jest.mock('@/lib/api', () => ({
-  apiClient: { recordWhatsAppConsent: jest.fn(), setPatientPortalEnabled: jest.fn(), updatePatient: jest.fn() },
+  apiClient: { recordWhatsAppConsent: jest.fn(), confirmWhatsAppNumber: jest.fn(), setPatientPortalEnabled: jest.fn(), updatePatient: jest.fn() },
 }));
 
 const profile = { phoneE164: '+919876543210', consentState: 'NOT_ASKED' as const, preferredLanguage: 'EN' as const, portalEnabled: true };
@@ -26,6 +26,28 @@ describe('PatientWhatsAppCard', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Patient agreed to WhatsApp' }));
     expect(apiClient.recordWhatsAppConsent).toHaveBeenCalledWith('p1', 'agreed');
     expect(await screen.findByText('Waiting for the number to confirm')).toBeInTheDocument();
+  });
+
+  it('PP-04: reception types the code from the confirmation message and the patient becomes agreed and confirmed', async () => {
+    (apiClient.confirmWhatsAppNumber as jest.Mock).mockResolvedValue({ ...profile, consentState: 'OPTED_IN' });
+    render(<PatientWhatsAppCard patientId="p1" profile={{ ...profile, consentState: 'PENDING' }} />);
+    const confirm = screen.getByRole('button', { name: 'Confirm number' });
+    expect(confirm).toBeDisabled();
+    await userEvent.type(screen.getByLabelText(/Code from the clinic/), '12a3456');
+    expect(screen.getByLabelText(/Code from the clinic/)).toHaveValue('123456');
+    await userEvent.click(confirm);
+    expect(apiClient.confirmWhatsAppNumber).toHaveBeenCalledWith('p1', '123456');
+    expect(await screen.findByText('Agreed and confirmed')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Confirm number' })).not.toBeInTheDocument();
+  });
+
+  it('PP-04: a wrong code shows the server message and keeps waiting', async () => {
+    (apiClient.confirmWhatsAppNumber as jest.Mock).mockRejectedValue(new Error('That code does not match. Check the latest WhatsApp message from the clinic.'));
+    render(<PatientWhatsAppCard patientId="p1" profile={{ ...profile, consentState: 'PENDING' }} />);
+    await userEvent.type(screen.getByLabelText(/Code from the clinic/), '000000');
+    await userEvent.click(screen.getByRole('button', { name: 'Confirm number' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('That code does not match');
+    expect(screen.getByTestId('whatsapp-consent-state')).toHaveTextContent('Waiting for the number to confirm');
   });
 
   it('PP-05: changing the language saves it on the patient', async () => {

@@ -329,6 +329,8 @@ model Patient {
   pharmacyInvoices PharmacyInvoice[]
   draftAttachments DraftAttachment[]
   portalProfile    PatientPortalProfile?
+  outboundMessages OutboundMessage[]
+  attentionItems   AttentionItem[]
 
   // Back-relations
   experimentAssignments ExperimentAssignment[]
@@ -2304,6 +2306,105 @@ model PatientPortalProfile {
 
   @@index([phoneE164])
   @@map("patient_portal_profiles")
+}
+
+enum OutboundMessageState {
+  QUEUED
+  SENDING
+  SENT
+  DELIVERED
+  READ
+  FAILED
+  SUPPRESSED
+  EXPIRED
+}
+
+enum OutboundMessagePurpose {
+  NUMBER_CONFIRMATION
+  APPOINTMENT_CONFIRMATION
+  REVIEW_REMINDER
+  CHECK_IN_OPENED
+  CHECK_IN_REMINDER
+  ACKNOWLEDGEMENT
+  OPT_OUT_CONFIRMATION
+}
+
+model OutboundMessage {
+  id                String                 @id @default(cuid())
+  dedupeKey         String                 @unique
+  purpose           OutboundMessagePurpose
+  state             OutboundMessageState   @default(QUEUED)
+  patientId         String?
+  toE164            String
+  templateKey       String
+  params            Json?
+  subjectType       String?
+  subjectId         String?
+  notBefore         DateTime               @default(now())
+  leaseUntil        DateTime?
+  attempts          Int                    @default(0)
+  providerMessageId String?                @unique
+  outcome           String?
+  sentAt            DateTime?
+  settledAt         DateTime?
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  patient           Patient?               @relation(fields: [patientId], references: [id], onDelete: SetNull)
+
+  @@index([state, notBefore])
+  @@index([patientId, sentAt])
+  @@index([toE164, purpose, createdAt])
+  @@map("outbound_messages")
+}
+
+enum PortalOtpPurpose {
+  CONFIRM_NUMBER
+}
+
+model PortalOtpChallenge {
+  id         String           @id @default(cuid())
+  purpose    PortalOtpPurpose
+  phoneE164  String
+  codeHash   String
+  expiresAt  DateTime
+  attempts   Int              @default(0)
+  consumedAt DateTime?
+  createdAt  DateTime         @default(now())
+
+  @@index([phoneE164, purpose, createdAt])
+  @@map("portal_otp_challenges")
+}
+
+enum AttentionKind {
+  PATIENT_MESSAGE
+  DELIVERY_FAILURE
+}
+
+enum AttentionState {
+  OPEN
+  CLAIMED
+  RESOLVED
+}
+
+model AttentionItem {
+  id          String         @id @default(cuid())
+  kind        AttentionKind
+  state       AttentionState @default(OPEN)
+  subjectKey  String
+  patientId   String?
+  phoneE164   String?
+  branchId    String?
+  reason      String?
+  claimedById String?
+  resolvedAt  DateTime?
+  lastEventAt DateTime       @default(now())
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  patient     Patient?       @relation(fields: [patientId], references: [id], onDelete: SetNull)
+
+  @@index([state, lastEventAt])
+  @@index([kind, subjectKey])
+  @@map("attention_items")
 }
 
 enum MedicineForm {

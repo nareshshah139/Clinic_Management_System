@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import { WhatsAppConsentState } from '@prisma/client';
 import { PrismaService } from '../../../shared/database/prisma.service';
 import { ensureProfile, nextConsent } from './portal-profile';
+import { CodeResult, confirmByCode, requestNumberConfirmation } from '../../messaging/number-confirmation';
 
 @Injectable()
 export class PatientPortalService {
@@ -22,7 +23,7 @@ export class PatientPortalService {
       }
       const to = nextConsent(profile.consentState, action);
       if (!to) throw new ConflictException(`Consent cannot move from ${profile.consentState} on ${action}`);
-      return tx.patientPortalProfile.update({
+      const updated = await tx.patientPortalProfile.update({
         where: { patientId },
         data: {
           consentState: to,
@@ -32,7 +33,29 @@ export class PatientPortalService {
           ...(to === WhatsAppConsentState.OPTED_OUT ? { phoneConfirmedAt: null } : {}),
         },
       });
+      if (to === WhatsAppConsentState.PENDING && profile.phoneE164) {
+        await requestNumberConfirmation(tx, profile.phoneE164, updated.preferredLanguage, patientId);
+      }
+      return updated;
     });
+  }
+
+  /** Reception types the code the patient read out from the confirmation message. */
+  async confirmWithCode(patientId: string, branchId: string, code: string) {
+    await this.loadPatient(patientId, branchId);
+    const result: CodeResult = await this.prisma.$transaction(async (tx) => {
+      const profile = await ensureProfile(tx, patientId);
+      if (!profile.phoneE164) return 'none';
+      return confirmByCode(tx, profile.phoneE164, code);
+    });
+    const messages: Record<Exclude<CodeResult, 'confirmed'>, string> = {
+      wrong: 'That code does not match. Check the latest WhatsApp message from the clinic.',
+      expired: 'That code has expired. Record agreement again to send a new one.',
+      locked: 'Too many wrong codes. Record agreement again to send a new one.',
+      none: 'No confirmation is waiting for this number.',
+    };
+    if (result !== 'confirmed') throw new BadRequestException(messages[result]);
+    return this.prisma.patientPortalProfile.findUnique({ where: { patientId } });
   }
 
   /**

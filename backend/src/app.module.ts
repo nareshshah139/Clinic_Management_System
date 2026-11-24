@@ -9,6 +9,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { PrismaModule } from './shared/database/prisma.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { PatientsModule } from './modules/patients/patients.module';
+import { MessagingModule } from './modules/messaging/messaging.module';
 import { AppointmentsModule } from './modules/appointments/appointments.module';
 import { ClinicInvestigationsModule } from './modules/clinic-investigations/clinic-investigations.module';
 import { DoctorAvailabilityModule } from './modules/doctor-availability/doctor-availability.module';
@@ -56,6 +57,7 @@ const commonImports = [
 const fullFeatureModules = [
   AuthModule,
   PatientsModule,
+  MessagingModule,
   AppointmentsModule,
   DoctorAvailabilityModule,
   ClinicInvestigationsModule,
