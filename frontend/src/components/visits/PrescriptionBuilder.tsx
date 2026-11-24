@@ -3650,6 +3650,18 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       spaceOptimized,
       fitToPage,
       lineSpacing,
+      includeSections,
+      breakBeforeMedications,
+      breakBeforeInvestigations,
+      breakBeforeFollowUp,
+      breakBeforeSignature,
+      activeProfileId,
+      printerProfiles,
+      resolvedPrintBgUrl,
+      translationsMap,
+      designAids,
+      frames,
+      bleedSafe,
     });
     
     // Skip processing if: initial render is done AND content hash hasn't changed
@@ -4240,7 +4252,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   }, [isTeleVideo, previewOpen, itemsStringified, diagnosis, chiefComplaints, personalHistory, spaceOptimized, fitToPage, lineSpacing, investigationsStringified, customSectionsStringified, followUpInstructions,
       paperPreset, effectiveTopMarginMm, effectiveBottomMarginMm, overrideTopMarginPx, overrideBottomMarginPx,
       activeProfileId, printerProfiles, printLeftMarginPx, printRightMarginPx, contentOffsetXPx, contentOffsetYPx, 
-      designAids, frames, bleedSafe, showRefillStamp, printedSignatureUrl, letterheadOption, resolvedPrintBgUrl, grayscale, translationsMap]); // Added translationsMap to re-process when translations complete
+      designAids, frames, bleedSafe, showRefillStamp, printedSignatureUrl, letterheadOption, resolvedPrintBgUrl, grayscale, translationsMap,
+      rxPrintFormat, includeSections, breakBeforeMedications, breakBeforeInvestigations, breakBeforeFollowUp, breakBeforeSignature]);
 
   // Handle page navigation
   useEffect(() => {
@@ -5891,20 +5904,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   margin-top: var(--fit-sign-gap, 8px) !important;
                   padding-top: var(--fit-sign-gap, 8px) !important;
                 }
-                ${rxPrintFormat === 'TEXT' ? `
-                  /* Text print mode - hide non-text content in Paged.js output only */
-                  .pagedjs_page_content > *:not(.rx-text) { 
-                    display: none !important; 
-                  }
-                  .pagedjs_page_content .rx-text { 
-                    display: block !important; 
-                  }
-                ` : `
-                  /* Table/normal mode - hide text format in Paged.js output */
-                  .pagedjs_page_content .rx-text { 
-                    display: none !important; 
-                  }
-                `}
                 
                 /* Unified Paged.js styling */
                 #pagedjs-container .pagedjs_page,
@@ -6036,80 +6035,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   {(!printCompact || isTeleVideo) && (
                     <div className="text-sm text-foreground mb-2">{todayStr}{isTeleVideo && <span data-consultation-label> • Consultation: Tele-video</span>}</div>
                   )}
-                  {/* Optional plain text preview block (shown only when TEXT format) */}
-                  {rxPrintFormat === 'TEXT' && (
-                    <div className="rx-text p-4 text-sm whitespace-pre-wrap font-mono border rounded-md mb-3">
-                      {(() => {
-                        const headerLines = [
-                          'PRESCRIPTION',
-                          `${displayClinicDateTime(new Date())}`
-                        ];
-                        const patientLines = [
-                          `Patient: ${visitData?.patient?.name || patientData?.name || '—'}`,
-                          `Patient Code: ${patientCodeDisplay || '—'}`,
-                          reviewDateDisplay ? `Review Date: ${reviewDateDisplay}` : null,
-                          (followUpInstructions || '').trim().length ? `Follow-up Instructions: ${tt('followUpInstructions', followUpInstructions)}` : null,
-                        ].filter(Boolean);
-                        const medsLines = (items || []).map((it: any, idx: number) => {
-                          const parts: string[] = [];
-                          parts.push(`${idx + 1}. ${printedMedicineName(it.drugName)}`);
-                          if (it.dosage) parts.push(`Dosage: ${it.dosage}${it.dosageUnit ? ' ' + it.dosageUnit.toLowerCase() : ''}`);
-                          parts.push(`Freq: ${(it.frequency || '').replaceAll('_',' ').toLowerCase()}`);
-                          parts.push(`Duration: ${it.duration} ${String(it.durationUnit || '').toLowerCase()}`);
-                          if (it.instructions) parts.push(`Notes: ${it.instructions}`);
-                          return parts.join(' | ');
-                        });
-                        const sections: string[] = [];
-                        sections.push(headerLines.join('\n'));
-                        sections.push('');
-                        sections.push(patientLines.join('\n'));
-                        sections.push('');
-                        sections.push('Rx:');
-                        sections.push(medsLines.length ? medsLines.join('\n') : '—');
-                        if ((procedures || '').trim().length > 0) {
-                          sections.push('');
-                          sections.push('Procedures:');
-                          sections.push(tt('procedures', procedures));
-                        }
-                        if ((procedurePlanned || '').trim().length > 0) {
-                          sections.push('');
-                          sections.push('Procedure Planned:');
-                          sections.push(tt('procedurePlanned', procedurePlanned));
-                        }
-                        const printableCustomSections = (customSections || []).filter(
-                          (s) => (s?.title || '').trim().length > 0 || (s?.content || '').trim().length > 0
-                        );
-                        if (printableCustomSections.length) {
-                          sections.push('');
-                          sections.push('Custom Sections:');
-                          printableCustomSections.forEach((s, idx) => {
-                            const title = (s.title || '').trim();
-                            const content = (s.content || '').trim();
-                            if (title && content) {
-                              sections.push(`${tt(`custom.${idx}.title`, title)}: ${tt(`custom.${idx}.content`, content)}`);
-                            } else if (title) {
-                              sections.push(tt(`custom.${idx}.title`, title));
-                            } else if (content) {
-                              sections.push(tt(`custom.${idx}.content`, content));
-                            }
-                          });
-                        }
-                        if ((counselingText || '').trim().length > 0) {
-                          sections.push('');
-                          sections.push('Counseling:');
-                          sections.push(tt('counseling', counselingText));
-                        }
-                        if ((followUpInstructions || '').trim().length > 0) {
-                          sections.push('');
-                          sections.push('Follow-up Instructions:');
-                          sections.push(tt('followUpInstructions', followUpInstructions));
-                        }
-                        return sections.join('\n');
-                      })()}
-                    </div>
-                  )}
-
-
                   {/* Patient Info */}
                   {includeSections.patientInfo && (
                     printCompact ? (

@@ -964,3 +964,25 @@ it('closes the print preview with Close and offers no toggle that reopens it', a
     expect(document.getElementById('pagedjs-container')).toBeNull();
   }
 });
+
+it('re-paginates the open preview when the print format or a page break changes', async () => {
+  paginateSourceContent = true;
+  localStorage.setItem('rxDraft:format-patient:standalone', JSON.stringify({ items: [rxDrug('Amoxicillin', { instructions: 'After food' })] }));
+  render(<PrescriptionBuilder patientId="format-patient" visitId={null} doctorId="doctor" standalone />);
+  await screen.findByDisplayValue('Amoxicillin');
+  await openPreview();
+  await settlePreviewPagination();
+  expect(printedRows()).toEqual([['Amoxicillin', '1-0-0', '—', '5 days', 'After food']]);
+
+  fireEvent.click(screen.getAllByRole('combobox', { name: 'Print format' }).at(-1)!);
+  fireEvent.click(await screen.findByRole('option', { name: 'Text' }));
+  await settlePreviewPagination();
+  const paged = () => document.getElementById('pagedjs-container')!;
+  await waitFor(() => expect(paged().querySelector('.rx-row')).toHaveTextContent('1. Amoxicillin 1 tablet — once daily × 5 days — After food'));
+  expect(paged().querySelector('.doctor-signature-block')).not.toBeNull();
+
+  expect(paged().querySelector('.pb-before-page')).toBeNull();
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Break before Rx' }));
+  await settlePreviewPagination();
+  await waitFor(() => expect(paged().querySelector('.pb-before-page')).toHaveTextContent(/^Rx1\. Amoxicillin/));
+});
