@@ -6,6 +6,6 @@
     "builder": "swc",
     "deleteOutDir": true,
     "typeCheck": false,
-    "assets": ["modules/users/assets/*.png"]
+    "assets": ["modules/users/assets/*.png", "modules/follow-ups/data/**/*.json"]
   }
 }

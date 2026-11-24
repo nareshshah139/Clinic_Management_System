@@ -1,0 +1,49 @@
+{
+  "key": "symptom-check",
+  "title": { "EN": "Symptom check", "TE": "లక్షణాల పరిశీలన", "HI": "लक्षण जाँच" },
+  "respondent": "PATIENT",
+  "licence": "Written by the clinic for this portal. Not a licensed or validated scale.",
+  "scoring": { "item": "severity" },
+  "items": [
+    {
+      "key": "severity",
+      "type": "scale",
+      "min": 0,
+      "max": 10,
+      "required": true,
+      "prompt": {
+        "EN": "How bad is your main symptom today? 0 means none, 10 means the worst.",
+        "TE": "ఈ రోజు మీ ప్రధాన లక్షణం ఎంత తీవ్రంగా ఉంది? 0 అంటే అసలు లేదు, 10 అంటే చాలా ఎక్కువ.",
+        "HI": "आज आपका मुख्य लक्षण कितना गंभीर है? 0 का मतलब बिल्कुल नहीं, 10 का मतलब सबसे ज़्यादा."
+      },
+      "flags": [{ "when": { "gte": 8 }, "priority": "URGENT" }]
+    },
+    {
+      "key": "change",
+      "type": "single-choice",
+      "required": true,
+      "prompt": {
+        "EN": "Compared with your last visit, your skin is",
+        "TE": "మీ గత సందర్శనతో పోలిస్తే, మీ చర్మం",
+        "HI": "पिछली मुलाक़ात की तुलना में आपकी त्वचा"
+      },
+      "options": [
+        { "value": "better", "label": { "EN": "Better", "TE": "మెరుగ్గా ఉంది", "HI": "बेहतर है" } },
+        { "value": "same", "label": { "EN": "The same", "TE": "అలాగే ఉంది", "HI": "पहले जैसी है" } },
+        { "value": "worse", "label": { "EN": "Worse", "TE": "అధ్వాన్నంగా ఉంది", "HI": "ख़राब हुई है" } }
+      ],
+      "flags": [{ "when": { "equals": "worse" }, "priority": "HIGH" }]
+    },
+    {
+      "key": "photo",
+      "type": "photo",
+      "required": false,
+      "position": "CLOSE_UP",
+      "prompt": {
+        "EN": "Add a photo of the affected area (optional).",
+        "TE": "ప్రభావిత ప్రాంతం ఫోటోను జోడించండి (ఐచ్ఛికం).",
+        "HI": "प्रभावित जगह की फ़ोटो जोड़ें (वैकल्पिक)."
+      }
+    }
+  ]
+}

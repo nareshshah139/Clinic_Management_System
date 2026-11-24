@@ -1,0 +1,8 @@
+{
+  "key": "skin-two-week",
+  "name": { "EN": "Two-week skin check", "TE": "రెండు వారాల చర్మ పరిశీలన", "HI": "दो हफ़्ते की त्वचा जाँच" },
+  "steps": [
+    { "key": "day3", "offsetDays": 3, "windowDays": 2, "instrument": "symptom-check", "respondent": "PATIENT", "reminderAfterDays": [1], "onMissed": "none" },
+    { "key": "day14", "offsetDays": 14, "windowDays": 3, "instrument": "symptom-check", "respondent": "PATIENT", "reminderAfterDays": [1], "onMissed": "attention" }
+  ]
+}

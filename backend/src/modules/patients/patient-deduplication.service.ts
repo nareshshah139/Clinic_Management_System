@@ -229,6 +229,8 @@ export class PatientDeduplicationService {
       tx.outboundMessage.updateMany({ where: { patientId: duplicate.id }, data: { patientId: canonical.id } }),
       tx.attentionItem.updateMany({ where: { patientId: duplicate.id }, data: { patientId: canonical.id } }),
       tx.patientMessage.updateMany({ where: { patientId: duplicate.id }, data: { patientId: canonical.id } }),
+      tx.followUpTrack.updateMany({ where: { patientId: duplicate.id }, data: { patientId: canonical.id } }),
+      tx.portalTaskLink.updateMany({ where: { patientId: duplicate.id }, data: { patientId: canonical.id } }),
     ]);
     await this.mergeMessageItems(tx, canonical.id, duplicate.id);
 

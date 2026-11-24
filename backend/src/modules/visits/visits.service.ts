@@ -6,6 +6,7 @@ import { CreateVisitDto, UpdateVisitDto, CompleteVisitDto } from './dto/create-v
 import { QueryVisitsDto, PatientVisitHistoryDto, DoctorVisitsDto } from './dto/query-visit.dto';
 import { Language, Prisma } from '@prisma/client';
 import { join, posix as pathPosix } from 'path';
+import { anchorDay, requirePlanVersion, startTrack, stopTracks } from '../follow-ups/tracks';
 import { randomBytes } from 'crypto';
 import * as fs from 'fs';
 
@@ -523,13 +524,22 @@ export class VisitsService {
       updateData.followUp = updateVisitDto.treatmentPlan.followUpDate ? new Date(updateVisitDto.treatmentPlan.followUpDate) : null;
     }
 
+    const planChanged = updateVisitDto.followUpPlanVersionId !== undefined
+      && updateVisitDto.followUpPlanVersionId !== ((visit as any).followUpPlanVersionId ?? null);
+    if (planChanged) {
+      if (updateVisitDto.followUpPlanVersionId) await requirePlanVersion(this.prisma, updateVisitDto.followUpPlanVersionId);
+      updateData.followUpPlanVersionId = updateVisitDto.followUpPlanVersionId;
+    }
+
     // Validation can strip an optional-only payload. Returning the current
     // record is safer than issuing an empty Prisma update that fails vaguely.
     if (Object.keys(updateData).length === 0) {
       return this.findOne(id, branchId);
     }
 
-    const updatedVisit = await this.prisma.visit.update({
+    const updatedVisit = await this.prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT id FROM visits WHERE id = ${id} FOR UPDATE`;
+      const row = await tx.visit.update({
       where: { id, version: visit.version, deletedAt: null },
       data: { ...updateData, version: { increment: 1 } },
       include: {
@@ -543,6 +553,14 @@ export class VisitsService {
           select: { id: true, date: true, slot: true },
         },
       },
+    });
+      if (planChanged && row.status === 'COMPLETED' && row.completedAt) {
+        await stopTracks(tx, { visitId: id }, 'plan-changed', actorId ?? null);
+        if (updateVisitDto.followUpPlanVersionId) {
+          await startTrack(tx, { visitId: id, patientId: row.patientId, planVersionId: updateVisitDto.followUpPlanVersionId, anchorDay: anchorDay(row.completedAt) });
+        }
+      }
+      return row;
     }).catch(error => {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
         throw new ConflictException('Visit changed; reload before saving');
@@ -584,6 +602,8 @@ export class VisitsService {
       if (input.version !== undefined && input.version !== visit.version) {
         throw new ConflictException('Visit changed; reload before completing');
       }
+      const completedAt = new Date();
+      if (input.followUpPlanVersionId) await requirePlanVersion(tx, input.followUpPlanVersionId);
       const plan = mergeClinicalData(visit.plan, {
         ...(input.finalNotes !== undefined ? { finalNotes: input.finalNotes } : {}),
         ...(input.followUpInstructions !== undefined ? { followUpInstructions: input.followUpInstructions } : {}),
@@ -591,13 +611,18 @@ export class VisitsService {
       await tx.visit.update({
         where: { id, version: visit.version, deletedAt: null },
         data: {
-          status: 'COMPLETED', completedAt: new Date(), version: { increment: 1 },
+          status: 'COMPLETED', completedAt, version: { increment: 1 },
+          ...(input.followUpPlanVersionId !== undefined ? { followUpPlanVersionId: input.followUpPlanVersionId } : {}),
           plan: JSON.stringify(plan),
           ...(input.followUpDate !== undefined ? { followUp: input.followUpDate ? new Date(input.followUpDate) : null } : {}),
         },
       });
       if (visit.appointmentId) {
         await tx.appointment.update({ where: { id: visit.appointmentId }, data: { status: 'COMPLETED' } });
+      }
+      const planVersionId = input.followUpPlanVersionId !== undefined ? input.followUpPlanVersionId : (visit as any).followUpPlanVersionId;
+      if (planVersionId) {
+        await startTrack(tx, { visitId: id, patientId: visit.patientId, planVersionId, anchorDay: anchorDay((visit as any).completedAt ?? completedAt) });
       }
       return service.findOne(id, branchId);
     });
@@ -639,6 +664,7 @@ export class VisitsService {
           data: { status: 'CHECKED_IN' },
         });
       }
+      await stopTracks(tx, { visitId: id }, 'visit-deleted', null);
       return { message: 'Visit deleted successfully' };
     });
   }

@@ -277,6 +277,11 @@ export class UpdateVisitDto {
   @Min(0)
   version?: number;
 
+  /** The plan version picked in the Follow-up tab; null means "No follow-up". */
+  @IsOptional()
+  @IsString()
+  followUpPlanVersionId?: string | null;
+
   @IsOptional()
   @IsEnum(ConsultationType)
   consultationType?: ConsultationType;
@@ -347,4 +352,9 @@ export class CompleteVisitDto {
   @IsOptional()
   @IsString()
   followUpInstructions?: string;
+
+  /** The plan version picked in the Follow-up tab; null means "No follow-up". */
+  @IsOptional()
+  @IsString()
+  followUpPlanVersionId?: string | null;
 }

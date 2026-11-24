@@ -7,6 +7,7 @@ import { renderTemplate } from './templates';
 import { CARE_PRIORITY, inSendWindow, isCare, kolkataDay, kolkataDayBounds, needsConsent, nextDayWindowStart, nextWindowStart } from './send-policy';
 import { requestNumberConfirmation } from './number-confirmation';
 import { openDeliveryFailure } from './attention';
+import { TASK_LINK_SUBJECT, closeEndedCheckIns, linkOpenedCheckIns, openDueCheckIns, queueCheckInReminders, queueReviewReminders, taskLinkIsCurrent } from '../follow-ups/scheduler';
 
 type Tx = Prisma.TransactionClient;
 type Decision =
@@ -22,6 +23,14 @@ export const MAX_ATTEMPTS = 5;
 export const RETRY_MS = 5 * 60 * 1000;
 const RECEIPT_STATE: Record<string, 'SENT' | 'DELIVERED' | 'READ' | 'FAILED'> = { sent: 'SENT', delivered: 'DELIVERED', read: 'READ', failed: 'FAILED' };
 const RECEIPT_RANK: Record<string, number> = { SENT: 1, DELIVERED: 2, READ: 3 };
+/**
+ * The verify-clinic launcher sets MESSAGING_CLOCK_OFFSET_MS so a live pass can run at a shifted
+ * time; production never sets it.
+ */
+function passClock(): Date {
+  const offset = Number(process.env.MESSAGING_CLOCK_OFFSET_MS ?? 0);
+  return new Date(Date.now() + (Number.isFinite(offset) ? offset : 0));
+}
 export const LAPSE_MS = 365 * 24 * 3600 * 1000;
 const DELIVERED_STATES = ['SENT', 'DELIVERED', 'READ'] as const;
 
@@ -51,16 +60,28 @@ export class SendPassService {
     }
   }
 
-  async runPass(now = new Date()) {
+  /**
+   * @cc [owner:nareshshah139,label:integrity] one-pass-order
+   * One pass MUST apply stored receipts, open due check-ins, queue their opened messages and
+   * reminders, queue review reminders, send, then close ended check-ins, in that order. Every
+   * step is a conditional update or a dedupe-keyed enqueue, so two passes or two instances
+   * leave the same rows as one (PP-31).
+   */
+  async runPass(now = passClock()) {
     const lapsed = await this.lapseStaleConsent(now);
     const receipts = await this.applyPendingReceipts(now);
+    const opened = await openDueCheckIns(this.prisma, now);
+    const checkInMessages = await linkOpenedCheckIns(this.prisma, now);
+    const reminders = await queueCheckInReminders(this.prisma, now);
+    const reviewReminders = await queueReviewReminders(this.prisma, now);
     const leased = await this.lease(now);
     const counts: Record<string, number> = {};
     for (const row of leased) {
       const outcome = await this.sendOne(row.id, now);
       counts[outcome] = (counts[outcome] ?? 0) + 1;
     }
-    return { lapsed, receipts, leased: leased.length, ...counts };
+    const missed = await closeEndedCheckIns(this.prisma, now);
+    return { lapsed, receipts, opened, checkInMessages, reminders, reviewReminders, leased: leased.length, ...counts, missed };
   }
 
   /**
@@ -226,6 +247,7 @@ export class SendPassService {
       if (start) return new Date(`${day}T${start[1]}:${start[2]}:00+05:30`) > now;
       return day >= kolkataDay(now);
     }
+    if (row.subjectType === TASK_LINK_SUBJECT && row.subjectId) return taskLinkIsCurrent(tx, row.subjectId);
     return false;
   }
 

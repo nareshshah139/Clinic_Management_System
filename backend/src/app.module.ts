@@ -10,6 +10,7 @@ import { PrismaModule } from './shared/database/prisma.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { PatientsModule } from './modules/patients/patients.module';
 import { MessagingModule } from './modules/messaging/messaging.module';
+import { FollowUpsModule } from './modules/follow-ups/follow-ups.module';
 import { AppointmentsModule } from './modules/appointments/appointments.module';
 import { ClinicInvestigationsModule } from './modules/clinic-investigations/clinic-investigations.module';
 import { DoctorAvailabilityModule } from './modules/doctor-availability/doctor-availability.module';
@@ -58,6 +59,7 @@ const fullFeatureModules = [
   AuthModule,
   PatientsModule,
   MessagingModule,
+  FollowUpsModule,
   AppointmentsModule,
   DoctorAvailabilityModule,
   ClinicInvestigationsModule,

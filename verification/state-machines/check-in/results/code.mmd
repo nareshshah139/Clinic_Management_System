@@ -1,0 +1,34 @@
+---
+title: "Follow-up track and check-in (code)"
+---
+stateDiagram-v2
+  state "Visit in progress" as s0
+  state "Completed, check-in scheduled" as s1
+  state "Completed, no live track" as s2
+  state "Visit deleted, no live track" as s3
+  state "Completed, check-in open" as s4
+  state "Completed, check-in answered" as s5
+  state "Completed, check-in missed" as s6
+  [*] --> s0
+  s0 --> s1: the completion commits
+  s0 --> s2: the completion commits
+  s0 --> s3: the visit is deleted
+  s1 --> s2: staff archive the patient / the doctor changes the plan / the doctor stops the track
+  s1 --> s3: the visit is deleted
+  s1 --> s4: the pass opens the check-in
+  s2 --> s1: the doctor changes the plan
+  s2 --> s3: the visit is deleted
+  s4 --> s1: the doctor changes the plan
+  s4 --> s2: staff archive the patient / the doctor changes the plan / the doctor stops the track
+  s4 --> s3: the visit is deleted
+  s4 --> s5: the patient answers
+  s4 --> s6: the pass closes the window
+  s5 --> s1: the doctor changes the plan
+  s5 --> s2: staff archive the patient / the doctor changes the plan / the doctor stops the track
+  s5 --> s3: the visit is deleted
+  s6 --> s1: the doctor changes the plan
+  s6 --> s2: staff archive the patient / the doctor changes the plan / the doctor stops the track
+  s6 --> s3: the visit is deleted
+  classDef breaks fill:#fde2dd,stroke:#b3261e,stroke-width:2px
+  classDef stuck fill:#fdf0d5,stroke:#a35a05,stroke-width:2px,stroke-dasharray:5 3
+  classDef breaksAndStuck fill:#fde2dd,stroke:#a35a05,stroke-width:2px,stroke-dasharray:5 3

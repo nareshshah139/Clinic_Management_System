@@ -126,6 +126,7 @@ describe('Patient merge covers every patient-linked model', () => {
       'deviceLog',
       'draftAttachment',
       'experimentAssignment',
+      'followUpTrack',
       'invoice',
       'labOrder',
       'newInvoice',
@@ -133,6 +134,7 @@ describe('Patient merge covers every patient-linked model', () => {
       'patientMessage',
       'patientPortalProfile',
       'pharmacyInvoice',
+      'portalTaskLink',
       'referral',
       'visit',
     ]);

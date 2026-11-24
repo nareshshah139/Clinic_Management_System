@@ -332,6 +332,8 @@ model Patient {
   outboundMessages OutboundMessage[]
   attentionItems   AttentionItem[]
   patientMessages  PatientMessage[]
+  followUpTracks   FollowUpTrack[]
+  portalTaskLinks  PortalTaskLink[]
 
   // Back-relations
   experimentAssignments ExperimentAssignment[]
@@ -426,6 +428,9 @@ model Visit {
   patient          Patient           @relation(fields: [patientId], references: [id])
   visitAttachments VisitAttachment[]
   reviewAppointments Appointment[] @relation("VisitReviewAppointments")
+  followUpPlanVersionId String?
+  followUpPlanVersion FollowUpPlanVersion? @relation(fields: [followUpPlanVersionId], references: [id])
+  followUpTracks   FollowUpTrack[]
 
   @@index([patientId])
   @@index([doctorId])
@@ -2328,6 +2333,7 @@ enum OutboundMessagePurpose {
   CHECK_IN_REMINDER
   ACKNOWLEDGEMENT
   OPT_OUT_CONFIRMATION
+  STAFF_REPLY
 }
 
 model OutboundMessage {
@@ -2418,6 +2424,7 @@ model PatientMessage {
   readAt            DateTime?
   createdAt         DateTime          @default(now())
   patient           Patient?          @relation(fields: [patientId], references: [id], onDelete: SetNull)
+  attachments       ResponseAttachment[]
 
   @@index([patientId, createdAt])
   @@index([phoneE164, createdAt])
@@ -2427,6 +2434,14 @@ model PatientMessage {
 enum AttentionKind {
   PATIENT_MESSAGE
   DELIVERY_FAILURE
+  RESPONSE_FLAG
+  MISSED_CHECK_IN
+}
+
+enum AttentionPriority {
+  URGENT
+  HIGH
+  NORMAL
 }
 
 enum AttentionState {
@@ -2445,6 +2460,10 @@ model AttentionItem {
   branchId    String?
   reason      String?
   claimedById String?
+  priority    AttentionPriority @default(NORMAL)
+  resolutionCode String?
+  resolutionNote String?
+  resolvedById String?
   resolvedAt  DateTime?
   lastEventAt DateTime       @default(now())
   createdAt   DateTime       @default(now())
@@ -2951,4 +2970,181 @@ model PharmacyPurchaseImportAttempt {
   @@index([branchId, status])
   @@index([branchId, userId, createdAt])
   @@map("pharmacy_purchase_import_attempts")
+}
+
+enum FollowUpTrackState {
+  ACTIVE
+  COMPLETED
+  STOPPED
+}
+
+enum CheckInState {
+  SCHEDULED
+  OPEN
+  ANSWERED
+  MISSED
+  CANCELLED
+}
+
+/// A questionnaire; its content lives in immutable versions.
+model Instrument {
+  id        String              @id @default(cuid())
+  key       String              @unique
+  createdAt DateTime            @default(now())
+  versions  InstrumentVersion[]
+
+  @@map("instruments")
+}
+
+model InstrumentVersion {
+  id           String            @id @default(cuid())
+  instrumentId String
+  version      Int
+  contentHash  String
+  content      Json
+  createdById  String?
+  createdAt    DateTime          @default(now())
+  instrument   Instrument        @relation(fields: [instrumentId], references: [id])
+  checkIns     CheckIn[]
+  responses    CheckInResponse[]
+
+  @@unique([instrumentId, version])
+  @@unique([instrumentId, contentHash])
+  @@map("instrument_versions")
+}
+
+model FollowUpPlan {
+  id        String                @id @default(cuid())
+  key       String                @unique
+  createdAt DateTime              @default(now())
+  versions  FollowUpPlanVersion[]
+
+  @@map("follow_up_plans")
+}
+
+model FollowUpPlanVersion {
+  id          String          @id @default(cuid())
+  planId      String
+  version     Int
+  contentHash String
+  content     Json
+  createdById String?
+  createdAt   DateTime        @default(now())
+  plan        FollowUpPlan    @relation(fields: [planId], references: [id])
+  visits      Visit[]
+  tracks      FollowUpTrack[]
+
+  @@unique([planId, version])
+  @@unique([planId, contentHash])
+  @@map("follow_up_plan_versions")
+}
+
+/// At most one non-STOPPED track per visit (partial unique index in the migration).
+model FollowUpTrack {
+  id            String              @id @default(cuid())
+  visitId       String
+  patientId     String
+  planVersionId String
+  state         FollowUpTrackState  @default(ACTIVE)
+  anchorDate    String
+  stopReason    String?
+  stoppedById   String?
+  stoppedAt     DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  visit         Visit               @relation(fields: [visitId], references: [id])
+  patient       Patient             @relation(fields: [patientId], references: [id])
+  planVersion   FollowUpPlanVersion @relation(fields: [planVersionId], references: [id])
+  checkIns      CheckIn[]
+
+  @@index([visitId])
+  @@index([patientId, state])
+  @@map("follow_up_tracks")
+}
+
+model CheckIn {
+  id                  String                 @id @default(cuid())
+  trackId             String
+  seq                 Int
+  stepKey             String
+  respondent          String                 @default("PATIENT")
+  reminderAfterDays   Int[]
+  instrumentVersionId String
+  state               CheckInState           @default(SCHEDULED)
+  onMissed            String
+  opensAt             DateTime
+  closesAt            DateTime
+  openedAt            DateTime?
+  endedAt             DateTime?
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+  track               FollowUpTrack          @relation(fields: [trackId], references: [id])
+  instrumentVersion   InstrumentVersion      @relation(fields: [instrumentVersionId], references: [id])
+  response            CheckInResponse?
+  taskLink            PortalTaskLinkCheckIn?
+
+  @@unique([trackId, seq])
+  @@index([state, opensAt])
+  @@index([state, closesAt])
+  @@map("check_ins")
+}
+
+/// Written once when the patient submits; never updated.
+model CheckInResponse {
+  id                  String               @id @default(cuid())
+  checkInId           String               @unique
+  instrumentVersionId String
+  answers             Json
+  score               Int?
+  flag                AttentionPriority?
+  submittedAt         DateTime             @default(now())
+  checkIn             CheckIn              @relation(fields: [checkInId], references: [id])
+  instrumentVersion   InstrumentVersion    @relation(fields: [instrumentVersionId], references: [id])
+  attachments         ResponseAttachment[]
+
+  @@map("check_in_responses")
+}
+
+/// Image bytes kept in Postgres, owned by exactly one response or patient message.
+model ResponseAttachment {
+  id               String           @id @default(cuid())
+  responseId       String?
+  patientMessageId String?
+  itemKey          String?
+  mime             String
+  sizeBytes        Int
+  bytes            Bytes
+  createdAt        DateTime         @default(now())
+  response         CheckInResponse? @relation(fields: [responseId], references: [id])
+  patientMessage   PatientMessage?  @relation(fields: [patientMessageId], references: [id])
+
+  @@index([responseId])
+  @@index([patientMessageId])
+  @@map("response_attachments")
+}
+
+/// The secret link in a check-in message. The token is derived from id and never stored.
+model PortalTaskLink {
+  id        String                  @id @default(cuid())
+  dedupeKey String                  @unique
+  patientId String
+  tokenHash String                  @unique
+  revokedAt DateTime?
+  createdAt DateTime                @default(now())
+  patient   Patient                 @relation(fields: [patientId], references: [id])
+  checkIns  PortalTaskLinkCheckIn[]
+
+  @@index([patientId])
+  @@map("portal_task_links")
+}
+
+model PortalTaskLinkCheckIn {
+  linkId    String
+  checkInId String         @unique
+  link      PortalTaskLink @relation(fields: [linkId], references: [id])
+  checkIn   CheckIn        @relation(fields: [checkInId], references: [id])
+
+  @@id([linkId, checkInId])
+  @@map("portal_task_link_check_ins")
 }

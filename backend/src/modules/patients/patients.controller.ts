@@ -115,7 +115,7 @@ export class PatientsController {
 
   @Post(':id/archive')
   archive(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
-    return this.patientsService.archive(id, req.user.branchId);
+    return this.patientsService.archive(id, req.user.branchId, req.user.id);
   }
 
   @Post(':id/unarchive')

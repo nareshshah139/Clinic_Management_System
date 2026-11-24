@@ -1,0 +1,34 @@
+{
+  "key": "treatment-check",
+  "title": { "EN": "Treatment check", "TE": "చికిత్స పరిశీలన", "HI": "इलाज की जाँच" },
+  "respondent": "PATIENT",
+  "licence": "Written by the clinic for this portal. Not a licensed or validated scale.",
+  "items": [
+    {
+      "key": "using",
+      "type": "single-choice",
+      "required": true,
+      "prompt": {
+        "EN": "Are you able to use your treatment as the doctor advised?",
+        "TE": "డాక్టర్ సూచించిన విధంగా మీరు మీ చికిత్సను వాడగలుగుతున్నారా?",
+        "HI": "क्या आप डॉक्टर के बताए तरीके से अपना इलाज कर पा रहे हैं?"
+      },
+      "options": [
+        { "value": "yes", "label": { "EN": "Yes", "TE": "అవును", "HI": "हाँ" } },
+        { "value": "sometimes", "label": { "EN": "Sometimes", "TE": "కొన్నిసార్లు", "HI": "कभी-कभी" } },
+        { "value": "no", "label": { "EN": "No", "TE": "లేదు", "HI": "नहीं" } }
+      ],
+      "flags": [{ "when": { "equals": "no" }, "priority": "HIGH" }]
+    },
+    {
+      "key": "note",
+      "type": "text",
+      "required": false,
+      "prompt": {
+        "EN": "Is there anything else you want the doctor to know?",
+        "TE": "డాక్టర్‌కు తెలియజేయాలనుకునేది ఇంకేమైనా ఉందా?",
+        "HI": "क्या आप डॉक्टर को कुछ और बताना चाहते हैं?"
+      }
+    }
+  ]
+}

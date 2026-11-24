@@ -1,0 +1,8 @@
+{
+  "key": "treatment-four-week",
+  "name": { "EN": "Four-week treatment check", "TE": "నాలుగు వారాల చికిత్స పరిశీలన", "HI": "चार हफ़्ते की इलाज जाँच" },
+  "steps": [
+    { "key": "week1", "offsetDays": 7, "windowDays": 3, "instrument": "treatment-check", "respondent": "PATIENT", "reminderAfterDays": [1], "onMissed": "none" },
+    { "key": "week4", "offsetDays": 28, "windowDays": 3, "instrument": "symptom-check", "respondent": "PATIENT", "reminderAfterDays": [1, 2], "onMissed": "attention" }
+  ]
+}

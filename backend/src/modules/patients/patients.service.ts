@@ -11,6 +11,7 @@ import { Prisma } from '@prisma/client';
 import { generatePatientCode } from '../../shared/ids/patient-code.util';
 import { readUpcomingAppointments } from '../appointments/upcoming-appointments';
 import { ensureProfile, syncPatientPhone } from './portal/portal-profile';
+import { stopTracks } from '../follow-ups/tracks';
 
 const portalProfileSelect = {
   phoneE164: true,
@@ -428,14 +429,14 @@ export class PatientsService {
     });
   }
 
-  async archive(id: string, branchId: string) {
+  async archive(id: string, branchId: string, actorId?: string) {
     const patient = await this.prisma.patient.findFirst({ where: { id, branchId } });
     if (!patient) throw new NotFoundException('Patient not found');
     if ((patient as any).isArchived) return { message: 'Already archived' };
 
-    await this.prisma.patient.update({
-      where: { id },
-      data: { isArchived: true, archivedAt: new Date() } as any,
+    await this.prisma.$transaction(async (tx) => {
+      await tx.patient.update({ where: { id }, data: { isArchived: true, archivedAt: new Date() } as any });
+      await stopTracks(tx, { patientId: id }, 'patient-archived', actorId ?? null);
     });
     return { message: 'Patient archived' };
   }
