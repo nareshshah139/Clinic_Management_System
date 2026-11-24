@@ -350,7 +350,9 @@ export class WorklistService {
       await tx.patientMessage.update({ where: { id: messageId }, data: { patientId: target.id, assignment: 'CONFIRMED', assignedById: staff.id } });
       await openPatientMessageItem(tx, { patientId: target.id, phoneE164: message.phoneE164, branchId: target.branchId }, now);
       if (message.patientId && message.patientId !== target.id) {
-        const left = await tx.patientMessage.count({ where: { patientId: message.patientId, direction: 'INBOUND', readAt: null } });
+        const left = await tx.patientMessage.count({
+          where: { patientId: message.patientId, direction: 'INBOUND', OR: [{ readAt: null }, { assignment: { in: ['UNASSIGNED', 'SUGGESTED'] } }] },
+        });
         if (!left) {
           await tx.attentionItem.updateMany({
             where: { kind: 'PATIENT_MESSAGE', subjectKey: `patient:${message.patientId}`, state: { in: [...LIVE_STATES] } },
