@@ -1,9 +1,11 @@
 import { PATIENT_HISTORY_CHANGED } from './patient-history';
+import { handleUnauthorizedRedirect, sendSessionEvent } from './authRedirect';
 import { diagnosticResource, newRequestId, recordApiDiagnostic, validRequestId, type DiagnosticCode } from './api-diagnostics';
 const API_BASE_URL = '/api';
 /** Replace the framework's bare refusals so staff read what happened and what to do. */
 export const NO_ACCESS_MESSAGE = "You don't have access to this. Ask an admin to grant it.";
 export const TOO_MANY_REQUESTS_MESSAGE = 'Too many attempts. Wait a minute, then try again.';
+export const SESSION_EXPIRED_MESSAGE = 'Your session expired. Sign in again, then retry.';
 
 export interface ApiError extends Error {
   status?: number;
@@ -90,7 +92,9 @@ export class ApiClient {
 
   async login(identifier: string, password: string) {
     // Server sets HttpOnly cookie via Set-Cookie. Do not persist token client-side.
-    return this.post<{ access_token?: string; user: any }>(`/auth/login`, { identifier, password });
+    const session = await this.post<{ access_token?: string; user: any }>(`/auth/login`, { identifier, password });
+    sendSessionEvent('signedIn');
+    return session;
   }
 
   /**
@@ -255,22 +259,10 @@ export class ApiClient {
             }
           }
 
-          // Centralized 401 handling: clear client token and redirect to login with next param
-          if (response.status === 401 && typeof window !== 'undefined') {
-            try {
-              this.clearToken();
-            } catch {}
-            try {
-              const isOnLogin = window.location.pathname.startsWith('/login');
-              if (!isOnLogin) {
-                const nextUrl = window.location.pathname + window.location.search + window.location.hash;
-                // Store next for fallback
-                try { window.localStorage.setItem('cms_next_after_login', nextUrl); } catch {}
-                window.location.href = `/login?next=${encodeURIComponent(nextUrl)}`;
-              }
-            } catch {
-              // ignore redirect errors
-            }
+          if (response.status === 401 && endpoint !== '/auth/login') {
+            this.clearToken();
+            handleUnauthorizedRedirect(401);
+            if (!body?.message || body.message === 'Unauthorized') body = { ...body, message: SESSION_EXPIRED_MESSAGE };
           }
 
           if (response.status === 403 && (!body?.message || body.message === 'Forbidden resource')) {
