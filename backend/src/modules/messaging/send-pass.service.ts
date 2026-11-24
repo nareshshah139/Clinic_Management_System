@@ -263,6 +263,7 @@ export class SendPassService {
       return day >= kolkataDay(now);
     }
     if (row.subjectType === TASK_LINK_SUBJECT && row.subjectId) return taskLinkIsCurrent(tx, row.subjectId);
+    if (row.subjectType === 'PATIENT_MESSAGE') return true;
     return false;
   }
 
