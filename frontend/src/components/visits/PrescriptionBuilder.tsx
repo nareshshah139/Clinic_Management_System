@@ -100,7 +100,7 @@ function restoreLegacyDosage<T>(dosage: T): T | '' {
 
 // Use centralized options from lib/frequency
 
-type LastPrescription = { visitId: string; date: number; doctorName: string | null; items: PrescriptionItemForm[] };
+type LastPrescription = { visitId: string; date: number; items: PrescriptionItemForm[] };
 
 interface PrescriptionItemForm extends RegimenRow {
   drugName: string;
@@ -1946,8 +1946,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       if (!v || v.id === visitId || !Array.isArray(v.prescriptionItems)) continue;
       const mapped = v.prescriptionItems.map(mapPrevRxItem).filter(Boolean) as PrescriptionItemForm[];
       if (!mapped.length) continue;
-      const doctorName = String(v.doctor?.name || `${v.doctor?.firstName || ''} ${v.doctor?.lastName || ''}`).trim();
-      return { visitId: v.id, date: encounterTime(v), doctorName: doctorName || null, items: mapped };
+      return { visitId: v.id, date: encounterTime(v), items: mapped };
     }
     return null;
   };
