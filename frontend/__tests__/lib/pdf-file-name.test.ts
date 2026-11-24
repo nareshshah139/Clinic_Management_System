@@ -37,6 +37,22 @@ describe('pdfFileName', () => {
     expect(pdfFileName('Invoice INV-1', undefined, 'not a date')).toBe('Invoice INV-1.pdf');
   });
 
+  it('drops invisible and text-direction characters', () => {
+    expect(pdfFileName('Prescription', 'Priya\u202eSharma', '2026-11-24')).toBe('Prescription - PriyaSharma - 2026-11-24.pdf');
+    expect(pdfFileName('Prescription', '\u200bPriya', '2026-11-24')).toBe('Prescription - Priya - 2026-11-24.pdf');
+    expect(pdfFileName('Prescription', '\ufeffPriya', '2026-11-24')).toBe('Prescription - Priya - 2026-11-24.pdf');
+  });
+
+  it('joins words separated only by a removed format character', () => {
+    expect(pdfFileName('Prescription', 'Priya\u200bSharma', '2026-11-24')).toBe('Prescription - PriyaSharma - 2026-11-24.pdf');
+    expect(pdfFileName('Prescription', 'Priya \u200b Sharma', '2026-11-24')).toBe('Prescription - Priya Sharma - 2026-11-24.pdf');
+  });
+
+  it('keeps the joiners that shape Indic and Persian names', () => {
+    expect(pdfFileName('Prescription', 'क्\u200dष', '2026-11-24')).toBe('Prescription - क्\u200dष - 2026-11-24.pdf');
+    expect(pdfFileName('Prescription', 'می\u200cخواهم', '2026-11-24')).toBe('Prescription - می\u200cخواهم - 2026-11-24.pdf');
+  });
+
   it('truncates the patient name and never the title', () => {
     const result = pdfFileName('Prescription', 'x'.repeat(300), '2026-11-24');
     expect(result.length).toBeLessThanOrEqual(124);
