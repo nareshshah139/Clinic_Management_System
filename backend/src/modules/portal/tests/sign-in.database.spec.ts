@@ -152,6 +152,21 @@ databaseTests('Portal sign-in, sessions and the profile picker on PostgreSQL (PP
     expect(await service.requestCode(phone, new Date(t0.getTime() + 24 * 3600_000 + 60_000))).toBe('sent');
   });
 
+  it('PP-57: concurrent wrong guesses cannot pass the ten-a-day limit together', async () => {
+    const phone = number();
+    await patient(phone);
+    const t0 = new Date();
+    await service.requestCode(phone, t0);
+    for (let i = 0; i < 4; i++) await service.verifyCode(phone, wrongCode(phone), t0);
+    await service.requestCode(phone, new Date(t0.getTime() + 16 * 60_000));
+    for (let i = 0; i < 4; i++) await service.verifyCode(phone, wrongCode(phone), new Date(t0.getTime() + 16 * 60_000));
+    const at = new Date(t0.getTime() + 17 * 60_000);
+    await service.requestCode(phone, at);
+    const tries = await Promise.all(Array.from({ length: 5 }, () => service.verifyCode(phone, wrongCode(phone), at)));
+    expect(tries.filter((r) => !r.ok && r.reason === 'wrong')).toHaveLength(2);
+    expect(await db.portalOtpChallenge.aggregate({ where: { phoneE164: `+91${phone}` }, _sum: { attempts: true } })).toEqual({ _sum: { attempts: 10 } });
+  });
+
   it('PP-57: the clinic-wide hourly ceiling pauses issuing and opens one attention item', async () => {
     process.env.PORTAL_CODES_PER_HOUR = String((await db.portalOtpChallenge.count({ where: { purpose: 'SIGN_IN', createdAt: { gte: new Date(Date.now() - 3600_000) } } })) + 1);
     try {

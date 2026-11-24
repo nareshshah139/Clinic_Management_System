@@ -138,6 +138,8 @@ export class SignInService {
     const code = typeof rawCode === 'string' ? rawCode.trim() : '';
     if (!phoneE164 || !/^\d{6}$/.test(code)) return { ok: false, reason: 'invalid-number' };
     return this.prisma.$transaction(async (tx): Promise<VerifyOutcome> => {
+      // Guesses on one number are counted one at a time, so concurrent tries cannot pass the daily limit together.
+      await lockNumber(tx, `portal-sign-in:${phoneE164}`);
       const challenge = await tx.portalOtpChallenge.findFirst({
         where: { phoneE164, purpose: 'SIGN_IN', consumedAt: null },
         orderBy: { createdAt: 'desc' },
