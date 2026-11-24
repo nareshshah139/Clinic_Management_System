@@ -1,0 +1,42 @@
+---
+title: "Automated WhatsApp care message (before)"
+---
+stateDiagram-v2
+  state "Queued" as s0
+  state "Sending" as s1
+  state "Failed" as s2
+  state "Failed with nobody told" as s3
+  state "Sent" as s4
+  state "Sent about a closed subject" as s5
+  state "Sent to a number that has not agreed" as s6
+  state "Delivered" as s7
+  state "Read" as s8
+  [*] --> s0
+  s0 --> s1: the scheduler leases the row
+  s1 --> s2: the provider rejects it
+  s1 --> s3: the provider rejects it
+  s1 --> s4: the scheduler sends or settles it
+  s1 --> s5: the scheduler sends or settles it
+  s1 --> s6: the scheduler sends or settles it
+  s2 --> s0: a later event queues a message
+  s3 --> s0: a later event queues a message
+  s4 --> s2: the provider rejects it
+  s4 --> s3: the provider rejects it
+  s4 --> s7: a delivered receipt arrives
+  s4 --> s8: a read receipt arrives
+  s5 --> s2: the provider rejects it
+  s5 --> s4: 12 months pass with no contact / a duplicate patient is merged in / staff change the phone / staff switch the portal / the patient sends STOP
+  s5 --> s7: a delivered receipt arrives
+  s5 --> s8: a read receipt arrives
+  s6 --> s2: the provider rejects it
+  s6 --> s3: the provider rejects it
+  s6 --> s4: 12 months pass with no contact / a duplicate patient is merged in / reception records agreement / staff change the phone / staff switch the portal / the number confirms / the patient sends STOP / the subject closes
+  s6 --> s7: a delivered receipt arrives
+  s6 --> s8: a read receipt arrives
+  s7 --> s0: a later event queues a message
+  s7 --> s8: a read receipt arrives
+  s8 --> s0: a later event queues a message
+  classDef breaks fill:#fde2dd,stroke:#b3261e,stroke-width:2px
+  classDef stuck fill:#fdf0d5,stroke:#a35a05,stroke-width:2px,stroke-dasharray:5 3
+  classDef breaksAndStuck fill:#fde2dd,stroke:#a35a05,stroke-width:2px,stroke-dasharray:5 3
+  class s3,s6 breaks
