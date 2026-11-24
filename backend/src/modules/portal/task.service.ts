@@ -120,7 +120,10 @@ export class TaskPageService {
     const attachments = images.map(({ itemKey, bytes }) => ({ itemKey, mime: 'image/jpeg', sizeBytes: bytes.length, bytes }));
 
     return this.prisma.$transaction(async (tx) => {
-      const live = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM portal_task_links WHERE id = ${principal.linkId} AND "revokedAt" IS NULL FOR SHARE`;
+      // Patient before link: the order a duplicate merge locks them in.
+      await tx.$queryRaw`SELECT id FROM patients WHERE id = ${principal.patientId} FOR SHARE`;
+      const live = await tx.$queryRaw<{ id: string }[]>`
+        SELECT id FROM portal_task_links WHERE id = ${principal.linkId} AND "patientId" = ${principal.patientId} AND "revokedAt" IS NULL FOR SHARE`;
       if (!live.length) throw new LinkInactive();
       const moved = await tx.checkIn.updateMany({
         where: { id: checkIn.id, state: 'OPEN', closesAt: { gt: now }, taskLink: { linkId: principal.linkId } },

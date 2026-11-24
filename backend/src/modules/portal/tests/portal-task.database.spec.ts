@@ -154,6 +154,21 @@ databaseTests('Task links and the patient task page on PostgreSQL', () => {
     expect(await db.checkInResponse.count({ where: { checkInId } })).toBe(0);
   });
 
+  it('PP-38: a submit waits for a merge that holds the patient, then refuses the moved link without deadlocking', async () => {
+    const { patient, checkInId, token } = await openLink();
+    const other = await openLink();
+    const principal = await principalFor(token);
+    let submitted: Promise<unknown> | undefined;
+    await db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM patients WHERE id = ${patient.id} FOR UPDATE`;
+      submitted = tasks.submit(principal, { token, checkInId, ...answer(3) } as any).catch((e) => e);
+      await new Promise((r) => setTimeout(r, 300));
+      await tx.portalTaskLink.updateMany({ where: { patientId: patient.id }, data: { patientId: other.patient.id } });
+    }, { timeout: 10_000 });
+    expect(await submitted).toBeInstanceOf(LinkInactive);
+    expect(await db.checkInResponse.count({ where: { checkInId } })).toBe(0);
+  });
+
   it('PP-42: two concurrent submits leave one response and one kept message', async () => {
     const { patient, checkInId, token } = await openLink();
     const principal = await principalFor(token);
