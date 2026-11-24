@@ -9,6 +9,8 @@ import { WhatsAppSender } from '../../messaging/whatsapp-sender';
 import { startFakeMeta } from '../../messaging/tests/fake-meta';
 import { PatientDeduplicationService } from '../../patients/patient-deduplication.service';
 import { PatientsService } from '../../patients/patients.service';
+import { AppointmentsService } from '../../appointments/appointments.service';
+import { ReviewBookingService } from '../../visits/review-booking';
 import { VisitsService } from '../../visits/visits.service';
 import { FollowUpsService } from '../follow-ups.service';
 import { importFollowUpData, readDataFiles } from '../plan-import';
@@ -175,6 +177,16 @@ databaseTests('Follow-up plans, tracks and the scheduler pass on PostgreSQL agai
       expect(t.checkIns.map((c) => c.state)).toEqual(['CANCELLED', 'CANCELLED']);
     });
 
+    it('PP-29: completing or re-planning a visit of an archived patient starts no track', async () => {
+      const p = await patient();
+      const v = await visit(p.id);
+      await new PatientsService(db as any, {} as any, {} as any).archive(p.id, 'A', 'own');
+      await visits.complete(v.id, { followUpPlanVersionId: planVersionId } as any, 'A');
+      const row = await db.visit.findUniqueOrThrow({ where: { id: v.id } });
+      await visits.update(v.id, { version: row.version, followUpPlanVersionId: otherPlanVersionId } as any, 'A', 'doc');
+      expect(await tracks({ visitId: v.id })).toEqual([]);
+    });
+
     it('PP-26: lists the plan picker and active tracks, and a doctor stop is idempotent under concurrency', async () => {
       const { p } = await completed();
       expect((await followUps.listPlans()).map((x) => x.key)).toEqual(['skin-two-week', 'treatment-four-week']);
@@ -270,18 +282,22 @@ databaseTests('Follow-up plans, tracks and the scheduler pass on PostgreSQL agai
       const silent = await completed();
       await db.patientPortalProfile.delete({ where: { patientId: silent.p.id } });
       const told = await completed();
-      for (const x of [silent, told]) {
-        await pass.runPass(passAt(x.anchor, 14, '10:00:00'));
+      const accepted = await completed();
+      for (const x of [silent, told, accepted]) await pass.runPass(passAt(x.anchor, 14, '10:00:00'));
+      expect(await db.outboundMessage.count({ where: { patientId: { in: [told.p.id, accepted.p.id] }, purpose: 'CHECK_IN_OPENED', state: 'SENT' } })).toBe(2);
+      await db.outboundMessage.updateMany({ where: { patientId: told.p.id, purpose: 'CHECK_IN_OPENED' }, data: { state: 'DELIVERED' } });
+      for (const x of [silent, told, accepted]) {
         await pass.runPass(passAt(x.anchor, 17, '10:00:00'));
         await pass.runPass(passAt(x.anchor, 17, '10:00:00'));
       }
       const [s] = await tracks({ visitId: silent.v.id });
       expect(s.checkIns.map((c) => c.state)).toEqual(['MISSED', 'MISSED']);
       expect(s.state).toBe('COMPLETED');
-      const items = await db.attentionItem.findMany({ where: { kind: 'MISSED_CHECK_IN', patientId: { in: [silent.p.id, told.p.id] } } });
+      const items = await db.attentionItem.findMany({ where: { kind: 'MISSED_CHECK_IN', patientId: { in: [silent.p.id, told.p.id, accepted.p.id] } } });
       expect(items.map((i) => [i.patientId, i.reason]).sort()).toEqual([
         [silent.p.id, 'missed:no-message-delivered'],
         [told.p.id, 'missed:message-delivered'],
+        [accepted.p.id, 'missed:no-message-delivered'],
       ].sort());
     });
 
@@ -297,6 +313,18 @@ databaseTests('Follow-up plans, tracks and the scheduler pass on PostgreSQL agai
       const sent = meta.calls.find((c) => c.body?.template?.name === 'review_reminder')!.body;
       const texts = sent.template.components[0].parameters.map((x: any) => x.text);
       expect(texts).toEqual(['Linae Skin Clinic', '2099-06-11', '10:30', 'Dr. Meera Rao']);
+    });
+
+    it('PP-34: a review booked by ReviewBookingService is reminded on the IST day before, not earlier', async () => {
+      const p = await patient();
+      const v = await db.visit.create({ data: { patientId: p.id, doctorId: 'doc', complaints: '[]', followUp: ist('2099-07-15T00:00:00') } });
+      const booking = await new ReviewBookingService(db as any, new AppointmentsService(db as any)).book(v.id, 'A');
+      expect(booking).toMatchObject({ status: 'booked', appointment: { date: '2099-07-15' } });
+      const reminders = () => db.outboundMessage.findMany({ where: { patientId: p.id, purpose: 'REVIEW_REMINDER' } });
+      for (const at of ['2099-07-13T10:00:00', '2099-07-13T23:59:00']) await pass.runPass(ist(at));
+      expect(await reminders()).toHaveLength(0);
+      await Promise.all([pass.runPass(ist('2099-07-14T00:30:00')), pass.runPass(ist('2099-07-14T00:30:00'))]);
+      expect(await reminders()).toMatchObject([{ params: expect.objectContaining({ date: '2099-07-15' }) }]);
     });
   });
 });

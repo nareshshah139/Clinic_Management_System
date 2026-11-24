@@ -10,7 +10,7 @@ import { completeTrackIfDone } from './tracks';
 
 type Db = PrismaClient | Prisma.TransactionClient;
 const BATCH = 500;
-const DELIVERED = ['SENT', 'DELIVERED', 'READ'] as const;
+const DELIVERED = ['DELIVERED', 'READ'] as const;
 export const TASK_LINK_SUBJECT = 'TASK_LINK';
 
 /** Moves due SCHEDULED check-ins to OPEN; the conditional update makes a second pass a no-op. */
