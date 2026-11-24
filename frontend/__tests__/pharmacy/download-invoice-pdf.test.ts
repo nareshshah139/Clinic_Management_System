@@ -14,7 +14,7 @@ beforeEach(() => {
 
 it('renders printable invoice content without copying the off-screen host', async () => {
   const source = new DOMParser().parseFromString('<style>body { color: black }</style><body onload="alert(2)"><p>Invoice line</p><button class="no-print">Print</button><img onerror="alert(1)"></body>', 'text/html');
-  await downloadInvoicePdf(source, 'INV/1');
+  await downloadInvoicePdf(source, { invoiceNumber: 'INV-1', patientName: 'Priya Sharma', date: new Date('2026-11-23T20:00:00Z') });
 
   const wrapper = mockFrom.mock.calls[0][0] as HTMLElement;
   expect(wrapper.textContent).toContain('Invoice line');
@@ -24,19 +24,19 @@ it('renders printable invoice content without copying the off-screen host', asyn
   expect(wrapper.style.left).toBe('');
   expect(wrapper.parentElement?.style.left).toBe('-10000px');
   expect(wrapper.isConnected).toBe(false);
-  expect(mockSet).toHaveBeenCalledWith(expect.objectContaining({ filename: 'pharmacy-invoice-INV_1.pdf' }));
+  expect(mockSet).toHaveBeenCalledWith(expect.objectContaining({ filename: 'Invoice INV-1 - Priya Sharma - 2026-11-24.pdf' }));
 });
 
 it('removes temporary content if rendering fails', async () => {
   mockSave.mockRejectedValue(new Error('render failed'));
   const source = new DOMParser().parseFromString('<body><p>Invoice line</p></body>', 'text/html');
-  await expect(downloadInvoicePdf(source, 'INV-1')).rejects.toThrow('render failed');
+  await expect(downloadInvoicePdf(source, { invoiceNumber: 'INV-1' })).rejects.toThrow('render failed');
   expect((mockFrom.mock.calls[0][0] as HTMLElement).isConnected).toBe(false);
 });
 
 it('converts unsupported cloned theme colors without changing the live document', async () => {
   const source = new DOMParser().parseFromString('<body><p>Invoice</p></body>', 'text/html');
-  await downloadInvoicePdf(source, 'INV-1');
+  await downloadInvoicePdf(source, { invoiceNumber: 'INV-1' });
   const { onclone } = mockSet.mock.calls[0][0].html2canvas;
   const clonedRoot = document.createElement('div');
   const clonedLine = document.createElement('p');

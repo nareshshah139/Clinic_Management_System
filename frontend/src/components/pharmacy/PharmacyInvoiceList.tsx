@@ -211,7 +211,11 @@ export function PharmacyInvoiceList() {
       
       const html = renderPharmacyInvoiceHtml(invoice);
       const source = new DOMParser().parseFromString(html, 'text/html');
-      await downloadInvoicePdf(source, (invoice as any)?.invoiceNumber || invoiceId);
+      await downloadInvoicePdf(source, {
+        invoiceNumber: (invoice as any)?.invoiceNumber || invoiceId,
+        patientName: (invoice as any)?.patient?.name || (invoice as any)?.billingName,
+        date: (invoice as any)?.invoiceDate || (invoice as any)?.createdAt,
+      });
     } catch (error) {
       console.error('Failed to download invoice:', error);
       toast({ variant: 'destructive', title: 'Could not download the invoice', description: 'Try again.' });

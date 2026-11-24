@@ -2064,7 +2064,11 @@ export function PharmacyInvoiceBuilderFixed({
     try {
       const invoiceCore = getPrintPreviewInvoiceCore();
       const invoiceNumber = invoiceCore?.invoiceNumber || 'draft';
-      await downloadInvoicePdf(frameDocument, invoiceNumber);
+      await downloadInvoicePdf(frameDocument, {
+        invoiceNumber,
+        patientName: getPrintPreviewPatient()?.name || printPreviewData?.billingFallback.billingName,
+        date: invoiceCore?.invoiceDate || invoiceCore?.createdAt,
+      });
 
       toast({
         title: 'PDF ready',
