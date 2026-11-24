@@ -41,6 +41,8 @@ function clinicServer(initialStatus: 'COMPLETED' | 'IN_PROGRESS', { prescription
     if (url === '/api/visits/v1') { server.version += 1; return reply(200, visit()); }
     if (url === '/api/prescriptions/rx1' || url === '/api/prescriptions') {
       if (prescriptionRefusal) return reply(409, { message: prescriptionRefusal });
+      const undated = body.items.findIndex((item: { duration: number }) => !(item.duration >= 1));
+      if (undated >= 0) return reply(400, { message: [`items.${undated}.duration must not be less than 1`] });
       server.saved = true;
       server.record = body.items;
       server.version += 1;
@@ -209,4 +211,43 @@ it('creates the prescription record when a visit with medicines but no saved pre
   await waitFor(() => expect(server.status).toBe('COMPLETED'), { timeout: 10_000 });
   expect(server.writes).toEqual(['PATCH /api/visits/v1', 'POST /api/prescriptions', 'POST /api/visits/v1/complete']);
   expect(server.record.map((item) => item.drugName)).toEqual([doxycycline.drugName]);
+});
+
+const clearDuration = () => fireEvent.change(screen.getByLabelText(`Duration for ${doxycycline.drugName}`), { target: { value: '' } });
+
+it('names the medicine missing a duration and leaves the visit open with no prescription written', async () => {
+  const server = clinicServer('IN_PROGRESS', { saved: false });
+  render(<><MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v1" userRole="DOCTOR" /><Toaster /></>);
+  await screen.findByDisplayValue(doxycycline.drugName, {}, { timeout: 20_000 });
+  clearDuration();
+  await completeVisit();
+  expect(await screen.findByText('Add a duration for Doxycycline 100.', {}, { timeout: 10_000 })).toBeInTheDocument();
+  expect(screen.getByText('Visit not completed')).toBeInTheDocument();
+  expect(server.status).toBe('IN_PROGRESS');
+  expect(server.saved).toBe(false);
+  expect(server.writes).toEqual(['PATCH /api/visits/v1']);
+});
+
+it('names the medicine missing a duration on Create Prescription and writes nothing', async () => {
+  const server = clinicServer('IN_PROGRESS', { saved: false });
+  render(<><MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v1" userRole="DOCTOR" /><Toaster /></>);
+  await screen.findByDisplayValue(doxycycline.drugName, {}, { timeout: 20_000 });
+  clearDuration();
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Create Prescription' })); });
+  expect(await screen.findByText('Add a duration for Doxycycline 100.', {}, { timeout: 10_000 })).toBeInTheDocument();
+  expect(screen.getByText('Cannot create prescription')).toBeInTheDocument();
+  expect(server.writes).toEqual([]);
+});
+
+it('names the medicine missing a duration on Save changes and keeps the completed visit and its record unchanged', async () => {
+  const server = clinicServer('COMPLETED');
+  render(<><MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v1" userRole="DOCTOR" /><Toaster /></>);
+  await lockedMedicine();
+  fireEvent.click(screen.getByRole('button', { name: 'Edit visit' }));
+  clearDuration();
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save changes' })); });
+  expect(await screen.findByText('Add a duration for Doxycycline 100.', {}, { timeout: 10_000 })).toBeInTheDocument();
+  expect(screen.getByText('Changes not saved')).toBeInTheDocument();
+  expect(server.record).toEqual([doxycycline]);
+  expect(server.writes).toEqual(['PATCH /api/visits/v1']);
 });
