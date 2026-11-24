@@ -45,4 +45,13 @@ describe('throttle windows stay per client when another client is blocked', () =
     await sleep(450);
     for (let i = 0; i < 3; i++) expect((await from('203.0.113.20')).status).toBe(200);
   });
+
+  it('counts each hit for the full window, so a burst across a window edge is still refused', async () => {
+    expect((await from('203.0.113.30')).status).toBe(200);
+    await sleep(250);
+    for (let i = 0; i < 2; i++) expect((await from('203.0.113.30')).status).toBe(200);
+    await sleep(200);
+    expect((await from('203.0.113.30')).status).toBe(200);
+    expect((await from('203.0.113.30')).status).toBe(429);
+  });
 });
