@@ -56,8 +56,10 @@ describe('/auth access control', () => {
       findUniqueOrThrow: jest.fn(async ({ where }) => users[where.id]),
       findFirst: jest.fn(
         async ({ where }) =>
-          Object.values(users).find((user) =>
-            where.email ? user.email === where.email.equals : false,
+          Object.values(users).find(
+            (user) =>
+              user.role !== where.role?.not &&
+              (where.email ? user.email === where.email.equals : false),
           ) ?? null,
       ),
       updateMany: jest.fn(async ({ where, data }) => {
@@ -137,6 +139,7 @@ describe('/auth access control', () => {
         resetToken: hashCode('EXPIREDX'),
         resetTokenExpiry: new Date(Date.now() - 1000),
       }),
+      patient: row('patient', 'PATIENT'),
       gone: row('gone', 'NURSE', {
         isActive: false,
         status: 'INACTIVE',
@@ -242,6 +245,23 @@ describe('/auth access control', () => {
         .get('/auth/backup/backup-2026-01-01T00-00-00-admin')
         .set(as('admin'))
         .expect(404);
+    });
+  });
+
+  describe('staff routes', () => {
+    it('refuses a token already issued to a PATIENT user, as a bearer and as the staff cookie', async () => {
+      await request(app.getHttpServer()).get('/auth/me').set(as('doctor')).expect(200);
+      const token = as('patient').Authorization.replace('Bearer ', '');
+      await request(app.getHttpServer()).get('/auth/me').set('Authorization', `Bearer ${token}`).expect(401);
+      await request(app.getHttpServer()).get('/auth/me').set('Cookie', `auth_token=${token}`).expect(401);
+      await request(app.getHttpServer()).get('/auth/statistics').set('Cookie', `auth_token=${token}`).expect(401);
+    });
+
+    it('refuses a request that carries only a portal cookie', async () => {
+      const staffToken = as('doctor').Authorization.replace('Bearer ', '');
+      for (const cookie of [`__Host-portal_session=${staffToken}`, `portal_session=${staffToken}`]) {
+        await request(app.getHttpServer()).get('/auth/me').set('Cookie', cookie).expect(401);
+      }
     });
   });
 
@@ -361,6 +381,15 @@ describe('/auth access control', () => {
         password: PASSWORD,
       }).expect(429);
       expect(res.headers['set-cookie']).toBeUndefined();
+    });
+
+    it('refuses a PATIENT user at the staff login with no token or cookie, as for an unknown account', async () => {
+      const unknown = await login({ email: 'nobody@example.test', password: PASSWORD });
+      const res = await login({ email: 'patient@example.test', password: PASSWORD });
+      expect({ status: res.status, body: res.body }).toEqual({ status: unknown.status, body: unknown.body });
+      expect(res.status).toBe(404);
+      expect(res.headers['set-cookie']).toBeUndefined();
+      expect(res.body).not.toHaveProperty('access_token');
     });
 
     it('expires the cookie on logout without a token', async () => {

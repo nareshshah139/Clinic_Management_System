@@ -13,10 +13,12 @@ describe('AuthService sign-in', () => {
     user: {
       findFirst: jest.fn(
         async ({ where }) =>
-          users.find((user) =>
-            where.email
-              ? user.email.toLowerCase() === where.email.equals
-              : user.phone === where.phone,
+          users.find(
+            (user) =>
+              user.role !== where.role?.not &&
+              (where.email
+                ? user.email.toLowerCase() === where.email.equals
+                : user.phone === where.phone),
           ) ?? null,
       ),
       findUniqueOrThrow: jest.fn(async ({ where }) => users.find((user) => user.id === where.id)),
@@ -52,6 +54,7 @@ describe('AuthService sign-in', () => {
       row('inactive', { status: 'INACTIVE' }),
       row('pending', { status: 'PENDING' }),
       row('switched-off', { isActive: false }),
+      row('patient', { role: 'PATIENT', phone: '919811122233' }),
     ];
     service = new AuthService(prisma, jwt);
   });
@@ -99,6 +102,17 @@ describe('AuthService sign-in', () => {
       message: 'Account suspended',
     });
   });
+
+  it.each([['patient@example.test'], ['+91 98111 22233']])(
+    'answers a PATIENT user at %s exactly as an unknown account, even with the right password',
+    async (identifier) => {
+      expect(await failure(identifier)).toEqual(await failure('nobody@example.test'));
+      expect(await failure(identifier, 'wrong-password')).toEqual({
+        status: 404,
+        message: 'Account not found',
+      });
+    },
+  );
 
   it.each([['not-an-email@'], ['12345'], ['0123456789'], ['   ']])(
     'answers 400 for the malformed identifier %j without a lookup',

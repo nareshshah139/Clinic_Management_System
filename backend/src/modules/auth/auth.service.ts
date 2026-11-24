@@ -2,7 +2,7 @@ import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../../shared/database/prisma.service';
 import * as bcrypt from 'bcryptjs';
-import { UserStatus } from '@prisma/client';
+import { UserRole, UserStatus } from '@prisma/client';
 import { passwordStamp } from './strategies/jwt.strategy';
 
 @Injectable()
@@ -17,6 +17,11 @@ export class AuthService {
    * Only an ACTIVE user with isActive set and the right password MAY sign in; a suspended, inactive,
    * pending or switched-off account MUST get 403 even with the right password. The returned user
    * MUST NOT contain the password hash.
+   */
+  /**
+   * @cc [owner:nareshshah139,label:security] staff-sign-in-refuses-patients
+   * A PATIENT user MUST get the same answer at the staff sign-in as an unknown account, with no
+   * token and no cookie, even with the right password.
    */
   /**
    * @cc [owner:nareshshah139,label:security;target] sign-in-hides-account-existence
@@ -59,7 +64,7 @@ export class AuthService {
       lookupField = { phone: normalizedPhone };
     }
 
-    const user = await this.prisma.user.findFirst({ where: lookupField });
+    const user = await this.prisma.user.findFirst({ where: { ...lookupField, role: { not: UserRole.PATIENT } } });
 
     if (!user) {
       throw new HttpException('Account not found', HttpStatus.NOT_FOUND);
