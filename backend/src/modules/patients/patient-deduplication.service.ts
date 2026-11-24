@@ -223,6 +223,8 @@ export class PatientDeduplicationService {
       tx.pharmacyInvoice.updateMany({ where: { patientId: duplicate.id }, data: { patientId: canonical.id } }),
       tx.draftAttachment.updateMany({ where: { patientId: duplicate.id }, data: { patientId: canonical.id } }),
       tx.experimentAssignment.updateMany({ where: { patientId: duplicate.id }, data: { patientId: canonical.id } }),
+      tx.outboundMessage.updateMany({ where: { patientId: duplicate.id }, data: { patientId: canonical.id } }),
+      tx.attentionItem.updateMany({ where: { patientId: duplicate.id }, data: { patientId: canonical.id } }),
     ]);
 
     await this.mergePortalProfiles(tx, canonical, duplicate.id);

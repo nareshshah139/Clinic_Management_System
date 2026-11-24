@@ -120,6 +120,7 @@ describe('Patient merge covers every patient-linked model', () => {
   it('repoints or folds every foreign-key child of Patient', async () => {
     expect([...(await modelsRepointedByMerge())].sort()).toEqual([
       'appointment',
+      'attentionItem',
       'consent',
       'deviceLog',
       'draftAttachment',
@@ -127,6 +128,7 @@ describe('Patient merge covers every patient-linked model', () => {
       'invoice',
       'labOrder',
       'newInvoice',
+      'outboundMessage',
       'patientPortalProfile',
       'pharmacyInvoice',
       'referral',

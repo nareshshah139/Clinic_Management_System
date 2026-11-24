@@ -75,6 +75,8 @@ describe('PatientDeduplicationService', () => {
     pharmacyInvoice: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
     draftAttachment: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
     experimentAssignment: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+    outboundMessage: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+    attentionItem: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
     patientPortalProfile: { findUnique: jest.fn().mockResolvedValue(null) },
   });
 

@@ -26,6 +26,7 @@ databaseTests('Patient phone, WhatsApp consent, language and portal switch on Po
 
   beforeAll(async () => {
     Logger.overrideLogger(false);
+    process.env.PORTAL_CODE_SECRET ??= 'portal-profile-test-secret';
     const url = new URL(process.env.PORTAL_PROFILE_TEST_DATABASE_URL!);
     if (!['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) throw new Error('Tests require local PostgreSQL');
     url.searchParams.set('schema', 'public');
@@ -132,6 +133,16 @@ databaseTests('Patient phone, WhatsApp consent, language and portal switch on Po
     await db.patientPortalProfile.create({ data: { patientId: dup.id, phoneE164: '+919876500019', consentState: 'PENDING', consentRecordedById: 'rec', consentMethod: 'reception-agreed' } });
     await new PatientDeduplicationService(db as any).runDuplicatePatientMergeJob();
     expect(await profile(kept.id)).toMatchObject({ consentState: 'PENDING', consentRecordedById: 'rec', consentMethod: 'reception-agreed' });
+  });
+
+  it('PP-10: a merge repoints the duplicate outbound messages and attention items to the kept patient', async () => {
+    const kept = await db.patient.create({ data: { name: 'Lata Dup', gender: 'F', phone: '9876500020', branchId: 'A', createdAt: new Date('2026-01-01') } });
+    const dup = await db.patient.create({ data: { name: 'Lata Dup', gender: 'F', phone: '9876500020', branchId: 'A', createdAt: new Date('2026-02-01') } });
+    await db.outboundMessage.create({ data: { dedupeKey: `merge:${dup.id}`, purpose: 'APPOINTMENT_CONFIRMATION', patientId: dup.id, toE164: '+919876500020', templateKey: 'appointment_confirmation' } });
+    await db.attentionItem.create({ data: { kind: 'DELIVERY_FAILURE', subjectKey: `merge:${dup.id}`, patientId: dup.id } });
+    await new PatientDeduplicationService(db as any).runDuplicatePatientMergeJob();
+    expect(await db.outboundMessage.findMany({ where: { dedupeKey: `merge:${dup.id}` }, select: { patientId: true } })).toEqual([{ patientId: kept.id }]);
+    expect(await db.attentionItem.findMany({ where: { subjectKey: `merge:${dup.id}` }, select: { patientId: true } })).toEqual([{ patientId: kept.id }]);
   });
 
   it('PP-10: a merge moves the duplicate profile to a kept patient without one, keeping an opt-out', async () => {
