@@ -32,14 +32,14 @@ export class FollowUpsService {
     });
   }
 
-  /** A response or patient-message photo, when its patient belongs to the caller's branch. */
+  /** A response or patient-message photo, when its patient belongs to the caller's branch or the sender is unknown (one clinic number). */
   async attachment(id: string, branchId: string): Promise<Buffer> {
     const row = await this.prisma.responseAttachment.findFirst({
       where: {
         id,
         OR: [
           { response: { checkIn: { track: { patient: { branchId } } } } },
-          { patientMessage: { patient: { branchId } } },
+          { patientMessage: { OR: [{ patient: { branchId } }, { patientId: null }] } },
         ],
       },
       select: { bytes: true },

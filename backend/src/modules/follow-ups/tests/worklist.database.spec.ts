@@ -10,7 +10,7 @@ import { startFakeMeta } from '../../messaging/tests/fake-meta';
 import { FollowUpsService } from '../follow-ups.service';
 import { kolkataAt } from '../schedule';
 import { startTrack } from '../tracks';
-import { WorklistController } from '../worklist.controller';
+import { FollowUpsController } from '../follow-ups.controller';
 import { Staff, WorklistService } from '../worklist.service';
 
 const HOUR = 3600 * 1000;
@@ -265,14 +265,16 @@ databaseTests('Follow-up worklist and clinic inbox on PostgreSQL against a fake 
       expect(timeline.tracks[0].checkIns.map((c) => [c.stepKey, c.state, c.response?.score ?? null])).toEqual([['day3', 'ANSWERED', 4], ['day14', 'ANSWERED', 9]]);
       await expect(worklist.timeline(p.id, 'B')).rejects.toBeInstanceOf(NotFoundException);
 
-      const res = { headers: {} as Record<string, string>, set(h: Record<string, string>) { Object.assign(this.headers, h); } };
-      const controller = new WorklistController(worklist);
-      const file = await controller.attachment(photo.id, { user: { id: 'doc', branchId: 'A', role: 'DOCTOR' } } as any, res as any);
-      expect(res.headers).toEqual({ 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' });
-      const chunks: Buffer[] = [];
-      for await (const chunk of file.getStream()) chunks.push(chunk as Buffer);
-      expect(Buffer.concat(chunks)).toEqual(jpeg);
-      await expect(worklist.attachment(photo.id, 'B')).rejects.toBeInstanceOf(NotFoundException);
+      const followUps = new FollowUpsService(db as any);
+      const res = { headers: {} as Record<string, string>, body: null as Buffer | null, set(h: Record<string, string>) { Object.assign(this.headers, h); }, send(b: Buffer) { this.body = b; } };
+      await new FollowUpsController(followUps).attachment(photo.id, { user: { id: 'doc', branchId: 'A', role: 'DOCTOR' } } as any, res as any);
+      expect(res.headers).toMatchObject({ 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' });
+      expect(res.body).toEqual(jpeg);
+      await expect(followUps.attachment(photo.id, 'B')).rejects.toBeInstanceOf(NotFoundException);
+
+      const stranger = await db.patientMessage.create({ data: { phoneE164: '+919999900088', direction: 'INBOUND', kind: 'image', assignment: 'UNASSIGNED', authorKind: 'patient' } });
+      const strangerPhoto = await db.responseAttachment.create({ data: { patientMessageId: stranger.id, mime: 'image/jpeg', sizeBytes: jpeg.length, bytes: jpeg } });
+      expect(await followUps.attachment(strangerPhoto.id, 'B')).toEqual(jpeg);
     });
 
     it('"Waiting on patient" lists open check-ins with the delivery state of their message', async () => {

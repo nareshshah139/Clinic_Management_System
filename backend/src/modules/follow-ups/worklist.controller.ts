@@ -1,7 +1,6 @@
-import { Body, Controller, Get, Param, Post, Request, Res, StreamableFile, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Request, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
-import type { Response } from 'express';
 import { Roles } from '../../shared/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
 import { AssignMessageDto, LogCallDto, ResolveItemDto, StaffReplyDto } from './dto/worklist.dto';
@@ -89,10 +88,4 @@ export class WorklistController {
     return this.worklist.timeline(patientId, staff(req).branchId);
   }
 
-  @Get('attachments/:id')
-  async attachment(@Param('id') id: string, @Request() req: Req, @Res({ passthrough: true }) res: Response) {
-    const { bytes, contentType } = await this.worklist.attachment(id, staff(req).branchId);
-    res.set({ 'Content-Type': contentType, 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' });
-    return new StreamableFile(bytes);
-  }
 }

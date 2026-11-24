@@ -17,7 +17,6 @@ const PRIORITY_RANK: Record<AttentionPriority, number> = { URGENT: 0, HIGH: 1, N
 const LIVE_STATES = ['OPEN', 'CLAIMED'] as const;
 const VISIBLE_ASSIGNMENTS: MessageAssignment[] = ['EXACT', 'CONFIRMED'];
 const REPLY_SUBJECT = 'PATIENT_MESSAGE';
-const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
 /**
  * @cc [owner:nareshshah139,label:security] worklist-branch-scope
@@ -491,21 +490,5 @@ export class WorklistService {
       })),
       messages: await this.thread({ patientId }, { visibleOnly: true }),
     };
-  }
-
-  /** PP-87 for staff: response and message photos only through this authenticated, uncached route. */
-  async attachment(id: string, branchId: string) {
-    const row = await this.prisma.responseAttachment.findFirst({
-      where: {
-        id,
-        OR: [
-          { response: { checkIn: { track: { patient: { branchId } } } } },
-          { patientMessage: { OR: [{ patient: { branchId } }, { patientId: null }] } },
-        ],
-      },
-      select: { bytes: true, mime: true },
-    });
-    if (!row) throw new NotFoundException('Photo not found');
-    return { bytes: Buffer.from(row.bytes), contentType: IMAGE_TYPES.has(row.mime) ? row.mime : 'image/jpeg' };
   }
 }

@@ -47,7 +47,8 @@ export class FollowUpsController {
 
   /**
    * @cc [owner:nareshshah139,label:security] attachment-serving-headers
-   * A patient photo MUST be served only to signed-in clinic staff of the patient's branch, as
+   * A patient photo MUST be served only to signed-in clinic staff of the patient's branch (any
+   * branch when the sender is unknown, as the clinic has one number), as
    * image/jpeg with Cache-Control: private, no-store and X-Content-Type-Options: nosniff (PP-87).
    */
   @Get('attachments/:id')
