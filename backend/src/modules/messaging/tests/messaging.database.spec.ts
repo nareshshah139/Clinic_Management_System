@@ -253,8 +253,36 @@ databaseTests('Durable outbound WhatsApp messages on PostgreSQL against a fake M
     release();
     await expect(merging).resolves.toEqual(expect.objectContaining({ archivedPatients: 2 }));
     await passing;
+    await pass.runPass(NOON);
     expect((await db.patient.findUniqueOrThrow({ where: { id: kept.id } })).email).toBe('late@example.test');
     expect((await messages({ dedupeKey: `merge:${kept.id}` }))[0].state).toBe('SENT');
+  });
+
+  it('PP-10/PP-13: a merge running while the pass picks up the duplicate\'s queued message does not deadlock; the message goes to the kept patient next pass', async () => {
+    const kept = await register('9876577754');
+    const dup = await register('9876577754');
+    await optIn(kept.id);
+    await optIn(dup.id);
+    await care(dup.id, 'REVIEW_REMINDER', `dupmsg:${dup.id}`);
+    const merger = new PatientDeduplicationService(db as any) as any;
+    const original = merger.mergePatientIntoCanonical.bind(merger);
+    let release!: () => void;
+    let locked!: () => void;
+    const patientsHeld = new Promise<void>((r) => { locked = r; });
+    merger.mergePatientIntoCanonical = async (...args: unknown[]) => {
+      locked();
+      await new Promise<void>((r) => { release = r; });
+      return original(...args);
+    };
+    const merging = merger.mergeDuplicateGroup([kept.id, dup.id]);
+    await patientsHeld;
+    const passing = pass.runPass(NOON);
+    await new Promise((r) => setTimeout(r, 300));
+    release();
+    await expect(merging).resolves.toEqual(expect.objectContaining({ archivedPatients: 1 }));
+    await passing;
+    await pass.runPass(NOON);
+    expect((await messages({ dedupeKey: `dupmsg:${dup.id}` }))[0]).toMatchObject({ patientId: kept.id, state: 'SENT' });
   });
 
   it('PP-13: a confirmation for an appointment that was moved, or whose slot has started, expires instead of sending the old time', async () => {
