@@ -330,7 +330,7 @@ describe('PurchaseInvoiceWorkbench', () => {
     fireEvent.change(within(form).getByLabelText('Product kind'), { target: { value: 'COSMETIC' } });
     fireEvent.click(within(form).getByRole('button', { name: 'Save details and recheck invoice' }));
     await screen.findByText('Product details saved. Invoice check could not finish. Retry the check without saving again.');
-    expect(api.suggestPharmacyPurchaseMasterMatches).toHaveBeenLastCalledWith({ items: expect.arrayContaining([expect.objectContaining({ productName: 'Cosglo New Cream' }), expect.objectContaining({ productName: 'Cosglo New Cream' })]) });
+    expect(api.suggestPharmacyPurchaseMasterMatches).toHaveBeenLastCalledWith({ items: expect.arrayContaining([expect.objectContaining({ productName: 'Cosglo New Cream' }), expect.objectContaining({ productName: 'Cosglo New Cream' })]), supplierGstin: '36ABCDE1234F1Z5' });
     checkFails = false;
     fireEvent.click(screen.getByRole('button', { name: 'Retry product check' }));
     await waitFor(() => expect(screen.queryByRole('region', { name: 'Invoice product checks' })).not.toBeInTheDocument());
@@ -810,7 +810,7 @@ describe('PurchaseInvoiceWorkbench', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Correct invoice name' }));
     fireEvent.change(screen.getByLabelText('Corrected name for line 1'), { target: { value: 'Corrected tablet' } });
     fireEvent.click(screen.getByRole('button', { name: 'Apply name' }));
-    await waitFor(() => expect(api.suggestPharmacyPurchaseMasterMatches).toHaveBeenLastCalledWith({ items: [expect.objectContaining({ productName: 'Corrected tablet', batchNumber: 'AZT2401', quantityPurchased: 1, taxableAmount: 100 })] }));
+    await waitFor(() => expect(api.suggestPharmacyPurchaseMasterMatches).toHaveBeenLastCalledWith({ items: [expect.objectContaining({ productName: 'Corrected tablet', batchNumber: 'AZT2401', quantityPurchased: 1, taxableAmount: 100 })], supplierGstin: '36ABCDE1234F1Z5' }));
     expect(api.confirmPharmacyPurchaseMaster).not.toHaveBeenCalled();
     expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
     expect(screen.queryByRole('checkbox', { name: /I verified the invoice/ })).not.toBeInTheDocument();

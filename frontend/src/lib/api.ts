@@ -631,7 +631,7 @@ export class ApiClient {
   }
 
   async suggestPharmacyPurchaseMasterMatches<T = unknown>(
-    data: Record<string, unknown>
+    data: { items: Record<string, unknown>[]; supplierGstin?: string }
   ): Promise<T> {
     return this.post<T>('/pharmacy/purchase-invoices/master-matches', data);
   }

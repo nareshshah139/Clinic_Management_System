@@ -1526,8 +1526,10 @@ function PurchaseInvoiceEditor({
       const entry = current[scope]?.[key];
       if (!entry) return current;
       const flags = entry.flags.filter((raw) => !isLearnedFlag(raw, field));
-      const { [key]: _dropped, ...rest } = current[scope];
-      return { ...current, [scope]: flags.length ? { ...rest, [key]: { ...entry, flags } } : rest };
+      const rest = { ...current[scope] };
+      if (flags.length) rest[key] = { ...entry, flags };
+      else delete rest[key];
+      return { ...current, [scope]: rest };
     });
   };
 
@@ -1798,7 +1800,10 @@ function PurchaseInvoiceEditor({
 
     setMasterRefreshing(true);
     try {
-      const response = await apiClient.suggestPharmacyPurchaseMasterMatches<MasterMatchResponse>({ items: sourceLines.map(linePayload) });
+      const response = await apiClient.suggestPharmacyPurchaseMasterMatches<MasterMatchResponse>({
+        items: sourceLines.map(linePayload),
+        ...(header.distributorGstin.trim() && { supplierGstin: header.distributorGstin.trim().toUpperCase() }),
+      });
       if (!catalogueCurrent(request)) return false;
       const rows = assessCatalogue(sourceLines, response);
       const matches = Array.isArray(response?.matches) ? response.matches : [];
