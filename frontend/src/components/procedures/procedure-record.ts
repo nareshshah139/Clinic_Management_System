@@ -69,6 +69,7 @@ export interface SavedVisitRef {
   id: string;
   version?: number;
   createdAt: string;
+  otherProcedures: unknown[];
 }
 
 export interface ProcedureRecord {
@@ -147,7 +148,7 @@ export function toVisitRequest(record: ProcedureRecord): VisitRequest {
         skinTypes: record.skinTypes,
         shotCounts: record.shotCounts,
         parameters: keepMachineParameters(machine, record.parameters),
-      }],
+      }, ...(record.visit?.otherProcedures ?? [])],
     },
     notes: record.notes,
   };
@@ -213,8 +214,9 @@ type VisitWithRelations = VisitSummary & {
 
 export function parseVisitProcedure(visit: VisitWithRelations): StoredProcedure | null {
   const plan = asObject(visit.plan);
-  const procedures = asObject(plan?.dermatology)?.procedures;
-  const entry = Array.isArray(procedures) ? asObject(procedures[0]) : undefined;
+  const stored = asObject(plan?.dermatology)?.procedures;
+  const procedures: unknown[] = Array.isArray(stored) ? stored : [];
+  const entry = asObject(procedures[0]);
   if (!entry) return null;
 
   const editable = isMachineId(entry.machine);
@@ -237,7 +239,7 @@ export function parseVisitProcedure(visit: VisitWithRelations): StoredProcedure 
     label: (machine && editable ? machineSpec(machine).name : label) || 'Procedure',
     doctorName: doctorName ? `Dr. ${doctorName}` : '',
     record: {
-      visit: { id: visit.id, version: visit.version, createdAt: visit.createdAt },
+      visit: { id: visit.id, version: visit.version, createdAt: visit.createdAt, otherProcedures: procedures.slice(1) },
       patient: { id: visit.patientId, name: visit.patient?.name || 'Unknown patient' },
       doctorId: visit.doctorId,
       therapistId: text(entry.therapistId),

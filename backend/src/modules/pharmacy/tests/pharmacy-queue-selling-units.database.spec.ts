@@ -273,6 +273,19 @@ databaseTests('Queue coverage in selling units with PostgreSQL', () => {
     expect((await queue.findOne('manual-task-without-sale', at.branchId)).status).toBe(PrescriptionQueueStatus.PENDING);
   });
 
+  it('lists an expired prescription that never got a dispense task under Expired, matching the chip count', async () => {
+    const at = await clinic('Legacy expired without task');
+    await rx(at, 'legacy-no-task', [line('tricogroStrips')]);
+    await db.prescription.update({ where: { id: 'legacy-no-task' }, data: { createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) } });
+    await rx(at, 'paused-task', [line('tricogroStrips')]);
+    await db.pharmacyDispenseTask.create({ data: { branchId: at.branchId, patientId: at.patientId, patientName: 'Test patient', prescriptionId: 'paused-task', status: 'PAUSED' } });
+    const ids = (page: { data: { prescriptionId: string }[] }) => page.data.map(entry => entry.prescriptionId).sort();
+    const notPaused = await queue.findAll({ status: PrescriptionQueueStatus.EXPIRED, paused: false, limit: 100 }, at.branchId);
+    const paused = await queue.findAll({ status: PrescriptionQueueStatus.EXPIRED, paused: true, limit: 100 }, at.branchId);
+    expect([ids(notPaused), ids(paused)]).toEqual([['legacy-no-task'], ['paused-task']]);
+    expect([notPaused.counts.expired, notPaused.counts.paused]).toEqual([2, 1]);
+  });
+
   it('rejects a medicine edit racing an invoice held under the prescription lock', async () => {
     const at = await clinic('Invoice edit race');
     await rx(at, 'rx-edit-race', [line('tricogroStrips')]);

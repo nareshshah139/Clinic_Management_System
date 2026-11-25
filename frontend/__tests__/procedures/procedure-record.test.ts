@@ -41,7 +41,7 @@ describe('procedure record serializer and parser', () => {
       label: 'Fotona Starwalker',
       doctorName: 'Dr. Meera Iyer',
       record: {
-        visit: { id: 'v9', version: 4, createdAt: '2026-11-20T10:00:00.000Z' },
+        visit: { id: 'v9', version: 4, createdAt: '2026-11-20T10:00:00.000Z', otherProcedures: [] },
         patient: { id: 'p1', name: 'Asha Rao' },
         doctorId: 'd1',
         therapistId: 'n1',
@@ -83,6 +83,16 @@ describe('procedure record serializer and parser', () => {
         },
       },
     });
+  });
+
+  it('keeps the visit\'s other procedures when the first one is edited', () => {
+    const peel = { type: 'Chemical peel', fluence: '', spotSize: '', passes: '2' };
+    const plan = toVisitRequest(filled).body.treatmentPlan as { dermatology: { procedures: unknown[] } };
+    const loaded = parseVisitProcedure(storedVisit({ ...plan, dermatology: { procedures: [...plan.dermatology.procedures, peel] } }))!;
+    const request = toVisitRequest({ ...loaded.record, notes: 'Settled' });
+    const procedures = (request.body.treatmentPlan as { dermatology: { procedures: Array<Record<string, unknown>> } }).dermatology.procedures;
+    expect(procedures.map((entry) => entry.type)).toEqual(['Fotona Starwalker', 'Chemical peel']);
+    expect(procedures[1]).toEqual(peel);
   });
 
   it('reads Fotona values saved under the old "Fluency" name as Fluence', () => {

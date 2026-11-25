@@ -232,7 +232,7 @@ export function queueStatusPage(
         THEN 'expired' ELSE queue_status END AS visible_status FROM queue_statuses
     ), filtered AS MATERIALIZED (
       SELECT id, "createdAt" FROM visible_statuses WHERE (${status ?? null}::text IS NULL OR ${status ?? null} = visible_status)
-        AND (${paused ?? null}::boolean IS NULL OR ${paused ?? null} = (workflow_status = 'PAUSED'))
+        AND (${paused ?? null}::boolean IS NULL OR ${paused ?? null} = coalesce(workflow_status = 'PAUSED', false))
     ), page_ids AS MATERIALIZED (
       SELECT id, "createdAt" FROM filtered ORDER BY "createdAt" DESC, id DESC LIMIT ${limit} OFFSET ${(page - 1) * limit}
     )
