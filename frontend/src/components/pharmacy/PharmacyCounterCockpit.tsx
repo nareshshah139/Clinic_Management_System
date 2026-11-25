@@ -1171,7 +1171,9 @@ function MedicationRow({
   const pick =
     medication.prescribedQuantity === null
       ? 'Review qty'
-      : `Pick ${Math.max(0, medication.prescribedQuantity - medication.dispensedQuantity)}`;
+      : stock && isLinked(stock) && stock.unit && Number.isFinite(stock.remainingBillingQuantity)
+        ? `Pick ${pickInSellingUnit(stock.remainingBillingQuantity, stock.unit)}`
+        : `Pick ${Math.max(0, medication.prescribedQuantity - medication.dispensedQuantity)}`;
   const warnings = stock ? stockWarnings(stock) : [];
   const batchLine = batch
     ? [
@@ -1306,6 +1308,16 @@ const EXCEPTION_ACTIONS: Array<{ value: LineAction; label: string }> = [
 ];
 
 const isLinked = (stock: StockCheckItem) => stock.stockStatus !== 'UNMATCHED';
+
+const UNIT_SINGULAR: Record<string, string> = {
+  PIECES: 'piece', BOXES: 'box', BOTTLES: 'bottle', STRIPS: 'strip', TUBES: 'tube',
+  VIALS: 'vial', AMPOULES: 'ampoule', SYRINGES: 'syringe', PACKS: 'pack', KITS: 'kit',
+};
+
+const pickInSellingUnit = (quantity: number, unit: string) => {
+  const many = unit.toLowerCase();
+  return plural(quantity, UNIT_SINGULAR[unit.toUpperCase()] ?? many.replace(/s$/, ''), many);
+};
 
 const stockQuantity = (stock: StockCheckItem) =>
   isLinked(stock) ? `${stock.totalNonExpiredStock}${stock.unit ? ` ${stock.unit.toLowerCase()}` : ''}` : '—';

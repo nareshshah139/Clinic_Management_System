@@ -468,3 +468,45 @@ describe('exception reasons', () => {
     ));
   });
 });
+
+describe('Pick line counts in the unit the pharmacist picks', () => {
+  const pickText = async (line: Record<string, unknown>, stockItem: Record<string, unknown>) => {
+    get.mockImplementation(async url => url.endsWith('/stock-check')
+      ? { items: [stockItem] }
+      : { data: [reviewTask([line])], pagination: { total: 1 } });
+    render(<PharmacyCounterCockpit {...props} />);
+    await screen.findByText(/\d+ \w+ available/);
+    return screen.getByRole('group', { name: String(line.drugName) }).textContent;
+  };
+
+  it('reads Pick 3 strips for 30 once-daily tablets stocked as strips of 10', async () => {
+    const text = await pickText(tabletLine('a'), stripStock('a', 3, [{ id: 'batch-1', currentStock: 3 }]));
+    expect(text).toContain('Pick 3 strips · 3 strips available');
+  });
+
+  it('reads Pick 1 bottle for a one-bottle serum', async () => {
+    const serum = { ...tabletLine('s'), drugName: 'Vitamin C serum', prescribedQuantity: 30 };
+    const text = await pickText(serum, {
+      ...stripStock('s', 1, [{ id: 'batch-s', currentStock: 2 }]), drugName: 'Vitamin C serum', stockName: 'Vitamin C serum', unit: 'BOTTLES',
+    });
+    expect(text).toContain('Pick 1 bottle · 2 bottles available');
+  });
+
+  it('reads Pick 1 strip when 2 of 3 strips are already billed', async () => {
+    const text = await pickText(
+      tabletLine('a', { dispensedQuantity: 20 }),
+      stripStock('a', 1, [{ id: 'batch-1', currentStock: 3 }]),
+    );
+    expect(text).toContain('Pick 1 strip · 3 strips available');
+  });
+
+  it('falls back to the prescribed quantity while the stock check has not answered', async () => {
+    get.mockImplementation(async url => url.endsWith('/stock-check')
+      ? new Promise(() => undefined)
+      : { data: [reviewTask([tabletLine('a')])], pagination: { total: 1 } });
+    render(<PharmacyCounterCockpit {...props} />);
+    const row = await screen.findByRole('group', { name: 'Tricogro tablet' });
+    expect(row).toHaveTextContent('Pick 30');
+    expect(row).not.toHaveTextContent('strip');
+  });
+});
