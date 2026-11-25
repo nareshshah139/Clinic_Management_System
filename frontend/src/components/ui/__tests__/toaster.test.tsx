@@ -115,14 +115,14 @@ describe('how long a notification stays', () => {
     expect(screen.queryByText('Reference: 69e9a011-77b5-4a85-a164-a11fe4c8d75b')).not.toBeInTheDocument();
   });
 
-  it('clears notifications that were open when a dialog opens, so their close button never lands on the dialog', () => {
+  it('sets notifications aside while a dialog is open, so their close button never lands on the dialog, and brings them back after', () => {
     render(<Toaster />);
     act(() => {
-      toast({ variant: 'destructive', title: 'Export failed', description: 'The server failed. (Reference: 69e9a011-77b5-4a85-a164-a11fe4c8d75b)' });
+      toast({ title: 'Patient archived', description: 'Undo is available for a moment.' });
     });
-    expect(screen.getByText('Export failed')).toBeInTheDocument();
+    expect(screen.getByText('Patient archived')).toBeVisible();
 
-    render(
+    const { rerender } = render(
       <Dialog open>
         <DialogContent>
           <DialogTitle>New patient</DialogTitle>
@@ -130,9 +130,27 @@ describe('how long a notification stays', () => {
       </Dialog>,
     );
     act(() => jest.advanceTimersByTime(1_000));
-
-    expect(screen.queryByText('Export failed')).not.toBeInTheDocument();
+    expect(screen.queryByText('Patient archived')).not.toBeInTheDocument();
     expect(screen.getByRole('dialog', { name: 'New patient' })).toBeInTheDocument();
+
+    act(() => {
+      toast({ variant: 'destructive', title: 'Could not add the patient' });
+    });
+    expect(screen.getByText('Could not add the patient')).toBeVisible();
+
+    act(() => jest.advanceTimersByTime(60_000));
+
+    rerender(
+      <Dialog open={false}>
+        <DialogContent>
+          <DialogTitle>New patient</DialogTitle>
+        </DialogContent>
+      </Dialog>,
+    );
+    act(() => jest.advanceTimersByTime(1_000));
+    expect(screen.getByText('Patient archived')).toBeVisible();
+    act(() => jest.advanceTimersByTime(4_000));
+    expect(screen.getByText('Patient archived')).toBeVisible();
   });
 
   it('keeps notifications while a page holds a dialog that is closed', () => {

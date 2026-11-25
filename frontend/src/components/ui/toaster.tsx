@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
 import {
   Toast,
   ToastClose,
@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/toast"
 import { useToast } from "@/hooks/use-toast"
 import { splitErrorReference } from "@/lib/utils"
-import { MODAL_OPENED } from "@/lib/modal-events"
+import { MODAL_CLOSED, MODAL_OPENED } from "@/lib/modal-events"
 
 const ERROR_DURATION_MS = 10_000
 const REFERENCE_DURATION_MS = 30_000
@@ -23,13 +23,32 @@ function durationFor(variant: ToastProps["variant"], reference: string | undefin
 }
 
 export function Toaster() {
-  const { toasts, dismiss } = useToast()
+  const { toasts, toast, dismiss } = useToast()
+  const latest = useRef({ toasts, toast, dismiss })
+  latest.current = { toasts, toast, dismiss }
 
   useEffect(() => {
-    const clear = () => dismiss()
-    window.addEventListener(MODAL_OPENED, clear)
-    return () => window.removeEventListener(MODAL_OPENED, clear)
-  }, [dismiss])
+    let depth = 0
+    let parked: typeof toasts = []
+    const opened = () => {
+      depth += 1
+      const showing = latest.current.toasts.filter((t) => t.open)
+      showing.forEach((t) => latest.current.dismiss(t.id))
+      parked = [...parked, ...showing]
+    }
+    const closed = () => {
+      depth = Math.max(0, depth - 1)
+      if (depth > 0) return
+      parked.reverse().forEach(({ title, description, action, variant, duration }) => latest.current.toast({ title, description, action, variant, duration }))
+      parked = []
+    }
+    window.addEventListener(MODAL_OPENED, opened)
+    window.addEventListener(MODAL_CLOSED, closed)
+    return () => {
+      window.removeEventListener(MODAL_OPENED, opened)
+      window.removeEventListener(MODAL_CLOSED, closed)
+    }
+  }, [])
 
   return (
     <ToastProvider>

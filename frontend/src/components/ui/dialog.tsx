@@ -5,7 +5,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { XIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import { announceModalOpened } from "@/lib/modal-events"
+import { announceModalClosed, announceModalOpened } from "@/lib/modal-events"
 
 function Dialog({
   ...props
@@ -52,10 +52,18 @@ function DialogContent({
   children,
   showCloseButton = true,
   onOpenAutoFocus,
+  onCloseAutoFocus,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
 }) {
+  const opened = React.useRef(false)
+  const close = React.useCallback(() => {
+    if (!opened.current) return
+    opened.current = false
+    announceModalClosed()
+  }, [])
+  React.useEffect(() => close, [close])
   return (
     <DialogPortal data-slot="dialog-portal">
       <DialogOverlay />
@@ -66,8 +74,13 @@ function DialogContent({
           className
         )}
         onOpenAutoFocus={(event: Event) => {
+          opened.current = true
           announceModalOpened()
           onOpenAutoFocus?.(event)
+        }}
+        onCloseAutoFocus={(event: Event) => {
+          close()
+          onCloseAutoFocus?.(event)
         }}
         {...props}
       >
