@@ -429,10 +429,15 @@ databaseTests('Clinic bill register on PostgreSQL', () => {
       receipt.items.map((i) => [i.name, i.qty, i.unitPrice, i.total]),
     ).toEqual([['Consultation', 1, 2500, 2500]]);
     expect(
-      receipt.payments.map((p) => [p.amount, p.mode, p.reference]),
+      receipt.payments.map((p) => [
+        p.amount,
+        p.mode,
+        p.reference,
+        p.refundable,
+      ]),
     ).toEqual([
-      [1000, 'UPI', null],
-      [-200, 'UPI', 'REFUND: Goodwill'],
+      [1000, 'UPI', null, 800],
+      [-200, 'UPI', 'REFUND: Goodwill', 0],
     ]);
     await expect(register.receipt(peel.id, 'other')).rejects.toMatchObject({
       status: 404,

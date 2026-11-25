@@ -52,7 +52,7 @@ const receiptOf = (bill: ClinicBillRow): ClinicReceipt => ({
   clinic: { name: 'Lakshmi Family Clinic', address: '12 MG Road, Hyderabad' },
   notes: null,
   items: [{ id: 'i1', name: 'Procedure: Chemical peel', qty: 1, unitPrice: bill.amount, discount: 0, gstRate: 0, total: bill.amount }],
-  payments: bill.paid ? [{ id: 'pay1', amount: bill.paid, mode: 'CASH', reference: null, paidAt: '2026-11-25T05:00:00.000Z' }] : [],
+  payments: bill.paid ? [{ id: 'pay1', amount: bill.paid, mode: 'CASH', reference: null, paidAt: '2026-11-25T05:00:00.000Z', refundable: bill.paid }] : [],
 });
 
 type Call = { method: string; path: string; params: URLSearchParams; body: unknown };
@@ -134,6 +134,46 @@ it('collects a part payment with the mode the desk picked, and the row shows wha
   fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   await waitFor(() => expect(Array.from(rowOf(peel.billNo).querySelectorAll('td')).map((td) => td.textContent).slice(6, 8)).toEqual(['₹1,200', '₹1,300']));
+});
+
+it('offers Refund only on payments with money left to refund, and defaults to what is left', async () => {
+  const split = row({ id: 'cb4', billNo: 'INV-20261125-004', amount: 1500, paid: 800, due: 700, refunded: 700, status: 'PARTIALLY_PAID' });
+  const paidAt = '2026-11-25T05:00:00.000Z';
+  const receipt: ClinicReceipt = {
+    ...receiptOf(split),
+    payments: [
+      { id: 'cash', amount: 500, mode: 'CASH', reference: null, paidAt, refundable: 0 },
+      { id: 'upi', amount: 500, mode: 'UPI', reference: null, paidAt, refundable: 300 },
+      { id: 'card', amount: 500, mode: 'CARD', reference: null, paidAt, refundable: 500 },
+      { id: 'cash-back', amount: -500, mode: 'CASH', reference: 'REFUND: Wrong bill', paidAt, refundable: 0 },
+      { id: 'upi-back', amount: -200, mode: 'UPI', reference: 'REFUND: Goodwill', paidAt, refundable: 0 },
+    ],
+  };
+  server = ({ method, path }) => {
+    if (method === 'POST' && path === '/api/billing/refunds') return { status: 201, body: { id: 'upi-back-2' } };
+    if (path === '/api/billing/invoices/cb4/receipt') return { body: receipt };
+    return { body: page([split]) };
+  };
+  render(<BillingPage />);
+
+  fireEvent.click(await screen.findByRole('button', { name: `Open bill ${split.billNo}` }));
+  const dialog = await screen.findByRole('dialog', { name: /Bill INV-20261125-004/ });
+  const payments = within(await within(dialog).findByRole('region', { name: 'Payments' })).getAllByRole('listitem');
+  const refundOn = (item: HTMLElement) => within(item).queryByRole('button', { name: 'Refund' });
+  expect(payments.map((item) => [item.textContent?.split(' · ')[0], Boolean(refundOn(item))])).toEqual([
+    ['₹500 Cash', false],
+    ['₹500 UPI', true],
+    ['₹500 Card', true],
+    ['Refund ₹500 Cash', false],
+    ['Refund ₹200 UPI', false],
+  ]);
+
+  fireEvent.click(refundOn(payments[1])!);
+  const form = within(dialog).getByRole('group', { name: 'Refund ₹500 UPI' });
+  expect(within(form).getByRole('textbox', { name: 'Refund amount' })).toHaveValue('300');
+  fireEvent.change(within(form).getByRole('textbox', { name: 'Reason' }), { target: { value: 'Goodwill' } });
+  fireEvent.click(within(form).getByRole('button', { name: 'Refund ₹300' }));
+  await waitFor(() => expect(writes()).toEqual([['POST', '/api/billing/refunds', { paymentId: 'upi', amount: 300, notes: 'Goodwill' }]]));
 });
 
 it('voids a bill only after the user gives a reason and confirms', async () => {

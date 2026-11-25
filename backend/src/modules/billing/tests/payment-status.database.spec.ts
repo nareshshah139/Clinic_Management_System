@@ -94,6 +94,70 @@ databaseTests('Clinic payments on PostgreSQL', () => {
     expect(await money(invoice.id)).toEqual({ received: 300, balance: 200, payments: [[500, 'UPI', 'COMPLETED'], [-200, 'UPI', 'COMPLETED']] });
   });
 
+  it('refuses to refund a cash payment again once it is refunded in full, and still refunds the UPI payment', async () => {
+    const invoice = await bill(1000);
+    const cash = await pay(invoice.id, 500);
+    const upi = await pay(invoice.id, 500, { method: 'UPI' });
+    await billing.processRefund({ paymentId: cash.id, amount: 500 } as any, 'branch');
+
+    await expect(billing.processRefund({ paymentId: cash.id, amount: 500 } as any, 'branch')).rejects.toMatchObject({
+      status: 400,
+      message: 'This ₹500 payment is already refunded in full, so ₹500 cannot be refunded.',
+    });
+    expect(await money(invoice.id)).toEqual({
+      received: 500,
+      balance: 500,
+      payments: [[500, 'CASH', 'COMPLETED'], [500, 'UPI', 'COMPLETED'], [-500, 'CASH', 'COMPLETED']],
+    });
+
+    await billing.processRefund({ paymentId: upi.id, amount: 500 } as any, 'branch');
+    expect(await money(invoice.id)).toMatchObject({ received: 0, balance: 1000 });
+  });
+
+  it('refunds only what is left of a partly refunded payment', async () => {
+    const invoice = await bill(1000);
+    const cash = await pay(invoice.id, 500);
+    await pay(invoice.id, 500, { method: 'UPI' });
+    await billing.processRefund({ paymentId: cash.id, amount: 200 } as any, 'branch');
+
+    await expect(billing.processRefund({ paymentId: cash.id, amount: 400 } as any, 'branch')).rejects.toMatchObject({
+      status: 400,
+      message: 'Only ₹300 of this ₹500 payment is left to refund, so ₹400 cannot be refunded.',
+    });
+    await billing.processRefund({ paymentId: cash.id, amount: 300 } as any, 'branch');
+    expect(await money(invoice.id)).toEqual({
+      received: 500,
+      balance: 500,
+      payments: [[500, 'CASH', 'COMPLETED'], [500, 'UPI', 'COMPLETED'], [-200, 'CASH', 'COMPLETED'], [-300, 'CASH', 'COMPLETED']],
+    });
+  });
+
+  it('tells the receipt what is left to refund on each payment', async () => {
+    const invoice = await bill(1000);
+    const cash = await pay(invoice.id, 500);
+    const upi = await pay(invoice.id, 500, { method: 'UPI' });
+    await billing.processRefund({ paymentId: cash.id, amount: 500 } as any, 'branch');
+    await billing.processRefund({ paymentId: upi.id, amount: 200 } as any, 'branch');
+
+    const { payments } = await register.receipt(invoice.id, 'branch');
+    expect(payments.map((p) => [p.amount, p.mode, p.refundable])).toEqual([
+      [500, 'CASH', 0],
+      [500, 'UPI', 300],
+      [-500, 'CASH', 0],
+      [-200, 'UPI', 0],
+    ]);
+  });
+
+  it('takes one of two simultaneous refunds of one payment that together exceed it', async () => {
+    const invoice = await bill(1000);
+    const cash = await pay(invoice.id, 500);
+    await pay(invoice.id, 500, { method: 'UPI' });
+    const refund = () => billing.processRefund({ paymentId: cash.id, amount: 500 } as any, 'branch');
+    const results = await Promise.allSettled([refund(), refund()]);
+    expect(results.map((r) => r.status).sort()).toEqual(['fulfilled', 'rejected']);
+    expect(await money(invoice.id)).toMatchObject({ received: 500, balance: 500 });
+  });
+
   it('takes one of two simultaneous refunds that together exceed what was received', async () => {
     const invoice = await bill(500);
     const payment = await pay(invoice.id, 500);
