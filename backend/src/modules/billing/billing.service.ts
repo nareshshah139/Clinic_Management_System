@@ -477,7 +477,8 @@ export class BillingService {
    * @cc [owner:nareshshah139,label:calculation;concurrency] refund-total-per-payment
    * The refunds of one payment MUST NOT add up to more than that payment. Each refund row links to
    * its payment (refundOfId), and the refunds already linked MUST be summed under the bill's row
-   * lock, so of two refunds racing for one payment the second sees the first.
+   * lock, so of two refunds racing for one payment the second sees the first. Refunds stored before
+   * refundOfId existed carry no link and are not counted here.
    */
   async processRefund(refundDto: RefundDto, branchId: string) {
     const { paymentId, amount, notes } = refundDto;
