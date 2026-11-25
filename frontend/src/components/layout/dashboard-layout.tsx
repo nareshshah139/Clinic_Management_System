@@ -8,10 +8,10 @@ import {
   useMemo,
   useState,
 } from "react";
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Sidebar } from "./sidebar";
 import { Header } from "./header";
+import { MobileNavigation } from "./mobile-navigation";
 import { VoiceBar } from "@/components/voice/VoiceBar";
 import { VoiceBarProvider } from "@/components/voice/VoiceBarProvider";
 import { apiClient } from "@/lib/api";
@@ -20,16 +20,7 @@ import type { User } from "@/lib/types";
 import { DashboardUserProvider } from "./dashboard-user-context";
 import { AnalyticsMount } from "@/lib/analytics";
 import { ReportIssueProvider } from "@/components/issue-report/ReportIssueProvider";
-import { ReportIssueButton } from "@/components/issue-report/ReportIssueButton";
 import { SessionExpiredDialog } from "@/components/auth/SessionExpiredDialog";
-import { Menu } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog as Sheet,
-  DialogContent as SheetContent,
-  DialogTitle as SheetTitle,
-  DialogTrigger as SheetTrigger,
-} from "@/components/ui/dialog";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -39,7 +30,6 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [navigationOpen, setNavigationOpen] = useState(false);
 
   const fetchCurrentUser = useCallback(async () => {
     try {
@@ -138,42 +128,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
             {/* Main content */}
             <div className="min-w-0 flex-1 flex flex-col overflow-hidden">
-              {/* Header */}
-              <div className="hidden md:block">
-                <Header />
-              </div>
-              <div className="flex h-14 shrink-0 items-center gap-3 border-b bg-white px-4 md:hidden">
-                <Sheet open={navigationOpen} onOpenChange={setNavigationOpen}>
-                  <SheetTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      aria-label="Open clinic navigation"
-                    >
-                      <Menu className="h-5 w-5" />
-                    </Button>
-                  </SheetTrigger>
-                  <SheetContent
-                    aria-describedby={undefined}
-                    className="left-0 top-0 block h-dvh w-72 max-w-72 translate-x-0 translate-y-0 overflow-y-auto rounded-none p-0"
-                  >
-                    <SheetTitle className="sr-only">
-                      Clinic navigation
-                    </SheetTitle>
-                    <Suspense>
-                      <Sidebar onNavigate={() => setNavigationOpen(false)} />
-                    </Suspense>
-                  </SheetContent>
-                </Sheet>
-                <Image
-                  src="/linae-name.png"
-                  alt="Linaé"
-                  width={304}
-                  height={112}
-                  className="h-6 w-auto"
-                />
-                <ReportIssueButton className="ml-auto" />
-              </div>
+              <Header leading={<MobileNavigation />} />
 
               {/* Page content */}
               <main className="min-w-0 flex-1 overflow-auto p-4 md:p-6">
