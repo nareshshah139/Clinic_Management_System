@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { UsersService } from '../users.service';
 import { PrismaService } from '../../../shared/database/prisma.service';
 import { JwtService } from '@nestjs/jwt';
-import { ConflictException, NotFoundException, BadRequestException, UnauthorizedException } from '@nestjs/common';
+import { ConflictException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { UserRole, UserStatus } from '@prisma/client';
 
 // Mock bcrypt
@@ -338,14 +338,15 @@ describe('UsersService', () => {
       expect(result).toEqual({ message: 'Password changed successfully' });
     });
 
-    it('should throw UnauthorizedException if current password is incorrect', async () => {
+    it('rejects a wrong current password as a bad request, not an expired session', async () => {
       const bcrypt = require('bcrypt');
       mockPrisma.user.findFirst.mockResolvedValue(mockUser);
       bcrypt.compare.mockResolvedValue(false);
 
-      await expect(service.changePassword('user-123', changePasswordDto, { id: 'user-123', branchId: 'branch-123', role: 'RECEPTION' })).rejects.toThrow(
-        UnauthorizedException,
-      );
+      await expect(service.changePassword('user-123', changePasswordDto, { id: 'user-123', branchId: 'branch-123', role: 'RECEPTION' })).rejects.toMatchObject({
+        status: 400,
+        message: 'Current password is incorrect',
+      });
     });
 
     it('should throw BadRequestException if passwords do not match', async () => {
