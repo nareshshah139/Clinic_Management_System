@@ -1,4 +1,5 @@
-import { IsString, IsOptional, IsEmail, IsEnum, IsBoolean, IsUUID, IsArray, IsDateString, MinLength, MaxLength } from 'class-validator';
+import { IsString, IsOptional, IsEmail, IsEnum, IsBoolean, IsUUID, IsArray, IsDateString, MinLength, MaxLength, IsByteLength } from 'class-validator';
+import { BCRYPT_MAX_BYTES, PASSWORD_BYTES } from '../../auth/dto/password-reset.dto';
 import { UserRole, UserStatus } from '@prisma/client';
 
 // Runtime enums for class-validator to avoid undefined during decorator evaluation in some build environments
@@ -192,12 +193,12 @@ export class ChangePasswordDto {
 
   @IsString()
   @MinLength(8)
-  @MaxLength(72)
+  @IsByteLength(0, BCRYPT_MAX_BYTES, { message: PASSWORD_BYTES })
   newPassword: string;
 
   @IsString()
   @MinLength(8)
-  @MaxLength(72)
+  @IsByteLength(0, BCRYPT_MAX_BYTES, { message: PASSWORD_BYTES })
   confirmPassword: string;
 }
 

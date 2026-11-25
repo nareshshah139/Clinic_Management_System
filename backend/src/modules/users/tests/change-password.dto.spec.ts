@@ -19,4 +19,9 @@ describe('ChangePasswordDto', () => {
     const tooLong = 'x'.repeat(73);
     expect(await problems({ currentPassword: 'old-pass-123', newPassword: tooLong, confirmPassword: tooLong })).toEqual(['newPassword', 'confirmPassword']);
   });
+
+  it('refuses a new password longer than the 72 bytes bcrypt reads, even under 72 characters', async () => {
+    const accented = 'é'.repeat(40);
+    expect(await problems({ currentPassword: 'old-pass-123', newPassword: accented, confirmPassword: accented })).toEqual(['newPassword', 'confirmPassword']);
+  });
 });
