@@ -42,7 +42,7 @@ export function useVoidBill(): [(bill: Pick<ClinicBillRow, 'id' | 'billNo' | 'pa
   return [voidBill, dialog];
 }
 
-type Refund = { paymentId: string; amount: string; reason: string };
+type Refund = { paymentId: string; amount: string; reason: string; error?: string };
 
 /**
  * @cc [owner:nareshshah139,label:product] clinic-bill-dialog
@@ -147,7 +147,8 @@ export function ClinicBillDialog({ billId, actions, collecting = false, onClose,
       await apiClient.refundPayment({ paymentId: refund.paymentId, amount: refundValue, notes: refund.reason.trim() });
       await changed(`${rupee(refundValue)} refunded on ${bill.billNo}`);
     } catch (e) {
-      setError(`${getErrorMessage(e)} Nothing was refunded.`);
+      setRefund({ ...refund, error: `${getErrorMessage(e)} Nothing was refunded.` });
+      await load();
     } finally {
       setSaving(false);
     }
@@ -230,6 +231,7 @@ export function ClinicBillDialog({ billId, actions, collecting = false, onClose,
                           {saving ? 'Saving…' : refundInvalid ? 'Refund' : `Refund ${rupee(refundValue ?? 0)}`}
                         </Button>
                       </div>
+                      {refund.error && <p role="alert" className="text-sm text-destructive-text">{refund.error}</p>}
                     </div>
                   )}
                 </li>
