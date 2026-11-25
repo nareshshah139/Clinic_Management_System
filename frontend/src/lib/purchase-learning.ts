@@ -32,9 +32,11 @@ export function parseLearnedCorrections(value: unknown): LearnedCorrection[] {
   });
 }
 
+const RESTORABLE_FIELDS = new Set(['productName', 'manufacturer', 'packSize', 'distributorName']);
+
 function stringRecord(value: unknown): Record<string, string> | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
-  const entries = Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === 'string');
+  const entries = Object.entries(value).filter((entry): entry is [string, string] => RESTORABLE_FIELDS.has(entry[0]) && typeof entry[1] === 'string');
   return entries.length ? Object.fromEntries(entries) : undefined;
 }
 

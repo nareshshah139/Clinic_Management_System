@@ -62,9 +62,7 @@ export interface Lesson {
 
 export interface LearnedCorrection {
   field: LearnableField; from: string; to: string; support: number; tier: LessonTier;
-  /** Form field -> value before the lesson rewrote it. */
   restore: Record<string, string>;
-  /** Flags the lesson removed, to put back on Undo. */
   restoreFlags: string[];
 }
 
