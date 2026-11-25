@@ -5,7 +5,10 @@ import { VisitsService } from '../visits.service';
 
 jest.mock('file-type', () => ({ fileTypeFromBuffer: jest.fn() }));
 
-type Row = { id: string; patientId: string; doctorId: string; date: Date; slot: string; status: string; reviewOfVisitId: string | null; reviewRequestedFor: Date | null; createdAt: number };
+type Row = {
+  id: string; patientId: string; doctorId: string; date: Date; slot: string; status: string; visitType: string; notes: string | null;
+  reviewOfVisitId: string | null; reviewRequestedFor: Date | null; reviewRequestedProcedure: string | null; createdAt: number;
+};
 type Seed = Omit<Partial<Row>, 'date' | 'reviewRequestedFor'> & { date?: string; requested?: string };
 
 const DOCTORS: Record<string, { firstName: string; lastName: string }> = {
@@ -14,13 +17,13 @@ const DOCTORS: Record<string, { firstName: string; lastName: string }> = {
 };
 const day = (date: string) => new Date(`${date}T00:00:00.000Z`);
 
-function setup({ followUp = '2099-11-17', slots = ['09:00-09:30', '09:30-10:00'], taken = [] as string[], rows = [] as Seed[] } = {}) {
+function setup({ followUp = '2099-11-17', plan = null as string | null, slots = ['09:00-09:30', '09:30-10:00'], taken = [] as string[], rows = [] as Seed[] } = {}) {
   let clock = 0;
   let store: Row[] = rows.map(({ requested, ...row }, i) => ({
-    id: `old-${i}`, patientId: 'p1', doctorId: 'd1', slot: '09:00-09:30', status: 'SCHEDULED', reviewOfVisitId: null, createdAt: clock++,
+    id: `old-${i}`, patientId: 'p1', doctorId: 'd1', slot: '09:00-09:30', status: 'SCHEDULED', visitType: 'OPD', notes: null, reviewOfVisitId: null, reviewRequestedProcedure: null, createdAt: clock++,
     ...row, date: day(row.date ?? '2099-11-17'), reviewRequestedFor: requested ? day(requested) : null,
   }));
-  const visit = { id: 'v1', patientId: 'p1', doctorId: 'd1', appointmentId: 'own', followUp: followUp ? day(followUp) : null, createdAt: new Date('2099-11-09T20:00:00.000Z'), deletedAt: null };
+  const visit = { id: 'v1', patientId: 'p1', doctorId: 'd1', appointmentId: 'own', followUp: followUp ? day(followUp) : null, createdAt: new Date('2099-11-09T20:00:00.000Z'), deletedAt: null, plan };
   const withDoctor = (row: Row) => ({ ...row, doctor: DOCTORS[row.doctorId] });
   const inDay = (row: Row, range: { gte: Date; lte: Date }) => row.date >= range.gte && row.date <= range.lte;
   const tx = {
@@ -35,8 +38,8 @@ function setup({ followUp = '2099-11-17', slots = ['09:00-09:30', '09:30-10:00']
       ).map(withDoctor)),
       update: jest.fn(async ({ where, data }: any) => Object.assign(store.find(r => r.id === where.id)!, data)),
       updateMany: jest.fn(async ({ where, data }: any) => {
-        const row = store.find(r => r.id === where.id && r.status === where.status);
-        if (row) row.status = data.status;
+        const row = store.find(r => r.id === where.id && (where.status === undefined || (where.status.in ? where.status.in.includes(r.status) : r.status === where.status)));
+        if (row) Object.assign(row, data);
         return { count: row ? 1 : 0 };
       }),
     },
@@ -51,18 +54,23 @@ function setup({ followUp = '2099-11-17', slots = ['09:00-09:30', '09:30-10:00']
     getAvailableSlots: jest.fn(async () => ({ availableSlots: slots })),
     bookInTransaction: jest.fn(async (_tx: unknown, dto: any) => {
       if (taken.includes(dto.slot)) throw new ConflictException('Scheduling conflict detected');
-      const row: Row = { id: `new-${dto.slot}`, patientId: dto.patientId, doctorId: dto.doctorId, date: day(dto.date), slot: dto.slot, status: 'SCHEDULED', reviewOfVisitId: dto.reviewOfVisitId, reviewRequestedFor: day(dto.reviewRequestedFor), createdAt: clock++ };
+      const row: Row = { id: `new-${dto.slot}`, patientId: dto.patientId, doctorId: dto.doctorId, date: day(dto.date), slot: dto.slot, status: 'SCHEDULED', visitType: dto.visitType, notes: dto.notes,
+        reviewOfVisitId: dto.reviewOfVisitId, reviewRequestedFor: day(dto.reviewRequestedFor), reviewRequestedProcedure: dto.reviewRequestedProcedure, createdAt: clock++ };
       store.push(row);
       return withDoctor(row);
     }),
     notifyBooked: jest.fn(async () => undefined),
     notifyCancelled: jest.fn(),
+    notifyUpdated: jest.fn(),
   };
   const service = new ReviewBookingService(prisma, appointments);
   const ymd = (date: Date | null) => date?.toISOString().slice(0, 10);
   return {
     appointments,
+    tx,
+    setStatus: (id: string, status: string) => { store.find(r => r.id === id)!.status = status; },
     book: () => service.book('v1', 'branch', 'user'),
+    stored: (id: string) => { const { visitType, notes, reviewRequestedProcedure } = store.find(r => r.id === id)!; return { visitType, notes, reviewRequestedProcedure }; },
     rows: () => store.map(r => `${r.id} ${ymd(r.date)} ${r.slot} ${r.status}${r.reviewOfVisitId ? ` review for ${ymd(r.reviewRequestedFor) ?? 'unknown'}` : ''}`),
   };
 }
@@ -79,6 +87,24 @@ describe('a first review booking', () => {
       patientId: 'p1', doctorId: 'd1', source: 'review', calendar: 'SCHEDULED', reviewOfVisitId: 'v1', notes: 'Review after visit on 2099-11-10',
     });
     expect(t.appointments.notifyBooked.mock.calls[0][0].id).toBe('new-09:00-09:30');
+  });
+
+  it.each([
+    ['a top-level procedure', { procedurePlanned: '  Chemical peel ' }, 'PROCEDURE', 'Chemical peel', 'Chemical peel'],
+    ['a legacy dermatology procedure', { dermatology: { procedurePlanned: 'PRP session' } }, 'PROCEDURE', 'PRP session', 'PRP session'],
+    ['a blank procedure', { procedurePlanned: '   ' }, 'OPD', 'Review after visit on 2099-11-10', null],
+    ['no procedure', { notes: 'x' }, 'OPD', 'Review after visit on 2099-11-10', null],
+    ['a cleared procedure over a legacy one', { procedurePlanned: '', dermatology: { procedurePlanned: 'PRP session' } }, 'OPD', 'Review after visit on 2099-11-10', null],
+  ])('books the review for %s', async (_name, plan, visitType, notes, reviewRequestedProcedure) => {
+    const t = setup({ plan: JSON.stringify(plan) });
+    expect(await t.book()).toMatchObject({ status: 'booked' });
+    expect(t.appointments.bookInTransaction.mock.calls[0][1]).toMatchObject({ visitType, notes, reviewRequestedProcedure, source: 'review', reviewOfVisitId: 'v1' });
+  });
+
+  it.each([[null], ['not json']])('books a plain OPD review for plan %p', async (plan) => {
+    const t = setup({ plan });
+    expect(await t.book()).toMatchObject({ status: 'booked' });
+    expect(t.appointments.bookInTransaction.mock.calls[0][1]).toMatchObject({ visitType: 'OPD', notes: 'Review after visit on 2099-11-10' });
   });
 
   it('takes the second slot when the first is taken by a race', async () => {
@@ -213,6 +239,82 @@ describe('completing with a new review date', () => {
     const t = setup({ rows: [{ id: 'r1', slot: '11:00-11:30', reviewOfVisitId: 'v1', requested: '2099-11-16' }] });
     expect(await t.book()).toEqual({ status: 'existing', appointment: shravya('r1', '2099-11-17', '11:00-11:30'), date: '2099-11-17' });
     expect(t.rows()).toEqual(['r1 2099-11-17 11:00-11:30 SCHEDULED review for 2099-11-17']);
+  });
+});
+
+describe('keeping a booked review in step with the planned procedure', () => {
+  const plan = (procedurePlanned: string) => JSON.stringify({ procedurePlanned });
+  const opd = { visitType: 'OPD', notes: 'Review after visit on 2099-11-10', reviewRequestedProcedure: null };
+  const peel = { visitType: 'PROCEDURE', notes: 'Chemical peel', reviewRequestedProcedure: 'Chemical peel' };
+  const review = (extra: Seed = {}) => ({ id: 'r1', slot: '10:00-10:30', reviewOfVisitId: 'v1', requested: '2099-11-17', ...opd, ...extra });
+  const existingR1 = { status: 'existing', appointment: shravya('r1', '2099-11-17', '10:00-10:30'), date: '2099-11-17' };
+
+  it.each(['SCHEDULED', 'CONFIRMED'])('turns a %s review into a procedure review when a procedure is added', async (status) => {
+    const t = setup({ plan: plan(' Chemical peel '), rows: [review({ status })] });
+    expect(await t.book()).toEqual(existingR1);
+    expect(t.stored('r1')).toEqual(peel);
+    expect(t.rows()).toEqual([`r1 2099-11-17 10:00-10:30 ${status} review for 2099-11-17`]);
+    expect(t.appointments.bookInTransaction).not.toHaveBeenCalled();
+    expect(t.appointments.notifyUpdated).toHaveBeenCalledWith('r1', 'user');
+  });
+
+  it('renames the procedure on a procedure review', async () => {
+    const t = setup({ plan: plan('PRP session'), rows: [review(peel)] });
+    expect(await t.book()).toEqual(existingR1);
+    expect(t.stored('r1')).toEqual({ visitType: 'PROCEDURE', notes: 'PRP session', reviewRequestedProcedure: 'PRP session' });
+  });
+
+  it('turns a procedure review back into an OPD review when the procedure is cleared', async () => {
+    const t = setup({ plan: plan(''), rows: [review(peel)] });
+    expect(await t.book()).toEqual(existingR1);
+    expect(t.stored('r1')).toEqual(opd);
+  });
+
+  it('leaves a note the desk edited when the procedure did not change', async () => {
+    const t = setup({ plan: plan('Chemical peel'), rows: [review({ ...peel, notes: 'Chemical peel, bring consent form' })] });
+    expect(await t.book()).toEqual(existingR1);
+    expect(t.stored('r1')).toEqual({ ...peel, notes: 'Chemical peel, bring consent form' });
+    expect(t.appointments.notifyUpdated).not.toHaveBeenCalled();
+  });
+
+  it('leaves a legacy review without a recorded procedure alone when the visit has none', async () => {
+    const t = setup({ plan: null, rows: [review({ notes: 'Desk note' })] });
+    expect(await t.book()).toEqual(existingR1);
+    expect(t.stored('r1')).toEqual({ ...opd, notes: 'Desk note' });
+  });
+
+  it.each(['CHECKED_IN', 'IN_PROGRESS'])('leaves a %s review alone when the procedure changed', async (status) => {
+    const t = setup({ plan: plan('PRP session'), rows: [review({ ...peel, status })] });
+    expect(await t.book()).toEqual(existingR1);
+    expect(t.stored('r1')).toEqual(peel);
+    expect(t.appointments.notifyUpdated).not.toHaveBeenCalled();
+  });
+
+  it('leaves a review the desk checks in after it was read alone', async () => {
+    const t = setup({ plan: plan('PRP session'), rows: [review(peel)] });
+    const read = t.tx.appointment.findMany.getMockImplementation()!;
+    t.tx.appointment.findMany.mockImplementationOnce(async (args: any) => {
+      const rows = await read(args);
+      t.setStatus('r1', 'CHECKED_IN');
+      return rows;
+    });
+    expect(await t.book()).toEqual(existingR1);
+    expect(t.stored('r1')).toEqual(peel);
+    expect(t.appointments.notifyUpdated).not.toHaveBeenCalled();
+  });
+
+  it('turns a review the desk already put on the new date into a procedure review', async () => {
+    const t = setup({ plan: plan('Chemical peel'), rows: [review({ requested: '2099-11-16' })] });
+    expect(await t.book()).toEqual(existingR1);
+    expect(t.rows()).toEqual(['r1 2099-11-17 10:00-10:30 SCHEDULED review for 2099-11-17']);
+    expect(t.stored('r1')).toEqual(peel);
+    expect(t.appointments.notifyUpdated).toHaveBeenCalledWith('r1', 'user');
+  });
+
+  it('records the procedure on the review booked when the date moves', async () => {
+    const t = setup({ plan: plan('Chemical peel'), rows: [review({ date: '2099-11-16', requested: '2099-11-16' })] });
+    expect(await t.book()).toMatchObject({ status: 'moved' });
+    expect(t.stored('new-09:00-09:30')).toEqual(peel);
   });
 });
 

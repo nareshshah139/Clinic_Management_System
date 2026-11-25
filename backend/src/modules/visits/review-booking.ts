@@ -22,7 +22,7 @@ export type ReviewBooking =
 
 type DayOutcome = Extract<ReviewBooking, { status: 'booked' | 'already-scheduled' | 'full' }>;
 type Booked = Awaited<ReturnType<AppointmentsService['bookInTransaction']>>;
-type Decision = { outcome: ReviewBooking; booked?: Booked; cancelledId?: string };
+type Decision = { outcome: ReviewBooking; booked?: Booked; cancelledId?: string; updatedId?: string };
 type Review = Prisma.AppointmentGetPayload<{ include: typeof withDoctor }>;
 
 const logger = new Logger('ReviewBooking');
@@ -41,6 +41,20 @@ const dayOf = (date: Date) => date.toISOString().slice(0, 10);
 const dayRange = (date: string) => ({ gte: new Date(`${date}T00:00:00.000Z`), lte: new Date(`${date}T23:59:59.999Z`) });
 const requestedDay = (review: Review) => dayOf(review.reviewRequestedFor ?? review.date);
 
+export function reviewKind(plan: string | null, visitDay: string): { visitType: VisitType; notes: string; reviewRequestedProcedure: string | null } {
+  let parsed: any = null;
+  try {
+    parsed = plan ? JSON.parse(plan) : null;
+  } catch {
+    parsed = null;
+  }
+  const planned = typeof parsed?.procedurePlanned === 'string' ? parsed.procedurePlanned : parsed?.dermatology?.procedurePlanned;
+  const procedure = typeof planned === 'string' ? planned.trim() : '';
+  return procedure
+    ? { visitType: VisitType.PROCEDURE, notes: procedure, reviewRequestedProcedure: procedure }
+    : { visitType: VisitType.OPD, notes: `Review after visit on ${visitDay}`, reviewRequestedProcedure: null };
+}
+
 function summarize(appointment: { id: string; date: Date; slot: string; doctor: { firstName: string | null; lastName: string | null } }): ReviewAppointment {
   return {
     id: appointment.id,
@@ -51,6 +65,13 @@ function summarize(appointment: { id: string; date: Date; slot: string; doctor: 
 }
 
 const existing = (review: Review, date: string): ReviewBooking => ({ status: 'existing', appointment: summarize(review), date });
+
+async function followPlan(tx: Prisma.TransactionClient, review: Review, visit: { plan: string | null; createdAt: Date }) {
+  const kind = reviewKind(visit.plan, istClock(visit.createdAt).date);
+  if (review.reviewRequestedProcedure === kind.reviewRequestedProcedure) return undefined;
+  const rewritten = await tx.appointment.updateMany({ where: { id: review.id, status: { in: MOVABLE } }, data: kind });
+  return rewritten.count === 1 ? review.id : undefined;
+}
 
 const UNCHANGED_REQUEST: Record<AppointmentStatus, (review: Review, date: string) => ReviewBooking> = {
   SCHEDULED: existing,
@@ -95,12 +116,19 @@ export class ReviewBookingService {
    * other than the visit's own appointment, is reported as already-scheduled and nothing is booked; appointments with
    * other doctors do not count. Otherwise every free SCHEDULED-calendar slot of the doctor that IST day that does not
    * overlap the patient's other appointments is tried in order until one books, and full means no such slot was left.
-   * The booked appointment's note names the visit's IST date.
+   * The booked appointment is a PROCEDURE appointment whose note is the trimmed "Procedure planned" text when the visit
+   * has any, and otherwise an OPD one whose note names the visit's IST date. A booking records that procedure text, or
+   * none, as reviewRequestedProcedure. A SCHEDULED or CONFIRMED review reported as existing MUST be rewritten to the
+   * visit's current procedure (type, note and reviewRequestedProcedure) in the same transaction when that differs from
+   * the recorded one, null counting as none; when it is the same the desk's edits stay, and a CHECKED_IN or
+   * IN_PROGRESS review is never rewritten, including one checked in after it was read. A rewritten review's calendar
+   * event MUST be synced after the transaction commits.
    */
   async book(visitId: string, branchId: string, callerUserId?: string): Promise<ReviewBooking> {
     try {
       const decision = await this.prisma.$transaction((tx) => this.decide(tx, visitId, branchId), { timeout: 15_000 });
       if (decision.cancelledId) this.appointments.notifyCancelled(decision.cancelledId, callerUserId);
+      if (decision.updatedId) this.appointments.notifyUpdated(decision.updatedId, callerUserId);
       if (decision.booked) {
         await this.appointments.notifyBooked(decision.booked, branchId, callerUserId).catch((error) => this.log(error));
       }
@@ -116,7 +144,7 @@ export class ReviewBookingService {
     await tx.$queryRaw`SELECT id FROM visits WHERE id = ${visitId} FOR UPDATE`;
     const visit = await tx.visit.findFirstOrThrow({
       where: { id: visitId, deletedAt: null },
-      select: { id: true, patientId: true, doctorId: true, appointmentId: true, followUp: true, createdAt: true },
+      select: { id: true, patientId: true, doctorId: true, appointmentId: true, followUp: true, createdAt: true, plan: true },
     });
     if (!visit.followUp) return { outcome: { status: 'skipped', reason: 'no-review-date' } };
     const date = istClock(visit.followUp).date;
@@ -132,11 +160,12 @@ export class ReviewBookingService {
     const newest = reviews[0];
     if (newest && requestedDay(newest) === date) {
       const current = open ?? newest;
-      return { outcome: UNCHANGED_REQUEST[current.status](current, date) };
+      const updatedId = open ? await followPlan(tx, open, visit) : undefined;
+      return { outcome: UNCHANGED_REQUEST[current.status](current, date), updatedId };
     }
     if (open && dayOf(open.date) === date) {
       await tx.appointment.update({ where: { id: open.id }, data: { reviewRequestedFor: new Date(date) } });
-      return { outcome: existing(open, date) };
+      return { outcome: existing(open, date), updatedId: await followPlan(tx, open, visit) };
     }
     if (open && !MOVABLE.includes(open.status)) {
       return { outcome: { status: 'in-progress', appointment: summarize(open), date } };
@@ -161,7 +190,7 @@ export class ReviewBookingService {
 
   private async bookDay(
     tx: Prisma.TransactionClient,
-    visit: { id: string; patientId: string; doctorId: string; appointmentId: string | null; createdAt: Date },
+    visit: { id: string; patientId: string; doctorId: string; appointmentId: string | null; createdAt: Date; plan: string | null },
     date: string,
     branchId: string,
   ): Promise<{ outcome: DayOutcome; booked?: Booked }> {
@@ -188,9 +217,8 @@ export class ReviewBookingService {
           doctorId: visit.doctorId,
           date,
           slot,
-          visitType: VisitType.OPD,
+          ...reviewKind(visit.plan, istClock(visit.createdAt).date),
           source: 'review',
-          notes: `Review after visit on ${istClock(visit.createdAt).date}`,
           calendar: 'SCHEDULED',
           reviewOfVisitId: visit.id,
           reviewRequestedFor: date,

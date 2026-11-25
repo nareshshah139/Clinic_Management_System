@@ -51,8 +51,8 @@ databaseTests('Review booking on PostgreSQL', () => {
     await admin?.$disconnect();
   });
 
-  const visitFor = (followUp: string) =>
-    db.visit.create({ data: { patientId: 'patient', doctorId: 'doctor', complaints: '[]', followUp: new Date(followUp) } });
+  const visitFor = (followUp: string, plan?: object) =>
+    db.visit.create({ data: { patientId: 'patient', doctorId: 'doctor', complaints: '[]', followUp: new Date(followUp), plan: plan && JSON.stringify(plan) } });
   const reviews = async (visitId: string) =>
     (await db.appointment.findMany({ where: { reviewOfVisitId: visitId }, orderBy: { createdAt: 'asc' } }))
       .map((a) => `${a.date.toISOString().slice(0, 10)} ${a.slot} ${a.status}`);
@@ -72,6 +72,25 @@ databaseTests('Review booking on PostgreSQL', () => {
     const moved = await Promise.all([controller.complete(visit.id, {} as any, request), controller.complete(visit.id, {} as any, request)]);
     expect(moved.map((r) => r.reviewAppointment.status).sort()).toEqual(['existing', 'moved']);
     expect(await reviews(visit.id)).toEqual(['2099-03-05 09:00-09:30 CANCELLED', '2099-03-06 09:00-09:30 SCHEDULED']);
+  }, 60000);
+
+  it('stores the review as a PROCEDURE appointment named after the planned procedure', async () => {
+    const visit = await visitFor('2099-03-20', { procedurePlanned: ' Chemical peel ' });
+    expect((await controller.complete(visit.id, {} as any, request)).reviewAppointment.status).toBe('booked');
+    const [review] = await db.appointment.findMany({ where: { reviewOfVisitId: visit.id } });
+    expect(review).toMatchObject({ visitType: 'PROCEDURE', notes: 'Chemical peel', source: 'review', status: 'SCHEDULED' });
+  }, 60000);
+
+  it('rewrites the pending review when the planned procedure changes and the review date does not', async () => {
+    const visit = await visitFor('2099-03-21', { procedurePlanned: 'Chemical peel' });
+    expect((await controller.complete(visit.id, {} as any, request)).reviewAppointment.status).toBe('booked');
+    await db.visit.update({ where: { id: visit.id }, data: { plan: JSON.stringify({ procedurePlanned: 'PRP session' }) } });
+
+    expect((await controller.complete(visit.id, {} as any, request)).reviewAppointment.status).toBe('existing');
+
+    const rows = await db.appointment.findMany({ where: { reviewOfVisitId: visit.id } });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ status: 'SCHEDULED', visitType: 'PROCEDURE', notes: 'PRP session', reviewRequestedProcedure: 'PRP session' });
   }, 60000);
 
   const reviewRow = async (visitId: string, slot: string, status: AppointmentStatus = 'SCHEDULED') => {
