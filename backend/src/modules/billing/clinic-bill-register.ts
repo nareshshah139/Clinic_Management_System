@@ -114,34 +114,36 @@ type BillPayment = {
   amount: number;
   mode: string;
   refundOfId: string | null;
+  createdAt: Date;
 };
 
 /**
  * Paise already refunded from each completed payment of one bill, given in the order they were made.
- * A refund linked by refundOfId counts against its payment. Refunds stored before that link existed
- * are spread over the payments of their mode, oldest first, so a fully refunded old payment never
- * looks refundable again.
+ * A refund linked by refundOfId counts against its payment. A refund stored before that link existed
+ * was taken from one payment no smaller than it, so it counts against the oldest earlier payment of
+ * its mode that can still hold all of it; only a refund no single payment can hold is spread.
  */
 export const refundedByPayment = (payments: BillPayment[]) => {
   const refunded = new Map<string, number>();
+  const used = (p: BillPayment) => refunded.get(p.id) ?? 0;
+  const take = (p: BillPayment, amount: number) =>
+    refunded.set(p.id, used(p) + amount);
   const paid = payments.filter((p) => paise(p.amount) > 0);
   for (const p of payments) {
-    if (p.refundOfId)
-      refunded.set(
-        p.refundOfId,
-        (refunded.get(p.refundOfId) ?? 0) - paise(p.amount),
-      );
+    const source = p.refundOfId && paid.find((q) => q.id === p.refundOfId);
+    if (source) take(source, -paise(p.amount));
   }
   for (const legacy of payments.filter(
     (p) => paise(p.amount) < 0 && !p.refundOfId,
   )) {
     let unplaced = -paise(legacy.amount);
-    for (const p of paid.filter((p) => p.mode === legacy.mode)) {
-      const taken = Math.min(
-        unplaced,
-        Math.max(0, paise(p.amount) - (refunded.get(p.id) ?? 0)),
-      );
-      refunded.set(p.id, (refunded.get(p.id) ?? 0) + taken);
+    const sources = paid.filter(
+      (p) => p.mode === legacy.mode && p.createdAt <= legacy.createdAt,
+    );
+    const whole = sources.find((p) => paise(p.amount) - used(p) >= unplaced);
+    for (const p of whole ? [whole] : sources) {
+      const taken = Math.min(unplaced, Math.max(0, paise(p.amount) - used(p)));
+      take(p, taken);
       unplaced -= taken;
     }
   }

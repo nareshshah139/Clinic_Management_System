@@ -515,7 +515,7 @@ export class BillingService {
       const payments = await tx.newPayment.findMany({
         where: { invoiceId: payment.invoiceId, reconStatus: 'COMPLETED' },
         orderBy: { createdAt: 'asc' },
-        select: { id: true, amount: true, mode: true, refundOfId: true },
+        select: { id: true, amount: true, mode: true, refundOfId: true, createdAt: true },
       });
       const left = leftToRefund(payment, refundedByPayment(payments));
       if (refund > left) throw new BadRequestException(this.refundRefusal(payment.amount, left, refund));

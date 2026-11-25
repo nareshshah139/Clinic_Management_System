@@ -170,6 +170,20 @@ databaseTests('Clinic payments on PostgreSQL', () => {
     expect(await money(invoice.id)).toMatchObject({ received: 0, balance: 1000 });
   });
 
+  it('counts a refund stored before refunds were linked against the one same-mode payment that could hold it', async () => {
+    const invoice = await bill(1000);
+    const small = await pay(invoice.id, 200);
+    const large = await pay(invoice.id, 800);
+    await db.newPayment.create({ data: { invoiceId: invoice.id, amount: -800, mode: 'CASH', reference: 'REFUND', reconStatus: 'COMPLETED' } });
+    await db.newInvoice.update({ where: { id: invoice.id }, data: { received: 200, balance: 800 } });
+
+    const { payments } = await register.receipt(invoice.id, 'branch');
+    expect(payments.map((p) => [p.amount, p.refundable])).toEqual([[200, 200], [800, 0], [-800, 0]]);
+    await expect(billing.processRefund({ paymentId: large.id, amount: 100 } as any, 'branch')).rejects.toMatchObject({ status: 400 });
+    await billing.processRefund({ paymentId: small.id, amount: 200 } as any, 'branch');
+    expect(await money(invoice.id)).toMatchObject({ received: 0, balance: 1000 });
+  });
+
   it('takes one of two simultaneous refunds of one payment that together exceed it', async () => {
     const invoice = await bill(1000);
     const cash = await pay(invoice.id, 500);
