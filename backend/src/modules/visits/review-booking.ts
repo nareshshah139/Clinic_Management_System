@@ -22,7 +22,7 @@ export type ReviewBooking =
 
 type DayOutcome = Extract<ReviewBooking, { status: 'booked' | 'already-scheduled' | 'full' }>;
 type Booked = Awaited<ReturnType<AppointmentsService['bookInTransaction']>>;
-type Decision = { outcome: ReviewBooking; booked?: Booked; cancelledId?: string };
+type Decision = { outcome: ReviewBooking; booked?: Booked; cancelledId?: string; updatedId?: string };
 type Review = Prisma.AppointmentGetPayload<{ include: typeof withDoctor }>;
 
 const logger = new Logger('ReviewBooking');
@@ -68,9 +68,9 @@ const existing = (review: Review, date: string): ReviewBooking => ({ status: 'ex
 
 async function followPlan(tx: Prisma.TransactionClient, review: Review, visit: { plan: string | null; createdAt: Date }) {
   const kind = reviewKind(visit.plan, istClock(visit.createdAt).date);
-  if (MOVABLE.includes(review.status) && review.reviewRequestedProcedure !== kind.reviewRequestedProcedure) {
-    await tx.appointment.update({ where: { id: review.id }, data: kind });
-  }
+  if (review.reviewRequestedProcedure === kind.reviewRequestedProcedure) return undefined;
+  const rewritten = await tx.appointment.updateMany({ where: { id: review.id, status: { in: MOVABLE } }, data: kind });
+  return rewritten.count === 1 ? review.id : undefined;
 }
 
 const UNCHANGED_REQUEST: Record<AppointmentStatus, (review: Review, date: string) => ReviewBooking> = {
@@ -121,12 +121,14 @@ export class ReviewBookingService {
    * none, as reviewRequestedProcedure. A SCHEDULED or CONFIRMED review reported as existing MUST be rewritten to the
    * visit's current procedure (type, note and reviewRequestedProcedure) in the same transaction when that differs from
    * the recorded one, null counting as none; when it is the same the desk's edits stay, and a CHECKED_IN or
-   * IN_PROGRESS review is never rewritten.
+   * IN_PROGRESS review is never rewritten, including one checked in after it was read. A rewritten review's calendar
+   * event MUST be synced after the transaction commits.
    */
   async book(visitId: string, branchId: string, callerUserId?: string): Promise<ReviewBooking> {
     try {
       const decision = await this.prisma.$transaction((tx) => this.decide(tx, visitId, branchId), { timeout: 15_000 });
       if (decision.cancelledId) this.appointments.notifyCancelled(decision.cancelledId, callerUserId);
+      if (decision.updatedId) this.appointments.notifyUpdated(decision.updatedId, callerUserId);
       if (decision.booked) {
         await this.appointments.notifyBooked(decision.booked, branchId, callerUserId).catch((error) => this.log(error));
       }
@@ -158,13 +160,12 @@ export class ReviewBookingService {
     const newest = reviews[0];
     if (newest && requestedDay(newest) === date) {
       const current = open ?? newest;
-      if (open) await followPlan(tx, open, visit);
-      return { outcome: UNCHANGED_REQUEST[current.status](current, date) };
+      const updatedId = open ? await followPlan(tx, open, visit) : undefined;
+      return { outcome: UNCHANGED_REQUEST[current.status](current, date), updatedId };
     }
     if (open && dayOf(open.date) === date) {
       await tx.appointment.update({ where: { id: open.id }, data: { reviewRequestedFor: new Date(date) } });
-      await followPlan(tx, open, visit);
-      return { outcome: existing(open, date) };
+      return { outcome: existing(open, date), updatedId: await followPlan(tx, open, visit) };
     }
     if (open && !MOVABLE.includes(open.status)) {
       return { outcome: { status: 'in-progress', appointment: summarize(open), date } };

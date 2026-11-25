@@ -38,8 +38,8 @@ function setup({ followUp = '2099-11-17', plan = null as string | null, slots = 
       ).map(withDoctor)),
       update: jest.fn(async ({ where, data }: any) => Object.assign(store.find(r => r.id === where.id)!, data)),
       updateMany: jest.fn(async ({ where, data }: any) => {
-        const row = store.find(r => r.id === where.id && r.status === where.status);
-        if (row) row.status = data.status;
+        const row = store.find(r => r.id === where.id && (where.status === undefined || (where.status.in ? where.status.in.includes(r.status) : r.status === where.status)));
+        if (row) Object.assign(row, data);
         return { count: row ? 1 : 0 };
       }),
     },
@@ -61,11 +61,14 @@ function setup({ followUp = '2099-11-17', plan = null as string | null, slots = 
     }),
     notifyBooked: jest.fn(async () => undefined),
     notifyCancelled: jest.fn(),
+    notifyUpdated: jest.fn(),
   };
   const service = new ReviewBookingService(prisma, appointments);
   const ymd = (date: Date | null) => date?.toISOString().slice(0, 10);
   return {
     appointments,
+    tx,
+    setStatus: (id: string, status: string) => { store.find(r => r.id === id)!.status = status; },
     book: () => service.book('v1', 'branch', 'user'),
     stored: (id: string) => { const { visitType, notes, reviewRequestedProcedure } = store.find(r => r.id === id)!; return { visitType, notes, reviewRequestedProcedure }; },
     rows: () => store.map(r => `${r.id} ${ymd(r.date)} ${r.slot} ${r.status}${r.reviewOfVisitId ? ` review for ${ymd(r.reviewRequestedFor) ?? 'unknown'}` : ''}`),
@@ -252,6 +255,7 @@ describe('keeping a booked review in step with the planned procedure', () => {
     expect(t.stored('r1')).toEqual(peel);
     expect(t.rows()).toEqual([`r1 2099-11-17 10:00-10:30 ${status} review for 2099-11-17`]);
     expect(t.appointments.bookInTransaction).not.toHaveBeenCalled();
+    expect(t.appointments.notifyUpdated).toHaveBeenCalledWith('r1', 'user');
   });
 
   it('renames the procedure on a procedure review', async () => {
@@ -270,6 +274,7 @@ describe('keeping a booked review in step with the planned procedure', () => {
     const t = setup({ plan: plan('Chemical peel'), rows: [review({ ...peel, notes: 'Chemical peel, bring consent form' })] });
     expect(await t.book()).toEqual(existingR1);
     expect(t.stored('r1')).toEqual({ ...peel, notes: 'Chemical peel, bring consent form' });
+    expect(t.appointments.notifyUpdated).not.toHaveBeenCalled();
   });
 
   it('leaves a legacy review without a recorded procedure alone when the visit has none', async () => {
@@ -282,6 +287,20 @@ describe('keeping a booked review in step with the planned procedure', () => {
     const t = setup({ plan: plan('PRP session'), rows: [review({ ...peel, status })] });
     expect(await t.book()).toEqual(existingR1);
     expect(t.stored('r1')).toEqual(peel);
+    expect(t.appointments.notifyUpdated).not.toHaveBeenCalled();
+  });
+
+  it('leaves a review the desk checks in after it was read alone', async () => {
+    const t = setup({ plan: plan('PRP session'), rows: [review(peel)] });
+    const read = t.tx.appointment.findMany.getMockImplementation()!;
+    t.tx.appointment.findMany.mockImplementationOnce(async (args: any) => {
+      const rows = await read(args);
+      t.setStatus('r1', 'CHECKED_IN');
+      return rows;
+    });
+    expect(await t.book()).toEqual(existingR1);
+    expect(t.stored('r1')).toEqual(peel);
+    expect(t.appointments.notifyUpdated).not.toHaveBeenCalled();
   });
 
   it('turns a review the desk already put on the new date into a procedure review', async () => {
@@ -289,6 +308,7 @@ describe('keeping a booked review in step with the planned procedure', () => {
     expect(await t.book()).toEqual(existingR1);
     expect(t.rows()).toEqual(['r1 2099-11-17 10:00-10:30 SCHEDULED review for 2099-11-17']);
     expect(t.stored('r1')).toEqual(peel);
+    expect(t.appointments.notifyUpdated).toHaveBeenCalledWith('r1', 'user');
   });
 
   it('records the procedure on the review booked when the date moves', async () => {

@@ -321,6 +321,12 @@ export class AppointmentsService {
       .catch(() => void 0);
   }
 
+  notifyUpdated(id: string, callerUserId?: string) {
+    void this.googleCalendar
+      ?.syncAppointmentEvent(id, callerUserId)
+      .catch(() => void 0);
+  }
+
   notifyCancelled(id: string, callerUserId?: string) {
     void this.googleCalendar
       ?.deleteAppointmentEvent(id, callerUserId)
