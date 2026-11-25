@@ -109,7 +109,7 @@ function engineEnv() {
   return {
     ...(query && { PRISMA_QUERY_ENGINE_LIBRARY: path.join(dir, query) }),
     ...(schema && { PRISMA_SCHEMA_ENGINE_BINARY: path.join(dir, schema) }),
-    ...Object.fromEntries(["HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY", "NODE_EXTRA_CA_CERTS", "SSL_CERT_FILE"].filter((k) => process.env[k]).map((k) => [k, process.env[k]])),
+    ...Object.fromEntries(["HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY", "NODE_EXTRA_CA_CERTS", "SSL_CERT_FILE", "PORTAL_SERVICE_SECRET"].filter((k) => process.env[k]).map((k) => [k, process.env[k]])),
   };
 }
 
