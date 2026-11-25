@@ -73,6 +73,7 @@ export type SalesRegisterRow = {
 export type SaleEntry = {
   row: SalesRegisterRow;
   collected: Partial<Record<PaymentMode, number>>;
+  patientNames: string[];
 };
 
 export type SalesRegisterQuery = {
@@ -253,6 +254,9 @@ export function billEntry(
       linkedBillNos: [],
     },
     collected,
+    patientNames: [text(bill.billingName), text(bill.patient?.name)].filter(
+      (name): name is string => Boolean(name),
+    ),
   };
 }
 
@@ -291,6 +295,9 @@ export function workflowEntry(
       linkedBillNos: source === 'SALES_RETURN' ? linkedBillNos : [],
     },
     collected: { [mode]: amount },
+    patientNames: [text(payload.customerName)].filter((name): name is string =>
+      Boolean(name),
+    ),
   };
 }
 
@@ -322,14 +329,20 @@ export function linkedBillNos(
   ];
 }
 
-function matchesSearch(row: SalesRegisterRow, field: SearchField, q: string) {
+function matchesSearch(
+  { row, patientNames }: SaleEntry,
+  field: SearchField,
+  q: string,
+) {
   if (field === 'mobile') {
     const wanted = mobileDigits(q);
     return Boolean(wanted) && mobileDigits(row.mobile ?? '').includes(wanted);
   }
-  const haystack =
-    field === 'billNo' ? (row.billNo ?? row.reservedNo) : row.patientName;
-  return (haystack ?? '').toLowerCase().includes(q.toLowerCase());
+  const haystacks =
+    field === 'billNo' ? [row.billNo ?? row.reservedNo ?? ''] : patientNames;
+  return haystacks.some((haystack) =>
+    haystack.toLowerCase().includes(q.toLowerCase()),
+  );
 }
 
 const paidIn = (row: SalesRegisterRow, mode: PaymentMode) =>
@@ -338,12 +351,13 @@ const paidIn = (row: SalesRegisterRow, mode: PaymentMode) =>
 const collectedIn = (entry: SaleEntry, mode: PaymentMode) =>
   (entry.collected[mode] ?? 0) + (mode === 'CREDIT' ? entry.row.due : 0);
 
-function matches(row: SalesRegisterRow, query: SalesRegisterQuery) {
+function matches(entry: SaleEntry, query: SalesRegisterQuery) {
+  const { row } = entry;
   const q = query.q?.trim();
   return (
     row.billDate >= query.from &&
     row.billDate <= query.to &&
-    (!q || matchesSearch(row, query.field ?? 'billNo', q)) &&
+    (!q || matchesSearch(entry, query.field ?? 'billNo', q)) &&
     (!query.paymentMode || paidIn(row, query.paymentMode)) &&
     (!query.state || row.state === query.state) &&
     (!query.source || row.source === query.source) &&
@@ -400,7 +414,7 @@ export function salesRegisterPage(
   entries: SaleEntry[],
   query: SalesRegisterQuery,
 ): SalesRegisterPage {
-  const filtered = entries.filter((entry) => matches(entry.row, query));
+  const filtered = entries.filter((entry) => matches(entry, query));
   const final = filtered.filter((entry) => entry.row.state === 'FINAL');
   const counted = (state: SaleState) =>
     filtered.filter((entry) => entry.row.state === state).length;

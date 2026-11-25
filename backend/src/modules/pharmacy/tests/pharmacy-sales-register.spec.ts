@@ -48,6 +48,7 @@ const entry = (
   return {
     row,
     collected: collected ?? { [paymentModes[0]]: amount },
+    patientNames: row.patientName ? [row.patientName] : [],
   };
 };
 
@@ -126,6 +127,7 @@ describe('sales register rows', () => {
         linkedBillNos: [],
       },
       collected: { UPI: 534.5, CASH: 300 },
+      patientNames: ['Meera Shah'],
     });
   });
 
@@ -288,6 +290,7 @@ describe('sales register rows', () => {
         linkedBillNos: [],
       },
       collected: { UPI: 450.1 },
+      patientNames: ['Walk-in Ravi'],
     });
   });
 
@@ -653,6 +656,26 @@ describe('sales register page', () => {
         entryById: 'user-asha',
       }),
     ).toEqual(['upi-asha']);
+  });
+
+  it('finds a bill issued under another billing name by the patient chart name or the billing name, showing the billing name', () => {
+    const bills = [
+      billEntry(
+        pharmacyBill({
+          id: 'paid-by-ravi',
+          billingName: 'Ravi Shah',
+          patient: { name: 'Asha Rao', phone: null },
+        }),
+        null,
+      ),
+      billEntry(pharmacyBill({ id: 'walk-in' }), null),
+    ];
+    const found = (q: string) =>
+      salesRegisterPage(bills, query({ field: 'patient', q })).rows.map(
+        (row) => [row.recordId, row.patientName],
+      );
+    expect(found('Asha Rao')).toEqual([['paid-by-ravi', 'Ravi Shah']]);
+    expect(found('ravi shah')).toEqual([['paid-by-ravi', 'Ravi Shah']]);
   });
 
   it('matches a mobile however the country code, trunk zero or spacing was typed on either side', () => {
