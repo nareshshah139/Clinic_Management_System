@@ -132,7 +132,8 @@ databaseTests('Purchase OCR learning with real PostgreSQL', () => {
       expect(bill.invoice.items[0]).toMatchObject({ productName: 'Dolo 650mg Tablet', manufacturer: 'Micro Labs', packSize: '15',
         ocrFlags: ['learned_product_needs_confirmation'] });
       expect(bill.draft.items[0].learnedCorrections).toEqual([{ field: 'product', from: 'DOLO-650 TAB', to: 'Dolo 650mg Tablet', support: 2 + index, tier: 'APPLY',
-        restore: { productName: 'DOLO-650 TAB', manufacturer: 'MICRO LABS', packSize: '15' }, restoreFlags: [] }]);
+        restore: { productName: 'DOLO-650 TAB', manufacturer: 'MICRO LABS', packSize: '15' },
+        applied: { productName: 'Dolo 650mg Tablet', manufacturer: 'Micro Labs', packSize: '15' }, restoreFlags: [] }]);
       expect(bill.automation.issues).toContain('Line 1: learned_product_needs_confirmation');
       await reviewAndCommit(bill.invoice.id, dolo);
       expect((await examplesOf(bill.invoice.id)).map(row => [row.field, row.provenance, row.appliedLessonKey])).toEqual([
