@@ -65,6 +65,6 @@ export const DOCTOR_VISIT_TOUR: readonly TourStep[] = [
   },
 ];
 
-export function DoctorTour(_props: { autoStart?: false }) {
+export function DoctorTour() {
   return <TourButton steps={DOCTOR_VISIT_TOUR} label="Visit workflow tour">Tour</TourButton>;
 }

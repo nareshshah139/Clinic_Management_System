@@ -1835,7 +1835,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
               Visit #{currentVisitNumber}
               <StatusBadge domain="visit" status={visitStatus} />
             </span>
-            <DoctorTour autoStart={false} />
+            <DoctorTour />
           </div>
         </div>
         {hasPermission('all') && (
