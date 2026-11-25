@@ -311,19 +311,21 @@ describe('UsersController', () => {
 
       mockUsersService.updateBranch.mockResolvedValue(updatedBranch);
 
-      const result = await controller.updateBranch('branch-123', updateBranchDto);
+      const req = { user: { id: 'user-123', branchId: 'branch-123', role: 'ADMIN' } };
+      const result = await controller.updateBranch('branch-123', updateBranchDto, req);
 
       expect(result).toEqual(updatedBranch);
-      expect(mockUsersService.updateBranch).toHaveBeenCalledWith('branch-123', updateBranchDto);
+      expect(mockUsersService.updateBranch).toHaveBeenCalledWith('branch-123', updateBranchDto, req.user);
     });
 
     it('should delete branch', async () => {
       mockUsersService.deleteBranch.mockResolvedValue({ message: 'Branch deleted successfully' });
 
-      const result = await controller.deleteBranch('branch-123');
+      const req = { user: { id: 'user-123', branchId: 'branch-123', role: 'ADMIN' } };
+      const result = await controller.deleteBranch('branch-123', req);
 
       expect(result).toEqual({ message: 'Branch deleted successfully' });
-      expect(mockUsersService.deleteBranch).toHaveBeenCalledWith('branch-123');
+      expect(mockUsersService.deleteBranch).toHaveBeenCalledWith('branch-123', req.user);
     });
   });
 

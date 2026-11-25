@@ -51,9 +51,11 @@ GET /auth/statistics | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMAC
 GET /billing/fees | roles: ADMIN | permissions: -
 GET /billing/invoices | roles: ADMIN,RECEPTION,DOCTOR | permissions: billing:invoice:read
 GET /billing/invoices/:id | roles: ADMIN,RECEPTION,DOCTOR | permissions: billing:invoice:read
+GET /billing/invoices/:id/receipt | roles: ADMIN,RECEPTION,DOCTOR | permissions: billing:invoice:read
 GET /billing/invoices/outstanding | roles: ADMIN,RECEPTION | permissions: billing:invoice:read
 GET /billing/payments | roles: ADMIN,RECEPTION | permissions: billing:payment:read
 GET /billing/payments/summary | roles: ADMIN | permissions: billing:payment:summary
+GET /billing/register | roles: ADMIN,RECEPTION,DOCTOR | permissions: billing:invoice:read
 GET /billing/reports/revenue | roles: ADMIN | permissions: billing:revenue:read
 GET /billing/statistics | roles: ADMIN | permissions: billing:statistics:read
 GET /clinic-investigations | roles: DOCTOR,ADMIN,OWNER,NURSE | permissions: -
@@ -222,6 +224,8 @@ GET /prescriptions/statistics | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTIO
 GET /prescriptions/templates | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /prescriptions/templates/:templateId/versions | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /prescriptions/translations | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
+GET /procedures/access | roles: OWNER,ADMIN,DOCTOR | permissions: -
+GET /procedures/access/me | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /reports/alerts | roles: any signed-in user | permissions: -
 GET /reports/appointments | roles: OWNER,ADMIN,MANAGER,DOCTOR | permissions: -
 GET /reports/dashboard | roles: OWNER,ADMIN,MANAGER,DOCTOR | permissions: -
@@ -289,6 +293,7 @@ PATCH /pharmacy/purchase-invoices/drafts/:id | roles: ADMIN,PHARMACIST,RECEPTION
 PATCH /pharmacy/purchase-invoices/master-records/:id | roles: ADMIN,PHARMACIST,RECEPTION | permissions: pharmacy:drug:update & pharmacy:purchase-invoice:create|inventory:po:create
 PATCH /pharmacy/purchase-invoices/suppliers/:id/gstin | roles: ADMIN,PHARMACIST,RECEPTION | permissions: inventory:supplier:update & pharmacy:purchase-invoice:create|inventory:po:create
 PATCH /prescriptions/:id | roles: DOCTOR,ADMIN,OWNER | permissions: -
+PATCH /procedures/:id | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 PATCH /users/:id | roles: OWNER,ADMIN | permissions: -
 PATCH /users/:id/permissions | roles: OWNER,ADMIN | permissions: -
 PATCH /users/:id/profile | roles: any signed-in user | permissions: -
@@ -441,6 +446,7 @@ POST /prescriptions/templates/:templateId/versions/:versionId/approve | roles: O
 POST /prescriptions/templates/:templateId/versions/:versionId/reject | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 POST /prescriptions/templates/:templateId/versions/:versionId/submit | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 POST /prescriptions/translations | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
+POST /procedures | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 POST /reports/export | roles: OWNER,ADMIN,MANAGER,DOCTOR | permissions: -
 POST /stock-prediction/predictions | roles: OWNER,ADMIN,MANAGER,PHARMACIST | permissions: -
 POST /users | roles: OWNER,ADMIN | permissions: -
@@ -467,5 +473,6 @@ POST /whatsapp/templates/generate | roles: ADMIN,DOCTOR | permissions: -
 PUT /billing/fees/:billType | roles: ADMIN | permissions: -
 PUT /doctor-availability/:doctorId/booking-limit | roles: ADMIN,OWNER,DOCTOR | permissions: -
 PUT /doctor-availability/:doctorId/hours | roles: ADMIN,OWNER,DOCTOR | permissions: -
-PUT /pharmacy/trade-terms | roles: OWNER,ADMIN,DOCTOR | permissions: -"
+PUT /pharmacy/trade-terms | roles: OWNER,ADMIN,DOCTOR | permissions: -
+PUT /procedures/access | roles: OWNER,ADMIN,DOCTOR | permissions: -"
 `;

@@ -42,6 +42,8 @@ function toWeek(hours: WeeklyShift[]): Week {
   return week;
 }
 
+const weekKey = (week: Week) => JSON.stringify(week.map((day) => [...day].sort((a, b) => a.start.localeCompare(b.start))));
+
 function weekError(week: Week): string {
   for (let day = 0; day < 7; day++) {
     const sorted = [...week[day]].sort((a, b) => a.start.localeCompare(b.start));
@@ -57,21 +59,25 @@ function weekError(week: Week): string {
 }
 
 
-export function DoctorAvailabilitySettings({ doctorId, canManageHolidays = false }: { doctorId: string; canManageHolidays?: boolean }) {
+export function DoctorAvailabilitySettings({ doctorId, canManageHolidays = false, onDirtyChange }: { doctorId: string; canManageHolidays?: boolean; onDirtyChange?: (dirty: boolean) => void }) {
   const [data, setData] = useState<DoctorAvailability | null>(null);
   const [week, setWeek] = useState<Week>(() => WEEKDAYS.map(() => []));
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
+  const [overbookDirty, setOverbookDirty] = useState(false);
+  const dirty = overbookDirty || (data !== null && weekKey(week) !== weekKey(toWeek(data.hours)));
 
-  const load = useCallback(async () => {
+  useEffect(() => onDirtyChange?.(dirty), [dirty, onDirtyChange]);
+
+  const load = useCallback(async (keepEditedHours = false) => {
     setLoading(true);
     setError('');
     try {
       const res = await apiClient.getDoctorAvailability(doctorId);
       setData(res);
-      setWeek(toWeek(res.hours));
+      if (!keepEditedHours) setWeek(toWeek(res.hours));
     } catch (e) {
       setError(getErrorMessage(e) || 'Could not load availability.');
     } finally {
@@ -108,7 +114,7 @@ export function DoctorAvailabilitySettings({ doctorId, canManageHolidays = false
     setError('');
     try {
       await apiClient.deleteTimeOff(id);
-      await load();
+      await load(true);
     } catch (e) {
       setError(getErrorMessage(e) || 'Could not remove time off.');
     }
@@ -155,7 +161,7 @@ export function DoctorAvailabilitySettings({ doctorId, canManageHolidays = false
         </div>
       </section>
 
-      {data && <OverbookingSettings doctorId={doctorId} saved={slotLimit(data.maxBookingsPerSlot)} onSaved={setData} />}
+      {data && <OverbookingSettings doctorId={doctorId} saved={slotLimit(data.maxBookingsPerSlot)} onSaved={setData} onDirtyChange={setOverbookDirty} />}
 
       <section aria-labelledby={`timeoff-${doctorId}`} className="border rounded-md p-3 space-y-3">
         <h3 id={`timeoff-${doctorId}`} className="font-medium text-foreground">Leave and blocked time</h3>
@@ -177,7 +183,7 @@ export function DoctorAvailabilitySettings({ doctorId, canManageHolidays = false
             </li>
           ))}
         </ul>
-        <TimeOffForm kinds={['LEAVE', 'BLOCKED']} doctorId={doctorId} onSaved={load} />
+        <TimeOffForm kinds={['LEAVE', 'BLOCKED']} doctorId={doctorId} onSaved={() => load(true)} />
       </section>
 
       {error && <p role="alert" className="text-sm text-destructive-text">{error}</p>}
@@ -187,7 +193,7 @@ export function DoctorAvailabilitySettings({ doctorId, canManageHolidays = false
 
 const OVERBOOK_CHOICES = Array.from({ length: MAX_BOOKINGS_PER_SLOT - 1 }, (_, i) => i + 2);
 
-function OverbookingSettings({ doctorId, saved, onSaved }: { doctorId: string; saved: number; onSaved: (data: DoctorAvailability) => void }) {
+function OverbookingSettings({ doctorId, saved, onSaved, onDirtyChange }: { doctorId: string; saved: number; onSaved: (data: DoctorAvailability) => void; onDirtyChange: (dirty: boolean) => void }) {
   const [allow, setAllow] = useState(saved > 1);
   const [limit, setLimit] = useState(Math.max(2, saved));
   const [saving, setSaving] = useState(false);
@@ -200,6 +206,8 @@ function OverbookingSettings({ doctorId, saved, onSaved }: { doctorId: string; s
   }, [saved]);
 
   const next = allow ? limit : 1;
+
+  useEffect(() => onDirtyChange(next !== saved), [next, saved, onDirtyChange]);
 
   const save = async () => {
     setSaving(true);

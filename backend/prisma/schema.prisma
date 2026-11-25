@@ -917,19 +917,23 @@ model NewInvoiceItem {
 }
 
 model NewPayment {
-  id          String      @id @default(cuid())
+  id          String       @id @default(cuid())
   invoiceId   String
   amount      Float
   mode        PaymentMode
   reference   String?
   gateway     String?
-  reconStatus String      @default("PENDING")
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  invoice     NewInvoice  @relation(fields: [invoiceId], references: [id])
+  reconStatus String       @default("PENDING")
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  refundOfId  String?
+  invoice     NewInvoice   @relation(fields: [invoiceId], references: [id])
+  refundOf    NewPayment?  @relation("PaymentRefunds", fields: [refundOfId], references: [id])
+  refunds     NewPayment[] @relation("PaymentRefunds")
 
   @@index([invoiceId], map: "new_payments_invoiceId_idx")
   @@index([reconStatus, createdAt], map: "new_payments_reconStatus_createdAt_idx")
+  @@index([refundOfId], map: "new_payments_refundOfId_idx")
   @@map("new_payments")
 }
 

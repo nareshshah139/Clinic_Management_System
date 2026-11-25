@@ -226,6 +226,18 @@ databaseTests('Queue coverage in selling units with PostgreSQL', () => {
     ]);
   });
 
+  it('fills the next bill of a partly billed prescription with only what each line still owes', async () => {
+    const at = await clinic('Next bill after a partial bill');
+    const tablet = { dosage: 1, dosageUnit: 'TABLET', ...thirtyDays };
+    const lines = [line('tricogroStrips', tablet), line('folvite', { ...tablet, quantity: 5 }), line('serum', { dosage: 2, dosageUnit: 'ML', ...thirtyDays })];
+    await rx(at, 'partly-billed', lines, confirmed(bill('tricogroStrips', 2), bill('folvite', 5), bill('serum', 1)));
+    await rx(at, 'draft-only', lines, [{ status: 'DRAFT', items: [bill('tricogroStrips', 2), bill('folvite', 5), bill('serum', 1)] }]);
+
+    const fill = async (id: string) => (await queue.stockCheck(id, at.branchId)).items.map(item => [item.billingQuantity.quantity, item.billingQuantity.unit]);
+    expect(await fill('partly-billed')).toEqual([[1, 'STRIPS'], [0, 'STRIPS'], [0, 'BOTTLES']]);
+    expect(await fill('draft-only')).toEqual([[3, 'STRIPS'], [5, 'STRIPS'], [1, 'BOTTLES']]);
+  });
+
   it('agrees with detail coverage on every prescription in a seeded random branch', async () => {
     const at = await clinic('Random coverage agreement');
     const next = random(20261106);

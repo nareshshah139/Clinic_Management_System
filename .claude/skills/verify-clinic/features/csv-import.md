@@ -12,8 +12,8 @@ A pharmacist uploads a purchase CSV (one row per bill line, with the bill header
 
 ## How to get to it (user POV)
 
-- Inventory → **Purchases** → **Import CSV**.
-- Direct route: `/dashboard/inventory?area=purchases&view=csv`.
+- Inventory → **Purchases** → **Bill intake** → method tab **Import CSV**.
+- Direct route: `/dashboard/inventory?area=purchases&view=intake&method=csv`. The old `view=csv` link lands there.
 
 ## Driving it with Playwright
 
@@ -23,7 +23,7 @@ Preconditions:
 - A CSV whose header is exactly the template's 31 columns: `distributorName,distributorGstin,distributorDlNo,invoiceNumber,invoiceDate,goodsReceivedDate,billType,dueDate,productName,manufacturer,packSize,packUnitType,hsnCode,batchNumber,expiryMonth,expiryYear,quantityPurchased,freeQuantity,mrp,purchaseRate,discountPercent,specialDiscountPercent,schemeAmount,taxableAmount,cgstPercent,sgstPercent,igstPercent,gstAmount,lineTotal,rounding,netPayable`.
 
 - **Upload.** `page.getByLabel('Purchase invoice CSV').setInputFiles('<file>.csv')`, then click `getByRole('button', { name: 'Open review draft' })`. The button reads "Reading CSV…" while it works.
-- **Land in review.** The URL becomes `…&view=intake`. `#invoice-number` holds the CSV bill number, `input[id$="-product"]` holds the first product, and the checks badge counts the open checks (for example, "1 check to finish" with "Products need attention" for an unknown product).
+- **Land in review.** The URL becomes `…&view=intake` with no `method`. `#invoice-number` holds the CSV bill number, `input[id$="-product"]` holds the first product, and the checks badge counts the open checks (for example, "1 check to finish" with "Products need attention" for an unknown product).
 - **Prove stock-neutral.** Before posting, `inventory_items.currentStock` for the CSV products is unchanged and no `stock_transactions` row references the bill.
 - **Post.** Continue with the manual-bill "Resolve products" and "Post" steps, and prove the same side effects.
 - **Proof artifacts.** Screenshot the import page after upload and the prefilled review form, plus `result.json` with the DB before and after, under `output/verify-clinic/evidence/<stamp>-csv-import/`.

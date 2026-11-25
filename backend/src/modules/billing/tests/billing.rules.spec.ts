@@ -1,5 +1,6 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { BillingService } from '../billing.service';
+import { paise } from '../clinic-bill-register';
 
 type Invoice = {
   id: string;
@@ -61,7 +62,9 @@ function setup(
           (i: any) =>
             i.id === where.id &&
             Object.entries(where).every(
-              ([key, test]: [string, any]) => key === 'id' || i[key] >= test.gte,
+              ([key, test]: [string, any]) =>
+                key === 'id' ||
+                ('not' in test ? i[key] !== test.not : i[key] >= test.gte),
             ),
         );
         if (!row) return { count: 0 };
@@ -96,9 +99,19 @@ function setup(
           return null;
         return { ...row, invoice };
       }),
+      findMany: jest.fn(async ({ where }) =>
+        payments.filter(
+          (p: any) =>
+            p.invoiceId === where.invoiceId &&
+            (p.reconStatus ?? 'COMPLETED') === where.reconStatus,
+        ),
+      ),
     },
   };
   prisma.$transaction = jest.fn(async (command: any) => command(prisma));
+  prisma.$queryRaw = jest.fn(async (_sql: TemplateStringsArray, id: string) =>
+    invoices.filter((i) => i.id === id),
+  );
   const numbers: any = {
     reserve: jest.fn(async () => ({ sequence: 7, periodKey: '2611' })),
   };
@@ -159,9 +172,18 @@ describe('billing invoice totals', () => {
     expect(data.total).toBeCloseTo(1000, 6);
   });
 
-  it('keeps fractional paise from non-round amounts', async () => {
+  it('rounds a total with fractional paise to the nearest paisa the desk can collect', async () => {
     const data = await totalFor([{ qty: 3, unitPrice: 33.33, gstRate: 18 }]);
-    expect(data.total).toBeCloseTo(117.9882, 4);
+    expect([data.total, data.balance]).toEqual([117.99, 117.99]);
+  });
+
+  it('rounds a half paisa away from zero, as Postgres ROUND does, for refunds too', () => {
+    expect([paise(264.025), paise(-264.025), paise(-0.004), paise(NaN)]).toEqual([26403, -26403, 0, NaN]);
+  });
+
+  it('rounds a discounted GST total just under half a paisa down, not up', async () => {
+    const data = await totalFor([{ qty: 1, unitPrice: 1620.02, gstRate: 18, discount: 17.38 }], 4.26);
+    expect(data.total).toBe(1522.36);
   });
 
   it('charges GST on the line amounts even when the overall discount is a hundred percent', async () => {

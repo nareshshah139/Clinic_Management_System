@@ -16,7 +16,7 @@ const pharmacyLinks = () => {
   return links.map((link) => link.textContent).filter((name) => ['Pharmacy Desk', 'Pharmacy Counter', 'Pharmacy Billing', 'Sales', 'Inventory', 'Daily Collection', 'Pharmacy Report'].includes(name || ''));
 };
 
-it.each(['PHARMACIST', 'DOCTOR', 'ADMIN'])('shows %s every Pharmacy entry, with Sales in place of Pharmacy Billing and Pharmacy Report last', (role) => {
+it.each(['PHARMACIST', 'DOCTOR', 'ADMIN', 'OWNER'])('shows %s every Pharmacy entry, with Sales in place of Pharmacy Billing and Pharmacy Report last', (role) => {
   mockRole = role;
   expect(pharmacyLinks()).toEqual(['Pharmacy Desk', 'Pharmacy Counter', 'Sales', 'Inventory', 'Daily Collection', 'Pharmacy Report']);
 });
@@ -34,7 +34,7 @@ it('puts Pharmacy Report in the Pharmacy group, apart from the clinical Reports 
 
 it.each([
   ['RECEPTION', ['Pharmacy Desk', 'Pharmacy Counter', 'Inventory']],
-  ['MANAGER', ['Inventory', 'Daily Collection', 'Pharmacy Report']],
+  ['MANAGER', ['Pharmacy Desk', 'Pharmacy Counter', 'Inventory', 'Daily Collection', 'Pharmacy Report']],
   ['ACCOUNTANT', ['Daily Collection', 'Pharmacy Report']],
   ['NURSE', []],
 ])('leaves %s with its other Pharmacy entries', (role, expected) => {
@@ -81,16 +81,36 @@ describe('Daily Collection in the main menu', () => {
   });
 });
 
+const CLINIC_AND_PHARMACY = ['Dashboard', 'Patients', 'Appointments', 'Visits', 'Procedures', 'Rooms', 'Pharmacy Desk', 'Pharmacy Counter', 'Sales', 'Inventory', 'Daily Collection', 'Pharmacy Report'];
+
 it.each([
-  ['OWNER', ['Dashboard', 'Patients', 'Appointments', 'Visits', 'Procedures', 'Rooms', 'Sales', 'Inventory', 'Daily Collection', 'Pharmacy Report', 'Reports', 'Users', 'Fee list']],
-  ['MANAGER', ['Dashboard', 'Patients', 'Appointments', 'Visits', 'Procedures', 'Inventory', 'Daily Collection', 'Pharmacy Report', 'Reports', 'Users']],
+  ['OWNER', [...CLINIC_AND_PHARMACY, 'Billing', 'Reports', 'Users', 'Fee list']],
+  ['ADMIN', [...CLINIC_AND_PHARMACY, 'Billing', 'Reports', 'Users', 'Fee list']],
+  ['MANAGER', ['Dashboard', 'Patients', 'Appointments', 'Visits', 'Procedures', 'Pharmacy Desk', 'Pharmacy Counter', 'Inventory', 'Daily Collection', 'Pharmacy Report', 'Reports', 'Users']],
+  ['DOCTOR', [...CLINIC_AND_PHARMACY, 'Billing', 'Reports']],
   ['NURSE', ['Dashboard', 'Patients', 'Appointments', 'Visits', 'Rooms']],
-  ['RECEPTION', ['Dashboard', 'Patients', 'Appointments', 'Rooms', 'Pharmacy Desk', 'Pharmacy Counter', 'Inventory']],
+  ['RECEPTION', ['Dashboard', 'Patients', 'Appointments', 'Rooms', 'Pharmacy Desk', 'Pharmacy Counter', 'Inventory', 'Billing']],
+  ['PHARMACIST', ['Dashboard', 'Pharmacy Desk', 'Pharmacy Counter', 'Sales', 'Inventory', 'Daily Collection', 'Pharmacy Report']],
   ['ACCOUNTANT', ['Dashboard', 'Daily Collection', 'Pharmacy Report']],
 ])('gives %s only pages its grants open, so no page refuses it on load', (role, expected) => {
   mockRole = role as string;
   render(<Sidebar />);
   expect(within(screen.getByRole('navigation', { name: 'Main navigation' })).getAllByRole('link').map((a) => a.textContent)).toEqual(expected);
+});
+
+it('offers Billing under Admin and sends it to the clinic billing page', () => {
+  mockRole = 'RECEPTION';
+  render(<Sidebar />);
+  const nav = screen.getByRole('navigation', { name: 'Main navigation' });
+  const texts = Array.from(nav.querySelectorAll('p, a')).map((el) => el.textContent);
+  expect(within(nav).getByRole('link', { name: 'Billing' })).toHaveAttribute('href', '/dashboard/billing');
+  expect(texts.slice(texts.indexOf('Admin'))).toEqual(['Admin', 'Billing']);
+});
+
+it.each([undefined, '', 'LAB_TECH', 'PATIENT', 'constructor'])('offers no page to a signed-in role of %p, which no page accepts', (role) => {
+  mockRole = role as string;
+  render(<Sidebar />);
+  expect(within(screen.getByRole('navigation', { name: 'Main navigation' })).queryAllByRole('link')).toEqual([]);
 });
 
 it('carries the Linaé name instead of a generic product name, and no developer page', () => {

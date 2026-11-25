@@ -35,7 +35,6 @@ EXPECT = {
         "GatewayPaymentSettles": "breaks",
     },
     "code": {r: "holds" for r in ALL} | {
-        "RefundsWithinPayment": "breaks",
         "GatewayPaymentSettles": "breaks",
     },
     "fixed": {r: "holds" for r in ALL},

@@ -12,7 +12,7 @@ A pharmacist uploads a bill as a PDF or up to 10 photos, in page order, sets "Re
 
 ## How to get to it (user POV)
 
-- Inventory → **Purchases** → **Scan or enter bill** → "Scan a bill" panel.
+- Inventory → **Purchases** → **Bill intake** (method tab **Scan or enter**) → "Scan a bill" panel.
 - Inventory → **Today** → "Original files awaiting intake" (archived uploads not yet turned into bills).
 - Direct route: `/dashboard/inventory?area=purchases&view=intake`.
 

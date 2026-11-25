@@ -29,7 +29,7 @@ const SWATCHES: Array<[label: string, color: string]> = [
  * @cc [owner:nareshshah139,label:accessibility] appointment-calendar-legend-disclosure
  * The Legend button is a disclosure, not a menu: it reports aria-expanded and controls the
  * legend panel. Escape closes the panel and returns focus to the button; a click outside closes it.
- * While open, the panel MUST stay inside the viewport when the toolbar wraps, the window resizes or the page scrolls.
+ * While open, the panel MUST stay inside the viewport when the toolbar wraps or the window resizes.
  */
 export function CalendarLegend() {
   const [open, setOpen] = useState(false);
@@ -58,21 +58,22 @@ export function CalendarLegend() {
 
   useLayoutEffect(() => {
     if (!open) return;
-    let frame = 0;
-    let placedFor = '';
-    const track = () => {
+    const place = () => {
       const anchor = rootRef.current?.getBoundingClientRect();
-      const key = anchor ? `${anchor.left}:${window.innerWidth}` : '';
-      if (anchor && key !== placedFor) {
-        placedFor = key;
-        const width = Math.min(PANEL_WIDTH_PX, window.innerWidth * 0.9);
-        const left = Math.max(VIEWPORT_GUTTER_PX, Math.min(anchor.left, window.innerWidth - VIEWPORT_GUTTER_PX - width));
-        setOffsetX(left - anchor.left);
-      }
-      frame = requestAnimationFrame(track);
+      if (!anchor) return;
+      const width = Math.min(PANEL_WIDTH_PX, window.innerWidth * 0.9);
+      const left = Math.max(VIEWPORT_GUTTER_PX, Math.min(anchor.left, window.innerWidth - VIEWPORT_GUTTER_PX - width));
+      setOffsetX(left - anchor.left);
     };
-    track();
-    return () => cancelAnimationFrame(frame);
+    place();
+    window.addEventListener('resize', place);
+    const observer = new ResizeObserver(place);
+    if (rootRef.current?.parentElement) observer.observe(rootRef.current.parentElement);
+    observer.observe(document.body);
+    return () => {
+      window.removeEventListener('resize', place);
+      observer.disconnect();
+    };
   }, [open]);
 
   return (

@@ -370,6 +370,8 @@ export class PharmacyPrescriptionQueueService {
    * boxes and packs). Free-text instruction schedules MUST override the structured frequency and flag
    * a conflict. Lines with no computable schedule MUST fill 1 and be flagged. Flags MUST NOT block billing.
    * Each line MUST also return remainingBillingQuantity: what it still needs after posted invoices, in that same unit.
+   * Once any invoice for the prescription is posted, billingQuantity MUST fill only remainingBillingQuantity,
+   * so a line already supplied fills 0.
    */
   /**
    * @cc [owner:nareshshah139,label:product] queue-stock-check-read-only
@@ -383,12 +385,14 @@ export class PharmacyPrescriptionQueueService {
         const inventory = stock.unit
           ? { unit: stock.unit, packSize: stock.packSize ?? null, packUnit: stock.packUnit ?? null }
           : null;
+        const course = billingQuantity(item.sourceItem ?? item, inventory, item.drugName);
+        const remaining = remainingBillingQuantity(item, inventory);
         return {
           ...stock,
           sourceLineKey: item.sourceLineKey,
           prescribedQuantity: item.prescribedQuantity,
-          billingQuantity: billingQuantity(item.sourceItem ?? item, inventory, item.drugName),
-          remainingBillingQuantity: remainingBillingQuantity(item, inventory),
+          billingQuantity: entry.billPosted ? { ...course, quantity: remaining } : course,
+          remainingBillingQuantity: remaining,
         };
       }),
     );

@@ -37,6 +37,7 @@ const confirmed = () => within(screen.getByRole('region', { name: 'Confirmed' })
 describe('DoctorDayCalendar billing on each row', () => {
   beforeEach(() => {
     jest.resetAllMocks();
+    jest.mocked(window.matchMedia).mockImplementation((query: string) => ({ matches: false, media: query, addEventListener: jest.fn(), removeEventListener: jest.fn() }) as unknown as MediaQueryList);
     (global.IntersectionObserver as unknown as jest.Mock).mockImplementation(() => ({ observe: () => {}, unobserve: () => {}, disconnect: () => {} }));
   });
 

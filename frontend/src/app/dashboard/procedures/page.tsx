@@ -25,6 +25,8 @@ import { useToast } from '@/hooks/use-toast';
 import { getErrorMessage } from '@/lib/utils';
 import { PatientPicker } from '@/components/procedures/PatientPicker';
 import { ProcedureDetails } from '@/components/procedures/ProcedureDetails';
+import { ProcedureAccessDialog } from '@/components/procedures/ProcedureAccessDialog';
+import type { MyProcedureAccess } from '@/components/procedures/procedure-access';
 import {
   BODY_PARTS,
   MACHINES,
@@ -50,6 +52,7 @@ interface Staff {
   doctors: StaffSummary[];
   nurses: StaffSummary[];
   defaultDoctorId: string;
+  access: MyProcedureAccess;
 }
 
 interface History {
@@ -88,9 +91,10 @@ export default function ProceduresPage() {
   const loadStaff = useCallback(async () => {
     setStaff({ status: 'loading' });
     try {
-      const [doctorsRes, nursesRes] = await Promise.all([
+      const [doctorsRes, nursesRes, access] = await Promise.all([
         apiClient.getUsers({ role: UserRole.DOCTOR, limit: 50 }),
         apiClient.getUsers({ role: UserRole.NURSE, limit: 50 }),
+        apiClient.getMyProcedureAccess(),
       ]);
       let defaultDoctorId = '';
       try {
@@ -99,7 +103,7 @@ export default function ProceduresPage() {
       } catch (error) {
         console.error('Failed to resolve signed-in user:', error);
       }
-      setStaff({ status: 'ready', data: { doctors: usersOf(doctorsRes), nurses: usersOf(nursesRes), defaultDoctorId } });
+      setStaff({ status: 'ready', data: { doctors: usersOf(doctorsRes), nurses: usersOf(nursesRes), defaultDoctorId, access } });
       setRecord((prev) => ({ ...prev, doctorId: prev.doctorId || defaultDoctorId }));
     } catch (error) {
       setStaff({ status: 'error', message: getErrorMessage(error) });
@@ -153,11 +157,13 @@ export default function ProceduresPage() {
     }));
 
   const defaultDoctorId = staff.status === 'ready' ? staff.data.defaultDoctorId : '';
+  const access = staff.status === 'ready' ? staff.data.access : null;
+  const canRecord = access?.canRecord ?? false;
   const total = totalShots(record.shotCounts);
 
   /**
    * @cc [owner:nareshshah139,label:product] procedure-visit-payload
-   * Saving a new procedure MUST send the required complaints array and retain the selected therapist
+   * Saving a new procedure MUST go through the procedures endpoint and retain the selected therapist
    * inside the stored procedure details. Editing a loaded procedure MUST update that visit, not create
    * another. Missing required selections MUST prevent the save.
    */
@@ -175,13 +181,13 @@ export default function ProceduresPage() {
     try {
       const request = toVisitRequest(record);
       if (request.kind === 'update') {
-        await apiClient.updateVisit(request.visitId, request.body);
+        await apiClient.updateProcedure(request.visitId, request.body);
         toast({ variant: 'success', title: 'Procedure updated' });
         setRecord({ ...emptyProcedure(defaultDoctorId), patient: record.patient });
         setHistoryPatient(record.patient);
         setActiveTab('history');
       } else {
-        await apiClient.createVisit(request.body);
+        await apiClient.createProcedure(request.body);
         toast({ variant: 'success', title: 'Procedure saved' });
         setRecord({
           ...record,
@@ -239,10 +245,10 @@ export default function ProceduresPage() {
           </dl>
           {saved.notes && <p className="mt-2 text-sm text-muted-foreground line-clamp-2">{saved.notes}</p>}
           <div className="mt-4 flex flex-wrap gap-2">
-            {procedure.editable && (
+            {canRecord && procedure.editable && (
               <Button size="sm" variant="outline" onClick={() => editProcedure(procedure)}>Load &amp; Edit</Button>
             )}
-            <Button size="sm" variant="outline" onClick={() => repeatProcedure(procedure)}>Repeat as new session</Button>
+            {canRecord && <Button size="sm" variant="outline" onClick={() => repeatProcedure(procedure)}>Repeat as new session</Button>}
             <Button size="sm" variant="ghost" onClick={() => setDetails(procedure)}>View Details</Button>
           </div>
         </CardContent>
@@ -297,7 +303,7 @@ export default function ProceduresPage() {
   };
 
   const renderForm = (doctors: StaffSummary[], nurses: StaffSummary[]) => (
-    <>
+    <fieldset disabled={!canRecord} className="min-w-0 space-y-6">
       {record.visit && (
         <Alert>
           <AlertTitle>Editing the procedure from {displayClinicDateTime(record.visit.createdAt)}</AlertTitle>
@@ -327,7 +333,7 @@ export default function ProceduresPage() {
 
           <div>
             <label htmlFor="procedure-doctor" className="text-sm font-medium text-foreground">Doctor *</label>
-            <Select value={record.doctorId} onValueChange={(value: string) => update('doctorId', value)} disabled={Boolean(record.visit)}>
+            <Select value={record.doctorId} onValueChange={(value: string) => update('doctorId', value)} disabled={!canRecord || Boolean(record.visit)}>
               <SelectTrigger id="procedure-doctor">
                 <SelectValue placeholder="Select doctor" />
               </SelectTrigger>
@@ -341,7 +347,7 @@ export default function ProceduresPage() {
 
           <div>
             <label htmlFor="procedure-therapist" className="text-sm font-medium text-foreground">Nurse/Therapist</label>
-            <Select value={record.therapistId} onValueChange={(value: string) => update('therapistId', value)}>
+            <Select value={record.therapistId} onValueChange={(value: string) => update('therapistId', value)} disabled={!canRecord}>
               <SelectTrigger id="procedure-therapist">
                 <SelectValue placeholder="Select nurse" />
               </SelectTrigger>
@@ -424,7 +430,7 @@ export default function ProceduresPage() {
           {SKIN_FIELDS.map(({ key, label, placeholder, format }) => (
             <div key={key}>
               <label htmlFor={`procedure-${key}`} className="text-sm font-medium text-foreground">{label}</label>
-              <Select value={record.skinTypes[key]} onValueChange={(value: string) => update('skinTypes', { ...record.skinTypes, [key]: value })}>
+              <Select value={record.skinTypes[key]} onValueChange={(value: string) => update('skinTypes', { ...record.skinTypes, [key]: value })} disabled={!canRecord}>
                 <SelectTrigger id={`procedure-${key}`}>
                   <SelectValue placeholder={placeholder} />
                 </SelectTrigger>
@@ -481,13 +487,15 @@ export default function ProceduresPage() {
         </CardContent>
       </Card>
 
-      <div className="flex justify-end">
-        <Button onClick={saveProcedure} disabled={saving} size="lg" className="flex items-center gap-2">
-          <Save className="h-4 w-4" />
-          {saving ? 'Saving...' : record.visit ? 'Update Procedure' : 'Save Procedure'}
-        </Button>
-      </div>
-    </>
+      {canRecord && (
+        <div className="flex justify-end">
+          <Button onClick={saveProcedure} disabled={saving} size="lg" className="flex items-center gap-2">
+            <Save className="h-4 w-4" />
+            {saving ? 'Saving...' : record.visit ? 'Update Procedure' : 'Save Procedure'}
+          </Button>
+        </div>
+      )}
+    </fieldset>
   );
 
   const renderHistory = () => {
@@ -529,7 +537,7 @@ export default function ProceduresPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Procedures" actions={<><QuickGuide
+      <PageHeader title="Procedures" actions={<>{access?.canConfigure && <ProcedureAccessDialog />}<QuickGuide
               title="Procedures guide"
               sections={[
                 {
@@ -562,6 +570,12 @@ export default function ProceduresPage() {
               ]}
             /></>} />
 
+      {access && !access.canRecord && (
+        <Alert>
+          <AlertDescription>Your role can view procedures but not record them. A doctor or admin can change this.</AlertDescription>
+        </Alert>
+      )}
+
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="grid w-full max-w-md grid-cols-2">
           <TabsTrigger value="new">{record.visit ? 'Edit Procedure' : 'New Procedure'}</TabsTrigger>
@@ -572,7 +586,7 @@ export default function ProceduresPage() {
           {staff.status === 'loading' && <LoadingSkeleton label="Loading doctors and nurses…" />}
           {staff.status === 'error' && (
             <Alert variant="destructive">
-              <AlertTitle>Could not load doctors and nurses</AlertTitle>
+              <AlertTitle>Could not load the procedure form</AlertTitle>
               <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
                 <span>{staff.message}</span>
                 <Button size="sm" variant="outline" onClick={() => void loadStaff()}>Try again</Button>

@@ -11,7 +11,9 @@ import { cn, formatPatientName, getErrorMessage } from '@/lib/utils';
 import { displayCalendarDate, displayClinicDateTime } from '@/lib/date-display';
 import { useToast } from '@/hooks/use-toast';
 import type { AppointmentInSlot, ClinicBillAccess } from '@/lib/types';
-import { DESK_PAYMENT_MODES, paymentModeLabel, type DeskPaymentMode } from '@/lib/clinic-payment-modes';
+import { paymentModeLabel, type DeskPaymentMode } from '@/lib/clinic-payment-modes';
+import { PaymentModePicker as ModePicker, deskPayment } from '@/components/billing/PaymentModePicker';
+import { ReceiptButtons } from '@/components/billing/ReceiptButtons';
 import { BILL_TYPE_LABEL, FEE_LIST_PATH, defaultBillLine, parseRupees, rupee } from './appointment-billing-view';
 import { plural } from '@/lib/labels';
 
@@ -27,48 +29,6 @@ type InvoiceDetail = {
 };
 
 type Mode = DeskPaymentMode;
-/** What the desk notes down for a mode that has a paper trail: a cheque number or a bank reference. */
-function referenceLabel(mode: Mode): string | undefined {
-  const found = DESK_PAYMENT_MODES.find((m) => m.value === mode);
-  return found && 'reference' in found ? found.reference : undefined;
-}
-
-function ModePicker({ value, onChange, label, reference, onReference }: {
-  value: Mode;
-  onChange: (mode: Mode) => void;
-  label: string;
-  reference: string;
-  onReference: (text: string) => void;
-}) {
-  const asks = referenceLabel(value);
-  return (
-    <div className="space-y-3">
-      <div role="radiogroup" aria-label={label} className="flex flex-wrap gap-2">
-        {DESK_PAYMENT_MODES.map((mode) => (
-          <button
-            key={mode.value}
-            type="button"
-            role="radio"
-            aria-checked={value === mode.value}
-            onClick={() => onChange(mode.value)}
-            className={cn(
-              'h-10 min-w-16 rounded-md border px-3 text-sm font-medium',
-              value === mode.value ? 'border-info bg-info-soft text-info-text' : 'border-border bg-white text-foreground hover:bg-accent',
-            )}
-          >
-            {mode.label}
-          </button>
-        ))}
-      </div>
-      {asks && (
-        <label className="flex flex-col gap-1 text-sm font-medium">
-          {asks} (optional)
-          <Input value={reference} onChange={(e) => onReference(e.target.value)} maxLength={60} autoComplete="off" className="h-10 text-base" />
-        </label>
-      )}
-    </div>
-  );
-}
 
 /**
  * @cc [owner:nareshshah139,label:product] appointment-bill-dialog
@@ -160,10 +120,7 @@ export function AppointmentBillDialog({
   const paidInvalid = paidValue !== null && (Number.isNaN(paidValue) || (feeValue !== null && paidValue > feeValue));
   const paymentInvalid = paymentValue !== null && (Number.isNaN(paymentValue) || paymentValue <= 0 || (payInvoice !== null && paymentValue > payInvoice.balance));
 
-  const paymentOf = (invoiceId: string, amount: number) => {
-    const ref = referenceLabel(mode) && reference.trim();
-    return { invoiceId, amount, method: mode, ...(ref ? { reference: ref } : {}) };
-  };
+  const paymentOf = (invoiceId: string, amount: number) => deskPayment(invoiceId, amount, mode, reference);
 
   const finish = async (message: string) => {
     toast({ variant: 'success', title: message });
@@ -280,6 +237,9 @@ export function AppointmentBillDialog({
                     ))}
                   </ul>
                 )}
+                <div className="mt-3 border-t pt-3">
+                  <ReceiptButtons invoiceId={invoice.id} billNo={invoice.invoiceNo} />
+                </div>
               </section>
             ))}
           </div>

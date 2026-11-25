@@ -110,7 +110,6 @@ function renderBills(query = 'tab=returns', { canSettle = true } = {}) {
         onNew={jest.fn()}
         onOpenReturn={onOpenReturn}
         onNewReturn={onNewReturn}
-        onLedger={jest.fn()}
         onSuppliers={jest.fn()}
       />
       <Toaster />

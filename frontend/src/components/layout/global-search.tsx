@@ -1,17 +1,20 @@
 'use client';
 
 import { useEffect, useId, useRef, useState, type ComponentType } from 'react';
+import { UserRole } from '@cms/shared-types';
 import { useRouter } from 'next/navigation';
-import { Calendar, Search, User, Users } from 'lucide-react';
+import { Calendar, Search, User, Users, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Spinner } from '@/components/ui/spinner';
 import { apiClient } from '@/lib/api';
 import { displayUtcDate } from '@/lib/date-display';
-import { formatAge } from '@/lib/utils';
+import { cn, formatAge } from '@/lib/utils';
 import { enumLabel } from '@/lib/labels';
 import { appointmentsHref } from '@/lib/appointments-link';
+import { APPOINTMENT_READ_ROLES } from '@/lib/appointment-access';
+import { doctorLabel } from './doctor-label';
 
 interface SearchResult {
   id: string;
@@ -30,59 +33,61 @@ const TYPE_TINT: Record<SearchResult['type'], string> = {
   user: 'bg-highlight-soft text-highlight-text',
 };
 
-async function searchEverything(query: string): Promise<SearchResult[]> {
-  const results: SearchResult[] = [];
-  try {
-    const patientRes: any = await apiClient.getPatients({ search: query, limit: 5 });
-    for (const patient of patientRes.data || patientRes.patients || []) {
-      results.push({
-        id: patient.id,
-        type: 'patient',
-        title: `${patient.firstName || ''} ${patient.lastName || ''}`.trim() || patient.name || 'Unknown Patient',
-        subtitle: patient.phone || patient.email,
-        description: `Patient • ${patient.gender ? enumLabel('gender', patient.gender) : 'Sex not recorded'} • ${formatAge(patient)}`,
-        icon: Users,
-        href: `/dashboard/patients?search=${encodeURIComponent(patient.id)}`,
-      });
-    }
-  } catch (e) {
-    console.error('Failed to search patients', e);
-  }
-  try {
-    const appointmentRes: any = await apiClient.getAppointments({ search: query, limit: 5, sortBy: 'date', sortOrder: 'desc' });
-    for (const appointment of appointmentRes.appointments || appointmentRes.data || []) {
-      const patientName = appointment.patient?.name || `${appointment.patient?.firstName || ''} ${appointment.patient?.lastName || ''}`.trim() || 'Unknown Patient';
-      const doctorName = appointment.doctor ? `${appointment.doctor.firstName || ''} ${appointment.doctor.lastName || ''}`.trim() : 'Unknown Doctor';
-      results.push({
-        id: appointment.id,
-        type: 'appointment',
-        title: `${patientName} - ${appointment.slot}`,
-        subtitle: `Dr. ${doctorName}`,
-        description: `Appointment • ${displayUtcDate(appointment.date)} • ${enumLabel('visitType', appointment.visitType || 'OPD')}`,
-        icon: Calendar,
-        href: appointmentsHref(String(appointment.date || '').slice(0, 10), appointment.doctorId),
-      });
-    }
-  } catch (e) {
-    console.error('Failed to search appointments', e);
-  }
-  try {
-    const userRes: any = await apiClient.getUsers({ search: query, limit: 3 });
-    for (const user of userRes.users || userRes.data || []) {
-      results.push({
-        id: user.id,
-        type: 'user',
-        title: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.name || 'Unknown User',
-        subtitle: user.email,
-        description: `${user.role ? enumLabel('role', user.role) : 'User'} • ${user.specialization || 'General'}`,
-        icon: User,
-        href: `/dashboard/users?search=${encodeURIComponent(user.id)}`,
-      });
-    }
-  } catch (e) {
-    console.error('Failed to search users', e);
-  }
-  return results;
+const STAFF_DIRECTORY_ROLES: string[] = [UserRole.OWNER, UserRole.ADMIN, UserRole.MANAGER];
+
+async function searchPatients(query: string): Promise<SearchResult[]> {
+  const response: any = await apiClient.getPatients({ search: query, limit: 5 });
+  return (response.data || response.patients || []).map((patient: any) => ({
+    id: patient.id,
+    type: 'patient',
+    title: `${patient.firstName || ''} ${patient.lastName || ''}`.trim() || patient.name || 'Unknown Patient',
+    subtitle: patient.phone || patient.email,
+    description: `Patient • ${patient.gender ? enumLabel('gender', patient.gender) : 'Sex not recorded'} • ${formatAge(patient)}`,
+    icon: Users,
+    href: `/dashboard/patients/${encodeURIComponent(patient.id)}`,
+  }));
+}
+
+async function searchAppointments(query: string): Promise<SearchResult[]> {
+  const response: any = await apiClient.getAppointments({ search: query, limit: 5, sortBy: 'date', sortOrder: 'desc' });
+  return (response.appointments || response.data || []).map((appointment: any) => {
+    const patientName = appointment.patient?.name || `${appointment.patient?.firstName || ''} ${appointment.patient?.lastName || ''}`.trim() || 'Unknown Patient';
+    const doctorName = `${appointment.doctor?.firstName || ''} ${appointment.doctor?.lastName || ''}`;
+    return {
+      id: appointment.id,
+      type: 'appointment',
+      title: `${patientName} - ${appointment.slot}`,
+      subtitle: doctorLabel(doctorName) || undefined,
+      description: `Appointment • ${displayUtcDate(appointment.date)} • ${enumLabel('visitType', appointment.visitType || 'OPD')}`,
+      icon: Calendar,
+      href: appointmentsHref(String(appointment.date || '').slice(0, 10), appointment.doctorId),
+    };
+  });
+}
+
+async function searchUsers(query: string): Promise<SearchResult[]> {
+  const response: any = await apiClient.getUsers({ search: query, limit: 3 });
+  return (response.users || response.data || []).map((user: any) => ({
+    id: user.id,
+    type: 'user',
+    title: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.name || 'Unknown User',
+    subtitle: user.email,
+    description: `${user.role ? enumLabel('role', user.role) : 'User'} • ${user.specialization || 'General'}`,
+    icon: User,
+    href: `/dashboard/users?search=${encodeURIComponent(user.id)}`,
+  }));
+}
+
+async function searchEverything(query: string, role?: string): Promise<SearchResult[]> {
+  const searches: [string, Promise<SearchResult[]>][] = [['patients', searchPatients(query)]];
+  if (role && APPOINTMENT_READ_ROLES.includes(role)) searches.push(['appointments', searchAppointments(query)]);
+  if (role && STAFF_DIRECTORY_ROLES.includes(role)) searches.push(['users', searchUsers(query)]);
+  const settled = await Promise.allSettled(searches.map(([, search]) => search));
+  return settled.flatMap((outcome, index) => {
+    if (outcome.status === 'fulfilled') return outcome.value;
+    console.error(`Failed to search ${searches[index][0]}`, outcome.reason);
+    return [];
+  });
 }
 
 /**
@@ -97,7 +102,7 @@ async function searchEverything(query: string): Promise<SearchResult[]> {
  * move the active option without leaving the input, Enter opens the active
  * option (the first one when none is active), and clicking an option opens it.
  */
-export function GlobalSearch() {
+export function GlobalSearch({ role, className, autoFocus, onNavigate }: { role?: string; className?: string; autoFocus?: boolean; onNavigate?: () => void }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
@@ -132,6 +137,11 @@ export function GlobalSearch() {
   }, []);
 
   useEffect(() => {
+    if (autoFocus) inputRef.current?.focus();
+  }, [autoFocus]);
+
+  useEffect(() => {
+    let current = true;
     const delayed = setTimeout(async () => {
       const trimmed = query.trim();
       if (trimmed.length < 2) {
@@ -141,13 +151,17 @@ export function GlobalSearch() {
         return;
       }
       setSearching(true);
-      const found = await searchEverything(trimmed);
+      const found = await searchEverything(trimmed, role);
+      if (!current) return;
       setResults(found);
       setActiveIndex(-1);
       setSearching(false);
     }, 300);
-    return () => clearTimeout(delayed);
-  }, [query]);
+    return () => {
+      current = false;
+      clearTimeout(delayed);
+    };
+  }, [query, role]);
 
   useEffect(() => {
     if (activeIndex < 0) return;
@@ -158,6 +172,16 @@ export function GlobalSearch() {
     setOpen(false);
     setQuery('');
     router.push(result.href);
+    onNavigate?.();
+  };
+
+  const clear = () => {
+    setQuery('');
+    setResults([]);
+    setOpen(false);
+    setActiveIndex(-1);
+    setSearching(false);
+    inputRef.current?.focus();
   };
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -182,7 +206,7 @@ export function GlobalSearch() {
   };
 
   return (
-    <div className="flex-1 max-w-md relative" ref={rootRef}>
+    <div className={cn('flex-1 max-w-md relative', className)} ref={rootRef}>
       <div className="relative">
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
         <Input
@@ -196,7 +220,7 @@ export function GlobalSearch() {
           aria-controls={listId}
           aria-activedescendant={listShown && activeIndex >= 0 ? optionId(activeIndex) : undefined}
           placeholder="Search patients, appointments, doctors..."
-          className="peer pl-10 pr-10 py-2 w-full"
+          className={cn('peer pl-10 py-2 w-full', query ? 'pr-16' : 'pr-10')}
           value={query}
           onChange={(e) => {
             const hasQuery = e.target.value.trim().length >= 2;
@@ -207,18 +231,28 @@ export function GlobalSearch() {
           onFocus={() => setOpen(query.trim().length >= 2)}
           onKeyDown={onKeyDown}
         />
-        {searching ? (
-          <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+        {searching && (
+          <div className="absolute right-10 top-1/2 transform -translate-y-1/2">
             <Spinner className="h-4 w-4" />
           </div>
-        ) : !query && (
+        )}
+        {query ? (
+          <button
+            type="button"
+            aria-label="Clear search"
+            onClick={clear}
+            className="absolute right-1.5 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 outline-none"
+          >
+            <X className="size-4" aria-hidden="true" />
+          </button>
+        ) : (
           <kbd aria-hidden="true" className="pointer-events-none absolute right-2.5 top-1/2 hidden -translate-y-1/2 rounded border bg-muted px-1.5 font-mono text-xs text-muted-foreground transition-opacity peer-focus:opacity-0 md:block">/</kbd>
         )}
       </div>
 
       {listShown && (
         <div className="absolute top-full left-0 right-0 mt-1 z-50 overflow-hidden rounded-lg border bg-card text-card-foreground shadow-sm">
-          <ul id={listId} role="listbox" aria-label="Search results" className="max-h-96 overflow-y-auto">
+          <ul id={listId} role="listbox" aria-label="Search results" className="max-h-[min(24rem,60dvh)] overflow-y-auto">
             {results.map((result, index) => {
               const IconComponent = result.icon;
               return (

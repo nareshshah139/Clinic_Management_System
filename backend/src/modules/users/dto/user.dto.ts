@@ -376,9 +376,6 @@ export class UpdateBranchDto {
   @IsBoolean()
   @IsOptional()
   isActive?: boolean;
-
-  @IsOptional()
-  metadata?: any;
 }
 
 // Permission Management DTOs

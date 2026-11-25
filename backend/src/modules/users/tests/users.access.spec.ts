@@ -29,8 +29,7 @@ const MANAGER_WRITES = [
   ['patch', '/users/target/permissions', { permissions: ['all'] }],
   ['patch', '/users/target/status', { status: 'INACTIVE' }],
   ['post', '/users/branches', { name: 'New branch', address: '1 Road' }],
-  ['patch', '/users/branches/empty-branch', { name: 'Renamed branch' }],
-  ['delete', '/users/branches/empty-branch', undefined],
+  ['patch', '/users/branches/branch', { name: 'Renamed branch' }],
   ['post', '/users/permissions', { name: 'x.read', resource: 'x', action: 'read' }],
   ['patch', '/users/permissions/perm', { description: 'Changed' }],
   ['delete', '/users/permissions/perm', undefined],
@@ -38,6 +37,7 @@ const MANAGER_WRITES = [
   ['patch', '/users/roles/role-admin', { description: 'Changed' }],
   ['delete', '/users/roles/role-admin', undefined],
 ] as const;
+const FORBIDDEN_WRITES = [...MANAGER_WRITES, ['delete', '/users/branches/branch', undefined]] as const;
 
 describe('/users access control', () => {
   let app: INestApplication;
@@ -52,7 +52,7 @@ describe('/users access control', () => {
     ADMIN: roleRecord,
     NURSE: { permissions: JSON.stringify(['appointments:read', 'visits:read', 'patients:read']) },
   };
-  const branchRecord = { id: 'empty-branch', name: 'Empty' };
+  const branchRecord = { id: 'branch', name: 'Home' };
   const permissionRecord = { id: 'perm', name: 'appointments:read' };
   const byWhere = (where: any) => Object.values(users).find(user => matches(user, where)) ?? null;
   const db: any = {
@@ -98,6 +98,7 @@ describe('/users access control', () => {
       updateMany: jest.fn(async () => ({ count: 1 })),
       create: jest.fn(async ({ data }) => ({ id: 'asset', url: data.url })),
     },
+    auditLog: { create: jest.fn(async ({ data }) => data) },
     appointment: { count: jest.fn(async () => 0) },
     visit: { count: jest.fn(async () => 0) },
   };
@@ -163,7 +164,7 @@ describe('/users access control', () => {
   });
 
   describe.each(NON_MANAGERS)('%s', (staff) => {
-    it.each(MANAGER_WRITES)('is forbidden from %s %s without a write', async (method, path, body) => {
+    it.each(FORBIDDEN_WRITES)('is forbidden from %s %s without a write', async (method, path, body) => {
       const res = await send(method, path, staff, body);
       expect(res.status).toBe(403);
       expect(writes()).toEqual([]);

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { WorkflowDocumentEditor } from '@/components/inventory/WorkflowDocumentEditor';
 import { apiClient } from '@/lib/api';
 import roleCapabilities from '../fixtures/workspace-capabilities.json';
@@ -22,6 +22,10 @@ function expectWritesBlocked() {
   }
   expect(screen.queryByText(/Draft.*no stock change/i)).not.toBeInTheDocument();
   expect(screen.queryByText(/Stock has not changed/i)).not.toBeInTheDocument();
+}
+async function clickAndConfirm(name: string) {
+  fireEvent.click(await screen.findByRole('button', { name }));
+  fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name }));
 }
 beforeEach(() => { jest.clearAllMocks(); sessionStorage.clear(); });
 afterEach(cleanup);
@@ -55,7 +59,8 @@ it.each(['LOSS', 'HOLD'])('retains %s identity and uncertainty after a lost tran
     throw new Error('Response lost');
   });
   const first = mount(kind, { draftKey: 'lost-operation', initial: { requestKey: 'original-request', payload } });
-  fireEvent.click(await screen.findByRole('button', { name: kind === 'HOLD' ? 'Block stock' : 'Post stock loss' }));
+  if (kind === 'HOLD') fireEvent.click(await screen.findByRole('button', { name: 'Block stock' }));
+  else await clickAndConfirm('Post stock loss');
   await screen.findByRole('button', { name: 'Check saved status' });
   expectWritesBlocked();
   first.unmount();
@@ -78,7 +83,7 @@ it('recovers an unknown creation with the exact retained request and never repla
     return savedDocument('LOSS');
   });
   const first = mount('LOSS', { draftKey: 'lost-create', initial: creation });
-  fireEvent.click(await screen.findByRole('button', { name: 'Post stock loss' }));
+  await clickAndConfirm('Post stock loss');
   await screen.findByRole('button', { name: 'Check saved status' });
   expectWritesBlocked();
   first.unmount();
@@ -105,7 +110,7 @@ it.each(['DRAFT', 'AWAITING_APPROVAL', 'POSTED', 'REJECTED', 'CANCELLED', 'REVER
   defaultGet(savedDocument('LOSS', status));
   mount('LOSS', { id: 'saved-document', capabilities: capabilities('LOSS', false) });
   expect(await screen.findByText(/Ask a colleague with this inventory workflow.s write permission/, { selector: 'p' })).toBeInTheDocument();
-  expect((screen.getByRole('textbox', { name: 'Recovery handoff' }) as HTMLTextAreaElement).value).toContain('saved-document');
+  expect((screen.getByRole('textbox', { name: /Recovery details for a colleague/ }) as HTMLTextAreaElement).value).toContain('saved-document');
   expect(screen.queryByRole('button', { name: 'Post stock loss' })).not.toBeInTheDocument();
 });
 
@@ -146,7 +151,7 @@ it('does not dispatch if durable recovery cannot be saved before a new stock ope
   mount('LOSS', { draftKey: 'blocked-storage', initial: { requestKey: 'original-request', payload } });
   await screen.findByRole('button', { name: 'Post stock loss' });
   const setItem = jest.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('Storage unavailable'); });
-  fireEvent.click(screen.getByRole('button', { name: 'Post stock loss' }));
+  await clickAndConfirm('Post stock loss');
   await screen.findByText(/No request was sent/);
   expect(apiClient.post).not.toHaveBeenCalled();
   setItem.mockRestore();
@@ -168,7 +173,7 @@ it('does not repeat an unresolved creation after losing write permission', async
   mount('LOSS', { draftKey: 'readonly-pending', capabilities: capabilities('LOSS', false) });
   fireEvent.click(await screen.findByRole('button', { name: 'Check saved status' }));
   await waitFor(() => expect(apiClient.get).toHaveBeenCalledWith('/inventory/workspace/documents/by-request/original-request'));
-  expect((screen.getByRole('textbox', { name: 'Recovery handoff' }) as HTMLTextAreaElement).value).toContain('original-request');
+  expect((screen.getByRole('textbox', { name: /Recovery details for a colleague/ }) as HTMLTextAreaElement).value).toContain('original-request');
   expect(apiClient.post).not.toHaveBeenCalled();
 });
 
@@ -178,7 +183,7 @@ it('renders a structured held-stock rejection with batch and source navigation a
   (apiClient.post as jest.Mock).mockRejectedValue(Object.assign(new Error('Loss is more than the available stock'), { status: 400, body: { code: 'INVENTORY_HELD_STOCK', stockEffect: 'NONE', recovery: { action: 'REVIEW_BATCH', inventoryId: 'batch', sourceId: 'source-return', sourceKind: 'SALES_RETURN', documents: [{ id: 'loss', kind: 'LOSS', reference: 'Loss record' }] } } }));
   const onOpen = jest.fn();
   mount('LOSS', { id: 'saved-document', onOpen });
-  fireEvent.click(await screen.findByRole('button', { name: 'Post stock loss' }));
+  await clickAndConfirm('Post stock loss');
   expect(await screen.findByText(/This rejected attempt made no stock change/)).toBeInTheDocument();
   expect(screen.getByRole('link', { name: 'Inspect batch balance and holds' })).toHaveAttribute('href', '?area=stock&view=list&item=batch');
   fireEvent.click(screen.getByRole('button', { name: 'Open blocking source hold' }));
@@ -232,7 +237,7 @@ it('does not unlock on an unchanged read while a stock transition may still comm
     throw new Error('Unexpected mutation');
   });
   mount('LOSS', { id: 'saved-document' });
-  fireEvent.click(await screen.findByRole('button', { name: 'Post stock loss' }));
+  await clickAndConfirm('Post stock loss');
   await screen.findByRole('button', { name: 'Check saved status' });
   expectWritesBlocked();
   expect(pendingVersion).toBe(3);
@@ -249,7 +254,7 @@ it('keeps readonly unchanged revisions unresolved and shares the expected revisi
   fireEvent.click(await screen.findByRole('button', { name: 'Check saved status' }));
   await screen.findByText(/interrupted request may still finish/i);
   expectWritesBlocked();
-  expect((screen.getByRole('textbox', { name: 'Recovery handoff' }) as HTMLTextAreaElement).value).toContain('recoverOperation=transition&recoverVersion=2');
+  expect((screen.getByRole('textbox', { name: /Recovery details for a colleague/ }) as HTMLTextAreaElement).value).toContain('recoverOperation=transition&recoverVersion=2');
   expect(apiClient.post).not.toHaveBeenCalled();
 });
 
@@ -308,10 +313,10 @@ it('retains rejected unsaved edits when the saved draft revision is unchanged', 
   defaultGet();
   (apiClient.patch as jest.Mock).mockRejectedValue(Object.assign(new Error('Correct the draft details'), { status: 400 }));
   mount('LOSS', { id: 'saved-document' });
-  fireEvent.change(await screen.findByRole('spinbutton', { name: 'quantity 1' }), { target: { value: '7' } });
+  fireEvent.change(await screen.findByRole('spinbutton', { name: 'Quantity, row 1' }), { target: { value: '7' } });
   fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
   await screen.findByText(/Your attempted edits remain in the form and have not been saved/);
-  expect(screen.getByRole('spinbutton', { name: 'quantity 1' })).toHaveValue(7);
+  expect(screen.getByRole('spinbutton', { name: 'Quantity, row 1' })).toHaveValue(7);
   expect(screen.getByRole('button', { name: 'Save draft' })).toBeEnabled();
 });
 

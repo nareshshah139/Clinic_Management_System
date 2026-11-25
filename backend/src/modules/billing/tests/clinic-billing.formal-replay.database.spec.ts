@@ -94,17 +94,11 @@ databaseTests('Clinic billing formal replay', () => {
       (row) => `${row.mode} ${row.amount}`,
     );
 
-  it.failing('RefundsWithinPayment: a 200 UPI payment cannot be refunded twice', async () => {
+  it('RefundsWithinPayment: a 200 UPI payment cannot be refunded twice', async () => {
     const id = await newBill();
-    await expect(refundUpiPaymentTwice(id)).rejects.toThrow();
+    await expect(refundUpiPaymentTwice(id)).rejects.toThrow('already refunded in full');
     expect(await refundModes(id)).toEqual(['UPI -200']);
-  });
-
-  it('today: a 200 UPI payment is refunded twice, both as UPI', async () => {
-    const id = await newBill();
-    await refundUpiPaymentTwice(id);
-    expect(await refundModes(id)).toEqual(['UPI -200', 'UPI -200']);
-    expect(await bill(id)).toEqual({ total: 400, received: 0, balance: 400 });
+    expect(await bill(id)).toEqual({ total: 400, received: 200, balance: 200 });
   });
 
   async function startCardPayment(invoiceId: string) {

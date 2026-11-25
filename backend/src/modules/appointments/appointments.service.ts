@@ -623,6 +623,10 @@ export class AppointmentsService {
       if (!isMovable(current.status)) {
         throw new BadRequestException(`Cannot move an appointment that is ${current.status}`);
       }
+      const timeChanged = !sameDay || current.slot !== rescheduleDto.slot;
+      if (timeChanged && this.slotHasStarted(rescheduleDto.date, rescheduleDto.slot)) {
+        throw new BadRequestException('Cannot move an appointment to a time that has already started');
+      }
       await this.assertSlotBookable(tx, 'Scheduling conflict detected for new time slot', current.doctorId, newRoomId, rescheduleDto.date, rescheduleDto.slot, branchId, {
         allowOverbook: rescheduleDto.allowOverbook ?? false,
         excludeAppointmentId: id,
@@ -1195,6 +1199,11 @@ export class AppointmentsService {
     return slots;
   }
 
+  // Slots are IST wall-clock times on the clinic day.
+  private slotHasStarted(date: string, slot: string): boolean {
+    return istDayStart(date.slice(0, 10)).getTime() + slotToMinutes(slot).start * 60_000 < Date.now();
+  }
+
   // Private helper methods
   private validateAppointmentInputs(dto: CreateAppointmentDto): void {
     if (!SchedulingUtils.isValidTimeSlot(dto.slot)) {
@@ -1203,11 +1212,7 @@ export class AppointmentsService {
       );
     }
 
-    // Slots are IST wall-clock times on the clinic day.
-    const appointmentStart = new Date(istDayStart(dto.date).getTime() + slotToMinutes(dto.slot).start * 60_000);
-    const now = new Date();
-
-    if (appointmentStart < now) {
+    if (this.slotHasStarted(dto.date, dto.slot)) {
       throw new BadRequestException('Cannot schedule appointment in the past');
     }
 

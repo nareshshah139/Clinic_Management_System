@@ -3,7 +3,7 @@ import ProceduresPage from '@/app/dashboard/procedures/page';
 import { apiClient } from '@/lib/api';
 
 jest.mock('@/lib/api', () => ({ apiClient: {
-  getPatients: jest.fn(), getUsers: jest.fn(), get: jest.fn(), createVisit: jest.fn(),
+  getPatients: jest.fn(), getUsers: jest.fn(), get: jest.fn(), getMyProcedureAccess: jest.fn(), createProcedure: jest.fn(),
 } }));
 const mockToast = jest.fn();
 jest.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: mockToast }) }));
@@ -15,7 +15,8 @@ it('saves a valid visit and retains the selected therapist in the procedure', as
     users: query.role === 'DOCTOR' ? [{ id: 'doctor', firstName: 'Doctor' }] : [{ id: 'nurse', firstName: 'Nurse' }],
   }) as any);
   jest.mocked(apiClient.get).mockResolvedValue({ visits: [] } as any);
-  jest.mocked(apiClient.createVisit).mockResolvedValue({} as any);
+  jest.mocked(apiClient.getMyProcedureAccess).mockResolvedValue({ canRecord: true, canConfigure: true });
+  jest.mocked(apiClient.createProcedure).mockResolvedValue({} as any);
 
   render(<ProceduresPage />);
   fireEvent.change(await screen.findByLabelText('Patient *'), { target: { value: 'Pat' } });
@@ -27,8 +28,8 @@ it('saves a valid visit and retains the selected therapist in the procedure', as
   fireEvent.click(screen.getByRole('button', { name: /Endymed Pro Max/i }));
   fireEvent.click(screen.getByRole('button', { name: /Save Procedure/i }));
 
-  await waitFor(() => expect(apiClient.createVisit).toHaveBeenCalledWith(expect.objectContaining({
-    patientId: 'patient', doctorId: 'doctor', complaints: [],
+  await waitFor(() => expect(apiClient.createProcedure).toHaveBeenCalledWith(expect.objectContaining({
+    patientId: 'patient', doctorId: 'doctor',
     treatmentPlan: expect.objectContaining({ dermatology: expect.objectContaining({
       procedures: [expect.objectContaining({ therapistId: 'nurse', machine: 'endymed-pro-max' })],
     }) }),

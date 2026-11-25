@@ -79,6 +79,48 @@ describe('DoctorAvailabilitySettings', () => {
     }));
     expect(api.getDoctorAvailability).toHaveBeenCalledTimes(2);
   });
+
+  it('keeps hours the doctor has edited but not saved when leave is added', async () => {
+    api.createTimeOff.mockResolvedValue({ ...legacy.timeOff[0], id: 'l1', kind: 'LEAVE', doctorId: 'doc-1' });
+    render(<DoctorAvailabilitySettings doctorId="doc-1" />);
+    fireEvent.change(await screen.findByLabelText('Monday shift 1 start'), { target: { value: '07:00' } });
+    fireEvent.click(screen.getByText('Add leave'));
+    await waitFor(() => expect(api.getDoctorAvailability).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByText('Adding…')).not.toBeInTheDocument());
+    expect(screen.getByLabelText('Monday shift 1 start')).toHaveValue('07:00');
+  });
+
+  describe('reporting unsaved edits', () => {
+    const lastReport = (onDirtyChange: jest.Mock) => onDirtyChange.mock.calls.at(-1)?.[0];
+
+    it('reports an edited shift as unsaved and a saved one as clean', async () => {
+      const onDirtyChange = jest.fn();
+      api.replaceDoctorHours.mockResolvedValue({ ...legacy, source: 'configured' } as never);
+      render(<DoctorAvailabilitySettings doctorId="doc-1" onDirtyChange={onDirtyChange} />);
+      const start = await screen.findByLabelText('Monday shift 1 start');
+      await waitFor(() => expect(lastReport(onDirtyChange)).toBe(false));
+
+      fireEvent.change(start, { target: { value: '07:00' } });
+      expect(lastReport(onDirtyChange)).toBe(true);
+
+      fireEvent.change(start, { target: { value: '10:00' } });
+      expect(lastReport(onDirtyChange)).toBe(false);
+
+      fireEvent.change(start, { target: { value: '07:00' } });
+      fireEvent.click(screen.getByText('Save hours'));
+      await screen.findByText('Working hours saved.');
+      await waitFor(() => expect(lastReport(onDirtyChange)).toBe(false));
+    });
+
+    it('reports an unsaved overbooking choice', async () => {
+      const onDirtyChange = jest.fn();
+      render(<DoctorAvailabilitySettings doctorId="doc-1" onDirtyChange={onDirtyChange} />);
+      await screen.findByLabelText('Monday shift 1 start');
+      await waitFor(() => expect(lastReport(onDirtyChange)).toBe(false));
+      fireEvent.click(screen.getByLabelText('Allow overbooking'));
+      await waitFor(() => expect(lastReport(onDirtyChange)).toBe(true));
+    });
+  });
 });
 
 describe('checkSlot and gridHoursFor', () => {

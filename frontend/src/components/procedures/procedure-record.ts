@@ -157,7 +157,7 @@ export function toVisitRequest(record: ProcedureRecord): VisitRequest {
   }
   return {
     kind: 'create',
-    body: { patientId: record.patient?.id, doctorId: record.doctorId, complaints: [], treatmentPlan },
+    body: { patientId: record.patient?.id, doctorId: record.doctorId, treatmentPlan },
   };
 }
 

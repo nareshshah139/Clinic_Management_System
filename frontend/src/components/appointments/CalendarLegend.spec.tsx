@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CalendarLegend } from './CalendarLegend';
 
@@ -54,7 +54,7 @@ describe('CalendarLegend disclosure', () => {
     expect(legend).toHaveAttribute('aria-expanded', 'false');
   });
 
-  it('keeps the open panel inside the viewport when the button moves with no resize or scroll event', async () => {
+  it('keeps the open panel inside the viewport when the window resizes', async () => {
     const { user, legend } = renderLegend();
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1366 });
     let anchorLeft = 1250;
@@ -65,9 +65,21 @@ describe('CalendarLegend disclosure', () => {
     expect(panel.style.left).toBe('-444px');
 
     anchorLeft = 5;
-    await waitFor(() => expect(panel.style.left).toBe('11px'));
+    act(() => { window.dispatchEvent(new Event('resize')); });
+    expect(panel.style.left).toBe('11px');
 
     anchorLeft = 300;
-    await waitFor(() => expect(panel.style.left).toBe('0px'));
+    act(() => { window.dispatchEvent(new Event('resize')); });
+    expect(panel.style.left).toBe('0px');
+  });
+
+  it('does not run an animation-frame loop while open', async () => {
+    const frames = jest.spyOn(window, 'requestAnimationFrame');
+    const { user, legend } = renderLegend();
+    await user.click(legend);
+    expect(screen.getByRole('region', { name: 'Legend' })).toBeInTheDocument();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(frames).not.toHaveBeenCalled();
+    frames.mockRestore();
   });
 });

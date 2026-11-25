@@ -31,8 +31,8 @@ describe('procedure record serializer and parser', () => {
   it('round-trips every field through a saved visit', () => {
     const request = toVisitRequest(filled);
     expect(request.kind).toBe('create');
-    const body = request.body as { treatmentPlan: unknown; patientId: string; doctorId: string; complaints: unknown[] };
-    expect([body.patientId, body.doctorId, body.complaints]).toEqual(['p1', 'd1', []]);
+    const body = request.body as { treatmentPlan: unknown; patientId: string; doctorId: string };
+    expect([body.patientId, body.doctorId]).toEqual(['p1', 'd1']);
 
     const parsed = parseVisitProcedure(storedVisit(body.treatmentPlan));
 

@@ -9,8 +9,9 @@ jest.mock('@/lib/api', () => ({
     getUsers: jest.fn(),
     get: jest.fn(),
     getVisits: jest.fn(),
-    createVisit: jest.fn(),
-    updateVisit: jest.fn(),
+    getMyProcedureAccess: jest.fn(),
+    createProcedure: jest.fn(),
+    updateProcedure: jest.fn(),
   },
 }));
 jest.mock('@/components/common/QuickGuide', () => ({ QuickGuide: () => null }));
@@ -54,8 +55,9 @@ beforeEach(() => {
   }) as any);
   jest.mocked(apiClient.get).mockResolvedValue({ id: 'd1', role: 'DOCTOR' } as any);
   jest.mocked(apiClient.getVisits).mockResolvedValue({ visits: [savedFotonaVisit] } as any);
-  jest.mocked(apiClient.createVisit).mockResolvedValue({} as any);
-  jest.mocked(apiClient.updateVisit).mockResolvedValue({} as any);
+  jest.mocked(apiClient.getMyProcedureAccess).mockResolvedValue({ canRecord: true, canConfigure: true });
+  jest.mocked(apiClient.createProcedure).mockResolvedValue({} as any);
+  jest.mocked(apiClient.updateProcedure).mockResolvedValue({} as any);
 });
 
 const renderReady = async () => {
@@ -139,9 +141,9 @@ describe('ProceduresPage', () => {
     fireEvent.change(screen.getByLabelText('Shot Count (End)'), { target: { value: '480' } });
     fireEvent.click(screen.getByRole('button', { name: /Update Procedure/ }));
 
-    await waitFor(() => expect(apiClient.updateVisit).toHaveBeenCalledTimes(1));
-    expect(apiClient.createVisit).not.toHaveBeenCalled();
-    expect(jest.mocked(apiClient.updateVisit).mock.calls[0]).toEqual(['v9', {
+    await waitFor(() => expect(apiClient.updateProcedure).toHaveBeenCalledTimes(1));
+    expect(apiClient.createProcedure).not.toHaveBeenCalled();
+    expect(jest.mocked(apiClient.updateProcedure).mock.calls[0]).toEqual(['v9', {
       version: 4,
       treatmentPlan: {
         dermatology: {
@@ -173,11 +175,11 @@ describe('ProceduresPage', () => {
     fireEvent.change(screen.getByLabelText('Shot Count (End)'), { target: { value: '700' } });
     fireEvent.click(screen.getByRole('button', { name: /Save Procedure/ }));
 
-    await waitFor(() => expect(apiClient.createVisit).toHaveBeenCalledTimes(1));
-    const body = jest.mocked(apiClient.createVisit).mock.calls[0][0] as any;
+    await waitFor(() => expect(apiClient.createProcedure).toHaveBeenCalledTimes(1));
+    const body = jest.mocked(apiClient.createProcedure).mock.calls[0][0] as any;
     expect([body.patientId, body.doctorId, body.treatmentPlan.dermatology.procedures[0].sessionNo, body.treatmentPlan.dermatology.procedures[0].shotCounts])
       .toEqual(['p1', 'd1', 4, { begin: 480, end: 700 }]);
-    expect(apiClient.updateVisit).not.toHaveBeenCalled();
+    expect(apiClient.updateProcedure).not.toHaveBeenCalled();
   });
 
   it('lists Fotona Starwalker parameters once each, spelled Fluence', async () => {
@@ -198,8 +200,8 @@ describe('ProceduresPage', () => {
     expect(screen.getByLabelText('Fluence, pass 1')).toHaveValue('');
     fireEvent.click(screen.getByRole('button', { name: /Save Procedure/ }));
 
-    await waitFor(() => expect(apiClient.createVisit).toHaveBeenCalledTimes(1));
-    const entry = (jest.mocked(apiClient.createVisit).mock.calls[0][0] as any).treatmentPlan.dermatology.procedures[0];
+    await waitFor(() => expect(apiClient.createProcedure).toHaveBeenCalledTimes(1));
+    const entry = (jest.mocked(apiClient.createProcedure).mock.calls[0][0] as any).treatmentPlan.dermatology.procedures[0];
     expect([entry.machine, entry.parameters]).toEqual(['fotona-starwalker', {}]);
   });
 
@@ -214,7 +216,7 @@ describe('ProceduresPage', () => {
     expect(screen.getByLabelText('Shot Count (Begin)')).toHaveAttribute('min', '0');
     fireEvent.click(screen.getByRole('button', { name: /Save Procedure/ }));
     expect(mockToast).toHaveBeenCalledWith({ variant: 'warning', title: 'The end shot count is lower than the begin count.' });
-    expect(apiClient.createVisit).not.toHaveBeenCalled();
+    expect(apiClient.createProcedure).not.toHaveBeenCalled();
 
     fireEvent.change(screen.getByLabelText('Shot Count (End)'), { target: { value: '650' } });
     expect(screen.getByLabelText('Total Shots')).toHaveValue('150');
@@ -223,7 +225,7 @@ describe('ProceduresPage', () => {
   it('says why the form is missing when staff fail to load, and retries', async () => {
     jest.mocked(apiClient.getUsers).mockRejectedValueOnce(new Error('Network down'));
     render(<ProceduresPage />);
-    expect(await screen.findByText('Could not load doctors and nurses')).toBeInTheDocument();
+    expect(await screen.findByText('Could not load the procedure form')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     expect(await screen.findByRole('combobox', { name: 'Doctor *' })).toBeInTheDocument();
   });

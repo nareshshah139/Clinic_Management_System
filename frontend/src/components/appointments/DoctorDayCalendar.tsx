@@ -37,6 +37,9 @@ import { AppointmentBillDialog } from './AppointmentBillDialog';
 import { BILL_TYPE_LABEL, billingChip } from './appointment-billing-view';
 import { enumLabel } from '@/lib/labels';
 import { statusLabel } from '@/lib/status-variants';
+import { PHONE_QUERY, useMediaQuery } from '@/hooks/use-media-query';
+import { useClinicHHMM } from './useCalendarClock';
+import { tileHeightPx, useViewportHeight } from './tile-height';
 
 const CHECK_IN_FROM: readonly AppointmentStatus[] = [AppointmentStatus.SCHEDULED, AppointmentStatus.CONFIRMED, AppointmentStatus.NO_SHOW];
 const NO_SHOW_FROM: readonly AppointmentStatus[] = [AppointmentStatus.SCHEDULED, AppointmentStatus.CONFIRMED];
@@ -76,6 +79,7 @@ export interface DoctorDayCalendarProps {
 type Move = { appointment: AppointmentInSlot; from: string; refused?: SlotChoice };
 type MoveState = { move: Move | null; setMove: (move: Move | null) => void };
 type OpenedState = { opened: readonly AppointmentCalendar[]; setOpened: (opened: readonly AppointmentCalendar[]) => void };
+type PhoneViewState = { phoneView: AppointmentCalendar | null; setPhoneView: (calendar: AppointmentCalendar) => void };
 
 /**
  * @cc [owner:nareshshah139,label:product] schedule-selection-isolation
@@ -93,7 +97,8 @@ export default function DoctorDayCalendar(props: DoctorDayCalendarProps) {
 function DoctorDayCalendarForDoctor(props: DoctorDayCalendarProps) {
   const [move, setMove] = useState<Move | null>(null);
   const [opened, setOpened] = useState<readonly AppointmentCalendar[]>([]);
-  return <DoctorDayCalendarForSelection key={props.date} {...props} move={move} setMove={setMove} opened={opened} setOpened={setOpened} />;
+  const [phoneView, setPhoneView] = useState<AppointmentCalendar | null>(null);
+  return <DoctorDayCalendarForSelection key={props.date} {...props} move={move} setMove={setMove} opened={opened} setOpened={setOpened} phoneView={phoneView} setPhoneView={setPhoneView} />;
 }
 
 function moveHint(move: Move, date: string, openCalendars: readonly AppointmentCalendar[]): string {
@@ -150,7 +155,9 @@ function DoctorDayCalendarForSelection({
   setMove,
   opened,
   setOpened,
-}: DoctorDayCalendarProps & MoveState & OpenedState) {
+  phoneView,
+  setPhoneView,
+}: DoctorDayCalendarProps & MoveState & OpenedState & PhoneViewState) {
   const router = useRouter();
   const { toast } = useToast();
   const { sendWithOverbookConfirm, overbookDialog } = useOverbookConfirm();
@@ -176,24 +183,16 @@ function DoctorDayCalendarForSelection({
     stepMinutes: slotMinutes,
     timezone: timeSlotConfig.timezone,
   }), [timeSlotConfig.startHour, timeSlotConfig.endHour, slotMinutes, timeSlotConfig.timezone]);
-  // Tile height so the entire day grid fits in ~80% of the viewport
-  const tileHeightCss = `calc(80vh / ${Math.max(1, baseGridSlots.length)})`;
+  const tilePx = tileHeightPx(useViewportHeight(), baseGridSlots.length);
+  const tileHeightCss = `${tilePx}px`;
+  const phone = useMediaQuery(PHONE_QUERY);
   const roomFilterLabel = roomFilter !== 'ALL' ? (selectedRoomName ?? 'Unknown Room') : undefined;
 
   const isToday = date === getISTDateString();
   const scopedOptimisticAppointment = optimisticAppointment?.doctorId === doctorId && optimisticAppointment.date === date
     ? optimisticAppointment.appointment
     : undefined;
-  const nowHHMM = useMemo(() => {
-    try {
-      const tz = timeSlotConfig.timezone || 'Asia/Kolkata';
-      const local = new Date(new Date().toLocaleString('en-US', { timeZone: tz }));
-      const pad = (n: number) => String(n).padStart(2, '0');
-      return `${pad(local.getHours())}:${pad(local.getMinutes())}`;
-    } catch {
-      return '';
-    }
-  }, [timeSlotConfig.timezone]);
+  const nowHHMM = useClinicHHMM(timeSlotConfig.timezone || 'Asia/Kolkata');
 
   const filteredSchedule = useMemo(() => {
     let appointments = schedule.filter(a => a.status !== AppointmentStatus.CANCELLED);
@@ -241,9 +240,9 @@ function DoctorDayCalendarForSelection({
       start = Math.min(start, from);
       end = Math.max(end, to);
     }
-    const vh = (minutes: number) => `${80 * minutes / slotMinutes / Math.max(1, baseGridSlots.length)}vh`;
-    return { start, end, topPadding: vh(workingStart - start), bottomPadding: vh(end - workingEnd) };
-  }, [filteredSchedule, timeSlotConfig.startHour, timeSlotConfig.endHour, slotMinutes, baseGridSlots.length]);
+    const px = (minutes: number) => `${tilePx * minutes / slotMinutes}px`;
+    return { start, end, topPadding: px(workingStart - start), bottomPadding: px(end - workingEnd) };
+  }, [filteredSchedule, timeSlotConfig.startHour, timeSlotConfig.endHour, slotMinutes, tilePx]);
 
   const showLoadingOverlay = loading && (schedule.length > 0 || !!scopedOptimisticAppointment);
 
@@ -443,8 +442,10 @@ function DoctorDayCalendarForSelection({
   };
 
   const isFolded = (calendar: AppointmentCalendar) =>
-    foldedCalendars.includes(calendar) && !opened.includes(calendar) && move?.refused?.calendar !== calendar;
+    !phone && foldedCalendars.includes(calendar) && !opened.includes(calendar) && move?.refused?.calendar !== calendar;
   const openCalendars = CALENDAR_ORDER.filter((calendar) => !isFolded(calendar));
+  const phoneCalendar = move?.refused?.calendar ?? phoneView ?? CALENDAR_ORDER.find((c) => !foldedCalendars.includes(c)) ?? CALENDAR_ORDER[0];
+  const shownColumns = phone ? columns.filter(({ calendar }) => calendar === phoneCalendar) : columns;
 
   const showCalendar = (calendar: AppointmentCalendar) => {
     setFocusFold(calendar);
@@ -507,8 +508,24 @@ function DoctorDayCalendarForSelection({
           )}
 
           <div className="relative" aria-busy={loading}>
+            {phone && (
+              <div role="group" aria-label="Calendar" className="sticky top-0 z-20 mb-2 grid h-11 grid-cols-2 gap-1 rounded-lg bg-muted p-1">
+                {columns.map(({ calendar, appointments }) => (
+                  <button
+                    key={calendar}
+                    type="button"
+                    aria-pressed={calendar === phoneCalendar}
+                    disabled={!!move?.refused && calendar !== phoneCalendar}
+                    onClick={() => setPhoneView(calendar)}
+                    className="rounded-md text-sm font-medium text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 aria-pressed:bg-card aria-pressed:text-foreground aria-pressed:shadow-sm"
+                  >
+                    {CALENDARS[calendar].title} ({appointments.length})
+                  </button>
+                ))}
+              </div>
+            )}
             {move && (
-              <div role="status" className="sticky top-0 z-20 mb-3 flex items-start justify-between gap-2 rounded-lg border border-warning-border bg-warning-soft p-3 text-sm">
+              <div role="status" className="sticky top-11 z-20 mb-3 flex sm:top-0 items-start justify-between gap-2 rounded-lg border border-warning-border bg-warning-soft p-3 text-sm">
                 <div>
                   <div className="font-medium text-warning-text">
                     {move.refused
@@ -532,7 +549,7 @@ function DoctorDayCalendarForSelection({
             )}
             <div
               className="grid grid-rows-[auto_auto] gap-x-1.5 gap-y-1 [--gutter:2.25rem] sm:[--gutter:3rem] [--folded:6rem] sm:[--folded:7.5rem] sm:gap-x-3"
-              style={{ gridTemplateColumns: ['var(--gutter)', ...CALENDAR_ORDER.map((c) => (isFolded(c) ? 'var(--folded)' : 'minmax(0,1fr)'))].join(' ') }}
+              style={{ gridTemplateColumns: ['var(--gutter)', ...shownColumns.map(({ calendar }) => (isFolded(calendar) ? 'var(--folded)' : 'minmax(0,1fr)'))].join(' ') }}
             >
               <div data-time-gutter aria-hidden="true" className="col-start-1 row-start-2" style={{ paddingTop: timeline.topPadding, paddingBottom: timeline.bottomPadding }}>
                 {baseGridSlots.map((slot) => {
@@ -546,7 +563,7 @@ function DoctorDayCalendarForSelection({
                   );
                 })}
               </div>
-              {columns.map(({ calendar, appointments }, index) => (
+              {shownColumns.map(({ calendar, appointments }, index) => (
                 isFolded(calendar) ? (
                 <FoldedCalendar
                   key={calendar}
@@ -582,7 +599,7 @@ function DoctorDayCalendarForSelection({
                   onOpenBill={billAccess.read ? (appointment) => setBillForId(appointment.id) : undefined}
                   onBook={(slot) => onSelectSlot?.(slot, calendar)}
                   onMove={(slot) => void moveInto({ slot, calendar })}
-                  onFold={foldedCalendars.includes(calendar) && move?.refused?.calendar !== calendar ? () => hideCalendar(calendar) : undefined}
+                  onFold={!phone && foldedCalendars.includes(calendar) && move?.refused?.calendar !== calendar ? () => hideCalendar(calendar) : undefined}
                   autoFocusFold={focusFold === calendar}
                 />
                 )
