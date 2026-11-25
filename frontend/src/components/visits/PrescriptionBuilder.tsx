@@ -684,6 +684,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const [rowLoadingDrugs, setRowLoadingDrugs] = useState<Record<number, boolean>>({});
   const [activeSearchRow, setActiveSearchRow] = useState<number | null>(null);
   const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [activeDrugOption, setActiveDrugOption] = useState(-1);
   const inputRefs = useRef<Record<number, HTMLInputElement | null>>({});
   const [drugStockByKey, setDrugStockByKey] = useState<Record<string, number | null>>({});
   const drugStockRequests = useRef(new Map<string, Promise<number | null>>());
@@ -1608,7 +1609,10 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     const t = setTimeout(async () => {
       try {
         const results = await apiClient.get<any[]>('/prescriptions/drugs/autocomplete', { q, limit: 10 });
-        if (current) setRowDrugResults(prev => ({ ...prev, [row]: results.slice(0, 10) }));
+        if (current) {
+          setRowDrugResults(prev => ({ ...prev, [row]: results.slice(0, 10) }));
+          setActiveDrugOption(-1);
+        }
       } catch {
         if (current) setRowDrugResults(prev => ({ ...prev, [row]: [] }));
       } finally {
@@ -1621,6 +1625,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const searchDrugsForRow = (rowIdx: number, q: string) => {
     setRowDrugQueries(prev => ({ ...prev, [rowIdx]: q }));
     setActiveSearchRow(rowIdx);
+    setActiveDrugOption(-1);
     
     // Calculate dropdown position based on input element
     const inputEl = inputRefs.current[rowIdx];
@@ -2315,6 +2320,45 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     if (!shouldAllowDrugAdd(drug)) return;
     applyDrugSelectionToRow(rowIdx, drug, { clearSearch: true, showToast: true });
   };
+
+  const drugListOpen = activeSearchRow !== null && dropdownPosition !== null && (rowDrugQueries[activeSearchRow] || '').trim().length >= 2;
+  const drugOptionId = (index: number) => `rx-drug-option-${index}`;
+  const handleDrugInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, idx: number) => {
+    const open = drugListOpen && activeSearchRow === idx;
+    const results = open ? rowDrugResults[idx] ?? [] : [];
+    const active = results[activeDrugOption];
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      if (results.length === 0) return;
+      e.preventDefault();
+      const step = e.key === 'ArrowDown' ? 1 : -1;
+      setActiveDrugOption(current => current < 0 ? (step > 0 ? 0 : results.length - 1) : (current + step + results.length) % results.length);
+      return;
+    }
+    if (e.key === 'Escape') {
+      if (!open) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setActiveSearchRow(null);
+      return;
+    }
+    if (e.key === 'Tab') {
+      if (active) addItemFromDrugToRow(idx, active);
+      else if (open) setActiveSearchRow(null);
+      return;
+    }
+    if (e.key !== 'Enter' || e.shiftKey) return;
+    e.preventDefault();
+    const loading = Boolean(rowLoadingDrugs[idx]);
+    if (open && (active || loading || results.length > 0)) {
+      const choice = active ?? (loading ? undefined : results[0]);
+      if (choice) addItemFromDrugToRow(idx, choice);
+      return;
+    }
+    insertRowBelow(idx);
+  };
+  useEffect(() => {
+    if (activeDrugOption >= 0) document.getElementById(drugOptionId(activeDrugOption))?.scrollIntoView?.({ block: 'nearest' });
+  }, [activeDrugOption]);
 
   const updateItem = (index: number, patch: Partial<PrescriptionItemForm>) => {
     setItems(prev => {
@@ -5485,12 +5529,12 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                                     }
                                   }, 200);
                                 }}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter' && !e.shiftKey) {
-                                    e.preventDefault();
-                                    insertRowBelow(idx);
-                                  }
-                                }}
+                                role="combobox"
+                                aria-autocomplete="list"
+                                aria-expanded={drugListOpen && activeSearchRow === idx}
+                                aria-controls="rx-drug-listbox"
+                                aria-activedescendant={drugListOpen && activeSearchRow === idx && rowDrugResults[idx]?.[activeDrugOption] ? drugOptionId(activeDrugOption) : undefined}
+                                onKeyDown={(e) => handleDrugInputKeyDown(e, idx)}
                                 placeholder="Search medicine name..." 
                                 className="min-w-0 flex-1"
                               />
@@ -7173,7 +7217,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       </div>
 
       {/* Fixed position drug search dropdown - rendered outside table structure */}
-      {activeSearchRow !== null && dropdownPosition && (rowDrugQueries[activeSearchRow] || '').trim().length >= 2 && (
+      {drugListOpen && activeSearchRow !== null && dropdownPosition && (
         <div 
           className="fixed z-[10000] bg-white border-2 border-info rounded-lg shadow-sm max-h-64 overflow-auto"
           style={{ 
@@ -7190,56 +7234,57 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
           {!rowLoadingDrugs[activeSearchRow] && (!rowDrugResults[activeSearchRow] || rowDrugResults[activeSearchRow].length === 0) && (
             <div className="px-3 py-2 text-xs text-muted-foreground">No results found</div>
           )}
-          {rowDrugResults[activeSearchRow] && rowDrugResults[activeSearchRow].length > 0 && (
-            <>
-              {rowDrugResults[activeSearchRow].map((d: any, index: number) => (
-                <div 
-                  key={`${d.id}-${d.name}`} 
-                  className={`px-3 py-2 text-sm flex items-center justify-between hover:bg-accent cursor-pointer border-b last:border-b-0 ${
-                    index === 0 ? 'bg-success-soft' :
-                    index < 3 ? 'bg-info-soft' : ''
-                  }`}
-                  onMouseEnter={() => prefetchDrugStockById(d.id, d.inventoryItemId)}
-                  onClick={() => { addItemFromDrugToRow(activeSearchRow, d); }}
-                  title={((): string => {
-                    const stock = drugStockByKey[d.inventoryItemId ? `inventory:${d.inventoryItemId}` : `id:${d.id}`] ?? d.totalStock;
-                    if (stock === undefined) return 'Checking stock…';
-                    return `Remaining stock: ${stock ?? '—'}`;
-                  })()}
-                >
-                  <div className="flex-1">
-                    <div className="flex items-center">
-                      <div className="font-medium">
-                        {highlightMatch(d.name, rowDrugQueries[activeSearchRow])}
-                      </div>
-                      {getRelevanceBadge(d, rowDrugQueries[activeSearchRow], index)}
+          <div id="rx-drug-listbox" role="listbox" aria-label="Medicine matches">
+            {(rowDrugResults[activeSearchRow] ?? []).map((d: any, index: number) => (
+              <div 
+                key={`${d.id}-${d.name}`} 
+                id={drugOptionId(index)}
+                role="option"
+                aria-selected={index === activeDrugOption}
+                className={`px-3 py-2 text-sm flex items-center justify-between hover:bg-accent aria-selected:bg-accent aria-selected:ring-2 aria-selected:ring-inset aria-selected:ring-ring cursor-pointer border-b last:border-b-0 ${
+                  index === 0 ? 'bg-success-soft' :
+                  index < 3 ? 'bg-info-soft' : ''
+                }`}
+                onMouseEnter={() => { setActiveDrugOption(index); prefetchDrugStockById(d.id, d.inventoryItemId); }}
+                onClick={() => { addItemFromDrugToRow(activeSearchRow, d); }}
+                title={((): string => {
+                  const stock = drugStockByKey[d.inventoryItemId ? `inventory:${d.inventoryItemId}` : `id:${d.id}`] ?? d.totalStock;
+                  if (stock === undefined) return 'Checking stock…';
+                  return `Remaining stock: ${stock ?? '—'}`;
+                })()}
+              >
+                <div className="flex-1">
+                  <div className="flex items-center">
+                    <div className="font-medium">
+                      {highlightMatch(d.name, rowDrugQueries[activeSearchRow])}
                     </div>
-                    {d.strengthMissing && <div className="text-xs text-warning-text">Strength missing</div>}
-                    <div className="text-xs text-muted-foreground">
-                      {highlightMatch(d.manufacturer || d.manufacturerName || d.genericName || '', rowDrugQueries[activeSearchRow])}
-                      {d.packSizeLabel ? ` • ${d.packSizeLabel}` : ''}
-                    </div>
-                    <div className="text-xs mt-0.5">
-                      <span className="text-muted-foreground">Stock:</span>{' '}
-                      {(() => {
-                        const stock = drugStockByKey[d.inventoryItemId ? `inventory:${d.inventoryItemId}` : `id:${d.id}`] ?? d.totalStock;
-                        return stock != null
-                          ? <span className={stock <= 5 ? 'text-destructive-text' : 'text-foreground'}>{stock}</span>
-                          : <span className="text-muted-foreground">—</span>;
-                      })()}
-                    </div>
+                    {getRelevanceBadge(d, rowDrugQueries[activeSearchRow], index)}
                   </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={(e) => { e.stopPropagation(); addItemFromDrugToRow(activeSearchRow, d); }}
-                  >
-                    Select
-                  </Button>
+                  {d.strengthMissing && <div className="text-xs text-warning-text">Strength missing</div>}
+                  <div className="text-xs text-muted-foreground">
+                    {highlightMatch(d.manufacturer || d.manufacturerName || d.genericName || '', rowDrugQueries[activeSearchRow])}
+                    {d.packSizeLabel ? ` • ${d.packSizeLabel}` : ''}
+                  </div>
+                  <div className="text-xs mt-0.5">
+                    <span className="text-muted-foreground">Stock:</span>{' '}
+                    {(() => {
+                      const stock = drugStockByKey[d.inventoryItemId ? `inventory:${d.inventoryItemId}` : `id:${d.id}`] ?? d.totalStock;
+                      return stock != null
+                        ? <span className={stock <= 5 ? 'text-destructive-text' : 'text-foreground'}>{stock}</span>
+                        : <span className="text-muted-foreground">—</span>;
+                    })()}
+                  </div>
                 </div>
-              ))}
-            </>
-          )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={(e) => { e.stopPropagation(); addItemFromDrugToRow(activeSearchRow, d); }}
+                >
+                  Select
+                </Button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
