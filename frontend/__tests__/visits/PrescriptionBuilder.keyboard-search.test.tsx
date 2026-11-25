@@ -96,3 +96,29 @@ describe('medicine search keyboard', () => {
     expect(medicineInputs().map((el) => el.value)).toEqual(['Amoxiclav 625', '']);
   });
 });
+
+describe('medicine search list placement', () => {
+  const viewport = { width: window.innerWidth, height: window.innerHeight };
+  afterEach(() => {
+    Object.assign(window, { innerWidth: viewport.width, innerHeight: viewport.height });
+    jest.restoreAllMocks();
+  });
+
+  it('fits a phone screen and follows the input when the page scrolls', async () => {
+    Object.assign(window, { innerWidth: 375, innerHeight: 667 });
+    let inputTop = 100;
+    const box = (left: number, top: number, width: number, height: number) =>
+      ({ left, top, width, height, bottom: top + height, right: left + width, x: left, y: top, toJSON: () => ({}) }) as DOMRect;
+    jest.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      return this.id === 'rx-row-0-drug' ? box(16, inputTop, 200, 36) : box(0, 0, 0, 0);
+    });
+    await typeMedicine('amo');
+    const list = screen.getByRole('listbox').parentElement!;
+    expect(list.style).toMatchObject({ left: '8px', width: '359px', top: '140px', bottom: '', maxHeight: '256px' });
+
+    inputTop = 600;
+    fireEvent.scroll(window);
+
+    expect(list.style).toMatchObject({ left: '8px', width: '359px', top: '', bottom: '71px', maxHeight: '256px' });
+  });
+});

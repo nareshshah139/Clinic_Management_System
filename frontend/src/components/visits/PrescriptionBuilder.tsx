@@ -2,8 +2,9 @@
 import { displayUtcDate, displayClinicDate } from '@/lib/date-display';
 import { Spinner } from "@/components/ui/spinner";
 import { TELE_VIDEO_DISCLAIMER, TELE_VIDEO_CONSENT_REQUIRED, type ConsultationType } from '@/lib/tele-consultation';
-import React, { useCallback, useDeferredValue, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useDeferredValue, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal, flushSync } from 'react-dom';
+import { placeDrugDropdown, samePlacement, type DropdownPlacement } from './drug-dropdown-position';
 import type { VisitDetails } from '@/lib/types';
 import { encounterTime } from '@/lib/patient-history';
 import { PRESCRIPTION_LETTERHEAD_URL, prescriptionLetterheadUrl, prescriptionPageMargin } from '@/lib/prescription-letterhead';
@@ -683,7 +684,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const [rowDrugResults, setRowDrugResults] = useState<Record<number, any[]>>({});
   const [rowLoadingDrugs, setRowLoadingDrugs] = useState<Record<number, boolean>>({});
   const [activeSearchRow, setActiveSearchRow] = useState<number | null>(null);
-  const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [dropdownPosition, setDropdownPosition] = useState<DropdownPlacement | null>(null);
   const [activeDrugOption, setActiveDrugOption] = useState(-1);
   const inputRefs = useRef<Record<number, HTMLInputElement | null>>({});
   const [drugStockByKey, setDrugStockByKey] = useState<Record<string, number | null>>({});
@@ -1626,18 +1627,27 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     setRowDrugQueries(prev => ({ ...prev, [rowIdx]: q }));
     setActiveSearchRow(rowIdx);
     setActiveDrugOption(-1);
-    
-    // Calculate dropdown position based on input element
-    const inputEl = inputRefs.current[rowIdx];
-    if (inputEl) {
-      const rect = inputEl.getBoundingClientRect();
-      setDropdownPosition({
-        top: rect.bottom + window.scrollY + 4,
-        left: rect.left + window.scrollX,
-        width: Math.max(500, rect.width)
-      });
-    }
   };
+
+  useLayoutEffect(() => {
+    if (activeSearchRow === null) {
+      setDropdownPosition(null);
+      return;
+    }
+    const place = () => {
+      const input = inputRefs.current[activeSearchRow];
+      if (!input) return;
+      const next = placeDrugDropdown(input.getBoundingClientRect(), { width: window.innerWidth, height: window.innerHeight });
+      setDropdownPosition(prev => samePlacement(prev, next) ? prev : next);
+    };
+    place();
+    window.addEventListener('scroll', place, true);
+    window.addEventListener('resize', place);
+    return () => {
+      window.removeEventListener('scroll', place, true);
+      window.removeEventListener('resize', place);
+    };
+  }, [activeSearchRow]);
 
   // Highlight matching text in search results
   const highlightMatch = (text: string, query: string) => {
@@ -2474,7 +2484,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     setRowDrugResults({});
     setRowLoadingDrugs({});
     setActiveSearchRow(null);
-    setDropdownPosition(null);
     setActiveRowIdx(focusIndex);
     setTimeout(() => inputRefs.current[focusIndex]?.focus(), 10);
   };
@@ -5505,14 +5514,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                                   updateItem(idx, { drugName: val });
                                   searchDrugsForRow(idx, val);
                                 }}
-                                onFocus={(e) => {
+                                onFocus={() => {
                                   setActiveRowIdx(idx);
-                                  const rect = e.currentTarget.getBoundingClientRect();
-                                  setDropdownPosition({
-                                    top: rect.bottom + window.scrollY + 4,
-                                    left: rect.left + window.scrollX,
-                                    width: Math.max(500, rect.width)
-                                  });
                                   if (it.drugName.trim().length >= 2) {
                                     searchDrugsForRow(idx, it.drugName);
                                   }
@@ -5523,10 +5526,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                                     if (patientId) pushRecent(`drugNames:${patientId}`, it.drugName);
                                   }
                                   setTimeout(() => {
-                                    if (activeSearchRow === idx) {
-                                      setActiveSearchRow(null);
-                                      setDropdownPosition(null);
-                                    }
+                                    if (activeSearchRow === idx) setActiveSearchRow(null);
                                   }, 200);
                                 }}
                                 role="combobox"
@@ -7219,11 +7219,9 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       {/* Fixed position drug search dropdown - rendered outside table structure */}
       {drugListOpen && activeSearchRow !== null && dropdownPosition && (
         <div 
-          className="fixed z-[10000] bg-white border-2 border-info rounded-lg shadow-sm max-h-64 overflow-auto"
+          className="fixed z-[10000] bg-popover text-popover-foreground border-2 border-info rounded-lg shadow-sm overflow-auto"
           style={{ 
-            top: `${dropdownPosition.top}px`,
-            left: `${dropdownPosition.left}px`,
-            width: `${dropdownPosition.width}px`,
+            ...dropdownPosition,
             boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)'
           }}
           onMouseDown={(e) => e.preventDefault()}
