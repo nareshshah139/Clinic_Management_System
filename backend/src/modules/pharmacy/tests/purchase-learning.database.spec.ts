@@ -174,6 +174,12 @@ databaseTests('Purchase OCR learning with real PostgreSQL', () => {
     expect(metrics.totals).toEqual({ lines: 7, reviewedLines: 6, reviewerTouches: 3, touchesPer100Lines: 42.9, rawCorrectionRate: 43.8,
       invoices: 7, automaticInvoices: 1, autoCommitRate: 14.3, lessonsKept: 4, lessonsOverridden: 1, overrideRate: 20 });
     expect(metrics.activeLessons).toEqual({ SUGGEST: 0, APPLY: 0, TRUSTED: 0 });
+
+    const today = new Date().toISOString().slice(0, 10);
+    const throughToday = await service.learningMetrics(branchId, { to: today });
+    expect(throughToday.totals).toEqual(metrics.totals);
+    expect(throughToday.totals.lines).toBe(7);
+    expect(throughToday.totals.reviewerTouches).toBe(3);
   }, 60000);
 
   it('forgets a lesson on request so the next bill is read as printed again', async () => {
