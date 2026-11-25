@@ -19,7 +19,6 @@ import { PortalController } from '../portal.controller';
 import { PORTAL_ROUTE } from '../portal.decorator';
 import { PortalGuard } from '../portal.guard';
 import { TaskPageService } from '../task.service';
-import { SignInController } from '../sign-in.controller';
 import { SignInService } from '../sign-in.service';
 import { SESSION_COOKIE } from '../session';
 
@@ -89,7 +88,7 @@ describe('portal routes (PP-37, PP-39, PP-55, PP-59, PP-83, PP-84, PP-86, StaffC
     process.env.PORTAL_BASE_URL = `${ORIGIN}/`;
     process.env.PORTAL_CODE_ANSWER_MS = '1';
     const module = await Test.createTestingModule({
-      controllers: [PortalController, SignInController, StaffProbeController],
+      controllers: [PortalController, StaffProbeController],
       providers: [
         PortalGuard,
         { provide: PrismaService, useValue: prisma },
@@ -110,8 +109,6 @@ describe('portal routes (PP-37, PP-39, PP-55, PP-59, PP-83, PP-84, PP-86, StaffC
   beforeEach(() => jest.clearAllMocks());
 
   const taskRoutes = routes.filter((r) => r.path.startsWith('/portal/task/'));
-  const signInRoutes = ['POST /portal/auth/code', 'POST /portal/auth/verify'];
-  const sessionRoutes = routes.filter((r) => !r.path.startsWith('/portal/task/') && !signInRoutes.includes(r.key));
   const send = (r: { method: string; path: string }, origin: string | null = ORIGIN) => {
     const req = (request(app.getHttpServer()) as any)[r.method](r.path);
     return origin ? req.set('Origin', origin) : req;
@@ -119,29 +116,11 @@ describe('portal routes (PP-37, PP-39, PP-55, PP-59, PP-83, PP-84, PP-86, StaffC
 
   it('finds the portal routes, none with a patient id in its path; task-link routes are all POST', () => {
     expect(routes.map((r) => r.key).sort()).toEqual([
-      'GET /portal/session',
-      'POST /portal/auth/code',
-      'POST /portal/auth/sign-out',
-      'POST /portal/auth/sign-out-everywhere',
-      'POST /portal/auth/verify',
-      'POST /portal/session/profile',
       'POST /portal/task/questions',
       'POST /portal/task/responses',
     ]);
     for (const r of routes) expect(r.path).not.toMatch(/:|patient/i);
     for (const r of taskRoutes) expect(r.method).toBe('post');
-  });
-
-  it.each(sessionRoutes.map((r) => [r.key, r]))('%s answers no session, an unknown session, a staff cookie or a staff bearer with 401 (PP-83, StaffCookieStaysStaff)', async (_, r: any) => {
-    const attempts = [
-      () => send(r).send({}),
-      () => send(r).set('Cookie', `${SESSION_COOKIE}=${'U'.repeat(43)}`).send({}),
-      () => send(r).set('Cookie', 'auth_token=staff.jwt.value').send({ patientId: 'p1' }),
-      () => send(r).set('Authorization', 'Bearer staff.jwt.value').send({}),
-    ];
-    for (const attempt of attempts) expect((await attempt()).status).toBe(401);
-    expect(signIn.profileList).not.toHaveBeenCalled();
-    expect(signIn.signOut).not.toHaveBeenCalled();
   });
 
   it.each(routes.filter((r) => r.method !== 'get').map((r) => [r.key, r]))('%s refuses a write whose Origin is missing or not exactly the portal origin (PP-59)', async (_, r: any) => {
@@ -155,35 +134,12 @@ describe('portal routes (PP-37, PP-39, PP-55, PP-59, PP-83, PP-84, PP-86, StaffC
     expect(tasks.submit).not.toHaveBeenCalled();
   });
 
-  it('answers a code request with the same body whether or not a code was sent (PP-55)', async () => {
-    const bodies: string[] = [];
-    for (const outcome of ['sent', 'not-eligible', 'phone-window', 'clinic-ceiling']) {
-      signIn.requestCode.mockResolvedValueOnce(outcome);
-      const res = await send({ method: 'post', path: '/portal/auth/code' }).send({ phone: '9800000001' });
-      expect(res.status).toBe(200);
-      expect(res.headers['cache-control']).toBe('no-store');
-      bodies.push(res.text);
-    }
-    expect(new Set(bodies).size).toBe(1);
-  });
-
-  it('answers a wrong code with 401 and sets no cookie', async () => {
-    const res = await send({ method: 'post', path: '/portal/auth/verify' }).send({ phone: '9800000001', code: '000000' });
-    expect(res.status).toBe(401);
-    expect(res.headers['set-cookie']).toBeUndefined();
-  });
-
   it('never lets a portal session authorize a staff route (PP-62, StaffCookieStaysStaff)', async () => {
     const server = app.getHttpServer();
     await request(server).get('/staff-probe').set('Cookie', `${SESSION_COOKIE}=${LIVE_SESSION}`).expect(401);
     await request(server).get('/staff-probe').set('Cookie', `auth_token=${LIVE_SESSION}`).expect(401);
     await request(server).get('/staff-probe').set('Authorization', `Bearer ${LIVE_SESSION}`).expect(401);
     expect(signIn.resolve).not.toHaveBeenCalled();
-  });
-
-  it('reads a live session from the __Host- cookie alone and ignores staff credentials beside it', async () => {
-    await send({ method: 'get', path: '/portal/session' }, null).set('Cookie', `auth_token=staff; ${SESSION_COOKIE}=${LIVE_SESSION}`).expect(200);
-    expect(signIn.profileList).toHaveBeenCalledWith({ kind: 'portal-identity', sessionId: 's1', identityId: 'i1', phoneE164: '+919800000001' });
   });
 
   it('puts every portal route behind the one Portal() decorator: public to staff, portal guard on', () => {

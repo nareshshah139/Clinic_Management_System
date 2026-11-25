@@ -10,6 +10,8 @@ import { JwtAuthGuard } from '../../../shared/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../shared/guards/roles.guard';
 import { canonicalBody, encodeCaller, signPortalCall, type PortalCaller } from '../portal-call';
 import { Caller, PortalInternal } from '../portal-internal.decorator';
+import { PrismaService } from '../../../shared/database/prisma.service';
+import { SignInService } from '../../portal/sign-in.service';
 import { PortalInternalModule } from '../portal-internal.module';
 import vector from './portal-call.vector.json';
 
@@ -36,8 +38,19 @@ function headers({ method, path: p, body, caller = PATIENT, ts = Date.now() }: S
   };
 }
 
+const LIVE_SESSION = 'L'.repeat(43);
+
 describe('/internal/portal (signed portal calls)', () => {
   let app: INestApplication;
+  const signIn = {
+    requestCode: jest.fn(async () => 'sent'),
+    verifyCode: jest.fn(async (): Promise<unknown> => ({ ok: false, reason: 'wrong' })),
+    resolve: jest.fn(async (token: string) =>
+      token === LIVE_SESSION ? { session: { id: 's1', identityId: 'i1' }, phoneE164: '+919800000001', profiles: [], chosen: null } : null),
+    profileList: jest.fn(async () => ({ profiles: [{ ref: 'r'.repeat(22), firstName: 'Asha', branch: 'Banjara Hills' }], chosen: null })),
+    chooseProfile: jest.fn(async () => true),
+    signOut: jest.fn(async () => undefined),
+  };
   const http = () => request(app.getHttpServer());
 
   beforeAll(async () => {
@@ -49,13 +62,18 @@ describe('/internal/portal (signed portal calls)', () => {
         { provide: APP_GUARD, useClass: RolesGuard },
         { provide: APP_GUARD, useClass: ThrottlerGuard },
       ],
-    }).compile();
+    })
+      .overrideProvider(PrismaService).useValue({})
+      .overrideProvider(SignInService).useValue(signIn)
+      .compile();
     app = moduleRef.createNestApplication();
     await app.init();
   });
   afterAll(() => app.close());
   beforeEach(() => {
+    jest.clearAllMocks();
     process.env.PORTAL_SERVICE_SECRET = SECRET;
+    process.env.PORTAL_CODE_ANSWER_MS = '30';
   });
   afterEach(() => {
     delete process.env.PORTAL_SERVICE_SECRET;
@@ -139,6 +157,59 @@ describe('/internal/portal (signed portal calls)', () => {
   ])('refuses a signed caller header with %s', async (_, caller) => {
     const p = '/internal/portal/ping';
     await http().get(p).set(headers({ method: 'GET', path: p, caller: caller as PortalCaller })).expect(401);
+  });
+
+  const post = (p: string, body: unknown, caller: PortalCaller = { kind: 'anonymous' }) =>
+    http().post(p).set(headers({ method: 'POST', path: p, body, caller })).send(body as object);
+  const SESSION: PortalCaller = { kind: 'session', token: LIVE_SESSION };
+
+  it('answers every code request with the same body, whether or not a code was sent (PP-55)', async () => {
+    const bodies = new Set<string>();
+    for (const outcome of ['sent', 'not-eligible', 'phone-window', 'clinic-ceiling']) {
+      signIn.requestCode.mockResolvedValueOnce(outcome);
+      const res = await post('/internal/portal/sign-in/code', { phone: '9800000001' }).expect(200);
+      bodies.add(res.text);
+    }
+    expect(bodies.size).toBe(1);
+  });
+
+  it('answers a wrong code with 401 and a right one with the session token and profile list', async () => {
+    await post('/internal/portal/sign-in/verify', { phone: '9800000001', code: '000000' }).expect(401);
+    signIn.verifyCode.mockResolvedValueOnce({
+      ok: true, token: LIVE_SESSION, absoluteExpiresAt: new Date('2026-11-26T00:00:00Z'),
+      principal: { kind: 'portal-identity', sessionId: 's1', identityId: 'i1', phoneE164: '+919800000001' },
+    });
+    const res = await post('/internal/portal/sign-in/verify', { phone: '9800000001', code: '123456' }).expect(200);
+    expect(res.body).toEqual({
+      token: LIVE_SESSION, absoluteExpiresAt: '2026-11-26T00:00:00.000Z',
+      profiles: [{ ref: 'r'.repeat(22), firstName: 'Asha', branch: 'Banjara Hills' }], chosen: null,
+    });
+  });
+
+  it.each([
+    ['GET', '/internal/portal/session'],
+    ['POST', '/internal/portal/session/profile'],
+    ['POST', '/internal/portal/sign-out'],
+    ['POST', '/internal/portal/sign-out-everywhere'],
+  ] as const)('%s %s works only for a live session caller', async (method, p) => {
+    const body = method === 'GET' ? undefined : { ref: 'r'.repeat(22) };
+    const call = (caller: PortalCaller) => {
+      const req = method === 'GET' ? http().get(p) : http().post(p);
+      return req.set(headers({ method: method as 'GET' | 'POST', path: p, body, caller })).send(body as object);
+    };
+    for (const caller of [{ kind: 'anonymous' }, PATIENT, { kind: 'phone', phoneE164: '+919800000001' }, { kind: 'session', token: 'U'.repeat(43) }] as PortalCaller[]) {
+      expect((await call(caller)).status).toBe(401);
+    }
+    expect(signIn.signOut).not.toHaveBeenCalled();
+    expect(signIn.chooseProfile).not.toHaveBeenCalled();
+    expect((await call(SESSION)).status).toBe(200);
+  });
+
+  it('signs out only this session, or every session of the number', async () => {
+    const principal = { kind: 'portal-identity', sessionId: 's1', identityId: 'i1', phoneE164: '+919800000001' };
+    await post('/internal/portal/sign-out', {}, SESSION).expect(200);
+    await post('/internal/portal/sign-out-everywhere', {}, SESSION).expect(200);
+    expect(signIn.signOut.mock.calls).toEqual([[principal, false], [principal, true]]);
   });
 
   it('matches the shared test vector the portal service also checks', () => {

@@ -83,6 +83,8 @@ GET /google-calendar/configured | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPT
 GET /google-calendar/status | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /google-calendar/status/:doctorId | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /health | public
+GET /internal/portal/ping | public
+GET /internal/portal/session | public
 GET /inventory/alerts/expiry | roles: ADMIN,PHARMACIST,RECEPTION | permissions: inventory:alerts:expiry
 GET /inventory/alerts/low-stock | roles: ADMIN,PHARMACIST,RECEPTION | permissions: inventory:alerts:lowStock
 GET /inventory/categories | roles: ADMIN,PHARMACIST,RECEPTION | permissions: inventory:catalog:categories
@@ -209,7 +211,6 @@ GET /pharmacy/reports/:reportId | roles: OWNER,ADMIN,MANAGER,ACCOUNTANT,PHARMACI
 GET /pharmacy/sales-register | roles: ADMIN,PHARMACIST,DOCTOR | permissions: pharmacy:invoice:read
 GET /pharmacy/trade-terms | roles: OWNER,ADMIN,DOCTOR,PHARMACIST,RECEPTION,MANAGER,ACCOUNTANT | permissions: -
 GET /pharmacy/trade-terms/distributors | roles: OWNER,ADMIN,DOCTOR,PHARMACIST,RECEPTION,MANAGER,ACCOUNTANT | permissions: -
-GET /portal/session | public
 GET /prescriptions | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /prescriptions/:id | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /prescriptions/:id/print-events | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
@@ -343,6 +344,11 @@ POST /follow-ups/messages/:id/confirm | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,
 POST /follow-ups/tracks/:id/stop | roles: DOCTOR,ADMIN,OWNER | permissions: -
 POST /google-calendar/disconnect | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 POST /google-calendar/exchange | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
+POST /internal/portal/session/profile | public
+POST /internal/portal/sign-in/code | public
+POST /internal/portal/sign-in/verify | public
+POST /internal/portal/sign-out | public
+POST /internal/portal/sign-out-everywhere | public
 POST /inventory/adjustments | roles: ADMIN,PHARMACIST,RECEPTION | permissions: inventory:adjustment:create
 POST /inventory/imports/:id/retry-failed-rows | roles: ADMIN,PHARMACIST,RECEPTION | permissions: inventory:item:create
 POST /inventory/item-requests/:id/approve | roles: ADMIN,DOCTOR | permissions: inventory:item:approve
@@ -442,11 +448,6 @@ POST /pharmacy/purchase-ledger/payments/:id/reallocate | roles: ADMIN,PHARMACIST
 POST /pharmacy/purchase-ledger/payments/:id/reverse | roles: ADMIN,PHARMACIST,ACCOUNTANT,DOCTOR | permissions: pharmacy:purchase-ledger:write
 POST /pharmacy/reports/daily-collection/:day/counts | roles: OWNER,ADMIN,MANAGER,PHARMACIST,DOCTOR | permissions: pharmacy:compliance:audit
 POST /pharmacy/trade-terms/lookup | roles: OWNER,ADMIN,DOCTOR,PHARMACIST,RECEPTION,MANAGER,ACCOUNTANT | permissions: -
-POST /portal/auth/code | public
-POST /portal/auth/sign-out | public
-POST /portal/auth/sign-out-everywhere | public
-POST /portal/auth/verify | public
-POST /portal/session/profile | public
 POST /portal/task/questions | public
 POST /portal/task/responses | public
 POST /prescriptions | roles: DOCTOR,ADMIN,OWNER | permissions: -

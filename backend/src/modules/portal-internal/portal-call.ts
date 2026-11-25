@@ -5,7 +5,8 @@ export type PortalCaller =
   | { kind: 'anonymous' }
   | { kind: 'phone'; phoneE164: string }
   | { kind: 'patient'; phoneE164: string; patientId: string }
-  | { kind: 'task-link'; token: string };
+  | { kind: 'task-link'; token: string }
+  | { kind: 'session'; token: string };
 
 export type PortalCallInput = {
   method: string;
@@ -65,6 +66,8 @@ export function parseCaller(raw: unknown): PortalCaller | null {
         : null;
     case 'task-link':
       return keys === 'kind,token' && str('token', TOKEN) ? { kind: 'task-link', token: v.token as string } : null;
+    case 'session':
+      return keys === 'kind,token' && str('token', TOKEN) ? { kind: 'session', token: v.token as string } : null;
     default:
       return null;
   }
