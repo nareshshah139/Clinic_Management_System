@@ -1,4 +1,5 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import RoomCalendar from './RoomCalendar';
 import { apiClient } from '@/lib/api';
 
@@ -49,4 +50,52 @@ it('extends the visible hours to show bookings outside 09:00-18:00', async () =>
   render(<RoomCalendar />);
   expect((await screen.findAllByText('Late Patient')).length).toBeGreaterThan(0);
   expect(screen.getByText('19:30')).toBeInTheDocument();
+});
+
+const booking = {
+  id: 'a1', slot: '10:00-10:30', visitType: 'OPD', status: 'CONFIRMED',
+  patient: { id: 'p1', name: 'Asha Rao' }, doctor: { id: 'd1', firstName: 'Meera', lastName: 'Shah' },
+};
+
+it('opens a dialog with the booking details and a link to the appointment from a click', async () => {
+  jest.mocked(apiClient.getRoomSchedule).mockResolvedValue({ appointments: [booking] } as never);
+  render(<RoomCalendar />);
+  fireEvent.click((await screen.findAllByRole('button', { name: /Asha Rao, 10:00-10:30/ }))[0]);
+  const dialog = await screen.findByRole('dialog');
+  expect(dialog).toHaveTextContent('Asha Rao');
+  expect(dialog).toHaveTextContent('Dr. Meera Shah');
+  expect(dialog).toHaveTextContent('10:00-10:30');
+  expect(dialog).toHaveTextContent('Confirmed');
+  expect(within(dialog).getByRole('link', { name: 'Open in Appointments' })).toHaveAttribute('href', expect.stringMatching(/^\/dashboard\/appointments\?date=\d{4}-\d{2}-\d{2}&doctorId=d1$/));
+});
+
+it('opens the booking dialog from the keyboard', async () => {
+  jest.mocked(apiClient.getRoomSchedule).mockResolvedValue({ appointments: [booking] } as never);
+  render(<RoomCalendar />);
+  const block = (await screen.findAllByRole('button', { name: /Asha Rao, 10:00-10:30/ }))[0];
+  block.focus();
+  await userEvent.keyboard('{Enter}');
+  expect(await screen.findByRole('dialog')).toHaveTextContent('Asha Rao');
+});
+
+it('fetches the picked date and ignores a slower earlier response', async () => {
+  const slow = { appointments: [{ ...booking, id: 'old', patient: { id: 'p2', name: 'Stale Patient' } }] };
+  const fresh = { appointments: [{ ...booking, id: 'new', patient: { id: 'p3', name: 'Fresh Patient' } }] };
+  const slowResolvers: Array<(v: unknown) => void> = [];
+  jest.mocked(apiClient.getRoomSchedule).mockImplementation(((_room: string, date: string) =>
+    date === '2031-03-04' ? new Promise((resolve) => { slowResolvers.push(resolve); }) :
+    date === '2031-03-05' ? Promise.resolve(fresh) : Promise.resolve({ appointments: [] })) as never);
+  render(<RoomCalendar />);
+  const picker = await screen.findByLabelText('Date');
+
+  fireEvent.change(picker, { target: { value: '2031-03-04' } });
+  await waitFor(() => expect(apiClient.getRoomSchedule).toHaveBeenCalledWith('r0', '2031-03-04'));
+  fireEvent.change(picker, { target: { value: '2031-03-05' } });
+  await waitFor(() => expect(apiClient.getRoomSchedule).toHaveBeenCalledWith('r0', '2031-03-05'));
+  expect((await screen.findAllByText('Fresh Patient')).length).toBeGreaterThan(0);
+  expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Wednesday, 5 March 2031');
+
+  await act(async () => slowResolvers.forEach((release) => release(slow)));
+  expect(screen.queryByText('Stale Patient')).toBeNull();
+  expect(screen.getAllByText('Fresh Patient').length).toBeGreaterThan(0);
 });

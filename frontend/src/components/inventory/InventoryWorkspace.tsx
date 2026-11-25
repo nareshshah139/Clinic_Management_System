@@ -18,7 +18,8 @@ import { DataQualityStrip } from "./optimization/DataQualityStrip";
 import { canRecordSupplierPayments } from "./purchase/purchase-register-model";
 import { splitText, type ReconciliationCards } from "./counts/count-model";
 import { Split } from "./counts/count-parts";
-import { usePendingItemRequestCount } from "./use-pending-item-requests";
+import { usePendingApprovals } from "./use-pending-item-requests";
+import { nextWorkspaceSearch } from "./workspace-url";
 import { ITEM_REQUEST_APPROVER_ROLES } from "@/lib/inventory-item-requests";
 import { useDashboardUser } from "@/components/layout/dashboard-user-context";
 import {
@@ -137,30 +138,23 @@ export function InventoryWorkspace() {
   const canReadEdits = ["OWNER", "ADMIN", "DOCTOR", "PHARMACIST"].includes(user?.role || "");
   const canSeeApprovals = canReadEdits || user?.role === "RECEPTION";
   const taskVisible = ([id]: string[]) => id !== "approvals" || canSeeApprovals;
-  const pendingItems = usePendingItemRequestCount(ITEM_REQUEST_APPROVER_ROLES.includes(user?.role || ""));
-  const taskLabel = (id: string, label: string) => (id === "approvals" && pendingItems > 0 ? `${label} (${pendingItems})` : label);
+  const pending = usePendingApprovals({ items: ITEM_REQUEST_APPROVER_ROLES.includes(user?.role || ""), edits: canReadEdits });
+  const pendingApprovals = (pending.items ?? 0) + (pending.edits ?? 0);
+  const taskLabel = (id: string, label: string) => (id === "approvals" && pendingApprovals > 0 ? `${label} (${pendingApprovals})` : label);
   const params = useSearchParams(),
     router = useRouter(),
     path = usePathname(),
     query = Object.fromEntries(params.entries()),
     area = query.area || "today",
     view = query.view || menus[area]?.[0]?.[0] || "";
-  const [caps, setCaps] = useState<any>(null),
+  const actor = `${user?.id}:${user?.branchId}`;
+  const [permissions, setPermissions] = useState<{ actor: string; caps: any } | null>(null),
     [error, setError] = useState(""),
     [initial, setInitial] = useState<any>(null),
     [importedDraft, setImportedDraft] = useState<any>(null);
   const navigate = useCallback(
     (changes: Record<string, string>) => {
-      const next = new URLSearchParams(params.toString());
-      for (const [key, val] of Object.entries(changes))
-        val ? next.set(key, val) : next.delete(key);
-      if ('document' in changes || 'new' in changes || 'invoice' in changes || 'item' in changes || 'view' in changes) {
-        for (const key of ['recoverRequest', 'recoverVersion', 'recoverOperation']) if (!(key in changes)) next.delete(key);
-      }
-      if ('invoice' in changes || 'new' in changes || (changes.view && changes.view !== 'intake')) {
-        for (const key of ['attempt', 'actor', 'sources']) if (!(key in changes)) next.delete(key);
-      }
-      router.push(`${path}?${next.toString()}`, { scroll: false });
+      router.push(`${path}?${nextWorkspaceSearch(params, changes)}`, { scroll: false });
     },
     [params, path, router],
   );
@@ -181,74 +175,31 @@ export function InventoryWorkspace() {
   };
   const open = (kind: string, id: string) => {
     setInitial(null);
-    navigate({
-      return: origin(),
-      area: workflowKinds[kind].area,
-      view: kind,
-      document: id,
-      new: "",
-      item: "",
-      invoice: "",
-      receipt: "",
-      intake: "",
-      purchaseInvoiceId: "",
-    });
+    navigate({ return: origin(), area: workflowKinds[kind].area, view: kind, document: id });
   };
   const task = (kind: string, data?: any) => {
     setInitial(data || null);
-    navigate({
-      return: origin(),
-      area: workflowKinds[kind].area,
-      view: kind,
-      new: requestKey(),
-      document: "",
-      item: "",
-      invoice: "",
-      receipt: "",
-      intake: "",
-      purchaseInvoiceId: "",
-    });
+    navigate({ return: origin(), area: workflowKinds[kind].area, view: kind, new: requestKey() });
   };
-  const invoice = (id: string) =>
-    navigate({
-      return: origin(),
-      area: "purchases",
-      view: "intake",
-      invoice: id,
-      document: "",
-      new: "",
-      item: "",
-      receipt: "",
-      intake: "",
-      purchaseInvoiceId: "",
-    });
+  const invoice = (id: string) => navigate({ return: origin(), area: "purchases", view: "intake", invoice: id });
   const linkedInvoice = (receipt: any) => {
     sessionStorage.setItem("inventory-linked-receipt", JSON.stringify(receipt));
-    navigate({
-      return: origin(),
-      area: "purchases",
-      view: "intake",
-      receipt: receipt.id,
-      invoice: "",
-      document: "",
-      new: "",
-      item: "",
-      intake: "",
-      purchaseInvoiceId: "",
-    });
+    navigate({ return: origin(), area: "purchases", view: "intake", receipt: receipt.id });
   };
   const permissionRequest = useRef(0);
   const loadPermissions = useCallback(async () => {
     const request = ++permissionRequest.current;
-    setCaps(null);
     setError("");
     try {
       const capabilities = await apiClient.get("/inventory/workspace/capabilities");
-      if (request === permissionRequest.current) setCaps(capabilities);
+      if (request === permissionRequest.current) setPermissions({ actor, caps: capabilities });
     } catch {
-      if (request === permissionRequest.current) setError("Inventory permissions could not be loaded. Loading permissions does not change stock. Retry when your connection is available; if access remains unavailable, ask an inventory administrator to check your account.");
+      if (request !== permissionRequest.current) return;
+      setPermissions(null);
+      setError("Inventory permissions could not be loaded. Loading permissions does not change stock. Retry when your connection is available; if access remains unavailable, ask an inventory administrator to check your account.");
     }
-  }, [user?.id, user?.branchId]);
+  }, [actor]);
+  const caps = permissions?.actor === actor ? permissions.caps : null;
   useEffect(() => {
     void loadPermissions();
     return () => { permissionRequest.current += 1; };
@@ -259,7 +210,7 @@ export function InventoryWorkspace() {
   const primaryCount = area === "stock" ? 5 : 3;
   const primaryTasks = availableTasks.slice(0, primaryCount);
   const moreTasks = availableTasks.slice(primaryCount);
-  const switchTask = (id: string, extra: Record<string, string> = {}) => navigate({ sourceId: "", view: id, document: "", new: "", invoice: "", item: "", receipt: "", intake: "", return: "", status: "", page: "1", ...extra });
+  const switchTask = (id: string, extra: Record<string, string> = {}) => navigate({ view: id, ...extra });
   const purchaseRegisterParams = (next: URLSearchParams) => {
     const merged = new URLSearchParams({ area: "purchases", view: "register" });
     next.forEach((value, key) => merged.set(key, value));
@@ -311,20 +262,7 @@ export function InventoryWorkspace() {
             aria-label="Inventory task"
             className="h-10 w-full min-w-0"
             value={view}
-            onChange={(e) =>
-              navigate({
-                view: e.target.value,
-                document: "",
-                new: "",
-                invoice: "",
-                item: "",
-                receipt: "",
-                intake: "",
-                return: "",
-                status: "",
-                page: "1",
-              })
-            }
+            onChange={(e) => switchTask(e.target.value)}
           >
             {availableTasks.map(([id, label]) => (
               <option key={id} value={id}>
@@ -417,7 +355,7 @@ export function InventoryWorkspace() {
             />
           )}
           {area === "stock" && view === "approvals" && (
-            canSeeApprovals ? <InventoryApprovals canReadEdits={canReadEdits} pendingItems={pendingItems} /> : <p role="alert">You do not have access to price/stock approvals.</p>
+            canSeeApprovals ? <InventoryApprovals canReadEdits={canReadEdits} pending={pending} /> : <p role="alert">You do not have access to price/stock approvals.</p>
           )}
           {area === "stock" && view === "opening" && (
             <>
@@ -455,12 +393,7 @@ export function InventoryWorkspace() {
               onInvoice={invoice}
               onDraft={(draft) => {
                 setImportedDraft(draft);
-                navigate({
-                  view: "intake",
-                  invoice: "",
-                  receipt: "",
-                  intake: "",
-                });
+                navigate({ view: "intake" });
               }}
             />
           )}
@@ -474,7 +407,7 @@ export function InventoryWorkspace() {
               onOpen={invoice}
               onOpenReturn={open}
               onNewReturn={() => task("SUPPLIER_RETURN")}
-              onNew={() => navigate({ return: origin(), view: "intake", new: requestKey(), invoice: "", receipt: "", intake: "", document: "", item: "" })}
+              onNew={() => navigate({ return: origin(), view: "intake", new: requestKey() })}
               onLedger={caps.ledger ? (gstin?: string) => switchTask("ledger", { gstin: gstin ?? "" }) : null}
               onSuppliers={() => switchTask("suppliers")}
             />
@@ -816,6 +749,13 @@ function WorkspaceToday({ navigate, open }: any) {
     </section>
   );
 }
+function useWorkspaceRefresh(reload: () => Promise<void>) {
+  useEffect(() => {
+    const refresh = () => void reload();
+    window.addEventListener("inventory-workspace-refresh", refresh);
+    return () => window.removeEventListener("inventory-workspace-refresh", refresh);
+  }, [reload]);
+}
 function WorkflowRegister({
   kind,
   query,
@@ -833,6 +773,7 @@ function WorkflowRegister({
     ...Object.fromEntries(["search", "from", "to", "gstin", "sourceId"].filter(k => query[k]).map(k => [k, query[k]])),
   });
   const { data, error: readError, status, reload: load } = useInventoryResource<any>("/inventory/workspace/documents?" + q);
+  useWorkspaceRefresh(load);
   const generate = async () => {
     setBusy(true);
     setError("");
@@ -1027,6 +968,7 @@ function WorkflowRegister({
 function SupplierWorkspace({ canCreate, canUpdate, onAccount, onBills }: any) {
   const [selected, setSelected] = useState<any>(null), [error, setError] = useState("");
   const { data: rows, error: readError, status, reload: load } = useInventoryResource<any[]>("/inventory/workspace/suppliers");
+  useWorkspaceRefresh(load);
   return (
     <section className="space-y-4">
       <div className="flex justify-between">

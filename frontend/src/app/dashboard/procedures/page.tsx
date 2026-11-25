@@ -4,7 +4,7 @@ import { displayClinicDateTime } from '@/lib/date-display';
 import { LoadingSkeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/ui/page-header';
 
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,301 +12,185 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { EmptyState } from '@/components/ui/empty-state';
 import { apiClient } from '@/lib/api';
-import { Zap, User, Activity, Settings, Save } from 'lucide-react';
-import type { Patient, StaffSummary, VisitSummary, ProcedureVisitResponse } from '@/lib/types';
+import { UserRole } from '@cms/shared-types';
+import { Activity, Settings, Save, User } from 'lucide-react';
+import type { ProcedureVisitResponse, StaffSummary, VisitSummary } from '@/lib/types';
 import { QuickGuide } from '@/components/common/QuickGuide';
 import { resolveDefaultDoctorId } from '@/lib/default-visit-doctor';
 import { useToast } from '@/hooks/use-toast';
 import { getErrorMessage } from '@/lib/utils';
+import { PatientPicker } from '@/components/procedures/PatientPicker';
+import { ProcedureDetails } from '@/components/procedures/ProcedureDetails';
+import {
+  BODY_PARTS,
+  MACHINES,
+  SKIN_TYPES,
+  emptyProcedure,
+  machineSpec,
+  parseVisitProcedure,
+  repeatAsNewSession,
+  toVisitRequest,
+  totalShots,
+  type MachineId,
+  type PatientRef,
+  type ProcedureRecord,
+  type SkinTypes,
+  type StoredProcedure,
+} from '@/components/procedures/procedure-record';
 
-// Machine configurations
-const MACHINES = {
-  'endymed-pro-max': {
-    name: 'Endymed Pro Max',
-    parameters: ['Intensity', 'RF', 'Depth', 'Area Treated', 'Mode'],
-    maxPasses: 8
-  },
-  'fotona-starwalker': {
-    name: 'Fotona Starwalker',
-    parameters: ['Area', 'Spot Size', 'Energy', 'Fluency', 'Frequency', 'Wavelength', 'PTP Mode', 'Area'],
-    maxPasses: 8
-  },
-  'soprano-platinum-lhr': {
-    name: 'Soprano Platinum LHR',
-    parameters: ['Area', 'Fluence', 'Spot Size'],
-    maxPasses: 8
-  },
-  'hydrafacial': {
-    name: 'Hydrafacial',
-    parameters: ['Actives Used', 'Area'],
-    maxPasses: 1
-  }
-};
+const HISTORY_SCAN_LIMIT = 100;
 
-const SKIN_TYPES = {
-  fitzpatrick: ['I', 'II', 'III', 'IV', 'V', 'VI'],
-  robert: ['Type 1', 'Type 2', 'Type 3', 'Type 4'],
-  scar: ['Atrophic', 'Hypertrophic', 'Keloid', 'Rolling', 'Boxcar', 'Ice Pick'],
-  herpes: ['Active', 'Inactive', 'History', 'None']
-};
+type Loadable<T> = { status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; data: T };
 
-const BODY_PARTS = [
-  'Face', 'Forehead', 'Cheeks', 'Nose', 'Chin', 'Neck', 'Chest', 'Back', 
-  'Arms', 'Legs', 'Hands', 'Feet', 'Abdomen', 'Shoulders', 'Other'
-];
-
-interface ProcedureData {
-  // Basic Info
-  patientId: string;
-  doctorId: string;
-  therapistId: string; // Actually stores nurse ID (for backend compatibility)
-  sessionNo: number;
-  bodyPart: string[];
-  indications: string;
-  
-  // Skin Types
-  fitzpatrickType: string;
-  robertType: string;
-  scarType: string;
-  herpesStatus: string;
-  
-  // Shot Counts
-  shotCountBegin: number;
-  shotCountEnd: number;
-  
-  // Machine & Parameters
-  selectedMachine: keyof typeof MACHINES | '';
-  machineParameters: Record<string, Record<number, string>>;
-  
-  // Notes
-  notes: string;
+interface Staff {
+  doctors: StaffSummary[];
+  nurses: StaffSummary[];
+  defaultDoctorId: string;
 }
 
-const parseJsonValue = <T,>(value: unknown): T | undefined => {
-  if (!value) return undefined;
-  if (typeof value === 'object') {
-    return value as T;
-  }
-  if (typeof value === 'string') {
-    try {
-      return JSON.parse(value) as T;
-    } catch {
-      return undefined;
-    }
-  }
-  return undefined;
-};
+interface History {
+  procedures: StoredProcedure[];
+  scannedAll: boolean;
+}
 
-const normalizeVisitResponse = (payload: ProcedureVisitResponse | VisitSummary[] | undefined): VisitSummary[] => {
-  if (!payload) return [];
+const usersOf = (res: unknown): StaffSummary[] =>
+  Array.isArray(res) ? res : ((res as { users?: StaffSummary[] })?.users ?? []);
+
+const visitsOf = (payload: ProcedureVisitResponse | VisitSummary[] | undefined): VisitSummary[] => {
   if (Array.isArray(payload)) return payload;
-  const { visits, data } = payload;
-  if (Array.isArray(visits)) return visits;
-  if (Array.isArray(data)) return data;
-  return [];
+  return payload?.visits ?? payload?.data ?? [];
 };
 
-const stringifyPatientName = (patient?: Patient | { name?: string } | null): string => {
-  if (!patient) return 'Unknown Patient';
-  if ('name' in patient && patient.name) return patient.name;
-  const first = (patient as Patient).firstName;
-  const last = (patient as Patient).lastName;
-  return [first, last].filter(Boolean).join(' ') || 'Unknown Patient';
-};
+const nonNegative = (value: string) => Math.max(0, Number.parseInt(value, 10) || 0);
 
-const formatDoctorName = (doctor?: StaffSummary | null): string => {
-  if (!doctor) return 'Unknown Doctor';
-  return ['Dr.', doctor.firstName, doctor.lastName].filter(Boolean).join(' ');
-};
+const SKIN_FIELDS: Array<{ key: keyof SkinTypes; label: string; placeholder: string; format: (v: string) => string }> = [
+  { key: 'fitzpatrick', label: 'Fitzpatrick Type', placeholder: 'Select type', format: (v) => `Type ${v}` },
+  { key: 'robert', label: 'Robert Type', placeholder: 'Select type', format: (v) => v },
+  { key: 'scar', label: 'Scar Type', placeholder: 'Select type', format: (v) => v },
+  { key: 'herpes', label: 'Herpes Status', placeholder: 'Select status', format: (v) => v },
+];
 
 export default function ProceduresPage() {
   const { toast } = useToast();
-  const [patients, setPatients] = useState<Patient[]>([]);
-  const [doctors, setDoctors] = useState<StaffSummary[]>([]);
-  const [nurses, setNurses] = useState<StaffSummary[]>([]);
-  const [procedures, setProcedures] = useState<ProcedureData[]>([]);
+  const [staff, setStaff] = useState<Loadable<Staff>>({ status: 'loading' });
+  const [record, setRecord] = useState<ProcedureRecord>(() => emptyProcedure());
   const [activeTab, setActiveTab] = useState('new');
-  const [visits, setVisits] = useState<VisitSummary[]>([]);
-  const [loadingVisits, setLoadingVisits] = useState(false);
-  const [selectedVisit, setSelectedVisit] = useState<VisitSummary | null>(null);
-  
-  // Form state
-  const [procedureData, setProcedureData] = useState<ProcedureData>({
-    patientId: '',
-    doctorId: '',
-    therapistId: '', // Keep as therapistId for backend compatibility
-    sessionNo: 1,
-    bodyPart: [],
-    indications: '',
-    fitzpatrickType: '',
-    robertType: '',
-    scarType: '',
-    herpesStatus: '',
-    shotCountBegin: 0,
-    shotCountEnd: 0,
-    selectedMachine: '',
-    machineParameters: {},
-    notes: ''
-  });
-
+  const [historyPatient, setHistoryPatient] = useState<PatientRef | null>(null);
+  const [history, setHistory] = useState<Loadable<History>>({ status: 'loading' });
+  const [details, setDetails] = useState<StoredProcedure | null>(null);
   const [saving, setSaving] = useState(false);
+  const historyRequest = useRef(0);
 
-  const loadData = useCallback(async () => {
+  const loadStaff = useCallback(async () => {
+    setStaff({ status: 'loading' });
     try {
-      const [patientsRes, doctorsRes, nursesRes] = await Promise.all([
-        apiClient.getPatients({ limit: 100 }),
-        apiClient.getUsers({ role: 'DOCTOR', limit: 50 }),
-        apiClient.getUsers({ role: 'NURSE', limit: 50 })
+      const [doctorsRes, nursesRes] = await Promise.all([
+        apiClient.getUsers({ role: UserRole.DOCTOR, limit: 50 }),
+        apiClient.getUsers({ role: UserRole.NURSE, limit: 50 }),
       ]);
-
-      const patientsData = Array.isArray((patientsRes as unknown as { data?: Patient[] }).data)
-        ? ((patientsRes as unknown as { data?: Patient[] }).data as Patient[])
-        : Array.isArray((patientsRes as unknown as { patients?: Patient[] }).patients)
-          ? ((patientsRes as unknown as { patients?: Patient[] }).patients as Patient[])
-          : (Array.isArray(patientsRes) ? (patientsRes as Patient[]) : []);
-
-      const doctorsData = Array.isArray((doctorsRes as { users?: StaffSummary[] }).users)
-        ? ((doctorsRes as { users?: StaffSummary[] }).users as StaffSummary[])
-        : (Array.isArray(doctorsRes) ? (doctorsRes as StaffSummary[]) : []);
-
-      const nursesData = Array.isArray((nursesRes as { users?: StaffSummary[] }).users)
-        ? ((nursesRes as { users?: StaffSummary[] }).users as StaffSummary[])
-        : (Array.isArray(nursesRes) ? (nursesRes as StaffSummary[]) : []);
-
-      setPatients(patientsData);
-      setDoctors(doctorsData);
-      setNurses(nursesData);
-
+      let defaultDoctorId = '';
       try {
         const me = await apiClient.get<{ id?: string; role?: string }>('/auth/me');
-        setProcedureData((prev) => ({
-          ...prev,
-          doctorId: resolveDefaultDoctorId({ role: me?.role, userId: me?.id, current: prev.doctorId }),
-        }));
+        defaultDoctorId = resolveDefaultDoctorId({ role: me?.role, userId: me?.id, current: '' });
       } catch (error) {
         console.error('Failed to resolve signed-in user:', error);
       }
+      setStaff({ status: 'ready', data: { doctors: usersOf(doctorsRes), nurses: usersOf(nursesRes), defaultDoctorId } });
+      setRecord((prev) => ({ ...prev, doctorId: prev.doctorId || defaultDoctorId }));
     } catch (error) {
-      console.error('Failed to load data:', error);
+      setStaff({ status: 'error', message: getErrorMessage(error) });
     }
   }, []);
 
   useEffect(() => {
-    void loadData();
-  }, [loadData]);
+    void loadStaff();
+  }, [loadStaff]);
 
-  const loadVisitsWithProcedures = useCallback(async (patientId?: string) => {
-    if (!patientId) return;
-    
-    setLoadingVisits(true);
+  const loadHistory = useCallback(async (patientId?: string) => {
+    const request = ++historyRequest.current;
+    setHistory({ status: 'loading' });
     try {
-      const response = await apiClient.get(`/visits`, { patientId, limit: 50 });
-      const visitsData = normalizeVisitResponse(response as ProcedureVisitResponse | VisitSummary[]);
-
-      const visitsWithProcedures = visitsData.filter((visit) => {
-        const plan = parseJsonValue<{ dermatology?: { procedures?: unknown[]; notes?: string } }>(visit.plan);
-        return Boolean(plan?.dermatology?.procedures?.length || plan?.dermatology?.notes);
-      });
-
-      setVisits(visitsWithProcedures);
+      const res = await apiClient.getVisits({ ...(patientId ? { patientId } : {}), limit: HISTORY_SCAN_LIMIT });
+      if (request !== historyRequest.current) return;
+      const visits = visitsOf(res as ProcedureVisitResponse | VisitSummary[]);
+      const procedures = visits.map(parseVisitProcedure).filter((p): p is StoredProcedure => p !== null);
+      setHistory({ status: 'ready', data: { procedures, scannedAll: visits.length < HISTORY_SCAN_LIMIT } });
     } catch (error) {
-      console.error('❌ Failed to load visits:', error);
-      setVisits([]);
-    } finally {
-      setLoadingVisits(false);
+      if (request !== historyRequest.current) return;
+      setHistory({ status: 'error', message: getErrorMessage(error) });
     }
   }, []);
 
-  const updateProcedureData = (field: keyof ProcedureData, value: string | number | string[] | Record<string, Record<number, string>>) => {
-    // If patient changes, reload their visits
-    if (field === 'patientId' && value !== procedureData.patientId) {
-      void loadVisitsWithProcedures(value as string);
-    }
-    
-    setProcedureData(prev => ({
-      ...prev,
-      [field]: value
-    }));
+  useEffect(() => {
+    if (activeTab === 'history') void loadHistory(historyPatient?.id);
+  }, [activeTab, historyPatient?.id, loadHistory]);
+
+  const update = <K extends keyof ProcedureRecord>(field: K, value: ProcedureRecord[K]) =>
+    setRecord((prev) => ({ ...prev, [field]: value }));
+
+  const choosePatient = (patient: PatientRef | null) => {
+    update('patient', patient);
+    if (patient) setHistoryPatient(patient);
   };
 
-  const updateMachineParameter = (parameterName: string, passNo: number, value: string) => {
-    setProcedureData(prev => ({
-      ...prev,
-      machineParameters: {
-        ...prev.machineParameters,
-        [parameterName]: {
-          ...prev.machineParameters[parameterName],
-          [passNo]: value
-        }
-      }
-    }));
-  };
+  const chooseMachine = (machine: MachineId) =>
+    setRecord((prev) => (prev.machine === machine ? prev : { ...prev, machine, parameters: {} }));
 
-  const toggleBodyPart = (part: string) => {
-    setProcedureData(prev => ({
+  const updateParameter = (name: string, pass: number, value: string) =>
+    setRecord((prev) => ({
       ...prev,
-      bodyPart: prev.bodyPart.includes(part)
-        ? prev.bodyPart.filter(p => p !== part)
-        : [...prev.bodyPart, part]
+      parameters: { ...prev.parameters, [name]: { ...prev.parameters[name], [pass]: value } },
     }));
-  };
+
+  const toggleBodyPart = (part: string) =>
+    setRecord((prev) => ({
+      ...prev,
+      bodyParts: prev.bodyParts.includes(part) ? prev.bodyParts.filter((p) => p !== part) : [...prev.bodyParts, part],
+    }));
+
+  const defaultDoctorId = staff.status === 'ready' ? staff.data.defaultDoctorId : '';
+  const total = totalShots(record.shotCounts);
 
   /**
    * @cc [owner:nareshshah139,label:product] procedure-visit-payload
-   * Saving a procedure MUST send the required complaints array and retain the selected therapist
-   * inside the stored procedure details. Missing required selections MUST prevent the save.
+   * Saving a new procedure MUST send the required complaints array and retain the selected therapist
+   * inside the stored procedure details. Editing a loaded procedure MUST update that visit, not create
+   * another. Missing required selections MUST prevent the save.
    */
   const saveProcedure = async () => {
-    if (!procedureData.patientId || !procedureData.doctorId || !procedureData.selectedMachine) {
+    if (!record.patient || !record.doctorId || !record.machine) {
       toast({ variant: 'warning', title: 'Choose a patient, a doctor and a machine before saving.' });
+      return;
+    }
+    if (total === null) {
+      toast({ variant: 'warning', title: 'The end shot count is lower than the begin count.' });
       return;
     }
 
     setSaving(true);
     try {
-      const payload = {
-        patientId: procedureData.patientId,
-        doctorId: procedureData.doctorId,
-        complaints: [],
-        treatmentPlan: {
-          dermatology: {
-            procedures: [{
-              type: MACHINES[procedureData.selectedMachine as keyof typeof MACHINES]?.name,
-              therapistId: procedureData.therapistId || undefined,
-              sessionNo: procedureData.sessionNo,
-              bodyPart: procedureData.bodyPart,
-              indications: procedureData.indications,
-              skinTypes: {
-                fitzpatrick: procedureData.fitzpatrickType,
-                robert: procedureData.robertType,
-                scar: procedureData.scarType,
-                herpes: procedureData.herpesStatus
-              },
-              shotCounts: {
-                begin: procedureData.shotCountBegin,
-                end: procedureData.shotCountEnd
-              },
-              machine: procedureData.selectedMachine,
-              parameters: procedureData.machineParameters
-            }]
-          },
-          notes: procedureData.notes
-        }
-      };
-
-      await apiClient.createVisit(payload);
-      toast({ variant: 'success', title: 'Procedure saved' });
-      
-      // Reset form
-      setProcedureData({
-        ...procedureData,
-        sessionNo: procedureData.sessionNo + 1,
-        shotCountBegin: 0,
-        shotCountEnd: 0,
-        machineParameters: {},
-        notes: ''
-      });
+      const request = toVisitRequest(record);
+      if (request.kind === 'update') {
+        await apiClient.updateVisit(request.visitId, request.body);
+        toast({ variant: 'success', title: 'Procedure updated' });
+        setRecord({ ...emptyProcedure(defaultDoctorId), patient: record.patient });
+        setHistoryPatient(record.patient);
+        setActiveTab('history');
+      } else {
+        await apiClient.createVisit(request.body);
+        toast({ variant: 'success', title: 'Procedure saved' });
+        setRecord({
+          ...record,
+          sessionNo: record.sessionNo + 1,
+          shotCounts: { begin: 0, end: 0 },
+          parameters: {},
+          notes: '',
+        });
+      }
     } catch (error) {
       console.error('Failed to save procedure:', error);
       toast({ variant: 'destructive', title: 'Could not save the procedure', description: getErrorMessage(error) });
@@ -315,140 +199,65 @@ export default function ProceduresPage() {
     }
   };
 
-  const loadProcedureFromVisit = (visit: VisitSummary) => {
-    try {
-      const plan = parseJsonValue<{ dermatology?: { procedures?: Array<Record<string, unknown>>; notes?: string } }>(visit.plan);
-      const exam = parseJsonValue<{ dermatology?: { skinType?: string } }>(visit.exam);
-
-      const procedure = plan?.dermatology?.procedures?.[0];
-      if (!procedure) return;
-
-      // Extract Fitzpatrick type from examination data
-      const fitzpatrickType = exam?.dermatology?.skinType || '';
-      const procedureType = typeof procedure.type === 'string' ? procedure.type : '';
-      
-      // Map visit data to procedure form
-      setProcedureData(prev => ({
-        ...prev,
-        patientId: visit.patientId,
-        doctorId: visit.doctorId,
-        sessionNo: 1, // Default since we don't track this in visits yet
-        indications: plan?.dermatology?.notes || '',
-        fitzpatrickType: fitzpatrickType,
-        // Map basic procedure parameters if available
-        selectedMachine: procedureType.toLowerCase().includes('endymed') ? 'endymed-pro-max' :
-                        procedureType.toLowerCase().includes('fotona') ? 'fotona-starwalker' :
-                        procedureType.toLowerCase().includes('soprano') ? 'soprano-platinum-lhr' :
-                        procedureType.toLowerCase().includes('hydra') ? 'hydrafacial' : '',
-        notes: plan?.dermatology?.notes || ''
-      }));
-      
-      // Switch to new procedure tab for editing
-      setActiveTab('new');
-      setSelectedVisit(visit);
-    } catch (error) {
-      console.error('Failed to load procedure from visit:', error);
-    }
+  const editProcedure = (procedure: StoredProcedure) => {
+    setRecord(procedure.record);
+    setDetails(null);
+    setActiveTab('new');
   };
- 
-  const renderVisitProcedureCard = (visit: VisitSummary) => {
-    try {
-      const plan = parseJsonValue<{ dermatology?: { procedures?: Array<Record<string, unknown>>; notes?: string } }>(visit.plan);
-      const procedure = plan?.dermatology?.procedures?.[0] as
-        | {
-            fluence?: string;
-            spotSize?: string;
-            passes?: string | number;
-            type?: string;
-          }
-        | undefined;
-      const patient = patients.find((p) => p.id === visit.patientId);
-      const doctor = doctors.find((d) => d.id === visit.doctorId);
-      
-      return (
-        <Card key={visit.id} className="cursor-pointer hover:shadow-sm transition-shadow">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-base">{stringifyPatientName(patient)}</CardTitle>
-                <CardDescription>
-                  {displayClinicDateTime(visit.createdAt)}
-                </CardDescription>
-              </div>
-              <Badge variant="outline">
-                {procedure?.type || 'Procedure'}
-              </Badge>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <User className="h-4 w-4" />
-                <span>{formatDoctorName(doctor)}</span>
-              </div>
-              
-              {procedure && (
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  {procedure.fluence && (
-                    <div>
-                      <span className="text-muted-foreground">Fluence:</span> {procedure.fluence} J/cm²
-                    </div>
-                  )}
-                  {procedure.spotSize && (
-                    <div>
-                      <span className="text-muted-foreground">Spot Size:</span> {procedure.spotSize} mm
-                    </div>
-                  )}
-                  {procedure.passes && (
-                    <div>
-                      <span className="text-muted-foreground">Passes:</span> {procedure.passes}
-                    </div>
-                  )}
-                </div>
-              )}
-              
-              {plan?.dermatology?.notes && (
-                <p className="text-sm text-muted-foreground line-clamp-2">{plan.dermatology.notes}</p>
-              )}
-            </div>
-            
-            <div className="flex gap-2 mt-4">
-              <Button 
-                size="sm" 
-                variant="outline"
-                onClick={() => loadProcedureFromVisit(visit)}
-              >
-                Load & Edit
-              </Button>
-              <Button 
-                size="sm" 
-                variant="ghost"
-                onClick={() => setSelectedVisit(visit)}
-              >
-                View Details
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      );
-    } catch (error) {
-      console.error('Error rendering visit card:', error);
-      return null;
-    }
+
+  const repeatProcedure = (procedure: StoredProcedure) => {
+    setRecord(repeatAsNewSession(procedure));
+    setDetails(null);
+    setActiveTab('new');
   };
- 
+
+  const nurseName = (id: string) => {
+    const nurse = staff.status === 'ready' ? staff.data.nurses.find((n) => n.id === id) : undefined;
+    return nurse ? `${nurse.firstName} ${nurse.lastName}`.trim() : '';
+  };
+
+  const renderProcedureCard = (procedure: StoredProcedure) => {
+    const { record: saved } = procedure;
+    const shots = totalShots(saved.shotCounts);
+    return (
+      <Card key={saved.visit.id}>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <CardTitle className="text-base">{saved.patient?.name}</CardTitle>
+              <CardDescription>{displayClinicDateTime(saved.visit.createdAt)}</CardDescription>
+            </div>
+            <Badge variant="outline">{procedure.label}</Badge>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <dl className="grid grid-cols-2 gap-2 text-sm">
+            {procedure.doctorName && <div className="col-span-2 flex items-center gap-2 text-muted-foreground"><User className="h-4 w-4" aria-hidden="true" />{procedure.doctorName}</div>}
+            {procedure.editable && <div><dt className="inline text-muted-foreground">Session: </dt><dd className="inline">{saved.sessionNo}</dd></div>}
+            {procedure.editable && <div><dt className="inline text-muted-foreground">Total shots: </dt><dd className="inline">{shots ?? 'invalid'}</dd></div>}
+            {saved.bodyParts.length > 0 && <div className="col-span-2"><dt className="inline text-muted-foreground">Areas: </dt><dd className="inline">{saved.bodyParts.join(', ')}</dd></div>}
+          </dl>
+          {saved.notes && <p className="mt-2 text-sm text-muted-foreground line-clamp-2">{saved.notes}</p>}
+          <div className="mt-4 flex flex-wrap gap-2">
+            {procedure.editable && (
+              <Button size="sm" variant="outline" onClick={() => editProcedure(procedure)}>Load &amp; Edit</Button>
+            )}
+            <Button size="sm" variant="outline" onClick={() => repeatProcedure(procedure)}>Repeat as new session</Button>
+            <Button size="sm" variant="ghost" onClick={() => setDetails(procedure)}>View Details</Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
+
   const renderMachineParametersTable = () => {
-    if (!procedureData.selectedMachine) return null;
- 
-    const machine = MACHINES[procedureData.selectedMachine as keyof typeof MACHINES];
-    if (!machine) return null;
+    if (!record.machine) return null;
+    const machine = machineSpec(record.machine);
 
     return (
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            {machine.name} Parameters
-          </CardTitle>
+          <CardTitle className="flex items-center gap-2">{machine.name} Parameters</CardTitle>
           <CardDescription>Configure parameters for each pass</CardDescription>
         </CardHeader>
         <CardContent>
@@ -457,25 +266,22 @@ export default function ProceduresPage() {
               <thead>
                 <tr className="bg-muted">
                   <th className="border border-border p-2 text-left font-medium">Parameter</th>
-                  {Array.from({ length: machine.maxPasses }, (_, i) => (
-                    <th key={i} className="border border-border p-2 text-center font-medium">
-                      Pass {i + 1}
-                    </th>
+                  {Array.from({ length: machine.passes }, (_, i) => (
+                    <th key={i} className="border border-border p-2 text-center font-medium">Pass {i + 1}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {machine.parameters.map((param, paramIndex) => (
-                  <tr key={paramIndex} className={paramIndex % 2 === 0 ? 'bg-white' : 'bg-muted/40'}>
-                    <td className="border border-border p-2 font-medium text-foreground">
-                      {param}
-                    </td>
-                    {Array.from({ length: machine.maxPasses }, (_, passIndex) => (
+                  <tr key={param} className={paramIndex % 2 === 0 ? 'bg-card' : 'bg-muted/40'}>
+                    <th scope="row" className="border border-border p-2 text-left font-medium text-foreground">{param}</th>
+                    {Array.from({ length: machine.passes }, (_, passIndex) => (
                       <td key={passIndex} className="border border-border p-1">
                         <Input
-                          placeholder={`${param.toLowerCase()}`}
-                          value={procedureData.machineParameters[param]?.[passIndex + 1] || ''}
-                          onChange={(e) => updateMachineParameter(param, passIndex + 1, e.target.value)}
+                          aria-label={`${param}, pass ${passIndex + 1}`}
+                          placeholder={param.toLowerCase()}
+                          value={record.parameters[param]?.[passIndex + 1] || ''}
+                          onChange={(e) => updateParameter(param, passIndex + 1, e.target.value)}
                           className="text-xs"
                         />
                       </td>
@@ -489,6 +295,237 @@ export default function ProceduresPage() {
       </Card>
     );
   };
+
+  const renderForm = (doctors: StaffSummary[], nurses: StaffSummary[]) => (
+    <>
+      {record.visit && (
+        <Alert>
+          <AlertTitle>Editing the procedure from {displayClinicDateTime(record.visit.createdAt)}</AlertTitle>
+          <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
+            <span>Saving updates that visit. Patient and doctor stay as recorded.</span>
+            <Button size="sm" variant="outline" onClick={() => setRecord(emptyProcedure(defaultDoctorId))}>Cancel editing</Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <User className="h-5 w-5" />
+            Basic Information
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <PatientPicker
+            id="procedure-patient"
+            label="Patient *"
+            value={record.patient}
+            onChange={choosePatient}
+            clearLabel="Change"
+            locked={Boolean(record.visit)}
+          />
+
+          <div>
+            <label htmlFor="procedure-doctor" className="text-sm font-medium text-foreground">Doctor *</label>
+            <Select value={record.doctorId} onValueChange={(value: string) => update('doctorId', value)} disabled={Boolean(record.visit)}>
+              <SelectTrigger id="procedure-doctor">
+                <SelectValue placeholder="Select doctor" />
+              </SelectTrigger>
+              <SelectContent>
+                {doctors.map((d) => (
+                  <SelectItem key={d.id} value={d.id}>Dr. {d.firstName} {d.lastName}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <label htmlFor="procedure-therapist" className="text-sm font-medium text-foreground">Nurse/Therapist</label>
+            <Select value={record.therapistId} onValueChange={(value: string) => update('therapistId', value)}>
+              <SelectTrigger id="procedure-therapist">
+                <SelectValue placeholder="Select nurse" />
+              </SelectTrigger>
+              <SelectContent>
+                {nurses.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>{t.firstName} {t.lastName}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Activity className="h-5 w-5" />
+            Procedure Metrics
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+              <label htmlFor="procedure-session" className="text-sm font-medium text-foreground">Session No.</label>
+              <Input id="procedure-session" type="number" min={1} inputMode="numeric" value={record.sessionNo} onChange={(e) => update('sessionNo', Math.max(1, nonNegative(e.target.value)))} />
+            </div>
+
+            <div>
+              <label htmlFor="procedure-shots-begin" className="text-sm font-medium text-foreground">Shot Count (Begin)</label>
+              <Input id="procedure-shots-begin" type="number" min={0} inputMode="numeric" value={record.shotCounts.begin} onChange={(e) => update('shotCounts', { ...record.shotCounts, begin: nonNegative(e.target.value) })} />
+            </div>
+
+            <div>
+              <label htmlFor="procedure-shots-end" className="text-sm font-medium text-foreground">Shot Count (End)</label>
+              <Input id="procedure-shots-end" type="number" min={0} inputMode="numeric" value={record.shotCounts.end} aria-invalid={total === null} aria-describedby={total === null ? 'procedure-shots-error' : undefined} onChange={(e) => update('shotCounts', { ...record.shotCounts, end: nonNegative(e.target.value) })} />
+              {total === null && <p id="procedure-shots-error" className="mt-1 text-xs text-destructive">End count is lower than the begin count.</p>}
+            </div>
+
+            <div>
+              <label htmlFor="procedure-shots-total" className="text-sm font-medium text-foreground">Total Shots</label>
+              <Input id="procedure-shots-total" value={total ?? '—'} disabled className="bg-muted" />
+            </div>
+          </div>
+
+          <div>
+            <p id="procedure-body-parts" className="text-sm font-medium text-foreground mb-2 block">Body Parts</p>
+            <div role="group" aria-labelledby="procedure-body-parts" className="flex flex-wrap gap-2">
+              {BODY_PARTS.map((part) => (
+                <Button
+                  key={part}
+                  type="button"
+                  variant={record.bodyParts.includes(part) ? 'default' : 'outline'}
+                  aria-pressed={record.bodyParts.includes(part)}
+                  size="sm"
+                  onClick={() => toggleBodyPart(part)}
+                >
+                  {part}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label htmlFor="procedure-indications" className="text-sm font-medium text-foreground">Indications</label>
+            <Textarea id="procedure-indications"
+              placeholder="Enter procedure indications..."
+              value={record.indications}
+              onChange={(e) => update('indications', e.target.value)}
+              rows={3}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Skin Type Assessment</CardTitle>
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {SKIN_FIELDS.map(({ key, label, placeholder, format }) => (
+            <div key={key}>
+              <label htmlFor={`procedure-${key}`} className="text-sm font-medium text-foreground">{label}</label>
+              <Select value={record.skinTypes[key]} onValueChange={(value: string) => update('skinTypes', { ...record.skinTypes, [key]: value })}>
+                <SelectTrigger id={`procedure-${key}`}>
+                  <SelectValue placeholder={placeholder} />
+                </SelectTrigger>
+                <SelectContent>
+                  {SKIN_TYPES[key].map((option) => (
+                    <SelectItem key={option} value={option}>{format(option)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Settings className="h-5 w-5" />
+            Machine Selection
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {(Object.keys(MACHINES) as MachineId[]).map((id) => (
+              <Button
+                key={id}
+                type="button"
+                variant={record.machine === id ? 'default' : 'outline'}
+                aria-pressed={record.machine === id}
+                className="h-14"
+                onClick={() => chooseMachine(id)}
+              >
+                {machineSpec(id).name}
+              </Button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {renderMachineParametersTable()}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Additional Notes</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Textarea
+            aria-label="Additional notes"
+            placeholder="Enter any additional notes or observations..."
+            value={record.notes}
+            onChange={(e) => update('notes', e.target.value)}
+            rows={4}
+          />
+        </CardContent>
+      </Card>
+
+      <div className="flex justify-end">
+        <Button onClick={saveProcedure} disabled={saving} size="lg" className="flex items-center gap-2">
+          <Save className="h-4 w-4" />
+          {saving ? 'Saving...' : record.visit ? 'Update Procedure' : 'Save Procedure'}
+        </Button>
+      </div>
+    </>
+  );
+
+  const renderHistory = () => {
+    if (history.status === 'loading') return <LoadingSkeleton variant="cards" label="Loading procedure history…" />;
+    if (history.status === 'error') {
+      return (
+        <Alert variant="destructive">
+          <AlertTitle>Could not load procedure history</AlertTitle>
+          <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
+            <span>{history.message}</span>
+            <Button size="sm" variant="outline" onClick={() => void loadHistory(historyPatient?.id)}>Try again</Button>
+          </AlertDescription>
+        </Alert>
+      );
+    }
+    const { procedures, scannedAll } = history.data;
+    if (procedures.length === 0) {
+      const scope = historyPatient ? ` for ${historyPatient.name}` : '';
+      return (
+        <Card>
+          <EmptyState
+            icon={Activity}
+            title={scannedAll ? `No procedures recorded${scope || ' yet'}` : `No procedures in the ${HISTORY_SCAN_LIMIT} most recent visits${scope}`}
+            description={historyPatient ? 'Procedures saved for this patient will appear here.' : 'Choose a patient to search their full history.'}
+          />
+        </Card>
+      );
+    }
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {procedures.map(renderProcedureCard)}
+      </div>
+    );
+  };
+
+  const historySummary = history.status !== 'ready'
+    ? ''
+    : `${history.data.procedures.length} procedure${history.data.procedures.length === 1 ? '' : 's'} for ${historyPatient?.name ?? 'all patients'}${history.data.scannedAll ? '' : ` in the ${HISTORY_SCAN_LIMIT} most recent visits`}`;
 
   return (
     <div className="space-y-6">
@@ -516,10 +553,10 @@ export default function ProceduresPage() {
                 {
                   title: "Procedure History",
                   items: [
-                    "View past procedures for the selected patient",
-                    "Load previous procedure data to repeat treatments",
-                    "Track treatment progression over sessions",
-                    "Compare parameters across different sessions"
+                    "View past procedures for one patient or all patients",
+                    "Load & Edit corrects a saved procedure in place",
+                    "Repeat as new session copies the settings into the next session",
+                    "View Details shows every recorded field"
                   ]
                 }
               ]}
@@ -527,304 +564,57 @@ export default function ProceduresPage() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="grid w-full max-w-md grid-cols-2">
-          <TabsTrigger value="new">New Procedure</TabsTrigger>
+          <TabsTrigger value="new">{record.visit ? 'Edit Procedure' : 'New Procedure'}</TabsTrigger>
           <TabsTrigger value="history">Procedure History</TabsTrigger>
         </TabsList>
 
         <TabsContent value="new" className="space-y-6">
-          {/* Basic Information */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <User className="h-5 w-5" />
-                Basic Information
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label htmlFor="procedure-patient" className="text-sm font-medium text-foreground">Patient *</label>
-                <Select value={procedureData.patientId} onValueChange={(value: string) => updateProcedureData('patientId', value)}>
-                  <SelectTrigger id="procedure-patient">
-                    <SelectValue placeholder="Select patient" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {patients.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        {p.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <label htmlFor="procedure-doctor" className="text-sm font-medium text-foreground">Doctor *</label>
-                <Select value={procedureData.doctorId} onValueChange={(value: string) => updateProcedureData('doctorId', value)}>
-                  <SelectTrigger id="procedure-doctor">
-                    <SelectValue placeholder="Select doctor" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {doctors.map((d) => (
-                      <SelectItem key={d.id} value={d.id}>
-                        Dr. {d.firstName} {d.lastName}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <label htmlFor="procedure-therapist" className="text-sm font-medium text-foreground">Nurse/Therapist</label>
-                <Select value={procedureData.therapistId} onValueChange={(value: string) => updateProcedureData('therapistId', value)}>
-                  <SelectTrigger id="procedure-therapist">
-                    <SelectValue placeholder="Select nurse" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {nurses.map((t) => (
-                      <SelectItem key={t.id} value={t.id}>
-                        {t.firstName} {t.lastName}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Procedure Metrics */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Activity className="h-5 w-5" />
-                Procedure Metrics
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div>
-                  <label htmlFor="procedure-session" className="text-sm font-medium text-foreground">Session No.</label>
-                  <Input id="procedure-session" placeholder="Session number" value={procedureData.sessionNo} onChange={(e) => updateProcedureData('sessionNo', parseInt(e.target.value) || 1)} />
-                </div>
-
-                <div>
-                  <label htmlFor="procedure-shots-begin" className="text-sm font-medium text-foreground">Shot Count (Begin)</label>
-                  <Input id="procedure-shots-begin" placeholder="e.g. 50" value={procedureData.shotCountBegin} onChange={(e) => updateProcedureData('shotCountBegin', parseInt(e.target.value) || 0)} />
-                </div>
-
-                <div>
-                  <label htmlFor="procedure-shots-end" className="text-sm font-medium text-foreground">Shot Count (End)</label>
-                  <Input id="procedure-shots-end" placeholder="e.g. 50" value={procedureData.shotCountEnd} onChange={(e) => updateProcedureData('shotCountEnd', parseInt(e.target.value) || 0)} />
-                </div>
-
-                <div>
-                  <label htmlFor="procedure-shots-total" className="text-sm font-medium text-foreground">Total Shots</label>
-                  <Input id="procedure-shots-total"
-                    value={procedureData.shotCountEnd - procedureData.shotCountBegin}
-                    disabled
-                    className="bg-muted"
-                  />
-                </div>
-              </div>
-
-              {/* Body Parts */}
-              <div>
-                <p id="procedure-body-parts" className="text-sm font-medium text-foreground mb-2 block">Body Parts</p>
-                <div role="group" aria-labelledby="procedure-body-parts" className="flex flex-wrap gap-2">
-                  {BODY_PARTS.map((part) => (
-                    <Button
-                      key={part}
-                      type="button"
-                      variant={procedureData.bodyPart.includes(part) ? 'default' : 'outline'}
-                      aria-pressed={procedureData.bodyPart.includes(part)}
-                      size="sm"
-                      onClick={() => toggleBodyPart(part)}
-                    >
-                      {part}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Indications */}
-              <div>
-                <label htmlFor="procedure-indications" className="text-sm font-medium text-foreground">Indications</label>
-                <Textarea id="procedure-indications"
-                  placeholder="Enter procedure indications..."
-                  value={procedureData.indications}
-                  onChange={(e) => updateProcedureData('indications', e.target.value)}
-                  rows={3}
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Skin Types */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Skin Type Assessment</CardTitle>
-            </CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div>
-                <label htmlFor="procedure-fitzpatrick" className="text-sm font-medium text-foreground">Fitzpatrick Type</label>
-                <Select value={procedureData.fitzpatrickType} onValueChange={(value: string) => updateProcedureData('fitzpatrickType', value)}>
-                  <SelectTrigger id="procedure-fitzpatrick">
-                    <SelectValue placeholder="Select type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {SKIN_TYPES.fitzpatrick.map((type) => (
-                      <SelectItem key={type} value={type}>
-                        Type {type}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <label htmlFor="procedure-robert" className="text-sm font-medium text-foreground">Robert Type</label>
-                <Select value={procedureData.robertType} onValueChange={(value: string) => updateProcedureData('robertType', value)}>
-                  <SelectTrigger id="procedure-robert">
-                    <SelectValue placeholder="Select type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {SKIN_TYPES.robert.map((type) => (
-                      <SelectItem key={type} value={type}>
-                        {type}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <label htmlFor="procedure-scar" className="text-sm font-medium text-foreground">Scar Type</label>
-                <Select value={procedureData.scarType} onValueChange={(value: string) => updateProcedureData('scarType', value)}>
-                  <SelectTrigger id="procedure-scar">
-                    <SelectValue placeholder="Select type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {SKIN_TYPES.scar.map((type) => (
-                      <SelectItem key={type} value={type}>
-                        {type}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <label htmlFor="procedure-herpes" className="text-sm font-medium text-foreground">Herpes Status</label>
-                <Select value={procedureData.herpesStatus} onValueChange={(value: string) => updateProcedureData('herpesStatus', value)}>
-                  <SelectTrigger id="procedure-herpes">
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {SKIN_TYPES.herpes.map((status) => (
-                      <SelectItem key={status} value={status}>
-                        {status}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Machine Selection */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Settings className="h-5 w-5" />
-                Machine Selection
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                {Object.entries(MACHINES).map(([key, machine]) => (
-                  <Button
-                    key={key}
-                    type="button"
-                    variant={procedureData.selectedMachine === key ? 'default' : 'outline'}
-                    aria-pressed={procedureData.selectedMachine === key}
-                    className="h-14"
-                    onClick={() => updateProcedureData('selectedMachine', key)}
-                  >
-                    {machine.name}
-                  </Button>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Machine Parameters Table */}
-          {renderMachineParametersTable()}
-
-          {/* Notes */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Additional Notes</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Textarea
-                placeholder="Enter any additional notes or observations..."
-                value={procedureData.notes}
-                onChange={(e) => updateProcedureData('notes', e.target.value)}
-                rows={4}
-              />
-            </CardContent>
-          </Card>
-
-          {/* Save Button */}
-          <div className="flex justify-end">
-            <Button 
-              onClick={saveProcedure} 
-              disabled={saving}
-              size="lg"
-              className="flex items-center gap-2"
-            >
-              <Save className="h-4 w-4" />
-              {saving ? 'Saving...' : 'Save Procedure'}
-            </Button>
-          </div>
+          {staff.status === 'loading' && <LoadingSkeleton label="Loading doctors and nurses…" />}
+          {staff.status === 'error' && (
+            <Alert variant="destructive">
+              <AlertTitle>Could not load doctors and nurses</AlertTitle>
+              <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
+                <span>{staff.message}</span>
+                <Button size="sm" variant="outline" onClick={() => void loadStaff()}>Try again</Button>
+              </AlertDescription>
+            </Alert>
+          )}
+          {staff.status === 'ready' && renderForm(staff.data.doctors, staff.data.nurses)}
         </TabsContent>
 
         <TabsContent value="history" className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
               <h3 className="text-lg font-semibold">Procedure History</h3>
-              <p className="text-sm text-muted-foreground">
-                Procedures captured from visits ({visits.length} found)
-              </p>
+              <p className="text-sm text-muted-foreground" aria-live="polite">{historySummary}</p>
             </div>
-            <Button 
-              variant="outline" 
-              onClick={() => loadVisitsWithProcedures(procedureData.patientId)}
-              disabled={loadingVisits}
-            >
-              {loadingVisits ? 'Loading…' : 'Refresh'}
-            </Button>
+            <div className="w-full max-w-sm">
+              <PatientPicker
+                id="procedure-history-patient"
+                label="Filter by patient"
+                value={historyPatient}
+                onChange={setHistoryPatient}
+                clearLabel="All patients"
+              />
+            </div>
           </div>
-
-          {loadingVisits ? (
-            <LoadingSkeleton variant="cards" label="Loading procedure history…" />
-          ) : visits.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {visits.map(renderVisitProcedureCard)}
-            </div>
-          ) : (
-            <Card>
-              <CardContent>
-                <div className="text-center py-8 text-muted-foreground">
-                  <Activity className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
-                  <p>No procedure history found for this patient</p>
-                  <p className="text-sm">Procedures from visits will appear here</p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+          {renderHistory()}
         </TabsContent>
-
       </Tabs>
+
+      <Dialog open={details !== null} onOpenChange={(open: boolean) => { if (!open) setDetails(null); }}>
+        <DialogContent className="max-w-2xl">
+          {details && (
+            <>
+              <DialogHeader>
+                <DialogTitle>{details.label}{details.editable ? ` · Session ${details.record.sessionNo}` : ''}</DialogTitle>
+                <DialogDescription>{details.record.patient?.name}</DialogDescription>
+              </DialogHeader>
+              <ProcedureDetails procedure={details} nurseName={nurseName(details.record.therapistId)} />
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
-} 
+}

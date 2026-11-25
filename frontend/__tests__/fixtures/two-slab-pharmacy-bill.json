@@ -1,0 +1,67 @@
+{
+  "format": "A5",
+  "copyType": "ORIGINAL",
+  "invoice": {
+    "id": "inv-14",
+    "invoiceNumber": "PHI-2026-014",
+    "status": "CONFIRMED",
+    "invoiceDate": "2026-11-05T09:00:00.000Z",
+    "subtotal": 450,
+    "discountAmount": 0,
+    "lineDiscountAmount": 0,
+    "billDiscountKind": null,
+    "billDiscountValue": 0,
+    "billDiscountAmount": 0,
+    "revisedAt": null,
+    "taxAmount": 40,
+    "totalAmount": 490,
+    "paidAmount": 0,
+    "balanceAmount": 490,
+    "amountInWords": "Four hundred ninety rupees only",
+    "notes": null
+  },
+  "branch": {
+    "id": "branch-1",
+    "name": "Skin Care Clinic",
+    "address": "12 MG Road, Pune, Maharashtra, 411001",
+    "phone": "020 4000 1234",
+    "gstNumber": "27ABCDE1234F1Z5",
+    "drugLicenseNumber": "MH-PZ-20B-1234"
+  },
+  "patient": { "id": "patient-1", "name": "Meera Shah", "phone": "9876543210" },
+  "lines": [
+    {
+      "lineNumber": 1,
+      "itemType": "DRUG",
+      "name": "Tab. Azithral 500",
+      "quantity": 2,
+      "unitPrice": 100,
+      "discountPercent": 0,
+      "taxPercent": 5,
+      "taxAmount": 10,
+      "taxableAmount": 200,
+      "totalAmount": 210,
+      "hsnCode": "30042019",
+      "batchAllocations": [{ "batchNumber": "AZ-501", "expiryDate": "2027-08-31T00:00:00.000Z", "quantity": 2, "hsnCode": "30042019" }]
+    },
+    {
+      "lineNumber": 2,
+      "itemType": "DRUG",
+      "name": "Cetaphil cream 100 g",
+      "quantity": 1,
+      "unitPrice": 250,
+      "discountPercent": 0,
+      "taxPercent": 12,
+      "taxAmount": 30,
+      "taxableAmount": 250,
+      "totalAmount": 280,
+      "hsnCode": "33049910",
+      "batchAllocations": [{ "batchNumber": "CP-77", "expiryDate": "2027-03-31T00:00:00.000Z", "quantity": 1, "hsnCode": "33049910" }]
+    }
+  ],
+  "gstSummary": [
+    { "taxPercent": 5, "taxableAmount": 200, "cgst": 5, "sgst": 5, "igst": 0, "totalTax": 10, "grossAmount": 210 },
+    { "taxPercent": 12, "taxableAmount": 250, "cgst": 15, "sgst": 15, "igst": 0, "totalTax": 30, "grossAmount": 280 }
+  ],
+  "payments": []
+}

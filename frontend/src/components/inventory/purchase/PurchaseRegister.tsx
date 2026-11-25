@@ -160,6 +160,30 @@ export function PurchaseRegister({
     },
   ];
 
+  const owes = (row: PurchaseRegisterRow) => ['DUE', 'OVERDUE'].includes(row.payment.state) && row.payment.outstanding > 0;
+  const card = (row: PurchaseRegisterRow) => (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-baseline justify-between gap-2">
+        <span title={row.distributor.name} className="min-w-0 truncate font-medium">{row.distributor.name}</span>
+        <span className={cn('whitespace-nowrap font-semibold', row.invoiceState === 'CANCELLED' && 'line-through')}>{formatRupees(row.amount)}</span>
+      </div>
+      <div className="flex items-center justify-between gap-2 text-sm">
+        <span className="flex min-w-0 items-center gap-1" onClick={(event) => event.stopPropagation()}>
+          <button id={settle.openId(row.id)} type="button" onClick={() => onOpen(row.id)} aria-label={`Open bill ${row.billNo}`} title={row.billNo} className={linkClass}>
+            {row.billNo}
+          </button>
+          <BillDocuments billNo={row.billNo} documents={row.documents} />
+          <span aria-hidden="true">·</span>
+          <span className="whitespace-nowrap">{compactDay(displayCalendarDate(row.billDate), today)}</span>
+        </span>
+        {owes(row) && <span className="whitespace-nowrap font-medium">{formatRupees(row.payment.outstanding)} due</span>}
+      </div>
+      <div onClick={(event) => event.stopPropagation()}>
+        <PaymentCell row={row} settle={settle} canSettle={canSettle} />
+      </div>
+    </div>
+  );
+
   if (load.status === 'denied') {
     return (
       <RegisterDenied noun={copy.noun}>
@@ -260,6 +284,7 @@ export function PurchaseRegister({
         onRetry={() => void reloadAll()}
         containerRef={tableRef}
         compact
+        card={card}
         empty={
           <EmptyState
             icon={Receipt}

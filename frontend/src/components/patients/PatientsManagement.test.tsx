@@ -5,9 +5,10 @@ import PatientsManagement from './PatientsManagement';
 import { apiClient } from '@/lib/api';
 
 const push = jest.fn();
+const mockSearchParams = { current: new URLSearchParams() };
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push }),
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => mockSearchParams.current,
 }));
 const mockToast = jest.fn();
 jest.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: mockToast }) }));
@@ -23,6 +24,8 @@ const rowOf = (name: string) => screen.getByRole('link', { name }).closest('tr')
 describe('PatientsManagement table', () => {
   beforeEach(() => {
     push.mockReset();
+    mockSearchParams.current = new URLSearchParams();
+    (apiClient.getPatients as jest.Mock).mockClear();
     (apiClient.getPatients as jest.Mock).mockResolvedValue({ data: PATIENTS, meta: { page: 1, limit: 20, total: 2, totalPages: 1 } });
   });
 
@@ -187,5 +190,37 @@ describe('PatientsManagement table', () => {
       fireEvent.click(await screen.findByRole('option', { name: option }));
       await waitFor(() => expect((apiClient.getPatients as jest.Mock).mock.calls.at(-1)[0].page).toBe(1));
     });
+  });
+
+  it('asks the server to sort when a header is clicked and returns to page 1', async () => {
+    const calls = () => (apiClient.getPatients as jest.Mock).mock.calls.map(([params]) => params);
+    (apiClient.getPatients as jest.Mock).mockResolvedValue({ data: PATIENTS, meta: { page: 1, limit: 20, total: 60, totalPages: 3 } });
+    render(<PatientsManagement />);
+    await screen.findByRole('link', { name: 'Ananya Reddy' });
+    expect(calls()[0]).toMatchObject({ page: 1, sortBy: 'name', sortOrder: 'asc' });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Next' }));
+    await waitFor(() => expect(calls().at(-1)).toMatchObject({ page: 2, sortBy: 'name', sortOrder: 'asc' }));
+
+    await userEvent.click(screen.getByRole('button', { name: /^Patient/ }));
+    await waitFor(() => expect(calls().at(-1)).toMatchObject({ page: 1, sortBy: 'name', sortOrder: 'desc' }));
+
+    await userEvent.click(screen.getByRole('button', { name: /^Last visit/ }));
+    await waitFor(() => expect(calls().at(-1)).toMatchObject({ page: 1, sortBy: 'lastVisit', sortOrder: 'asc' }));
+  });
+
+  it('shows rows in the order the server returned them', async () => {
+    (apiClient.getPatients as jest.Mock).mockResolvedValue({ data: [PATIENTS[1], PATIENTS[0]], meta: { page: 1, limit: 20, total: 2, totalPages: 1 } });
+    render(<PatientsManagement />);
+    await screen.findByRole('link', { name: 'Ananya Reddy' });
+    expect(screen.getAllByRole('link').filter((a) => a.getAttribute('href')?.startsWith('/dashboard/patients/')).map((a) => a.textContent)).toEqual(['Karthik N', 'Ananya Reddy']);
+  });
+
+  it('applies a search from the URL that arrives after mount', async () => {
+    const { rerender } = render(<PatientsManagement />);
+    await screen.findByRole('link', { name: 'Ananya Reddy' });
+    mockSearchParams.current = new URLSearchParams('search=Karthik');
+    rerender(<PatientsManagement />);
+    await waitFor(() => expect((apiClient.getPatients as jest.Mock).mock.calls.at(-1)[0]).toMatchObject({ search: 'Karthik', page: 1 }));
   });
 });

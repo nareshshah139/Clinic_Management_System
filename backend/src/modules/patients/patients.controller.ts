@@ -16,6 +16,7 @@ import { CreatePatientDto } from './dto/create-patient.dto';
 import { UpdatePatientDto } from './dto/update-patient.dto';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
 import { LinkPatientUserDto } from './dto/link-patient-user.dto';
+import { ListPatientsSortDto } from './dto/list-patients-sort.dto';
 
 interface AuthenticatedRequest {
   user: {
@@ -46,6 +47,7 @@ export class PatientsController {
     @Query('dateRange') dateRange: string | undefined,
     @Query('primaryDoctorId') primaryDoctorId: string | undefined,
     @Query('export') exportAll: string | undefined,
+    @Query() sort: ListPatientsSortDto,
     @Request() req: AuthenticatedRequest,
   ) {
     const isExport = exportAll === 'true';
@@ -65,6 +67,8 @@ export class PatientsController {
         consultationType: consultationTypeFilter,
         dateRange: dateRangeFilter,
         primaryDoctorId: primaryDoctorId?.trim() || undefined,
+        sortBy: sort.sortBy,
+        sortOrder: sort.sortOrder,
       },
       req.user.branchId,
     );

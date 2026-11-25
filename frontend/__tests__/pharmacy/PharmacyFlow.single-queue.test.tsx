@@ -90,7 +90,7 @@ describe('Pharmacy Counter', () => {
     expect(await screen.findByRole('button', { name: 'Link inventory for Adapalene gel' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Collect payment/ })).not.toBeInTheDocument();
     fireEvent.click(within(screen.getByRole('list', { name: 'Prescription queue' })).getByText('Mohammed Irfan'));
-    expect(await screen.findByRole('link', { name: /Collect payment/ })).toHaveAttribute('href', '/dashboard/pharmacy/invoices?search=Mohammed%20Irfan');
+    expect(await screen.findByRole('link', { name: /Collect payment/ })).toHaveAttribute('href', '/dashboard/pharmacy/sales?field=patient&q=Mohammed%20Irfan');
   });
 });
 

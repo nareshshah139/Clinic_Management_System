@@ -2,12 +2,12 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Fragment, useCallback, useMemo, type MouseEvent } from 'react';
-import { MessageCircle, Percent, Plus, Printer } from 'lucide-react';
+import { Fragment, useCallback, useMemo, useState, type MouseEvent } from 'react';
+import { IndianRupee, MessageCircle, Percent, Plus, Printer } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { displayCalendarDate } from '@/lib/date-display';
 import { formatDisplayDay } from '@/lib/date-ranges';
-import { formatRupees, printHtml, renderPharmacyInvoiceHtml, renderSaleReceiptHtml, type ClinicIdentity } from '@/lib/pharmacy-invoice-print';
+import { formatRupees, printHtml, renderPharmacyBillHtml, renderSaleReceiptHtml, type ClinicIdentity, type PharmacyBillPrint } from '@/lib/pharmacy-invoice-print';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 import { requestKey } from '@/components/inventory/workspace-model';
@@ -31,6 +31,7 @@ import {
   SEARCH_FIELD_OPTIONS,
   SOURCE_FILTER_LABELS,
   STATE_LABELS,
+  collectableDue,
   displayMobile,
   editDiscountAction,
   excludedNote,
@@ -48,6 +49,7 @@ import {
   type FilterKey,
   type SortKey,
 } from './sales-register-model';
+import { CollectPaymentDialog } from './CollectPaymentDialog';
 
 const badgeText = 'whitespace-nowrap px-1.5 py-0 text-xs font-medium';
 const quietAction = 'text-muted-foreground group-hover:text-foreground group-focus-within:text-foreground';
@@ -59,7 +61,7 @@ async function printRow(row: SalesRegisterRow, clinic: ClinicIdentity | null) {
     const id = encodeURIComponent(row.recordId);
     const html =
       row.source === 'PHARMACY_BILL'
-        ? renderPharmacyInvoiceHtml(await apiClient.get(`/pharmacy/invoices/${id}`), clinic)
+        ? renderPharmacyBillHtml(await apiClient.get<PharmacyBillPrint>(`/pharmacy/invoices/${id}/print-data`))
         : renderSaleReceiptHtml(await apiClient.get(`/inventory/workspace/documents/${id}`), clinic);
     await printHtml(html);
   } catch {
@@ -112,6 +114,7 @@ export function SalesRegister({
   onParamsChange: (params: URLSearchParams) => void;
 }) {
   const router = useRouter();
+  const [collecting, setCollecting] = useState<SalesRegisterRow | null>(null);
   const copy = REGISTER_COPY[register];
   const fetchPage = useCallback(
     (query: SalesQuery) => apiClient.get<SalesRegisterResponse>('/pharmacy/sales-register', requestParams(register, query)),
@@ -168,6 +171,15 @@ export function SalesRegister({
     const name = billName(row);
     return (
       <div className="inline-flex">
+        {collectableDue(row) > 0 && (
+          <RowAction
+            icon={IndianRupee}
+            label={`Collect payment on ${name}`}
+            hint={`Collect ${formatRupees(row.due)}`}
+            onClick={() => setCollecting(row)}
+            className="text-destructive-text"
+          />
+        )}
         {register === 'sales' && (
           <RowAction
             icon={Percent}
@@ -311,6 +323,19 @@ export function SalesRegister({
         busy={load.status === 'loading' && !!data}
         onPage={goToPage}
       />
+
+      {collecting && (
+        <CollectPaymentDialog
+          billId={collecting.recordId}
+          billNo={billName(collecting)}
+          due={collecting.due}
+          onClose={() => setCollecting(null)}
+          onSaved={() => {
+            setCollecting(null);
+            void reload();
+          }}
+        />
+      )}
     </div>
   );
 }

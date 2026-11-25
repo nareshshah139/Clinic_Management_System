@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import AppointmentsPage from './page';
 import { DashboardUserProvider } from '@/components/layout/dashboard-user-context';
@@ -24,7 +24,6 @@ jest.mock('@/components/appointments/AppointmentsCalendar', () => ({
 }));
 let mockQuery = '';
 jest.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams(mockQuery) }));
-jest.mock('@/components/appointments/AppointmentScheduler', () => ({ __esModule: true, default: () => null }));
 
 function renderAs(user: Partial<User>) {
   render(
@@ -72,12 +71,31 @@ describe('Appointments page default doctor', () => {
   });
 });
 
-describe('Appointments page header', () => {
-  it('keeps the calendar legend beside the view switch, closed until opened', async () => {
+describe('Appointments page views', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    mockQuery = '';
+  });
+
+  it('has no Slots tab', async () => {
     renderAs({ id: 'r-1', role: UserRole.RECEPTION });
-    const views = await screen.findByRole('tablist');
-    const header = views.parentElement as HTMLElement;
-    const legend = within(header).getByRole('button', { name: 'Legend' });
+    await screen.findByText('Calendar for d-praneeta');
+    expect(screen.queryByRole('tab', { name: 'Slots' })).toBeNull();
+    expect(screen.queryByRole('tablist')).toBeNull();
+  });
+
+  it('opens an old ?tab=slots link on the calendar', async () => {
+    mockQuery = 'tab=slots';
+    renderAs({ id: 'r-1', role: UserRole.RECEPTION });
+    expect(await screen.findByText('Calendar for d-praneeta')).toBeInTheDocument();
+  });
+});
+
+describe('Appointments page header', () => {
+  it('keeps the calendar legend closed until opened', async () => {
+    renderAs({ id: 'r-1', role: UserRole.RECEPTION });
+    await screen.findByText('Calendar for d-praneeta');
+    const legend = screen.getByRole('button', { name: 'Legend' });
     expect(screen.queryByText('Booking In Progress')).toBeNull();
 
     await userEvent.click(legend);

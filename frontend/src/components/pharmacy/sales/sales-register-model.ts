@@ -212,6 +212,8 @@ export function editDiscountAction(row: SalesRegisterRow): { href: string } | { 
   return { href: billHref({ bill: row.recordId, edit: 'discount' }) };
 }
 
+export const collectableDue = (row: SalesRegisterRow) => (row.source === 'PHARMACY_BILL' && row.state === 'FINAL' ? row.due : 0);
+
 export function newReturnHref(returnTo: string, key: string) {
   return `/dashboard/inventory?area=sales&view=SALES_RETURN&new=${key}&return=${encodeURIComponent(returnTo)}`;
 }

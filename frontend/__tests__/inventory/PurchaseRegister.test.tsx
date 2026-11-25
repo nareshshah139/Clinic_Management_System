@@ -552,3 +552,54 @@ describe('original bill documents', () => {
     expect(screen.queryByRole('link', { name: /Open original bill/ })).not.toBeInTheDocument();
   });
 });
+
+describe('phone layout and partial payments', () => {
+  const bigBill = () => response({ rows: [row({ amount: 1200, payment: { outstanding: 1200 } }), ...ROWS.slice(1)] });
+
+  it('lists bills as cards on a phone with the bill number, bill amount, due amount and Mark paid', async () => {
+    const matchMedia = jest.mocked(window.matchMedia);
+    const desktop = matchMedia.getMockImplementation();
+    matchMedia.mockImplementation((query: string) => ({ ...desktop!(query), matches: query === '(max-width: 639px)' }));
+    try {
+      renderRegister();
+      const list = await screen.findByRole('list', { name: 'Purchase bills' });
+      expect(screen.queryByRole('table', { name: 'Purchase bills' })).not.toBeInTheDocument();
+      const card = (await within(list).findByRole('button', { name: 'Open bill LIN-099' })).closest('li')!;
+      expect(card).toHaveTextContent('Linae Distributors₹900.00');
+      expect(card).toHaveTextContent('LIN-099');
+      expect(card).toHaveTextContent('₹500.00 due');
+      fireEvent.click(within(card).getByRole('button', { name: 'Mark bill LIN-099 paid' }));
+      expect(onOpen).not.toHaveBeenCalled();
+      expect(await screen.findByRole('dialog', { name: 'Pay ₹500.00 to Linae Distributors' })).toBeInTheDocument();
+    } finally {
+      matchMedia.mockImplementation(desktop!);
+    }
+  });
+
+  it('posts a partial payment of 500 on a 1,200 bill and shows 700 still due', async () => {
+    get.mockResolvedValue(bigBill());
+    post.mockResolvedValue(recorded('payment-1', 700));
+    renderRegister();
+    fireEvent.click(await screen.findByRole('button', { name: 'Mark bill LIN-101 paid' }));
+    const dialog = screen.getByRole('dialog', { name: 'Pay ₹1,200.00 to Linae Distributors' });
+    expect(within(dialog).getByLabelText('Amount')).toHaveValue('1200.00');
+    fireEvent.change(within(dialog).getByLabelText('Amount'), { target: { value: '500' } });
+    expect(within(dialog).getByText('₹700.00 will still be due')).toBeInTheDocument();
+    await armed();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Record payment ₹500.00' }));
+    await waitFor(() => expect(post).toHaveBeenCalled());
+    expect(post.mock.calls[0][1]).toMatchObject({ amount: 500, allocations: [{ purchaseInvoiceId: 'bill-a', amount: 500 }] });
+  });
+
+  it('refuses an amount above what is due and records nothing', async () => {
+    get.mockResolvedValue(bigBill());
+    renderRegister();
+    fireEvent.click(await screen.findByRole('button', { name: 'Mark bill LIN-101 paid' }));
+    const dialog = screen.getByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('Amount'), { target: { value: '1300' } });
+    await armed();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Record payment' }));
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Enter an amount from ₹0.01 to ₹1,200.00.');
+    expect(post).not.toHaveBeenCalled();
+  });
+});

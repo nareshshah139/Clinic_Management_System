@@ -20,6 +20,7 @@ interface Props {
   onVisitNeeded?: () => Promise<string>; // Callback to create visit if needed
   patientId?: string; // required for draft uploads when visitId is temp
   allowDelete?: boolean; // doctor-only delete control
+  readOnly?: boolean;
   onVisitVersion?: (version: number) => void;
   onClinicalConflict?: () => void;
   onChangeCount?: (count: number) => void; // notify parent of photo count changes
@@ -39,7 +40,7 @@ interface PhotoItem { url: string; uploadedAt?: string | null; position?: PhotoP
  * An upload or deletion 409 MUST notify the parent conflict gate immediately,
  * including legacy and draft routes, before another batch can acknowledge success.
  */
-export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId, allowDelete, onChangeCount, onVisitVersion, onClinicalConflict }: Props) {
+export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId, allowDelete, readOnly = false, onChangeCount, onVisitVersion, onClinicalConflict }: Props) {
   const { toast } = useToast();
   const [confirm, confirmDialog] = useConfirm();
   const [items, setItems] = useState<PhotoItem[]>([]);
@@ -270,10 +271,6 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
           invalids.push(`${f.name}: not an image`);
           continue;
         }
-        if (f.size > MAX_FILE_BYTES) {
-          // Backend downscales but enforces size limit; warn but still attempt upload
-          invalids.push(`${f.name}: larger than ${Math.round(MAX_FILE_BYTES / (1024*1024))}MB (may fail, attempting anyway)`);
-        }
         validFiles.push(f);
         validPositions.push(p);
       }
@@ -452,14 +449,23 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
           preferWebP ? 'image/webp' : 'image/jpeg',
         )));
         const fd = new FormData();
-        processed.forEach((f) => fd.append('files', f as any));
-        fd.append('positions', JSON.stringify(groupPositions));
+        const sentPositions: typeof groupPositions = [];
+        processed.forEach((f, i) => {
+          if (f.size > MAX_FILE_BYTES) {
+            invalids.push(`${group[i].name}: larger than ${Math.round(MAX_FILE_BYTES / (1024*1024))}MB`);
+            return;
+          }
+          fd.append('files', f as any);
+          sentPositions.push(groupPositions[i]);
+        });
+        fd.append('positions', JSON.stringify(sentPositions));
 
         const targetUrl = visitId === 'temp'
           ? `${baseUrl}/visits/photos/draft/${patientId}`
           : `${baseUrl}/visits/${actualVisitId}/photos`;
 
         try {
+          if (sentPositions.length === 0) return;
           await xhrUpload(targetUrl, fd, (pct) => {
             setBatchState(prev => ({ current: Math.min(prev.current, batchIndex) + 1, total: totalBatches, percent: pct }));
           }, 90000);
@@ -511,31 +517,39 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
   const active = items[activeIndex] || null;
   const previous = useMemo(() => (activeIndex > 0 ? items[activeIndex - 1] : null), [items, activeIndex]);
 
-  // Build position-based pairs for compare mode
-  const positionPairs = useMemo(() => {
+  const comparePairs = useMemo(() => {
     const byPos = (arr: PhotoItem[]) => {
-      const map: Partial<Record<PhotoPosition, PhotoItem>> = {};
+      const map: Partial<Record<PhotoPosition, PhotoItem[]>> = {};
       for (const it of arr) {
         const p = (it.position as PhotoPosition) || 'OTHER';
-        if (!map[p]) map[p] = it;
+        (map[p] ||= []).push(it);
       }
       return map;
     };
     const curBy = byPos(items);
     const cmpBy = byPos(compareItems);
-    const available = RECOMMENDED_ORDER.filter(p => curBy[p] || cmpBy[p]);
-    return { available, curBy, cmpBy } as { available: PhotoPosition[]; curBy: Partial<Record<PhotoPosition, PhotoItem>>; cmpBy: Partial<Record<PhotoPosition, PhotoItem>> };
+    const pairs: Array<{ position: PhotoPosition; left: PhotoItem | null; right: PhotoItem | null }> = [];
+    for (const position of RECOMMENDED_ORDER) {
+      const cur = curBy[position] ?? [];
+      const cmp = cmpBy[position] ?? [];
+      for (let i = 0; i < Math.max(cur.length, cmp.length); i += 1) {
+        pairs.push({ position, left: cmp[i] ?? null, right: cur[i] ?? null });
+      }
+    }
+    return pairs;
   }, [items, compareItems]);
 
   useEffect(() => {
-    if (pairIndex >= positionPairs.available.length) {
-      setPairIndex(positionPairs.available.length > 0 ? positionPairs.available.length - 1 : 0);
+    if (pairIndex >= comparePairs.length) {
+      setPairIndex(comparePairs.length > 0 ? comparePairs.length - 1 : 0);
     }
-  }, [positionPairs.available.length, pairIndex]);
+  }, [comparePairs.length, pairIndex]);
 
-  const currentPairPosition = positionPairs.available[pairIndex] || null;
-  const leftItem = currentPairPosition ? positionPairs.cmpBy[currentPairPosition] || null : null;
-  const rightItem = currentPairPosition ? positionPairs.curBy[currentPairPosition] || null : null;
+  const currentPair = comparePairs[pairIndex] || null;
+  const currentPairPosition = currentPair?.position ?? null;
+  const leftItem = currentPair?.left ?? null;
+  const rightItem = currentPair?.right ?? null;
+  const deleteTarget = compareMode ? rightItem : active;
 
   const formatVisitLabel = (vid: string | null, fallback: string) => {
     if (!vid) return fallback;
@@ -628,21 +642,25 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
         <div className="flex items-center justify-between">
           <CardTitle>Before / After Photos ({items.length})</CardTitle>
           <div className="space-x-2">
-            <Button variant="outline" size="sm" disabled={uploading} onClick={() => inputRef.current?.click()}>
-              <Upload className="h-4 w-4 mr-2" />
-              {uploading ? 'Uploading...' : 'Upload'}
-            </Button>
-            <Button variant="outline" size="sm" disabled={uploading} onClick={() => cameraRef.current?.click()}>
-              <Camera className="h-4 w-4 mr-2" />
-              Camera
-            </Button>
+            {!readOnly && (
+              <>
+                <Button variant="outline" size="sm" disabled={uploading} onClick={() => inputRef.current?.click()}>
+                  <Upload className="h-4 w-4 mr-2" />
+                  {uploading ? 'Uploading...' : 'Upload'}
+                </Button>
+                <Button variant="outline" size="sm" disabled={uploading} onClick={() => cameraRef.current?.click()}>
+                  <Camera className="h-4 w-4 mr-2" />
+                  Camera
+                </Button>
+              </>
+            )}
             {items.length > 0 && (
               <Button variant={compareMode ? 'default' : 'outline'} aria-pressed={compareMode} size="sm" onClick={() => setCompareMode(v => !v)}>
                 {compareMode ? 'Compare: On' : 'Compare: Off'}
               </Button>
             )}
-            {allowDelete && active && (
-              <Button variant="destructive" size="sm" onClick={() => void deletePhoto(active)} disabled={deleting}>
+            {allowDelete && !readOnly && deleteTarget && (
+              <Button variant="destructive" size="sm" onClick={() => void deletePhoto(deleteTarget)} disabled={deleting}>
                 <Trash2 className="h-4 w-4 mr-2" /> Delete
               </Button>
             )}
@@ -650,8 +668,12 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
-        <input ref={inputRef} type="file" accept="image/*" multiple onChange={onUpload} className="hidden" />
-        <input ref={cameraRef} type="file" accept="image/*" capture="environment" onChange={onUpload} className="hidden" />
+        {!readOnly && (
+          <>
+            <input ref={inputRef} type="file" accept="image/*" multiple onChange={onUpload} className="hidden" />
+            <input ref={cameraRef} type="file" accept="image/*" capture="environment" onChange={onUpload} className="hidden" />
+          </>
+        )}
 
         {photoLoading ? <p role="status">Loading visit photos…</p> : photoLoadError ? <div role="alert" className="space-y-2 text-sm">
           <p>{photoLoadError}</p><Button type="button" variant="outline" onClick={() => void load()}>Retry visit photos</Button>
@@ -660,7 +682,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
             <ImageIcon className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
             <h3 className="text-lg font-medium text-foreground mb-2">No photos attached to this visit</h3>
             <p className="text-sm text-muted-foreground mb-6">Photos from other visits and unattached uploads are listed below when available.</p>
-            <div className="flex justify-center space-x-3">
+            {!readOnly && <div className="flex justify-center space-x-3">
               <Button onClick={() => inputRef.current?.click()} disabled={uploading}>
                 <Upload className="h-4 w-4 mr-2" />
                 Choose Files
@@ -669,7 +691,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
                 <Camera className="h-4 w-4 mr-2" />
                 Take Photo
               </Button>
-            </div>
+            </div>}
           </div>
         ) : (
           <div className="space-y-3">
@@ -734,11 +756,11 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
                   <div>
                     {currentPairPosition ? `Position: ${POSITION_LABEL[currentPairPosition]}` : 'No positions to compare'}
-                    {positionPairs.available.length > 0 ? ` • ${pairIndex + 1} / ${positionPairs.available.length}` : ''}
+                    {comparePairs.length > 0 ? ` • ${pairIndex + 1} / ${comparePairs.length}` : ''}
                   </div>
                   <div className="space-x-2">
-                    <Button size="sm" variant="outline" onClick={() => setPairIndex(i => Math.max(0, i - 1))} disabled={positionPairs.available.length <= 1}>Prev</Button>
-                    <Button size="sm" variant="outline" onClick={() => setPairIndex(i => Math.min(positionPairs.available.length - 1, i + 1))} disabled={positionPairs.available.length <= 1}>Next</Button>
+                    <Button size="sm" variant="outline" onClick={() => setPairIndex(i => Math.max(0, i - 1))} disabled={comparePairs.length <= 1}>Prev</Button>
+                    <Button size="sm" variant="outline" onClick={() => setPairIndex(i => Math.min(comparePairs.length - 1, i + 1))} disabled={comparePairs.length <= 1}>Next</Button>
                   </div>
                 </div>
               </div>
@@ -747,14 +769,14 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
             {/* Meta */}
             <div className="text-xs text-muted-foreground flex items-center justify-between">
               <div>
-                {active?.uploadedAt ? `Uploaded: ${displayClinicDateTime(active.uploadedAt)}` : ''}
-                {active?.position ? ` • ${POSITION_LABEL[active.position]}` : ''}
+                {deleteTarget?.uploadedAt ? `Uploaded: ${displayClinicDateTime(deleteTarget.uploadedAt)}` : ''}
+                {deleteTarget?.position ? ` • ${POSITION_LABEL[deleteTarget.position]}` : ''}
               </div>
               <div className="space-x-2">
                 <Button size="sm" variant="outline" onClick={() => setActiveIndex(i => Math.max(0, i - 1))} disabled={items.length <= 1}>Prev</Button>
                 <Button size="sm" variant="outline" onClick={() => setActiveIndex(i => Math.min(items.length - 1, i + 1))} disabled={items.length <= 1}>Next</Button>
-                {allowDelete && active && (
-                  <Button size="sm" variant="destructive" onClick={() => void deletePhoto(active)}>
+                {allowDelete && !readOnly && deleteTarget && (
+                  <Button size="sm" variant="destructive" onClick={() => void deletePhoto(deleteTarget)}>
                     <Trash2 className="h-4 w-4 mr-1" /> Delete
                   </Button>
                 )}
@@ -777,7 +799,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
                     <span className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs px-1 truncate">
                       {it.position ? POSITION_LABEL[it.position] : ''}
                     </span>
-                    {allowDelete && (
+                    {allowDelete && !readOnly && (
                       <button
                         type="button"
                         aria-label="Delete photo"

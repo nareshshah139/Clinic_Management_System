@@ -1,33 +1,61 @@
-import { formatRupees, printHtml, renderPharmacyInvoiceHtml } from '@/lib/pharmacy-invoice-print';
+import { formatRupees, printHtml, renderPharmacyBillHtml, renderPharmacyInvoiceHtml, type PharmacyBillPrint } from '@/lib/pharmacy-invoice-print';
+import twoSlabBill from '../fixtures/two-slab-pharmacy-bill.json';
+
+const TWO_SLAB_GST_TABLE =
+  '<table><caption>GST summary</caption><thead><tr><th style="text-align:right">GST %</th><th style="text-align:right">Taxable</th><th style="text-align:right">CGST</th><th style="text-align:right">SGST</th><th style="text-align:right">Total tax</th></tr></thead><tbody><tr><td style="text-align:right">5%</td><td style="text-align:right">₹200.00</td><td style="text-align:right">₹5.00</td><td style="text-align:right">₹5.00</td><td style="text-align:right">₹10.00</td></tr><tr><td style="text-align:right">12%</td><td style="text-align:right">₹250.00</td><td style="text-align:right">₹15.00</td><td style="text-align:right">₹15.00</td><td style="text-align:right">₹30.00</td></tr></tbody></table>';
 
 it('formats print amounts with Indian grouping and two decimals', () => {
   expect([formatRupees(4554.64), formatRupees(135234.4), formatRupees(-12.5), formatRupees('n/a')]).toEqual(['₹4,554.64', '₹1,35,234.40', '-₹12.50', '₹0.00']);
 });
 
 it('escapes every value it prints and heads the bill with the clinic identity', () => {
-  const html = renderPharmacyInvoiceHtml(
-    {
+  const html = renderPharmacyBillHtml({
+    invoice: {
       invoiceNumber: 'PHI-<1>',
       invoiceDate: '2026-11-05T09:00:00.000Z',
       status: 'COMPLETED',
-      billingName: '<img src=x onerror=alert(1)>',
-      billingPhone: '98765 43210',
-      items: [{ itemType: 'DRUG', drug: { name: 'Gel "A" & B' }, quantity: 2, unitPrice: 2277.32, discountPercent: 0, taxPercent: 12, totalAmount: 4554.64 }],
       subtotal: 4554.64,
       discountAmount: 0,
       taxAmount: 0,
       totalAmount: 4554.64,
       notes: '</div><script>x()</script>',
     },
-    { name: 'Skin & Care', address: 'MG Road', phone: '020 4000', drugLicence: 'DL-20B' },
-  );
+    branch: { name: 'Skin & Care', address: 'MG Road', phone: '020 4000', drugLicenseNumber: 'DL-20B' },
+    patient: { name: '<img src=x onerror=alert(1)>', phone: '98765 43210' },
+    lines: [{ name: 'Gel "A" & B', hsnCode: '<b>3004</b>', quantity: 2, unitPrice: 2277.32, discountPercent: 0, taxPercent: 12, totalAmount: 4554.64 }],
+  });
   expect(html).not.toContain('<img');
   expect(html).not.toContain('<script>');
+  expect(html).not.toContain('<b>');
   expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
   expect(html).toContain('Gel &quot;A&quot; &amp; B');
   expect(html).toContain('<title>Pharmacy Invoice PHI-&lt;1&gt;</title>');
   expect(html).toContain('<div class="clinic-name">Skin &amp; Care</div><div>MG Road</div><div>Phone: 020 4000</div><div>Drug licence: DL-20B</div>');
   expect(html).toContain('<div class="grand"><strong>Grand Total:</strong> ₹4,554.64</div>');
+});
+
+it('prints each line with HSN, batch and expiry, its GST rate, and the CGST and SGST split per rate', () => {
+  const html = renderPharmacyBillHtml(twoSlabBill as PharmacyBillPrint);
+  expect(html).toContain('<div>GSTIN: 27ABCDE1234F1Z5 · Drug licence: MH-PZ-20B-1234</div>');
+  expect(html).toContain(
+    '<tr><td style="text-align:left">Tab. Azithral 500</td><td style="text-align:left">30042019</td><td style="text-align:left">AZ-501 (exp 31 Aug 2027)</td><td style="text-align:center">2</td><td style="text-align:right">₹100.00</td><td style="text-align:right">0%</td><td style="text-align:right">5%</td><td style="text-align:right">₹210.00</td></tr>',
+  );
+  expect(html).toContain(
+    '<tr><td style="text-align:left">Cetaphil cream 100 g</td><td style="text-align:left">33049910</td><td style="text-align:left">CP-77 (exp 31 Mar 2027)</td><td style="text-align:center">1</td><td style="text-align:right">₹250.00</td><td style="text-align:right">0%</td><td style="text-align:right">12%</td><td style="text-align:right">₹280.00</td></tr>',
+  );
+  expect(html).toContain(TWO_SLAB_GST_TABLE);
+  expect(html).toContain('<strong>Copy:</strong> Original');
+  expect(html).toContain('<div class="words">Four hundred ninety rupees only</div>');
+});
+
+it('prints an interstate bill with IGST in place of CGST and SGST', () => {
+  const html = renderPharmacyBillHtml({
+    ...(twoSlabBill as PharmacyBillPrint),
+    gstSummary: [{ taxPercent: 12, taxableAmount: 250, cgst: 0, sgst: 0, igst: 30, totalTax: 30 }],
+  });
+  expect(html).toContain(
+    '<table><caption>GST summary</caption><thead><tr><th style="text-align:right">GST %</th><th style="text-align:right">Taxable</th><th style="text-align:right">IGST</th><th style="text-align:right">Total tax</th></tr></thead><tbody><tr><td style="text-align:right">12%</td><td style="text-align:right">₹250.00</td><td style="text-align:right">₹30.00</td><td style="text-align:right">₹30.00</td></tr></tbody></table>',
+  );
 });
 
 describe('printHtml frame lifetime', () => {
