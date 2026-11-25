@@ -131,7 +131,8 @@ databaseTests('Purchase OCR learning with real PostgreSQL', () => {
       expect(bill.automation.status).toBe('SAVED_FOR_REVIEW');
       expect(bill.invoice.items[0]).toMatchObject({ productName: 'Dolo 650mg Tablet', manufacturer: 'Micro Labs', packSize: '15',
         ocrFlags: ['learned_product_needs_confirmation'] });
-      expect(bill.draft.items[0].learnedCorrections).toEqual([{ field: 'product', from: 'DOLO-650 TAB', to: 'Dolo 650mg Tablet', support: 2 + index, tier: 'APPLY' }]);
+      expect(bill.draft.items[0].learnedCorrections).toEqual([{ field: 'product', from: 'DOLO-650 TAB', to: 'Dolo 650mg Tablet', support: 2 + index, tier: 'APPLY',
+        restore: { productName: 'DOLO-650 TAB', manufacturer: 'MICRO LABS', packSize: '15' }, restoreFlags: [] }]);
       expect(bill.automation.issues).toContain('Line 1: learned_product_needs_confirmation');
       await reviewAndCommit(bill.invoice.id, dolo);
       expect((await examplesOf(bill.invoice.id)).map(row => [row.field, row.provenance, row.appliedLessonKey])).toEqual([
@@ -193,5 +194,27 @@ databaseTests('Purchase OCR learning with real PostgreSQL', () => {
     expect(forgotten.learning).toEqual({ applied: [], suggestions: [] });
     expect(forgotten.invoice.items[0]).toMatchObject({ productName: 'CROCIN ADV 500', ocrFlags: [] });
     await expect(service.forgetLearningLesson(branchId, lessonKey, userId)).rejects.toThrow('already forgotten');
+  }, 60000);
+
+  it('keeps the cross-supplier ranking aid out of the lessons list and refuses to forget it', async () => {
+    const supplierA = { distributorName: 'Alpha Supplier', distributorGstin: '36AAACA1234F1Z5' };
+    const supplierB = { distributorName: 'Beta Supplier', distributorGstin: '36AAACB1234F1Z5' };
+    const line = { productName: 'AZEE 500 TAB', manufacturer: 'ALKEM LAB', packSize: '5' };
+    const azee = await prisma.drug.create({ data: { branchId, name: 'Azee 500mg Tablet', manufacturerName: 'Alkem Laboratories', packSizeLabel: '5',
+      price: 90, composition1: 'Azithromycin', category: 'Antibiotic', dosageForm: 'Tablet', strength: '500mg' } });
+    for (const invoiceNumber of ['STAR-A1', 'STAR-A2']) await reviewAndCommit((await importBill(invoiceNumber, line, supplierA)).invoice.id, azee);
+    await reviewAndCommit((await importBill('STAR-B1', line, supplierB)).invoice.id, azee);
+
+    const lessons = (await service.learningLessons(branchId)).lessons;
+    const productKeys = lessons.filter(lesson => lesson.rawKey === 'azee 500 tablet|5').map(lesson => lesson.key).sort();
+    expect(productKeys).toEqual([
+      `product:${supplierA.distributorGstin}:azee 500 tablet|5`, `product:${supplierB.distributorGstin}:azee 500 tablet|5`,
+    ]);
+    expect(lessons.filter(lesson => lesson.supplierGstin === '*')).toEqual([]);
+
+    await expect(service.forgetLearningLesson(branchId, 'product:*:azee 500 tablet|5', userId)).rejects.toMatchObject({
+      status: 400, message: expect.stringContaining("supplier's own lesson"),
+    });
+    expect((await service.learningLessons(branchId)).lessons.filter(lesson => lesson.rawKey === 'azee 500 tablet|5').map(lesson => lesson.key).sort()).toEqual(productKeys);
   }, 60000);
 });
