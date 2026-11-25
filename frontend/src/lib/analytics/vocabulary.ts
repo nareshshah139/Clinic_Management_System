@@ -33,6 +33,7 @@ export const PAGE_ROUTES = [
   '/dashboard',
   '/dashboard/appointments',
   '/dashboard/appointments/google-callback',
+  '/dashboard/audit-logs',
   '/dashboard/billing',
   '/dashboard/fees',
   '/dashboard/inventory',
