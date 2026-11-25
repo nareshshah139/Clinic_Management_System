@@ -1,4 +1,6 @@
-import { formatRupees, printHtml, renderPharmacyBillHtml, renderPharmacyInvoiceHtml, type PharmacyBillPrint } from '@/lib/pharmacy-invoice-print';
+import { billPrintFromInvoice, formatRupees, printHtml, renderPharmacyBillHtml, type PharmacyBillPrint } from '@/lib/pharmacy-invoice-print';
+
+const renderStoredBill = (invoice: any) => renderPharmacyBillHtml(billPrintFromInvoice(invoice));
 import twoSlabBill from '../fixtures/two-slab-pharmacy-bill.json';
 
 const TWO_SLAB_GST_TABLE =
@@ -111,17 +113,17 @@ it('prints a revised bill with its bill discount and marks a draft as not a tax 
     taxAmount: 37.08,
     totalAmount: 282.68,
   };
-  const html = renderPharmacyInvoiceHtml(bill);
+  const html = renderStoredBill(bill);
   expect(html).toContain('<strong>Revised:</strong> 10 Nov 2026');
   expect(html).toContain('<div><strong>Item discount:</strong> -₹23.00</div>');
   expect(html).toContain('<div><strong>Bill discount (20%):</strong> -₹61.40</div>');
   expect(html).toContain('<div class="grand"><strong>Grand Total:</strong> ₹282.68</div>');
-  const draft = renderPharmacyInvoiceHtml({ ...bill, invoiceNumber: 'DRAFT-9a', status: 'DRAFT', revisedAt: null });
+  const draft = renderStoredBill({ ...bill, invoiceNumber: 'DRAFT-9a', status: 'DRAFT', revisedAt: null });
   expect([draft.includes('<title>Draft bill, not a tax invoice</title>'), draft.includes('DRAFT-9a')]).toEqual([true, false]);
 });
 
 it('prints a bill line by the stock name the bill carries, not the catalogue name', () => {
-  const html = renderPharmacyInvoiceHtml({
+  const html = renderStoredBill({
     invoiceNumber: 'PHI-2026-007', invoiceDate: '2026-11-11T09:00:00.000Z', status: 'CONFIRMED', billingName: 'Meera Shah', billingPhone: '9876543210',
     items: [
       { itemType: 'DRUG', name: 'Tab. Flutas 150 mg', drug: { name: 'Flutas 150' }, quantity: 3, unitPrice: 20, discountPercent: 0, taxPercent: 12, totalAmount: 67.2 },

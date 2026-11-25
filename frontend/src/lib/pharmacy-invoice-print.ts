@@ -261,10 +261,6 @@ export function billPrintFromInvoice(invoice: StoredInvoice, items: StoredLine[]
   };
 }
 
-export function renderPharmacyInvoiceHtml(invoice: any): string {
-  return renderPharmacyBillHtml(billPrintFromInvoice(invoice), { printButton: true });
-}
-
 const MODE_LABELS: Record<string, string> = {
   CASH: 'Cash', UPI: 'UPI', CARD: 'Card', NETBANKING: 'Net banking', WALLET: 'Wallet', INSURANCE: 'Insurance', CREDIT: 'Credit', OTHER: 'Other',
 };
