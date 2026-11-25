@@ -213,7 +213,7 @@ supplier", for the product chosen for the same spelling and pack.
 **Endpoints.**
 
 - `GET /pharmacy/purchase-invoices/learning/metrics?from&to` (read permission;
-  default last 8 weeks, `to` exclusive). Weekly totals and per-supplier rows:
+  default last 8 weeks, a plain-date `to` includes that whole UTC day). Weekly totals and per-supplier rows:
   reviewer touches per 100 reviewed OCR lines (`HUMAN_CORRECTED` plus
   `LESSON_OVERRIDDEN`; this should fall), raw OCR correction rate, auto-commit rate,
   override rate (`LESSON_OVERRIDDEN / (LESSON_KEPT + LESSON_OVERRIDDEN)`), and active

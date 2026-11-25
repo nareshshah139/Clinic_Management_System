@@ -758,6 +758,7 @@ export class PharmacyPurchaseInvoiceService {
 
   async learningMetrics(branchId: string, query: { from?: string; to?: string }) {
     const to = query.to ? new Date(query.to) : new Date();
+    if (query.to && /^\d{4}-\d{2}-\d{2}$/.test(query.to) && Number.isFinite(to.getTime())) to.setUTCDate(to.getUTCDate() + 1);
     const from = query.from ? new Date(query.from) : new Date(to.getTime() - 56 * 24 * 60 * 60 * 1000);
     if (!Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime()) || from > to) {
       throw new BadRequestException('Choose a valid date range for OCR learning metrics.');
