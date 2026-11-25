@@ -140,19 +140,19 @@ export function ClinicBillRegister({
         <span className="min-w-0 truncate font-medium">{row.patient.name}</span>
         <span className={cn('whitespace-nowrap font-semibold', row.status === 'CANCELLED' && 'line-through')}>{rupee(row.amount)}</span>
       </div>
-      <div className="flex items-center justify-between gap-2 text-sm">
-        <span className="flex min-w-0 items-center gap-1">
-          {billLink(row)}
-          <span aria-hidden="true">·</span>
-          <RegisterDateTime value={row.billedAt} today={today} />
-        </span>
-        {row.due > 0 && <span className="whitespace-nowrap font-semibold text-destructive-text">{rupee(row.due)} due</span>}
+      <div className="flex flex-wrap items-center gap-x-1 text-sm">
+        {billLink(row)}
+        <span aria-hidden="true">·</span>
+        <RegisterDateTime value={row.billedAt} today={today} />
       </div>
       <div className="flex items-center justify-between gap-2 text-sm">
         <span className="min-w-0 truncate">{[row.doctor?.name, row.kind && KIND_LABEL[row.kind]].filter(Boolean).join(' · ') || '—'}</span>
         <StatusCell row={row} />
       </div>
-      <div className="-mr-2 flex justify-end" onClick={stop}>{actionsCell(row)}</div>
+      <div className="-mr-2 flex items-center justify-between gap-2" onClick={stop}>
+        <span className="text-sm font-semibold text-destructive-text">{row.due > 0 ? `${rupee(row.due)} due` : ''}</span>
+        {actionsCell(row)}
+      </div>
     </div>
   );
 
