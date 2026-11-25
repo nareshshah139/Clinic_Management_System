@@ -2405,7 +2405,9 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     const selection = nextRegimenSelection();
     recordHistory();
     setItems(prev => {
-      const next = prev.map((item, index) => index === rowIdx ? selectDrugOnRow(item, drug, selection) : item);
+      const next = rowIdx < prev.length
+        ? prev.map((item, index) => index === rowIdx ? selectDrugOnRow(item, drug, selection) : item)
+        : [...prev, selectDrugOnRow(createBlankItem(), drug, selection)];
       if (!hasTrailingBlank(next)) next.push(createBlankItem());
       return next;
     });
@@ -5433,7 +5435,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                       <span className="text-muted-foreground">Recent meds:</span>
                       {(recentDrugsForPatient.length ? recentDrugsForPatient : recentDrugsGlobal).map((d) => (
                         <Button key={d} size="sm" variant="outline" onClick={() => {
-                          const target = activeRowIdx ?? (items.length > 0 ? items.length - 1 : 0);
+                          const activeIsBlank = activeRowIdx !== null && items[activeRowIdx] && !items[activeRowIdx].drugName.trim();
+                          const target = activeIsBlank ? activeRowIdx : hasTrailingBlank(items) ? items.length - 1 : items.length;
                           applyDrugSelectionToRow(target, { name: d }, { showToast: false });
                         }}>
                           {d}
