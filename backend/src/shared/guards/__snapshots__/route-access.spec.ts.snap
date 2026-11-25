@@ -51,9 +51,11 @@ GET /auth/statistics | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMAC
 GET /billing/fees | roles: ADMIN | permissions: -
 GET /billing/invoices | roles: ADMIN,RECEPTION,DOCTOR | permissions: billing:invoice:read
 GET /billing/invoices/:id | roles: ADMIN,RECEPTION,DOCTOR | permissions: billing:invoice:read
+GET /billing/invoices/:id/receipt | roles: ADMIN,RECEPTION,DOCTOR | permissions: billing:invoice:read
 GET /billing/invoices/outstanding | roles: ADMIN,RECEPTION | permissions: billing:invoice:read
 GET /billing/payments | roles: ADMIN,RECEPTION | permissions: billing:payment:read
 GET /billing/payments/summary | roles: ADMIN | permissions: billing:payment:summary
+GET /billing/register | roles: ADMIN,RECEPTION,DOCTOR | permissions: billing:invoice:read
 GET /billing/reports/revenue | roles: ADMIN | permissions: billing:revenue:read
 GET /billing/statistics | roles: ADMIN | permissions: billing:statistics:read
 GET /clinic-investigations | roles: DOCTOR,ADMIN,OWNER,NURSE | permissions: -

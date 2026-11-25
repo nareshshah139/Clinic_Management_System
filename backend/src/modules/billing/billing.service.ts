@@ -19,6 +19,7 @@ import {
   RevenueReportDto,
   OutstandingInvoicesDto,
 } from './dto/query-billing.dto';
+import { VOID, metadataOf } from './clinic-bill-register';
 
 const RUPEES = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0, maximumFractionDigits: 2 });
 const PAYMENT_INVOICE = { invoice: { select: { id: true, invoiceNo: true, total: true } } } as const;
@@ -292,6 +293,7 @@ export class BillingService {
    */
   async updateInvoice(id: string, updateInvoiceDto: UpdateInvoiceDto, branchId: string) {
     const invoice = await this.findInvoiceById(id, branchId);
+    if (invoice.status === VOID) throw new BadRequestException(`Bill ${invoice.invoiceNo} is void, so it cannot be changed.`);
 
     const updateData: any = {};
 
@@ -337,9 +339,29 @@ export class BillingService {
     });
   }
 
-  async cancelInvoice(id: string, branchId: string, _reason?: string) {
-    // Current schema has no status/cancel semantics; avoid destructive delete by returning a clear error
-    throw new BadRequestException('Invoice cancellation is not supported in the current schema');
+  /**
+   * @cc [owner:nareshshah139,label:calculation;security] invoice-void
+   * Voiding MUST need a reason and MUST mark the bill CANCELLED with that reason only while it holds
+   * no money, in one conditional write, so a payment racing the void either lands first and the void
+   * is refused, or finds the bill void and is refused. Voiding a void bill MUST change nothing.
+   */
+  async cancelInvoice(id: string, branchId: string, reason?: string) {
+    const why = reason?.trim();
+    if (!why) throw new BadRequestException('Give a reason for voiding the bill.');
+    const invoice = await this.findInvoiceById(id, branchId);
+    if (invoice.status === VOID) return invoice;
+    const metadata = JSON.stringify({ ...metadataOf(invoice.metadata), void: { reason: why, at: new Date().toISOString() } });
+    const voided = await this.prisma.newInvoice.updateMany({
+      where: { id, branchId, status: { not: VOID }, received: { lt: 0.005 } },
+      data: { status: VOID, metadata },
+    });
+    const current = await this.findInvoiceById(id, branchId);
+    if (voided.count === 0 && current.status !== VOID) {
+      throw new BadRequestException(
+        `Bill ${invoice.invoiceNo} has received ${RUPEES.format(current.received)}. Refund it first, then void the bill.`,
+      );
+    }
+    return current;
   }
 
   /**
@@ -356,9 +378,10 @@ export class BillingService {
     const { invoiceId, amount, method, reference, gateway } = paymentDto;
     if (!(amount > 0)) throw new BadRequestException('Enter a payment above ₹0.');
     const invoice = await this.findInvoiceById(invoiceId, branchId);
+    if (invoice.status === VOID) throw new BadRequestException(this.refusal(invoice, VOID, 0, amount));
 
     if (gateway) {
-      if (amount > invoice.balance) throw new BadRequestException(this.overDue(invoice, invoice.balance, amount));
+      if (amount > invoice.balance) throw new BadRequestException(this.refusal(invoice, invoice.status, invoice.balance, amount));
       return this.prisma.newPayment.create({
         data: { invoiceId, amount, mode: method as any, reference: reference ?? null, gateway, reconStatus: 'PENDING' },
         include: PAYMENT_INVOICE,
@@ -415,16 +438,17 @@ export class BillingService {
     Refusal: new (message: string) => Error,
   ) {
     const applied = await tx.newInvoice.updateMany({
-      where: { id: invoice.id, balance: { gte: amount } },
+      where: { id: invoice.id, balance: { gte: amount }, status: { not: VOID } },
       data: { received: { increment: amount }, balance: { decrement: amount } },
     });
     if (applied.count === 1) return;
-    const { balance } = await tx.newInvoice.findUniqueOrThrow({ where: { id: invoice.id }, select: { balance: true } });
-    throw new Refusal(this.overDue(invoice, balance, amount));
+    const { balance, status } = await tx.newInvoice.findUniqueOrThrow({ where: { id: invoice.id }, select: { balance: true, status: true } });
+    throw new Refusal(this.refusal(invoice, status, balance, amount));
   }
 
-  private overDue(invoice: { invoiceNo: string }, balance: number, amount: number) {
+  private refusal(invoice: { invoiceNo: string }, status: string, balance: number, amount: number) {
     const refused = `so ${RUPEES.format(amount)} cannot be recorded.`;
+    if (status === VOID) return `Bill ${invoice.invoiceNo} is void, ${refused}`;
     return balance > 0
       ? `Only ${RUPEES.format(balance)} is due on bill ${invoice.invoiceNo}, ${refused}`
       : `Bill ${invoice.invoiceNo} is already paid in full, ${refused}`;
@@ -660,6 +684,7 @@ export class BillingService {
       branchId,
       ...(patientId && { patientId }),
       balance: { gt: 0 },
+      status: { not: VOID },
     };
 
     const invoices = await this.prisma.newInvoice.findMany({

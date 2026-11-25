@@ -61,7 +61,9 @@ function setup(
           (i: any) =>
             i.id === where.id &&
             Object.entries(where).every(
-              ([key, test]: [string, any]) => key === 'id' || i[key] >= test.gte,
+              ([key, test]: [string, any]) =>
+                key === 'id' ||
+                ('not' in test ? i[key] !== test.not : i[key] >= test.gte),
             ),
         );
         if (!row) return { count: 0 };
