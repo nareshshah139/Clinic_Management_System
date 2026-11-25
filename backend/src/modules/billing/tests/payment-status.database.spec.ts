@@ -1,8 +1,13 @@
+import 'reflect-metadata';
 import { PrismaClient } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { execFileSync } from 'child_process';
 import { resolve } from 'path';
 import { readFileSync } from 'fs';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
+import { BulkPaymentDto, PaymentDto, RefundDto } from '../dto/invoice.dto';
+import { paise, rupees } from '../clinic-bill-register';
 import { BillingService } from '../billing.service';
 import { ClinicBillRegisterService } from '../clinic-bill-register.service';
 import { InvoiceNumbersService } from '../../../shared/numbering/invoice-numbers.service';
@@ -317,7 +322,7 @@ databaseTests('Clinic payments on PostgreSQL', () => {
     expect([status, amount, paid, due]).toEqual(['PAID', 264.02, 264.02, 0]);
   });
 
-  it('rounds a payment saved with a half paisa the same way as the bill it paid', async () => {
+  it('shows a payment saved with a half paisa rounded the same way as the bill it paid, without changing it', async () => {
     const invoice = await bill(264.025);
     const payment = await pay(invoice.id, 264.03);
     await db.newPayment.update({ where: { id: payment.id }, data: { amount: 264.025 } });
@@ -326,6 +331,27 @@ databaseTests('Clinic payments on PostgreSQL', () => {
     const receipt = await register.receipt(invoice.id, 'branch');
     expect([receipt.bill.amount, receipt.bill.paid, receipt.bill.due]).toEqual([264.03, 264.03, 0]);
     expect(receipt.payments.map((p) => p.amount)).toEqual([264.03]);
+    expect((await db.newPayment.findUniqueOrThrow({ where: { id: payment.id } })).amount).toBe(264.025);
+  });
+
+  it('leaves split payments as they were taken, so the ledger still adds up to what the bill received', async () => {
+    const invoice = await bill(100.01);
+    const first = await pay(invoice.id, 50);
+    const second = await pay(invoice.id, 50.01);
+    await db.newPayment.update({ where: { id: first.id }, data: { amount: 50.005 } });
+    await db.newPayment.update({ where: { id: second.id }, data: { amount: 50.005 } });
+    await toWholePaise();
+    const rows = await db.newPayment.findMany({ where: { invoiceId: invoice.id } });
+    expect(rupees(paise(rows.reduce((sum, p) => sum + p.amount, 0)))).toBe(100.01);
+    expect((await register.receipt(invoice.id, 'branch')).bill.paid).toBe(100.01);
+  });
+
+  it('refuses a payment or refund with a fraction of a paisa before it reaches the bill', async () => {
+    const errors = async (dto: object, type: new () => object) => (await validate(plainToInstance(type, dto))).map((e) => e.property);
+    expect(await errors({ invoiceId: 'cmww7600u00001qlx1h22nc71', amount: 50.005, method: 'CASH' }, PaymentDto)).toEqual(['amount']);
+    expect(await errors({ paymentId: 'cmww7600u00001qlx1h22nc71', amount: 50.005 }, RefundDto)).toEqual(['amount']);
+    expect(await errors({ invoiceIds: ['cmww7600u00001qlx1h22nc71'], totalAmount: 50.005, method: 'CASH' }, BulkPaymentDto)).toEqual(['totalAmount']);
+    expect(await errors({ invoiceId: 'cmww7600u00001qlx1h22nc71', amount: 50.01, method: 'CASH' }, PaymentDto)).toEqual([]);
   });
 
   it('rounds a bill saved with a fraction of a paisa to whole paise when migrated', async () => {

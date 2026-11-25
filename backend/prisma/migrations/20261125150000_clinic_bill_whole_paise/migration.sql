@@ -1,9 +1,6 @@
 -- Clinic bill money is kept in whole paise. GST bills saved before this kept fractions of a paisa,
--- so the total, received and balance shown could disagree by a paisa once each was rounded.
-
-UPDATE "new_payments"
-SET "amount" = ROUND("amount"::numeric, 2)
-WHERE "amount" <> ROUND("amount"::numeric, 2)::double precision;
+-- so the total, received and balance shown could disagree by a paisa once each was rounded. Payment
+-- rows are what was taken and are left as they are.
 
 -- A bill whose balance was under half a paisa read as paid, so it stays paid at what it received.
 UPDATE "new_invoices"
