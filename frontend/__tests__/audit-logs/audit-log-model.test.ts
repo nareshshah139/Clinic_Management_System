@@ -72,3 +72,24 @@ describe('the fields an entry changed', () => {
     expect(fieldChanges(entry({ newValues: 'plain note' }))).toEqual([{ field: 'value', label: 'Value', before: null, after: 'plain note' }]);
   });
 });
+
+describe('the fields an entry changed, for deletions and loaded relations', () => {
+  it('shows what a deleted record held, even when the same row was stored as both snapshots', () => {
+    const room = JSON.stringify({ name: 'Treatment 2', capacity: 3 });
+    expect(fieldChanges(entry({ action: 'DELETE', entity: 'Room', oldValues: room, newValues: room }))).toEqual([
+      { field: 'name', label: 'Name', before: 'Treatment 2', after: null },
+      { field: 'capacity', label: 'Capacity', before: '3', after: null },
+    ]);
+  });
+
+  it('lists only the staff fields an edit changed, not the clinic loaded with the saved user', () => {
+    const changes = fieldChanges(
+      entry({
+        entity: 'User',
+        oldValues: JSON.stringify({ phone: '9000000001', branchId: 'b1' }),
+        newValues: JSON.stringify({ phone: '9000000002', branchId: 'b1', branch: { name: 'Main clinic', address: '12 MG Road' } }),
+      }),
+    );
+    expect(changes.map((change) => change.label)).toEqual(['Phone']);
+  });
+});

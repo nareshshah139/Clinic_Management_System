@@ -139,11 +139,19 @@ const fieldLabel = (path: string) => path.split('.').map((part) => sentence(word
 
 export type FieldChange = { field: string; label: string; before: string | null; after: string | null };
 
+const withoutLoadedRelations = (before: unknown, after: unknown) =>
+  isPlainObject(before) && isPlainObject(after)
+    ? Object.fromEntries(Object.entries(after).filter(([key, value]) => key in before || !isPlainObject(value)))
+    : after;
+
 export function fieldChanges(entry: AuditEntry): FieldChange[] {
-  const before = flatten(parse(entry.oldValues));
-  const after = flatten(parse(entry.newValues));
-  const hasBefore = entry.oldValues !== null;
-  const hasAfter = entry.newValues !== null;
+  const deleted = entry.action === 'DELETE';
+  const oldRecord = asObject(parse(entry.oldValues ?? (deleted ? entry.newValues : null)));
+  const newRecord = deleted ? null : withoutLoadedRelations(oldRecord, asObject(parse(entry.newValues)));
+  const before = flatten(oldRecord);
+  const after = flatten(newRecord);
+  const hasBefore = oldRecord !== null && oldRecord !== undefined;
+  const hasAfter = newRecord !== null && newRecord !== undefined;
   const fields = [...new Set([...before.keys(), ...after.keys()])];
   return fields
     .filter((field) => {
