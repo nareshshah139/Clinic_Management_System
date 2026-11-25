@@ -7,6 +7,7 @@ export type LearnedCorrection = {
   support: number;
   tier: 'SUGGEST' | 'APPLY' | 'TRUSTED';
   restore: Record<string, string>;
+  applied: Record<string, string>;
   restoreFlags: string[];
 };
 
@@ -27,8 +28,9 @@ export function parseLearnedCorrections(value: unknown): LearnedCorrection[] {
     if (!item || !(item.field! in LEARNED_FIELDS) || typeof item.from !== 'string' || typeof item.to !== 'string') return [];
     const field = item.field!;
     const restore = stringRecord(item.restore) ?? { [LEARNED_FIELDS[field].formKey]: item.from };
+    const applied = stringRecord(item.applied) ?? { [LEARNED_FIELDS[field].formKey]: item.to };
     const restoreFlags = Array.isArray(item.restoreFlags) ? item.restoreFlags.filter((flag): flag is string => typeof flag === 'string') : [];
-    return [{ field, from: item.from, to: item.to, support: Number(item.support) || 0, tier: item.tier || 'APPLY', restore, restoreFlags }];
+    return [{ field, from: item.from, to: item.to, support: Number(item.support) || 0, tier: item.tier || 'APPLY', restore, applied, restoreFlags }];
   });
 }
 
@@ -51,6 +53,22 @@ export function isLearnedFlag(flag: string, field: LearnedField) {
 
 export function withoutLearnedFlag(flags: string, field: LearnedField) {
   return flags.split(',').map(part => part.trim()).filter(part => part && !isLearnedFlag(part, field)).join(', ');
+}
+
+const FIELD_LABELS: Record<string, string> = {
+  productName: 'Product name', manufacturer: 'Manufacturer', packSize: 'Pack size', distributorName: 'Supplier name',
+};
+
+export type UndoConflict = { field: string; label: string; current: string; restored: string };
+
+// A correction autosaved before `applied` existed cannot tell a hand edit from the lesson's own value.
+export function undoConflicts(values: Record<string, unknown>, correction: LearnedCorrection): UndoConflict[] {
+  return Object.entries(correction.restore).flatMap(([field, restored]): UndoConflict[] => {
+    if (!(field in correction.applied)) return [];
+    const current = String(values[field] ?? '');
+    if (current === correction.applied[field] || current === restored) return [];
+    return [{ field, label: FIELD_LABELS[field] ?? field, current, restored }];
+  });
 }
 
 export function flagsAfterUndo(flags: string, correction: LearnedCorrection) {

@@ -41,7 +41,7 @@ import {
 import { PurchaseManualMatchSearch } from "./PurchaseManualMatchSearch";
 import { PurchaseSupplierReview } from "./PurchaseSupplierReview";
 import { PurchaseLearnedChips } from "./PurchaseLearnedChip";
-import { isLearnedFlag, parseLearnedCorrections, readLearnedCorrections, serializeLearnedCorrections, undoLearnedCorrection, flagsAfterUndo, learnedFormKey, type LearnedCorrection } from "@/lib/purchase-learning";
+import { isLearnedFlag, parseLearnedCorrections, readLearnedCorrections, serializeLearnedCorrections, undoLearnedCorrection, flagsAfterUndo, learnedFormKey, undoConflicts, type LearnedCorrection } from "@/lib/purchase-learning";
 import { AgreedTermHint, AgreedTermsPanel, useAgreedTerms } from "./AgreedTerms";
 import { PurchaseOcrChecklist } from "./PurchaseOcrChecklist";
 import { PurchaseReviewSummary } from "./PurchaseReviewSummary";
@@ -1534,7 +1534,21 @@ function PurchaseInvoiceEditor({
     });
   };
 
-  const undoLineLearning = (localId: string, correction: LearnedCorrection) => {
+  const confirmUndoOverEdits = (values: Record<string, unknown>, correction: LearnedCorrection) => {
+    const conflicts = undoConflicts(values, correction);
+    if (!conflicts.length) return true;
+    return confirm({
+      title: "Replace your edits?",
+      description: conflicts.map(({ field, label, current, restored }) => (
+        <span key={field} className="block">{label}: “{current}” → “{restored || "(blank)"}”</span>
+      )),
+      confirmLabel: "Undo and replace",
+    });
+  };
+
+  const undoLineLearning = async (localId: string, correction: LearnedCorrection) => {
+    const line = lines.find((row) => row.localId === localId);
+    if (!line || !(await confirmUndoOverEdits(line, correction))) return;
     invalidatePending();
     setManualReviewCandidateId(null);
     setMasterMatches([]);
@@ -1543,7 +1557,8 @@ function PurchaseInvoiceEditor({
     setLines((current) => current.map((row) => row.localId === localId ? undoLearnedCorrection(row, correction, "ocrFlags") : row));
   };
 
-  const undoHeaderLearning = (correction: LearnedCorrection) => {
+  const undoHeaderLearning = async (correction: LearnedCorrection) => {
+    if (!(await confirmUndoOverEdits(header, correction))) return;
     invalidatePending();
     setManualReviewCandidateId(null);
     dropLearnedCheck("header", correction.field);

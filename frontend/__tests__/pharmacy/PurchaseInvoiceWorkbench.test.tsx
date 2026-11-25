@@ -2694,4 +2694,65 @@ describe('PurchaseInvoiceWorkbench', () => {
     expect(api.updatePharmacyPurchaseInvoiceDraft).not.toHaveBeenCalled();
   });
 
+  describe('undoing a learned correction', () => {
+    const learned = (restore: Record<string, string>, applied: Record<string, string>) => ({
+      field: 'product', from: 'AZITHRAL 500', to: 'Azithral 500 Tablet', support: 3, tier: 'APPLY', restore, applied, restoreFlags: [],
+    });
+    const learnedDraft = () => ({ draft: {
+      ...draftInvoice, invoiceDate: '2026-05-01', goodsReceivedDate: '2026-05-02',
+      items: [{ ...draftInvoice.items[0], learnedCorrections: [learned(
+        { productName: 'AZITHRAL 500', manufacturer: '', packSize: 'Strip of 3' },
+        { productName: 'Azithral 500 Tablet', manufacturer: 'Alembic', packSize: 'Strip of 3' },
+      )] }],
+    } });
+
+    it('undoes straight away while every value is still what the lesson wrote', async () => {
+      render(<PurchaseInvoiceWorkbench importedDraft={learnedDraft()} />);
+      await screen.findByDisplayValue('APX-001');
+      fireEvent.click(screen.getByRole('button', { name: 'Undo learned product correction' }));
+      await waitFor(() => expect(screen.getByLabelText('Product')).toHaveValue('AZITHRAL 500'));
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+      expect(screen.getByLabelText('Manufacturer (optional)')).toHaveValue('');
+    });
+
+    it('lists the hand edits and replaces them only after the reviewer agrees', async () => {
+      render(<PurchaseInvoiceWorkbench importedDraft={learnedDraft()} />);
+      await screen.findByDisplayValue('APX-001');
+      fireEvent.change(screen.getByLabelText('Manufacturer (optional)'), { target: { value: 'Alembic Pharma' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Undo learned product correction' }));
+
+      const dialog = await screen.findByRole('alertdialog', { name: 'Replace your edits?' });
+      expect(dialog).toHaveTextContent('Manufacturer: “Alembic Pharma” → “(blank)”');
+      expect(screen.getByLabelText('Product')).toHaveValue('Azithral 500 Tablet');
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Undo and replace' }));
+
+      await waitFor(() => expect(screen.getByLabelText('Product')).toHaveValue('AZITHRAL 500'));
+      expect(screen.getByLabelText('Manufacturer (optional)')).toHaveValue('');
+    });
+
+    it('keeps everything as it was when the reviewer cancels', async () => {
+      render(<PurchaseInvoiceWorkbench importedDraft={learnedDraft()} />);
+      await screen.findByDisplayValue('APX-001');
+      fireEvent.change(screen.getByLabelText('Manufacturer (optional)'), { target: { value: 'Alembic Pharma' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Undo learned product correction' }));
+      fireEvent.click(within(await screen.findByRole('alertdialog', { name: 'Replace your edits?' })).getByRole('button', { name: 'Cancel' }));
+
+      await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+      expect(screen.getByLabelText('Product')).toHaveValue('Azithral 500 Tablet');
+      expect(screen.getByLabelText('Manufacturer (optional)')).toHaveValue('Alembic Pharma');
+      expect(screen.getByRole('button', { name: 'Undo learned product correction' })).toBeInTheDocument();
+    });
+
+    it('asks before an undo overwrites a supplier name the reviewer retyped', async () => {
+      render(<PurchaseInvoiceWorkbench importedDraft={{ draft: {
+        ...draftInvoice, invoiceDate: '2026-05-01', goodsReceivedDate: '2026-05-02',
+        learnedCorrections: [{ field: 'distributorName', from: 'APEX DISTRIBUTER', to: 'Apex Distributors', support: 2, tier: 'APPLY',
+          restore: { distributorName: 'APEX DISTRIBUTER' }, applied: { distributorName: 'Apex Distributors' }, restoreFlags: [] }],
+      } }} />);
+      await screen.findByDisplayValue('APX-001');
+      fireEvent.change(screen.getByLabelText('Distributor'), { target: { value: 'Apex Pharma' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Undo learned supplier correction' }));
+      expect(await screen.findByRole('alertdialog', { name: 'Replace your edits?' })).toHaveTextContent('Supplier name: “Apex Pharma” → “APEX DISTRIBUTER”');
+    });
+  });
 });
