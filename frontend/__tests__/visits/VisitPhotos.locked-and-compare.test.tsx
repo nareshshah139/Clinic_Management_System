@@ -42,25 +42,6 @@ it('keeps upload and delete when editable', async () => {
   expect(screen.getAllByRole('button', { name: /delete/i }).length).toBeGreaterThan(0);
 });
 
-it('does not send a 26MB file to the upload API', async () => {
-  const fetchMock = photos([]);
-  global.fetch = fetchMock as unknown as typeof fetch;
-  const open = jest.fn();
-  URL.createObjectURL = () => 'blob:preview';
-  URL.revokeObjectURL = () => {};
-  jest.spyOn(window, 'XMLHttpRequest').mockImplementation(function (this: any) { this.open = open; this.send = jest.fn(); this.setRequestHeader = jest.fn(); this.upload = {}; } as any);
-  const { container } = render(<VisitPhotos visitId="cur" />);
-  await screen.findByText(/No photos attached/);
-  const big = new File(['x'], 'huge.jpg', { type: 'image/jpeg' });
-  Object.defineProperty(big, 'size', { value: 26 * 1024 * 1024 });
-  fireEvent.change(container.querySelector('input[type="file"]')!, { target: { files: [big] } });
-  const dialog = await screen.findByRole('dialog');
-  fireEvent.click(within(dialog).getByRole('button', { name: /upload/i }));
-  await waitFor(() => expect(screen.queryByText('Uploading...')).toBeNull());
-  expect(open).not.toHaveBeenCalled();
-  expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
-});
-
 it('reaches every photo of the same position in compare mode and deletes only the visible one', async () => {
   const fetchMock = photos(current);
   global.fetch = fetchMock as unknown as typeof fetch;

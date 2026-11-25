@@ -271,10 +271,6 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
           invalids.push(`${f.name}: not an image`);
           continue;
         }
-        if (f.size > MAX_FILE_BYTES) {
-          invalids.push(`${f.name}: larger than ${Math.round(MAX_FILE_BYTES / (1024*1024))}MB`);
-          continue;
-        }
         validFiles.push(f);
         validPositions.push(p);
       }
@@ -453,14 +449,23 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
           preferWebP ? 'image/webp' : 'image/jpeg',
         )));
         const fd = new FormData();
-        processed.forEach((f) => fd.append('files', f as any));
-        fd.append('positions', JSON.stringify(groupPositions));
+        const sentPositions: typeof groupPositions = [];
+        processed.forEach((f, i) => {
+          if (f.size > MAX_FILE_BYTES) {
+            invalids.push(`${group[i].name}: larger than ${Math.round(MAX_FILE_BYTES / (1024*1024))}MB`);
+            return;
+          }
+          fd.append('files', f as any);
+          sentPositions.push(groupPositions[i]);
+        });
+        fd.append('positions', JSON.stringify(sentPositions));
 
         const targetUrl = visitId === 'temp'
           ? `${baseUrl}/visits/photos/draft/${patientId}`
           : `${baseUrl}/visits/${actualVisitId}/photos`;
 
         try {
+          if (sentPositions.length === 0) return;
           await xhrUpload(targetUrl, fd, (pct) => {
             setBatchState(prev => ({ current: Math.min(prev.current, batchIndex) + 1, total: totalBatches, percent: pct }));
           }, 90000);
