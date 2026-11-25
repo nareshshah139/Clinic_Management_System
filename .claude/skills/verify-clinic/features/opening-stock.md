@@ -10,8 +10,8 @@ A clinic going live records the stock already on its shelves. Two ways exist: up
 
 ## How to get to it (user POV)
 
-- Inventory → **Stock** → **More tasks…** → **Opening stock import**, or route `/dashboard/inventory?area=stock&view=opening`.
-- Inventory → **Stock** → **More tasks…** → **Manual opening stock**, or route `/dashboard/inventory?area=stock&view=OPENING_STOCK`.
+- Inventory → **Stock** → task **Opening stock import** (group "Opening stock"; on a phone open **Task: …** first), or route `/dashboard/inventory?area=stock&view=opening`.
+- Inventory → **Stock** → task **Manual opening stock**, or route `/dashboard/inventory?area=stock&view=OPENING_STOCK`.
 - Pharmacy Desk also links the starter import ("Upload opening stock without leaving the pharmacy desk").
 
 ## Driving it with Playwright

@@ -15,7 +15,7 @@ A pharmacist types a distributor's bill: supplier, bill number and one or more p
 
 ## How to get to it (user POV)
 
-- Sidebar **Inventory** → **Purchases** tab → **Scan or enter bill** → link **Type instead**.
+- Sidebar **Inventory** → **Purchases** tab → **Bill intake** (method tab **Scan or enter**) → link **Type instead**.
 - Purchases → **Purchase bills** register → **New** bill action (opens the same form with `new=<key>`).
 - Inventory → **Today** → "Scan or enter bill" button.
 - Direct route: `/dashboard/inventory?area=purchases&view=intake`, then **Type instead**.
