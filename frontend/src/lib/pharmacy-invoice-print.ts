@@ -1,5 +1,5 @@
 import { billLineName } from '@/lib/bill-line-name';
-import { displayCalendarDate, displayClinicDate } from '@/lib/date-display';
+import { displayCalendarDate, displayClinicDate, displayUtcDate } from '@/lib/date-display';
 import { getGlobalPrintStyleTag } from '@/lib/printStyles';
 import { billNumberLabel } from '@/lib/bill-number';
 
@@ -12,16 +12,19 @@ export type ClinicIdentity = {
 };
 
 type Column = { label: string; align?: 'center' | 'right'; width?: string };
+type Table = { columns: Column[]; rows: string[][]; caption?: string };
 type PrintDocument = {
   title: string;
   meta: [string, string][];
   party: string[];
-  columns: Column[];
-  rows: string[][];
+  table: Table;
   totals: [string, string][];
   grandTotal: [string, string];
+  amountInWords?: string | null;
+  taxTable?: Table | null;
   notes?: string;
   clinic?: ClinicIdentity | null;
+  printButton?: boolean;
 };
 
 const ENTITIES: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
@@ -52,13 +55,16 @@ function clinicHeader(clinic?: ClinicIdentity | null) {
   return `<div class="clinic"><div class="clinic-name">${escapeHtml(clinic.name)}</div>${lines.map((line) => `<div>${escapeHtml(line)}</div>`).join('')}</div>`;
 }
 
-function renderPrintDocument(doc: PrintDocument): string {
-  const cell = (column: Column, value: string) =>
-    `<td style="text-align:${column.align ?? 'left'}">${escapeHtml(value)}</td>`;
-  const head = doc.columns
-    .map((column) => `<th style="text-align:${column.align ?? 'left'}${column.width ? `;width:${column.width}` : ''}">${escapeHtml(column.label)}</th>`)
+function renderTable({ columns, rows, caption }: Table) {
+  const align = (column: Column) => `text-align:${column.align ?? 'left'}`;
+  const head = columns
+    .map((column) => `<th style="${align(column)}${column.width ? `;width:${column.width}` : ''}">${escapeHtml(column.label)}</th>`)
     .join('');
-  const body = doc.rows.map((row) => `<tr>${row.map((value, index) => cell(doc.columns[index], value)).join('')}</tr>`).join('');
+  const body = rows.map((row) => `<tr>${row.map((value, index) => `<td style="${align(columns[index])}">${escapeHtml(value)}</td>`).join('')}</tr>`).join('');
+  return `<table>${caption ? `<caption>${escapeHtml(caption)}</caption>` : ''}<thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+}
+
+function renderPrintDocument(doc: PrintDocument): string {
   return `<!doctype html>
 <html>
   <head>
@@ -80,6 +86,8 @@ function renderPrintDocument(doc: PrintDocument): string {
       .totals { margin-top: 16px; text-align: right; line-height: 1.8; font-variant-numeric: tabular-nums; }
       .grand { font-size: 20px; font-weight: bold; border-top: 2px solid var(--print-ink); padding-top: 8px; margin-top: 8px; }
       .notes { margin-top: 16px; padding: 12px; background: var(--print-surface); border-radius: 4px; }
+      caption { text-align: left; font-weight: bold; margin-bottom: 4px; }
+      .words { font-size: 14px; color: var(--print-muted); }
       .print-button { margin: 16px 0; padding: 10px 20px; background: var(--print-accent); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; }
     </style>
   </head>
@@ -90,63 +98,171 @@ function renderPrintDocument(doc: PrintDocument): string {
       <div class="meta">${doc.meta.map(([label, value]) => `<strong>${escapeHtml(label)}:</strong> ${escapeHtml(value)}`).join('<br/>')}</div>
     </div>
     <div class="party"><strong>Bill to:</strong><br/>${doc.party.map(escapeHtml).join('<br/>')}</div>
-    <button class="print-button no-print" onclick="window.print()">Print</button>
-    <table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>
+    ${doc.printButton ? '<button class="print-button no-print" onclick="window.print()">Print</button>' : ''}
+    ${renderTable(doc.table)}
     <div class="totals">
       ${doc.totals.map(([label, value]) => `<div><strong>${escapeHtml(label)}:</strong> ${escapeHtml(value)}</div>`).join('')}
       <div class="grand"><strong>${escapeHtml(doc.grandTotal[0])}:</strong> ${escapeHtml(doc.grandTotal[1])}</div>
+      ${doc.amountInWords ? `<div class="words">${escapeHtml(doc.amountInWords)}</div>` : ''}
     </div>
+    ${doc.taxTable ? renderTable(doc.taxTable) : ''}
     ${doc.notes ? `<div class="notes"><strong>Notes:</strong><br/>${escapeHtml(doc.notes)}</div>` : ''}
   </body>
 </html>`;
 }
 
-export function renderPharmacyInvoiceHtml(invoice: any, clinic?: ClinicIdentity | null): string {
-  const party = [
-    invoice.patient?.name || invoice.billingName || 'N/A',
-    invoice.patient?.phone || invoice.billingPhone || 'N/A',
-    invoice.billingAddress || invoice.patient?.address || '',
-  ].filter(Boolean);
-  const number = billNumberLabel(invoice ?? {});
-  const billDiscount = Number(invoice?.billDiscountAmount) || 0;
-  const discount = Number(invoice?.discountAmount) || 0;
+type PrintBatch = { batchNumber?: string | null; expiryDate?: string | null };
+type PrintLine = {
+  name: string;
+  hsnCode?: string | null;
+  batchAllocations?: PrintBatch[];
+  quantity: number;
+  unitPrice: number;
+  discountPercent: number;
+  taxPercent: number;
+  totalAmount: number;
+};
+type GstSlab = { taxPercent: number; taxableAmount: number; cgst: number; sgst: number; igst: number; totalTax: number };
+
+/** The shape `GET /pharmacy/invoices/:id/print-data` returns; every printed pharmacy bill renders from it. */
+export type PharmacyBillPrint = {
+  copyType?: 'ORIGINAL' | 'DUPLICATE';
+  invoice: {
+    invoiceNumber?: string | null;
+    status?: string | null;
+    invoiceDate?: string | null;
+    createdAt?: string | null;
+    revisedAt?: string | null;
+    subtotal: number;
+    discountAmount?: number;
+    billDiscountKind?: string | null;
+    billDiscountValue?: number | null;
+    billDiscountAmount?: number;
+    taxAmount: number;
+    totalAmount: number;
+    amountInWords?: string | null;
+    notes?: string | null;
+  };
+  branch?: { name?: string | null; address?: string | null; phone?: string | null; gstNumber?: string | null; drugLicenseNumber?: string | null } | null;
+  patient?: { name?: string | null; phone?: string | null; address?: string | null } | null;
+  lines: PrintLine[];
+  gstSummary?: GstSlab[];
+};
+
+function clinicOf(branch: PharmacyBillPrint['branch']): ClinicIdentity | null {
+  if (!branch?.name) return null;
+  return {
+    name: branch.name,
+    address: branch.address ?? undefined,
+    phone: branch.phone ?? undefined,
+    gstin: branch.gstNumber ?? undefined,
+    drugLicence: branch.drugLicenseNumber ?? undefined,
+  };
+}
+
+const batchText = (batches: PrintBatch[] = []) =>
+  batches
+    .filter((batch) => batch.batchNumber)
+    .map((batch) => `${batch.batchNumber}${batch.expiryDate ? ` (exp ${displayUtcDate(batch.expiryDate)})` : ''}`)
+    .join(', ');
+
+function taxTable(slabs: GstSlab[] = []): Table | null {
+  if (!slabs.length) return null;
+  const interstate = slabs.some((slab) => slab.igst > 0);
+  const split: Column[] = interstate ? [{ label: 'IGST', align: 'right' }] : [{ label: 'CGST', align: 'right' }, { label: 'SGST', align: 'right' }];
+  return {
+    caption: 'GST summary',
+    columns: [{ label: 'GST %', align: 'right' }, { label: 'Taxable', align: 'right' }, ...split, { label: 'Total tax', align: 'right' }],
+    rows: slabs.map((slab) => [
+      percent(slab.taxPercent),
+      formatRupees(slab.taxableAmount),
+      ...(interstate ? [formatRupees(slab.igst)] : [formatRupees(slab.cgst), formatRupees(slab.sgst)]),
+      formatRupees(slab.totalTax),
+    ]),
+  };
+}
+
+export function renderPharmacyBillHtml(bill: PharmacyBillPrint, options: { printButton?: boolean } = {}): string {
+  const { invoice, lines } = bill;
+  const number = billNumberLabel(invoice);
+  const billDiscount = Number(invoice.billDiscountAmount) || 0;
+  const discount = Number(invoice.discountAmount) || 0;
+  const hasHsn = lines.some((line) => line.hsnCode);
+  const hasBatch = lines.some((line) => batchText(line.batchAllocations));
+  const meta: [string, string][] = [
+    ['Invoice #', number],
+    ['Date', displayClinicDate(invoice.invoiceDate || invoice.createdAt)],
+  ];
+  if (bill.copyType && number !== 'Draft') meta.push(['Copy', bill.copyType === 'DUPLICATE' ? 'Duplicate' : 'Original']);
+  if (invoice.revisedAt) meta.push(['Revised', displayClinicDate(invoice.revisedAt)]);
+  const columns: Column[] = [
+    { label: 'Item' },
+    ...(hasHsn ? [{ label: 'HSN', width: '72px' }] : []),
+    ...(hasBatch ? [{ label: 'Batch', width: '150px' }] : []),
+    { label: 'Qty', align: 'center', width: '48px' },
+    { label: 'Rate', align: 'right', width: '96px' },
+    { label: 'Disc%', align: 'right', width: '56px' },
+    { label: 'GST%', align: 'right', width: '56px' },
+    { label: 'Amount', align: 'right', width: '110px' },
+  ];
   return renderPrintDocument({
     title: number === 'Draft' ? 'Draft bill, not a tax invoice' : `Pharmacy Invoice ${number}`,
-    clinic,
-    meta: [
-      ['Invoice #', number],
-      ['Date', displayClinicDate(invoice.invoiceDate || invoice.createdAt)],
-      ['Status', invoice?.status || 'N/A'],
-      ...(invoice?.revisedAt ? [['Revised', displayClinicDate(invoice.revisedAt)] as [string, string]] : []),
-    ],
-    party,
-    columns: [
-      { label: 'Item' },
-      { label: 'Qty', align: 'center', width: '64px' },
-      { label: 'Unit Price', align: 'right', width: '110px' },
-      { label: 'Disc%', align: 'right', width: '64px' },
-      { label: 'Tax%', align: 'right', width: '64px' },
-      { label: 'Amount', align: 'right', width: '120px' },
-    ],
-    rows: (invoice.items || []).map((item: any) => [
-      billLineName(item),
-      String(item.quantity ?? ''),
-      formatRupees(item.unitPrice),
-      percent(item.discountPercent),
-      percent(item.taxPercent),
-      formatRupees(item.totalAmount),
-    ]),
+    clinic: clinicOf(bill.branch),
+    meta,
+    party: [bill.patient?.name || 'Walk-in customer', bill.patient?.phone, bill.patient?.address].filter((part): part is string => Boolean(part)),
+    table: {
+      columns,
+      rows: lines.map((line) => [
+        line.name,
+        ...(hasHsn ? [line.hsnCode || '—'] : []),
+        ...(hasBatch ? [batchText(line.batchAllocations) || '—'] : []),
+        String(line.quantity ?? ''),
+        formatRupees(line.unitPrice),
+        percent(line.discountPercent),
+        percent(line.taxPercent),
+        formatRupees(line.totalAmount),
+      ]),
+    },
     totals: [
       ['Subtotal', formatRupees(invoice.subtotal)],
       ['Item discount', formatRupees(-(discount - billDiscount))],
       ...(billDiscount > 0
         ? [[invoice.billDiscountKind === 'PERCENT' ? `Bill discount (${invoice.billDiscountValue}%)` : 'Bill discount', formatRupees(-billDiscount)] as [string, string]]
         : []),
-      ['Tax', formatRupees(invoice.taxAmount)],
+      ['GST', formatRupees(invoice.taxAmount)],
     ],
     grandTotal: ['Grand Total', formatRupees(invoice.totalAmount)],
+    amountInWords: invoice.amountInWords,
+    taxTable: taxTable(bill.gstSummary),
     notes: invoice.notes || undefined,
+    printButton: options.printButton,
   });
+}
+
+type StoredLine = Omit<PrintLine, 'name' | 'taxPercent'> & Parameters<typeof billLineName>[0] & { taxPercent: number | null };
+type StoredInvoice = PharmacyBillPrint['invoice'] & {
+  billingName?: string | null;
+  billingPhone?: string | null;
+  billingAddress?: string | null;
+  patient?: PharmacyBillPrint['patient'];
+  items?: StoredLine[];
+};
+
+/** A bill as `GET /pharmacy/invoices/:id` or an unsaved draft holds it: no HSN, batches or GST split. */
+export function billPrintFromInvoice(invoice: StoredInvoice, items: StoredLine[] = invoice.items ?? []): PharmacyBillPrint {
+  return {
+    invoice,
+    patient: {
+      name: invoice.patient?.name || invoice.billingName,
+      phone: invoice.patient?.phone || invoice.billingPhone,
+      address: invoice.billingAddress || invoice.patient?.address,
+    },
+    lines: items.map((item) => ({ ...item, name: billLineName(item), taxPercent: item.taxPercent ?? 0 })),
+  };
+}
+
+export function renderPharmacyInvoiceHtml(invoice: any): string {
+  return renderPharmacyBillHtml(billPrintFromInvoice(invoice), { printButton: true });
 }
 
 const MODE_LABELS: Record<string, string> = {
@@ -167,23 +283,26 @@ export function renderSaleReceiptHtml(doc: any, clinic?: ClinicIdentity | null):
       [isReturn ? 'Refund mode' : 'Payment mode', mode ? MODE_LABELS[mode] ?? String(mode) : '—'],
     ],
     party: [payload.customerName || 'Walk-in customer', payload.customerPhone].filter(Boolean),
-    columns: [
-      { label: 'Item' },
-      { label: 'Batch', width: '110px' },
-      { label: 'Qty', align: 'center', width: '64px' },
-      { label: 'Rate', align: 'right', width: '110px' },
-      { label: 'Amount', align: 'right', width: '120px' },
-    ],
-    rows: lines.map((line) => [
-      line.name || 'Item',
-      line.batchNumber || '—',
-      String(line.quantity ?? ''),
-      formatRupees(line.unitPrice),
-      formatRupees(line.total ?? (Number(line.quantity) || 0) * (Number(line.unitPrice) || 0)),
-    ]),
+    table: {
+      columns: [
+        { label: 'Item' },
+        { label: 'Batch', width: '110px' },
+        { label: 'Qty', align: 'center', width: '64px' },
+        { label: 'Rate', align: 'right', width: '110px' },
+        { label: 'Amount', align: 'right', width: '120px' },
+      ],
+      rows: lines.map((line) => [
+        line.name || 'Item',
+        line.batchNumber || '—',
+        String(line.quantity ?? ''),
+        formatRupees(line.unitPrice),
+        formatRupees(line.total ?? (Number(line.quantity) || 0) * (Number(line.unitPrice) || 0)),
+      ]),
+    },
     totals: [],
     grandTotal: [isReturn ? 'Refund total' : 'Total', formatRupees(doc?.totalAmount ?? lines.reduce((sum, line) => sum + (Number(line.total) || 0), 0))],
     notes: payload.notes || undefined,
+    printButton: true,
   });
 }
 

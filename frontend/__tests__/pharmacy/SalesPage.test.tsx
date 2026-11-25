@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import SalesPage from '@/app/dashboard/pharmacy/sales/page';
 import { apiClient } from '@/lib/api';
 import type { SalesRegisterResponse, SalesRegisterRow } from '@/components/pharmacy/sales/sales-register-model';
+import twoSlabBill from '../fixtures/two-slab-pharmacy-bill.json';
 
 let mockQuery = '';
 const mockReplace = jest.fn();
@@ -10,7 +11,7 @@ jest.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(mockQuery),
   useRouter: () => ({ replace: mockReplace, push: mockPush }),
 }));
-jest.mock('@/lib/api', () => ({ apiClient: { get: jest.fn() } }));
+jest.mock('@/lib/api', () => ({ apiClient: { get: jest.fn(), post: jest.fn() } }));
 
 const row = (overrides: Partial<SalesRegisterRow>): SalesRegisterRow => ({
   id: 'PHARMACY_BILL:inv-14',
@@ -49,6 +50,7 @@ const response = (overrides: Partial<SalesRegisterResponse> = {}): SalesRegister
 });
 
 const get = jest.mocked(apiClient.get);
+const post = jest.mocked(apiClient.post);
 const registerCalls = () => get.mock.calls.filter(([url]) => url === '/pharmacy/sales-register');
 const panel = () => within(screen.getByRole('tabpanel'));
 const lastRequest = () => registerCalls()[registerCalls().length - 1][1] as Record<string, unknown>;
@@ -246,11 +248,68 @@ it('opens Returns from the URL with an Against bill column and links that come b
   expect(mockPush).toHaveBeenLastCalledWith('/dashboard/pharmacy/sales', { scroll: false });
 });
 
-it('starts no bill from the Sales register, since new bills start at the Pharmacy Counter', async () => {
+it('starts a new bill from the Sales register header', async () => {
   get.mockResolvedValue(response({ rows: [], total: 0, totals: { amount: 0, count: 0, collected: null, excluded: { drafts: 0, cancelled: 0 } } }));
   render(<SalesPage />);
   expect(await screen.findByText(/No sales in this period/)).toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: /New (sale|bill)/ })).not.toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'New bill' })).toHaveAttribute('href', '/dashboard/pharmacy/sales/bill');
+});
+
+it('reprints a pharmacy bill as a GST invoice with HSN, batch and expiry, and the CGST and SGST split', async () => {
+  get.mockImplementation(async (url: string) => (url === '/pharmacy/invoices/inv-14/print-data' ? twoSlabBill : response()));
+  render(<SalesPage />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Print PHI-2026-014' }));
+
+  await waitFor(() => expect(document.querySelector('iframe')).not.toBeNull());
+  const html = document.querySelector('iframe')!.srcdoc;
+  expect(html).toContain('<div>GSTIN: 27ABCDE1234F1Z5 · Drug licence: MH-PZ-20B-1234</div>');
+  expect(html).toContain('<td style="text-align:left">30042019</td><td style="text-align:left">AZ-501 (exp 31 Aug 2027)</td>');
+  expect(html).toContain('<td style="text-align:left">33049910</td><td style="text-align:left">CP-77 (exp 31 Mar 2027)</td>');
+  expect(html).toContain(
+    '<table><caption>GST summary</caption><thead><tr><th style="text-align:right">GST %</th><th style="text-align:right">Taxable</th><th style="text-align:right">CGST</th><th style="text-align:right">SGST</th><th style="text-align:right">Total tax</th></tr></thead><tbody><tr><td style="text-align:right">5%</td><td style="text-align:right">₹200.00</td><td style="text-align:right">₹5.00</td><td style="text-align:right">₹5.00</td><td style="text-align:right">₹10.00</td></tr><tr><td style="text-align:right">12%</td><td style="text-align:right">₹250.00</td><td style="text-align:right">₹15.00</td><td style="text-align:right">₹15.00</td><td style="text-align:right">₹30.00</td></tr></tbody></table>',
+  );
+});
+
+it('collects part of a due bill from its row and shows the balance still due', async () => {
+  get.mockResolvedValue(response({ rows: [row({ amount: 490, paymentModes: [], due: 490 })] }));
+  render(<SalesPage />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Collect payment on PHI-2026-014' }));
+  const dialog = await screen.findByRole('dialog', { name: 'Collect payment on PHI-2026-014' });
+  const amount = within(dialog).getByLabelText('Amount');
+  expect(amount).toHaveValue(490);
+
+  fireEvent.change(amount, { target: { value: '500' } });
+  expect(within(dialog).getByText('Only ₹490.00 is due on this bill.')).toBeInTheDocument();
+  expect(within(dialog).getByRole('button', { name: /^Collect/ })).toBeDisabled();
+
+  fireEvent.change(amount, { target: { value: '150' } });
+  fireEvent.change(within(dialog).getByLabelText('Paid by'), { target: { value: 'UPI' } });
+  fireEvent.change(within(dialog).getByLabelText('Reference (optional)'), { target: { value: ' UPI-778 ' } });
+  post.mockResolvedValueOnce({ id: 'pay-1' });
+  get.mockResolvedValue(response({ rows: [row({ amount: 490, paymentModes: ['UPI'], due: 340 })] }));
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Collect ₹150.00' }));
+
+  expect(await screen.findByText('Due ₹340.00')).toBeInTheDocument();
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(post.mock.calls).toEqual([
+    ['/pharmacy/invoices/inv-14/payments', { requestKey: expect.stringMatching(/^[0-9a-f]{32}$/), amount: 150, method: 'UPI', reference: 'UPI-778' }],
+  ]);
+  expect(screen.queryByText('Due ₹490.00')).not.toBeInTheDocument();
+});
+
+it('offers Collect payment only on final pharmacy bills that still have money due', async () => {
+  get.mockResolvedValue(
+    response({
+      rows: [
+        row({ due: 120 }),
+        row({ id: 'PHARMACY_BILL:inv-15', recordId: 'inv-15', billNo: 'PHI-2026-015', due: 0 }),
+        row({ id: 'COUNTER_SALE:cs-1', source: 'COUNTER_SALE', recordId: 'cs-1', billNo: 'CS-2026-001', due: 80 }),
+      ],
+    }),
+  );
+  render(<SalesPage />);
+  await screen.findByText('PHI-2026-015');
+  expect(screen.getAllByRole('button', { name: /^Collect payment on/ }).map((button) => button.getAttribute('aria-label'))).toEqual(['Collect payment on PHI-2026-014']);
 });
 
 it('pins the total of every matching final bill and what it leaves out', async () => {
