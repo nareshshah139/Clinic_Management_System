@@ -16,12 +16,12 @@ export class AuditLogsService {
 
   /**
    * @cc [owner:nareshshah139,label:security] audit-log-branch-scope
-   * Every read MUST return only entries made by staff of the reader's branch, so one clinic never
-   * sees another's changes. An entry with no user belongs to no branch and MUST NOT be returned.
+   * Every read MUST return only entries recorded for the reader's branch, so one clinic never sees
+   * another's changes, and an entry stays readable after its author's account is deleted. An entry
+   * with no branch MUST NOT be returned.
    */
   private async madeInBranch(branchId: string): Promise<Prisma.AuditLogWhereInput> {
-    const staff = await this.prisma.user.findMany({ where: { branchId }, select: { id: true } });
-    return { userId: { in: staff.map((member) => member.id) } };
+    return { branchId };
   }
 
   async findAll(query: QueryAuditLogsDto, branchId: string) {

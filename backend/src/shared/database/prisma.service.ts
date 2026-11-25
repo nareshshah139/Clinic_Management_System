@@ -46,6 +46,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       query: {
         $allModels: {
           async create({ model, args, query }: any) {
+            if (model === 'AuditLog') await stampBranch(base, args);
             const result = await query(args);
             await audit({ base, model, operation: 'create', args, result, getCtx: getRequestContext });
             return result;
@@ -68,6 +69,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
             return result;
           },
           async createMany({ model, args, query }: any) {
+            if (model === 'AuditLog') await stampBranch(base, args);
             const result = await query(args);
             await audit({ base, model, operation: 'createMany', args, result, getCtx: getRequestContext });
             return result;
@@ -88,6 +90,20 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 
     // Copy extended client API onto this instance so DI consumers can use it transparently
     Object.assign(this, extended);
+
+    /**
+     * @cc [owner:nareshshah139,label:security] audit-log-branch-stamp
+     * Every audit entry with an author MUST record the author's branch when it is written, so the
+     * entry stays with that clinic after the author's account is moved or deleted.
+     */
+    async function stampBranch(client: any, args: any) {
+      const rows = Array.isArray(args?.data) ? args.data : args?.data ? [args.data] : [];
+      for (const row of rows) {
+        if (row.branchId || !row.userId) continue;
+        const author = await client.user.findUnique({ where: { id: row.userId }, select: { branchId: true } });
+        row.branchId = author?.branchId ?? null;
+      }
+    }
 
     async function tryFindOld(client: any, model: string, args: any) {
       try {

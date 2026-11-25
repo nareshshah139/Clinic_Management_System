@@ -3,12 +3,15 @@ import { randomUUID } from 'crypto';
 import { execFileSync } from 'child_process';
 import { resolve } from 'path';
 import { AuditLogsService } from '../audit-logs.service';
+import { PrismaService } from '../../../shared/database/prisma.service';
+import { RequestContextService } from '../../../shared/context/request-context.service';
 
 const databaseTests = process.env.AUDIT_LOGS_TEST_DATABASE_URL ? describe : describe.skip;
 databaseTests('Audit log reads on PostgreSQL stay inside the reader’s branch', () => {
   const schema = `audit_logs_${randomUUID().replaceAll('-', '')}`;
   let admin: PrismaClient;
   let db: PrismaClient;
+  let prisma: PrismaService;
   let service: AuditLogsService;
   let created = false;
 
@@ -29,18 +32,21 @@ databaseTests('Audit log reads on PostgreSQL stay inside the reader’s branch',
     await staff('owner-here', 'here');
     await staff('nurse-here', 'here');
     await staff('owner-there', 'there');
-    await db.auditLog.createMany({
+    process.env.DATABASE_URL = url.toString();
+    prisma = new PrismaService(new RequestContextService());
+    await prisma.auditLog.create({ data: { id: 'log-here', userId: 'owner-here', action: 'BRANCH_UPDATED', entity: 'Branch', entityId: 'here', newValues: '{"phone":"1"}' } });
+    await prisma.auditLog.createMany({
       data: [
-        { id: 'log-here', userId: 'owner-here', action: 'BRANCH_UPDATED', entity: 'Branch', entityId: 'here', newValues: '{"phone":"1"}' },
         { id: 'log-nurse', userId: 'nurse-here', action: 'UPDATE', entity: 'Patient', entityId: 'pat-1' },
         { id: 'log-there', userId: 'owner-there', action: 'UPDATE', entity: 'Patient', entityId: 'pat-1', newValues: '{"name":"Someone else"}' },
         { id: 'log-system', userId: null, action: 'CREATE', entity: 'Appointment', entityId: 'apt-1' },
       ],
     });
-    service = new AuditLogsService(db as any);
+    service = new AuditLogsService(prisma);
   }, 120000);
 
   afterAll(async () => {
+    await prisma?.$disconnect();
     await db?.$disconnect();
     if (created) await admin.$executeRawUnsafe(`DROP SCHEMA "${schema}" CASCADE`);
     await admin?.$disconnect();
@@ -73,5 +79,23 @@ databaseTests('Audit log reads on PostgreSQL stay inside the reader’s branch',
     expect(stats.actionBreakdown.map((row) => row.action).sort()).toEqual(['BRANCH_UPDATED', 'UPDATE']);
     expect(stats.entityBreakdown.map((row) => row.entity).sort()).toEqual(['Branch', 'Patient']);
     expect(stats.topUsers.map((row) => row.userId).sort()).toEqual(['nurse-here', 'owner-here']);
+  });
+
+  it('records each entry against its author’s branch when it is written', async () => {
+    const rows = await db.auditLog.findMany({ orderBy: { id: 'asc' }, select: { id: true, branchId: true } });
+    expect(rows).toEqual([
+      { id: 'log-here', branchId: 'here' },
+      { id: 'log-nurse', branchId: 'here' },
+      { id: 'log-system', branchId: null },
+      { id: 'log-there', branchId: 'there' },
+    ]);
+  });
+
+  it('keeps a deleted author’s entries in their own clinic’s history and out of others', async () => {
+    await db.user.create({ data: { id: 'leaver', firstName: 'leaver', lastName: 'Staff', email: 'leaver@example.test', password: 'x', role: 'RECEPTION', branchId: 'here' } });
+    await prisma.auditLog.create({ data: { id: 'log-left', userId: 'leaver', action: 'UPDATE', entity: 'Patient', entityId: 'pat-2' } });
+    await db.user.delete({ where: { id: 'leaver' } });
+    expect(ids((await service.findAll({}, 'here')).data)).toContain('log-left');
+    expect(ids((await service.findAll({}, 'there')).data)).not.toContain('log-left');
   });
 });
