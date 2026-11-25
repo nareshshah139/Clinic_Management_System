@@ -176,6 +176,40 @@ it('offers Refund only on payments with money left to refund, and defaults to wh
   await waitFor(() => expect(writes()).toEqual([['POST', '/api/billing/refunds', { paymentId: 'upi', amount: 300, notes: 'Goodwill' }]]));
 });
 
+it('shows the refusal and the bill as it is now when another desk refunded the payment first', async () => {
+  const paid = row({ id: 'cb5', billNo: 'INV-20261125-005', amount: 1000, paid: 1000, due: 0, status: 'PAID' });
+  const paidAt = '2026-11-25T05:00:00.000Z';
+  const cash = { id: 'cash', amount: 500, mode: 'CASH', reference: null, paidAt };
+  const upi = { id: 'upi', amount: 500, mode: 'UPI', reference: null, paidAt, refundable: 500 };
+  let current: ClinicReceipt = { ...receiptOf(paid), payments: [{ ...cash, refundable: 500 }, upi] };
+  const refunded: ClinicReceipt = {
+    ...receiptOf({ ...paid, paid: 500, due: 500, refunded: 500, status: 'PARTIALLY_PAID' }),
+    payments: [{ ...cash, refundable: 0 }, upi, { id: 'cash-back', amount: -500, mode: 'CASH', reference: 'REFUND: Paid twice', paidAt, refundable: 0 }],
+  };
+  const refusal = 'This ₹500 payment is already refunded in full, so ₹500 cannot be refunded.';
+  server = ({ method, path }) => {
+    if (method === 'POST' && path === '/api/billing/refunds') return { status: 400, body: { message: refusal } };
+    if (path === '/api/billing/invoices/cb5/receipt') return { body: current };
+    return { body: page([paid]) };
+  };
+  render(<BillingPage />);
+
+  fireEvent.click(await screen.findByRole('button', { name: `Open bill ${paid.billNo}` }));
+  const dialog = await screen.findByRole('dialog', { name: /Bill INV-20261125-005/ });
+  const payments = within(await within(dialog).findByRole('region', { name: 'Payments' })).getAllByRole('listitem');
+  fireEvent.click(within(payments[0]).getByRole('button', { name: 'Refund' }));
+  const form = within(dialog).getByRole('group', { name: 'Refund ₹500 Cash' });
+  fireEvent.change(within(form).getByRole('textbox', { name: 'Reason' }), { target: { value: 'Paid twice' } });
+  current = refunded;
+  fireEvent.click(within(form).getByRole('button', { name: 'Refund ₹500' }));
+
+  expect(await within(dialog).findByText(/^Refund ₹500 Cash/)).toBeInTheDocument();
+  const alert = within(within(dialog).getByRole('group', { name: 'Refund ₹500 Cash' })).getByRole('alert');
+  expect(alert).toHaveTextContent(refusal);
+  expect(alert).toHaveTextContent(/Nothing was refunded\.$/);
+  expect(within(dialog).getByText('Paid').nextElementSibling).toHaveTextContent('₹500');
+});
+
 it('voids a bill only after the user gives a reason and confirms', async () => {
   let voided = false;
   server = ({ method }) => {
