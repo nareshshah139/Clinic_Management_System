@@ -599,6 +599,26 @@ export class ApiClient {
     return this.post('/billing/invoices', data);
   }
 
+  async getClinicBillRegister(params: Record<string, unknown>) {
+    return this.get<import('@/components/billing/clinic-bill-model').ClinicBillRegister>('/billing/register', params);
+  }
+
+  async getClinicReceipt(invoiceId: string) {
+    return this.get<import('@/components/billing/clinic-bill-model').ClinicReceipt>(`/billing/invoices/${encodeURIComponent(invoiceId)}/receipt`);
+  }
+
+  async collectClinicPayment(payment: { invoiceId: string; amount: number; method: string; reference?: string }, idempotencyKey: string) {
+    return this.post('/billing/payments', payment, { idempotencyKey });
+  }
+
+  async voidInvoice(invoiceId: string, reason: string) {
+    return this.delete(`/billing/invoices/${encodeURIComponent(invoiceId)}?reason=${encodeURIComponent(reason)}`);
+  }
+
+  async refundPayment(data: { paymentId: string; amount: number; notes?: string }) {
+    return this.post('/billing/refunds', data);
+  }
+
   async getPharmacyInvoices(params?: Record<string, unknown>) {
     return this.get<import('./types').PharmacyInvoiceListResponse>('/pharmacy/invoices', params);
   }
