@@ -12,8 +12,8 @@ const learnedRow: Row = {
   manufacturer: 'Micro Labs',
   ocrFlags: 'learned_product_needs_confirmation, uncertain_batchNumber',
   learnedCorrections: serializeLearnedCorrections([
-    { field: 'product', from: 'DOLO-650 TAB', to: 'Dolo 650mg Tablet', support: 4, tier: 'APPLY' },
-    { field: 'manufacturer', from: 'MICRO LAB', to: 'Micro Labs', support: 2, tier: 'TRUSTED' },
+    { field: 'product', from: 'DOLO-650 TAB', to: 'Dolo 650mg Tablet', support: 4, tier: 'APPLY', restore: { productName: 'DOLO-650 TAB' }, restoreFlags: [] },
+    { field: 'manufacturer', from: 'MICRO LAB', to: 'Micro Labs', support: 2, tier: 'TRUSTED', restore: { manufacturer: 'MICRO LAB' }, restoreFlags: [] },
   ]),
 };
 
@@ -53,7 +53,39 @@ describe('learned correction chip', () => {
   });
 
   it('renders nothing for suggestions that were not applied', () => {
-    render(<PurchaseLearnedChips label="x" onUndo={jest.fn()} corrections={[{ field: 'product', from: 'A', to: 'B', support: 1, tier: 'SUGGEST' }]} />);
+    render(<PurchaseLearnedChips label="x" onUndo={jest.fn()} corrections={[{ field: 'product', from: 'A', to: 'B', support: 1, tier: 'SUGGEST', restore: { productName: 'A' }, restoreFlags: [] }]} />);
     expect(screen.queryByRole('list')).not.toBeInTheDocument();
+  });
+
+  const productRow = (withRestore: boolean): Row => ({
+    productName: 'Dolo 650mg Tablet',
+    manufacturer: 'Micro Labs',
+    ocrFlags: 'learned_product_needs_confirmation',
+    learnedCorrections: JSON.stringify([{
+      field: 'product', from: 'DOLO-650 TAB', to: 'Dolo 650mg Tablet', support: 4, tier: 'APPLY',
+      ...(withRestore ? { restore: { productName: 'DOLO-650 TAB', manufacturer: '', packSize: '15' }, restoreFlags: ['missing_manufacturer'] } : {}),
+    }]),
+  });
+
+  it('puts back everything the product lesson rewrote and the flag it cleared', () => {
+    const [correction] = readLearnedCorrections(productRow(true).learnedCorrections);
+    const undone = undoLearnedCorrection({ ...productRow(true), packSize: '15' } as Row & Record<string, unknown>, correction, 'ocrFlags');
+    expect(undone).toMatchObject({ productName: 'DOLO-650 TAB', manufacturer: '', packSize: '15', ocrFlags: 'missing_manufacturer' });
+    expect(undone.learnedCorrections).toBeUndefined();
+  });
+
+  it('falls back to the product name for a correction saved before restore existed', () => {
+    const [correction] = readLearnedCorrections(productRow(false).learnedCorrections);
+    expect(correction).toMatchObject({ restore: { productName: 'DOLO-650 TAB' }, restoreFlags: [] });
+    const undone = undoLearnedCorrection(productRow(false) as Row & Record<string, unknown>, correction, 'ocrFlags');
+    expect(undone).toMatchObject({ productName: 'DOLO-650 TAB', manufacturer: 'Micro Labs', ocrFlags: '' });
+  });
+
+  it('restores only learnable fields, never the row identity', () => {
+    const [correction] = readLearnedCorrections(JSON.stringify([{ field: 'product', from: 'DOLO-650 TAB', to: 'Dolo 650mg Tablet', support: 1, tier: 'APPLY',
+      restore: { productName: 'DOLO-650 TAB', localId: 'forged' }, restoreFlags: [] }]));
+    expect(correction.restore).toEqual({ productName: 'DOLO-650 TAB' });
+    const undone = undoLearnedCorrection({ ...productRow(true), localId: 'line-1' } as Row & Record<string, unknown>, correction, 'ocrFlags');
+    expect(undone).toMatchObject({ localId: 'line-1', productName: 'DOLO-650 TAB' });
   });
 });

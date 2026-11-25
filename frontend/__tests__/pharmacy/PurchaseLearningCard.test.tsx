@@ -42,6 +42,12 @@ describe('OCR learning card', () => {
     expect(api.getPharmacyPurchaseLearningMetrics).toHaveBeenCalledWith({ from: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/), to: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) });
   });
 
+  it('names the supplier each lesson belongs to', async () => {
+    render(<PurchaseLearningCard />);
+    await userEvent.click(await screen.findByText('What it has learned (2)'));
+    expect(screen.getAllByText('GSTIN 36ABCDE1234F1Z5')).toHaveLength(2);
+  });
+
   it('forgets a lesson through the API and removes it from the list', async () => {
     api.forgetPharmacyPurchaseLearningLesson.mockResolvedValue({});
     render(<PurchaseLearningCard />);

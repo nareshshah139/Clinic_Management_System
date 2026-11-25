@@ -93,8 +93,9 @@ export function PurchaseLearningCard() {
             <span className="min-w-0 flex-1 basis-48 break-words">
               <span className="text-muted-foreground">{FIELD_LABEL[lesson.field]}: </span>
               &lsquo;{lesson.from}&rsquo; → {lesson.to}
-              <span className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
                 <Badge variant={lesson.tier === 'SUGGEST' ? 'outline' : 'secondary'}>{TIER_LABEL[lesson.tier]}</Badge>
+                <span className="break-all">GSTIN {lesson.supplierGstin}</span>
                 {lesson.reviews > 0 && `${lesson.reviews} ${lesson.reviews === 1 ? 'review' : 'reviews'}`}
               </span>
             </span>

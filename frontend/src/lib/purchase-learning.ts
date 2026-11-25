@@ -6,6 +6,8 @@ export type LearnedCorrection = {
   to: string;
   support: number;
   tier: 'SUGGEST' | 'APPLY' | 'TRUSTED';
+  restore: Record<string, string>;
+  restoreFlags: string[];
 };
 
 const LEARNED_FIELDS: Record<LearnedField, { formKey: 'productName' | 'manufacturer' | 'distributorName'; flag: string }> = {
@@ -23,8 +25,19 @@ export function parseLearnedCorrections(value: unknown): LearnedCorrection[] {
   return value.flatMap((entry): LearnedCorrection[] => {
     const item = entry as Partial<LearnedCorrection> | null;
     if (!item || !(item.field! in LEARNED_FIELDS) || typeof item.from !== 'string' || typeof item.to !== 'string') return [];
-    return [{ field: item.field!, from: item.from, to: item.to, support: Number(item.support) || 0, tier: item.tier || 'APPLY' }];
+    const field = item.field!;
+    const restore = stringRecord(item.restore) ?? { [LEARNED_FIELDS[field].formKey]: item.from };
+    const restoreFlags = Array.isArray(item.restoreFlags) ? item.restoreFlags.filter((flag): flag is string => typeof flag === 'string') : [];
+    return [{ field, from: item.from, to: item.to, support: Number(item.support) || 0, tier: item.tier || 'APPLY', restore, restoreFlags }];
   });
+}
+
+const RESTORABLE_FIELDS = new Set(['productName', 'manufacturer', 'packSize', 'distributorName']);
+
+function stringRecord(value: unknown): Record<string, string> | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const entries = Object.entries(value).filter((entry): entry is [string, string] => RESTORABLE_FIELDS.has(entry[0]) && typeof entry[1] === 'string');
+  return entries.length ? Object.fromEntries(entries) : undefined;
 }
 
 export function learnedChipText(correction: LearnedCorrection) {
@@ -40,6 +53,11 @@ export function withoutLearnedFlag(flags: string, field: LearnedField) {
   return flags.split(',').map(part => part.trim()).filter(part => part && !isLearnedFlag(part, field)).join(', ');
 }
 
+export function flagsAfterUndo(flags: string, correction: LearnedCorrection) {
+  const kept = withoutLearnedFlag(flags, correction.field).split(',').map(part => part.trim()).filter(Boolean);
+  return [...kept, ...correction.restoreFlags.filter(flag => !kept.includes(flag))].join(', ');
+}
+
 export type LearningWeek = { weekStart: string; lines: number; touches: number; per100: number | null };
 
 export type LearningLesson = {
@@ -47,6 +65,7 @@ export type LearningLesson = {
   field: LearnedField;
   from: string;
   to: string;
+  supplierGstin: string;
   tier: LearnedCorrection['tier'];
   reviews: number;
 };
@@ -77,7 +96,7 @@ export function parseLearningLessons(response: unknown): LearningLesson[] {
     const rawKey = typeof lesson.rawKey === 'string' ? lesson.rawKey.split('|')[0] : '';
     const from = typeof lesson.rawValue === 'string' && lesson.rawValue ? lesson.rawValue : rawKey;
     const tier = lesson.tier === 'TRUSTED' || lesson.tier === 'SUGGEST' ? lesson.tier : 'APPLY';
-    return [{ key: lesson.key, field, from, to: lesson.finalValue, tier, reviews: finite(lesson.independent) ?? 0 }];
+    return [{ key: lesson.key, field, from, to: lesson.finalValue, supplierGstin: typeof lesson.supplierGstin === 'string' ? lesson.supplierGstin : '', tier, reviews: finite(lesson.independent) ?? 0 }];
   });
 }
 
@@ -101,8 +120,8 @@ export function undoLearnedCorrection<T extends { learnedCorrections?: string }>
 ): T {
   return {
     ...row,
-    [learnedFormKey(correction.field)]: correction.from,
-    [flagsKey]: withoutLearnedFlag(String(row[flagsKey] ?? ''), correction.field),
+    ...correction.restore,
+    [flagsKey]: flagsAfterUndo(String(row[flagsKey] ?? ''), correction),
     learnedCorrections: serializeLearnedCorrections(readLearnedCorrections(row.learnedCorrections).filter(entry => entry.field !== correction.field)),
   };
 }

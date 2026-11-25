@@ -60,7 +60,11 @@ export interface Lesson {
   alternatives: Array<{ finalValue: string; drugId?: string; support: number }>;
 }
 
-export interface LearnedCorrection { field: LearnableField; from: string; to: string; support: number; tier: LessonTier }
+export interface LearnedCorrection {
+  field: LearnableField; from: string; to: string; support: number; tier: LessonTier;
+  restore: Record<string, string>;
+  restoreFlags: string[];
+}
 
 export interface LearningLine {
   productName: string;
@@ -387,10 +391,14 @@ export function applyLessonsToDraft<D extends LearningDraft>(
     (tier === 'SUGGEST' ? suggestions : applied).push(entry);
     return tier === 'SUGGEST' ? null : entry;
   };
-  const correction = (entry: AppliedLesson): LearnedCorrection => ({ field: entry.field, from: entry.from, to: entry.to, support: entry.support, tier: entry.tier });
+  const correction = (entry: AppliedLesson, restore: Record<string, string>, flags: string[] | undefined, cleared: string[] = []): LearnedCorrection => ({
+    field: entry.field, from: entry.from, to: entry.to, support: entry.support, tier: entry.tier,
+    restore, restoreFlags: (flags || []).filter(flag => cleared.includes(flag)),
+  });
   const flagged = (flags: string[] | undefined, entry: AppliedLesson, cleared: string[] = []) => [
     ...(flags || []).filter(flag => !cleared.includes(flag)), ...(entry.tier === 'APPLY' ? [FIELD_POLICY[entry.field].flag] : []),
   ];
+  const PRODUCT_CLEARED = ['missing_manufacturer', 'missing_packSize'];
 
   const items = draft.items.map(line => {
     if (!line.ocrLineKey) return line;
@@ -400,8 +408,9 @@ export function applyLessonsToDraft<D extends LearningDraft>(
       const entry = decide(product, line.ocrLineKey, line.productName, drug.name, drug.id);
       if (entry) return {
         ...line, productName: drug.name, manufacturer: drug.manufacturerName || '', packSize: drug.packSizeLabel!,
-        ocrFlags: flagged(line.ocrFlags, entry, ['missing_manufacturer', 'missing_packSize']),
-        learnedCorrections: [...(line.learnedCorrections || []), correction(entry)],
+        ocrFlags: flagged(line.ocrFlags, entry, PRODUCT_CLEARED),
+        learnedCorrections: [...(line.learnedCorrections || []), correction(entry,
+          { productName: line.productName, manufacturer: line.manufacturer || '', packSize: line.packSize }, line.ocrFlags, PRODUCT_CLEARED)],
       };
     }
     const manufacturer = find('manufacturer', LEARNABLE_LINE_FIELDS.manufacturer.rawKey(line));
@@ -409,7 +418,7 @@ export function applyLessonsToDraft<D extends LearningDraft>(
       const entry = decide(manufacturer, line.ocrLineKey, line.manufacturer || '', manufacturer.finalValue);
       if (entry) return {
         ...line, manufacturer: manufacturer.finalValue, ocrFlags: flagged(line.ocrFlags, entry),
-        learnedCorrections: [...(line.learnedCorrections || []), correction(entry)],
+        learnedCorrections: [...(line.learnedCorrections || []), correction(entry, { manufacturer: line.manufacturer || '' }, line.ocrFlags)],
       };
     }
     return line;
@@ -423,7 +432,7 @@ export function applyLessonsToDraft<D extends LearningDraft>(
     const entry = decide(distributor, 'header', draft.distributorName, supplier.name);
     if (entry) header = {
       distributorName: supplier.name, ocrFlags: flagged(draft.ocrFlags, entry),
-      learnedCorrections: [...(draft.learnedCorrections || []), correction(entry)],
+      learnedCorrections: [...(draft.learnedCorrections || []), correction(entry, { distributorName: draft.distributorName }, draft.ocrFlags)],
     };
   }
   return { draft: { ...draft, ...header, items } as D, applied, suggestions };
