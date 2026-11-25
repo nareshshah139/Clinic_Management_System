@@ -1,4 +1,4 @@
-import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react';
 import { InventoryWorkspace } from '@/components/inventory/InventoryWorkspace';
 import { apiClient } from '@/lib/api';
 import { useInventoryResource } from '@/components/inventory/useInventoryResource';
@@ -169,20 +169,7 @@ it.each(['RECEPTION', 'PHARMACIST', 'DOCTOR'])('keeps pharmacy reports out of %s
   mockQuery = 'area=purchases&view=suppliers';
   (apiClient.get as jest.Mock).mockResolvedValue({ kinds: {}, rows: [], total: 0, totalPages: 1 });
   render(<InventoryWorkspace/>);
-  const options = (await screen.findAllByRole('option')).map((o) => o.textContent);
-  expect(options.filter((o) => ['GST & monthly reports', 'Day-wise summary', 'Item-wise margin'].includes(o || ''))).toEqual([]);
-  expect(options).toContain('Terms of Trade');
-});
-
-it.each([
-  ['reports', '/dashboard/pharmacy/reports?report=gst-summary'],
-  ['daywise', '/dashboard/pharmacy/reports?report=day-wise-summary'],
-  ['margin', '/dashboard/pharmacy/reports?report=item-margin'],
-])('sends an old Inventory link to %s on to the same report in Pharmacy Report', async (view, href) => {
-  mockRole = 'PHARMACIST';
-  mockQuery = `area=purchases&view=${view}`;
-  (apiClient.get as jest.Mock).mockResolvedValue({ kinds: {}, rows: [], total: 0, totalPages: 1 });
-  render(<InventoryWorkspace/>);
-  await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith(href));
-  expect(screen.getByRole('link', { name: 'Pharmacy Report' })).toHaveAttribute('href', href);
+  const tasks = within(await screen.findByRole('navigation', { name: 'Purchases tasks' })).getAllByRole('button').map((b) => b.textContent);
+  expect(tasks.filter((t) => ['GST & monthly reports', 'Day-wise summary', 'Item-wise margin'].includes(t || ''))).toEqual([]);
+  expect(tasks).toContain('Terms of Trade');
 });

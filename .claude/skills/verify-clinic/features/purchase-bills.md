@@ -12,7 +12,8 @@ Every bill entered through any intake channel appears in the Purchase bills regi
 ## How to get to it (user POV)
 
 - Inventory → **Purchases** → **Purchase bills**, or route `/dashboard/inventory?area=purchases&view=register`.
-- Inventory → **Purchases** → **Scan or enter bill** → disclosure **Recent invoices (n)**.
+- Inventory → **Purchases** → **Bill intake** → disclosure **Recent invoices (n)**.
+- Payments & dues and Credits & vouchers are tabs of Purchase bills (`tab=payments`, `tab=credits`), shown with ledger access. Old `view=ledger` and `view=credits` links land there.
 
 ## Driving it with Playwright
 

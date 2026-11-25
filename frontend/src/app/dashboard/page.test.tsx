@@ -6,9 +6,17 @@ import { apiClient } from '@/lib/api';
 jest.mock('@/components/common/QuickGuide', () => ({ QuickGuide: () => null }));
 jest.mock('@/components/dashboard/DoctorPatientPanels', () => ({ DoctorPatientPanels: () => null }));
 let mockRole = 'RECEPTION';
+let mockBillingForAccountant = false;
 jest.mock('@/components/layout/dashboard-user-context', () => ({
   useDashboardUser: () => ({ user: { id: 'user-1', role: mockRole }, loading: false }),
 }));
+jest.mock('@/lib/role-capabilities', () => {
+  const actual = jest.requireActual('@/lib/role-capabilities');
+  return {
+    ...actual,
+    can: (role: string, capability: string) => (mockBillingForAccountant && role === 'ACCOUNTANT' && capability === 'billing') || actual.can(role, capability),
+  };
+});
 jest.mock('@/lib/api', () => ({
   apiClient: {
     get: jest.fn(),
@@ -32,10 +40,12 @@ const today = [
 const countsByStatus: Record<string, number> = { SCHEDULED: 1, CHECKED_IN: 1, NO_SHOW: 2 };
 
 const row = (name: RegExp) => screen.getByRole('link', { name });
+const linkHrefs = () => screen.getAllByRole('link').map((link) => link.getAttribute('href'));
 const expectNoItLabels = () => IT_LABELS.forEach((label) => expect(screen.queryByText(label)).not.toBeInTheDocument());
 
 beforeEach(() => {
   mockRole = 'RECEPTION';
+  mockBillingForAccountant = false;
   Object.values(api).forEach((mock) => mock.mockReset());
   api.getAppointments.mockImplementation(async ({ status }: { status?: string }) =>
     status ? { appointments: [], pagination: { total: countsByStatus[status] ?? 0 } } : { appointments: today, pagination: { total: 3 } });
@@ -59,9 +69,9 @@ beforeEach(() => {
 it("shows reception today's full list grouped by doctor, and the bookings left to confirm", async () => {
   render(<DashboardPage />);
 
-  expect(await screen.findByRole('heading', { name: "Today's appointments" })).toBeInTheDocument();
+  const praneetaDay = within(await screen.findByRole('list', { name: 'Dr. Praneeta Jain today' }));
+  expect(screen.getByRole('heading', { name: "Today's appointments" })).toBeInTheDocument();
   expectNoItLabels();
-  const praneetaDay = within(screen.getByRole('list', { name: 'Dr. Praneeta Jain today' }));
   expect(praneetaDay.getAllByRole('link').map((link) => link.textContent)).toEqual(['09:30-09:45Ananya ReddyScheduled', '15:00-15:30Fatima BegumChecked in']);
   expect(row(/Mohammed Irfan Siddiqui/).getAttribute('href')).toBe('/dashboard/patients/p2');
   expect(row(/Today.s bookings not yet confirmed/).textContent).toBe("1Today's bookings not yet confirmed");
@@ -131,23 +141,31 @@ it('reports a database backup in the app, not in a browser alert', async () => {
   expect(alert).not.toHaveBeenCalled();
 });
 
-it('says the appointments failed to load instead of claiming an empty day, and recovers on retry', async () => {
-  api.getAppointments.mockRejectedValueOnce(httpError(500));
+it("says today's appointments failed to load instead of claiming an empty day, keeps the counts, and recovers on retry", async () => {
+  let dayFails = true;
+  const answer = api.getAppointments.getMockImplementation() as (query: { status?: string }) => Promise<unknown>;
+  api.getAppointments.mockImplementation(async (query: { status?: string }) => {
+    if (dayFails && !query.status) throw httpError(500);
+    return answer(query);
+  });
   render(<DashboardPage />);
 
   expect(await screen.findByText("Couldn't load today's appointments")).toBeInTheDocument();
   expect(screen.queryByText('No appointments scheduled for today.')).not.toBeInTheDocument();
+  expect((await screen.findByRole('link', { name: /Today.s bookings not yet confirmed/ })).textContent).toBe("1Today's bookings not yet confirmed");
 
+  dayFails = false;
   fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
   expect(await screen.findByText('Ananya Reddy')).toBeInTheDocument();
   expect(screen.queryByText("Couldn't load today's appointments")).not.toBeInTheDocument();
 });
 
-it('tells a role without access to ask an admin', async () => {
+it('tells a role without access to ask an admin, on every widget it was refused', async () => {
   api.getAppointments.mockRejectedValue(httpError(403));
   render(<DashboardPage />);
 
-  expect(await screen.findByText(/Ask an admin to check your role permissions/)).toBeInTheDocument();
+  expect((await screen.findAllByText(/Ask an admin to check your role permissions/)).length).toBeGreaterThan(0);
+  expect(screen.getByText("Couldn't load today's appointments")).toBeInTheDocument();
 });
 
 it('still shows a genuinely empty day as empty', async () => {
@@ -163,4 +181,112 @@ it('never asks an accountant, whose grants hold no appointments, for appointment
 
   expect(await screen.findByRole('heading', { name: 'Billing to follow up' })).toBeInTheDocument();
   expect([api.getAppointments.mock.calls.length, screen.queryByText("Today's appointments")]).toEqual([0, null]);
+});
+
+it.each(['OWNER', 'ADMIN'])('offers the database backup to %s', async (role) => {
+  mockRole = role;
+  render(<DashboardPage />);
+
+  expect(await screen.findByRole('button', { name: 'Create backup' })).toBeInTheDocument();
+});
+
+it('lands a manager on the clinic overview an admin sees, without the database backup the server refuses it', async () => {
+  mockRole = 'MANAGER';
+  render(<DashboardPage />);
+
+  expect(await screen.findByRole('heading', { name: 'Clinic today' })).toBeInTheDocument();
+  await screen.findByText('₹1,240.00');
+  expect([/Appointments today/, /Upcoming appointments/, /No-shows today/, /Collected today/].map((name) => row(name).textContent))
+    .toEqual(['3Appointments today', '3Upcoming appointmentsrest of today and later days', '2No-shows today', '₹1,240.00Collected todayClinic and pharmacy, every payment mode']);
+  expect(screen.queryByText(/bookings not yet confirmed|bookings to confirm/)).not.toBeInTheDocument();
+  expect(screen.queryByRole('heading', { name: 'Database backup' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Create backup' })).not.toBeInTheDocument();
+});
+
+it("gives a nurse who is waiting for the doctor and today's list, not reception's bookings to confirm", async () => {
+  mockRole = 'NURSE';
+  render(<DashboardPage />);
+
+  expect(await screen.findByRole('heading', { name: "Today's appointments" })).toBeInTheDocument();
+  expect((await screen.findByRole('link', { name: /Checked in, waiting for the doctor/ })).textContent).toBe('1Checked in, waiting for the doctor');
+  expect(screen.getByText('Ananya Reddy')).toBeInTheDocument();
+  expect(screen.queryByText(/bookings not yet confirmed|bookings to confirm/)).not.toBeInTheDocument();
+  expect(api.getAppointments.mock.calls.map(([query]) => query.status).filter(Boolean)).toEqual(['CHECKED_IN']);
+});
+
+describe('an accountant, whom the sales register and the billing page refuse', () => {
+  beforeEach(() => {
+    mockRole = 'ACCOUNTANT';
+    api.getSystemAlerts.mockResolvedValue({ counts: { overdueInvoices: 3, pendingPayments: 2, upcomingAppointments: 0 } });
+  });
+
+  it('shows the dues as counts and links only the collection report, which the accountant can open', async () => {
+    render(<DashboardPage />);
+
+    expect((await screen.findByText('Overdue invoices')).closest('li')).toHaveTextContent('3Overdue invoices');
+    expect(screen.getByText('Payments awaiting reconciliation').closest('li')).toHaveTextContent('2Payments awaiting reconciliation');
+    expect(linkHrefs()).toEqual(['/dashboard/pharmacy/reports?report=daily-collection']);
+  });
+
+  it('links the dues to Billing once the role can open it, never to the pharmacy sales register', async () => {
+    mockBillingForAccountant = true;
+    render(<DashboardPage />);
+
+    await screen.findByText('Overdue invoices');
+    expect(linkHrefs()).toEqual(['/dashboard/pharmacy/reports?report=daily-collection', '/dashboard/billing', '/dashboard/billing']);
+  });
+});
+
+describe('one widget failing', () => {
+  it('leaves the other admin counts and the day list showing, and retries only the failed count', async () => {
+    mockRole = 'ADMIN';
+    let collectionFails = true;
+    api.get.mockImplementation(async (url: string) => {
+      if (url !== '/pharmacy/reports/daily-collection') throw new Error(`unexpected ${url}`);
+      if (collectionFails) throw httpError(500);
+      return { headline: { value: 1240 } };
+    });
+    render(<DashboardPage />);
+
+    const failed = await screen.findByRole('alert');
+    expect(failed).toHaveTextContent('Collected today');
+    expect(failed).toHaveTextContent("Couldn't load this count. It is not zero.");
+    expect([/Appointments today/, /Upcoming appointments/, /No-shows today/].map((name) => row(name).textContent))
+      .toEqual(['3Appointments today', '3Upcoming appointmentsrest of today and later days', '2No-shows today']);
+    expect(screen.getByText('Ananya Reddy')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Database backup' })).toBeInTheDocument();
+
+    collectionFails = false;
+    fireEvent.click(within(failed).getByRole('button', { name: 'Try again' }));
+    expect(await screen.findByText('₹1,240.00')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect([api.getAppointments.mock.calls.length, api.getSystemAlerts.mock.calls.length]).toEqual([2, 1]);
+  });
+
+  it("keeps a pharmacist's prescription counts when the stock overview fails", async () => {
+    mockRole = 'PHARMACIST';
+    api.get.mockImplementation(async (url: string, params?: { status?: string }) => {
+      if (url === '/inventory/workspace/overview') throw httpError(500);
+      if (url === '/pharmacy/prescription-queue') return { pagination: { total: params?.status === 'pending' ? 5 : 1 } };
+      throw new Error(`unexpected ${url}`);
+    });
+    render(<DashboardPage />);
+
+    expect((await screen.findByRole('link', { name: /Prescriptions waiting to dispense/ })).textContent).toBe('5Prescriptions waiting to dispense');
+    expect(row(/Prescriptions partly dispensed/).textContent).toBe('1Prescriptions partly dispensed');
+    const failedRows = await screen.findAllByRole('alert');
+    expect(failedRows.map((alert) => alert.querySelector('strong')?.textContent)).toEqual(['Low stock', 'Expiring in the next 3 months']);
+  });
+
+  it("tells an accountant who is refused the collection report to ask an admin, and still shows the dues", async () => {
+    mockRole = 'ACCOUNTANT';
+    api.getSystemAlerts.mockResolvedValue({ counts: { overdueInvoices: 3, pendingPayments: 2, upcomingAppointments: 0 } });
+    api.get.mockRejectedValue(httpError(403));
+    render(<DashboardPage />);
+
+    const failed = await screen.findByRole('alert');
+    expect(failed).toHaveTextContent('Collected today');
+    expect(failed).toHaveTextContent('Ask an admin to check your role permissions');
+    expect((await screen.findByText('Overdue invoices')).closest('li')).toHaveTextContent('3Overdue invoices');
+  });
 });

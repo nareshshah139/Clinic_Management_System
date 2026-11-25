@@ -15,9 +15,27 @@ import { appointmentsHref } from '@/lib/appointments-link';
 import { foldedCalendarsFor } from '@/components/appointments/appointment-calendars';
 
 type LoadFailure = 'forbidden' | 'unavailable';
-type Loadable<T> = { status: 'loading' } | { status: 'failed'; failure: LoadFailure } | { status: 'ready'; value: T };
+export type Loadable<T> = { status: 'loading' } | { status: 'failed'; failure: LoadFailure } | { status: 'ready'; value: T };
 
-export type AttentionRow = { label: string; count: number | string; href: string; note?: string };
+export type AttentionRow = {
+  label: string;
+  count: number | string;
+  href?: string;
+  note?: string;
+  failure?: LoadFailure;
+  onRetry?: () => void;
+};
+
+export function rowFrom<T>(
+  state: Loadable<T>,
+  retry: () => void,
+  row: Pick<AttentionRow, 'label' | 'href' | 'note'>,
+  count: (value: T) => number | string,
+): AttentionRow {
+  if (state.status === 'ready') return { ...row, count: count(state.value) };
+  if (state.status === 'failed') return { ...row, count: '—', failure: state.failure, onRetry: retry };
+  return { ...row, count: '…' };
+}
 
 export type DayAppointment = Pick<Appointment, 'id' | 'slot' | 'status' | 'doctorId' | 'doctor' | 'visit'> & {
   patient?: { id: string; name?: string; firstName?: string; lastName?: string };
@@ -73,19 +91,43 @@ export function DashboardSection({ title, description, tour, children }: { title
   );
 }
 
+const attentionBody = (row: AttentionRow) => (
+  <>
+    <span className="min-w-20 shrink-0 text-2xl font-semibold tabular-nums text-foreground">{row.count}</span>
+    <span className="flex-1">
+      <strong className="font-medium text-foreground">{row.label}</strong>
+      {row.note && <span className="block text-sm text-muted-foreground">{row.note}</span>}
+    </span>
+  </>
+);
+
+const FAILURE_NOTE: Record<LoadFailure, string> = {
+  forbidden: "Couldn't load this count. Your account does not have access to it yet. Ask an admin to check your role permissions.",
+  unavailable: "Couldn't load this count. It is not zero. Check your connection and try again.",
+};
+
 export function AttentionList({ rows }: { rows: AttentionRow[] }) {
   return (
     <ul className="divide-y border-y">
       {rows.map((row) => (
         <li key={row.label}>
-          <Link href={row.href} className="flex items-center gap-4 px-1 py-3 hover:bg-muted/50 focus-visible:outline focus-visible:outline-2">
-            <span className="min-w-20 shrink-0 text-2xl font-semibold tabular-nums text-foreground">{row.count}</span>
-            <span className="flex-1">
-              <strong className="font-medium text-foreground">{row.label}</strong>
-              {row.note && <span className="block text-sm text-muted-foreground">{row.note}</span>}
-            </span>
-            <ArrowRight className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
-          </Link>
+          {row.failure ? (
+            <div role="alert" className="flex items-center gap-4 px-1 py-3">
+              <span className="min-w-20 shrink-0 text-2xl font-semibold text-muted-foreground">{row.count}</span>
+              <span className="flex-1">
+                <strong className="font-medium text-foreground">{row.label}</strong>
+                <span className="block text-sm text-muted-foreground">{FAILURE_NOTE[row.failure]}</span>
+              </span>
+              <Button variant="outline" size="sm" onClick={row.onRetry}>Try again</Button>
+            </div>
+          ) : row.href ? (
+            <Link href={row.href} className="flex items-center gap-4 px-1 py-3 hover:bg-muted/50 focus-visible:outline focus-visible:outline-2">
+              {attentionBody(row)}
+              <ArrowRight className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+            </Link>
+          ) : (
+            <div className="flex items-center gap-4 px-1 py-3">{attentionBody(row)}</div>
+          )}
         </li>
       ))}
     </ul>

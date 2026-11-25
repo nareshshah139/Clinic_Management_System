@@ -548,6 +548,27 @@ export class ApiClient {
     return this.post<Partial<import('./types').VisitDetails>>(`/visits/${id}/complete`, data, opts);
   }
 
+  // Procedures
+  async getMyProcedureAccess() {
+    return this.get<import('@/components/procedures/procedure-access').MyProcedureAccess>('/procedures/access/me');
+  }
+
+  async getProcedureAccess() {
+    return this.get<import('@/components/procedures/procedure-access').ProcedureAccess>('/procedures/access');
+  }
+
+  async updateProcedureAccess(data: import('@/components/procedures/procedure-access').ProcedureAccess) {
+    return this.put<import('@/components/procedures/procedure-access').ProcedureAccess>('/procedures/access', data);
+  }
+
+  async createProcedure(data: Record<string, unknown>) {
+    return this.post('/procedures', data);
+  }
+
+  async updateProcedure(id: string, data: Record<string, unknown>) {
+    return this.patch(`/procedures/${id}`, data);
+  }
+
   async getPatientVisitHistory<T = unknown>(patientId: string, params?: { limit?: number; offset?: number; includeAppointments?: boolean; startDate?: string; endDate?: string }): Promise<T> {
     return this.get<T>(`/visits/patient/${patientId}/history`, params || {});
   }
@@ -576,6 +597,26 @@ export class ApiClient {
 
   async createInvoice(data: Record<string, unknown>) {
     return this.post('/billing/invoices', data);
+  }
+
+  async getClinicBillRegister(params: Record<string, unknown>) {
+    return this.get<import('@/components/billing/clinic-bill-model').ClinicBillRegister>('/billing/register', params);
+  }
+
+  async getClinicReceipt(invoiceId: string) {
+    return this.get<import('@/components/billing/clinic-bill-model').ClinicReceipt>(`/billing/invoices/${encodeURIComponent(invoiceId)}/receipt`);
+  }
+
+  async collectClinicPayment(payment: { invoiceId: string; amount: number; method: string; reference?: string }, idempotencyKey: string) {
+    return this.post('/billing/payments', payment, { idempotencyKey });
+  }
+
+  async voidInvoice(invoiceId: string, reason: string) {
+    return this.delete(`/billing/invoices/${encodeURIComponent(invoiceId)}?reason=${encodeURIComponent(reason)}`);
+  }
+
+  async refundPayment(data: { paymentId: string; amount: number; notes?: string }) {
+    return this.post('/billing/refunds', data);
   }
 
   async getPharmacyInvoices(params?: Record<string, unknown>) {

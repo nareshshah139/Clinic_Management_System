@@ -1,30 +1,7 @@
-'use client';
+import { redirect } from 'next/navigation';
+import { salesHrefForLegacySearch } from './sales-search';
 
-import { Suspense } from 'react';
-import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
-import { PharmacyInvoiceList } from '@/components/pharmacy/PharmacyInvoiceList';
-import { Button } from '@/components/ui/button';
-import { PageHeader } from '@/components/ui/page-header';
-
-export default function PharmacyInvoicesPage() {
-  return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Pharmacy Invoices"
-       
-        actions={
-          <Button asChild variant="outline">
-            <Link href="/dashboard/pharmacy?section=counter">
-              <ArrowLeft className="h-4 w-4" />
-              Back to Counter
-            </Link>
-          </Button>
-        }
-      />
-      <Suspense fallback={null}>
-        <PharmacyInvoiceList />
-      </Suspense>
-    </div>
-  );
+export default async function PharmacyInvoicesPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const { search } = await searchParams;
+  redirect(salesHrefForLegacySearch(typeof search === 'string' ? search : undefined));
 }

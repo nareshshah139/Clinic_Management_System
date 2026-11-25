@@ -19,6 +19,7 @@ import {
   RevenueReportDto,
   OutstandingInvoicesDto,
 } from './dto/query-billing.dto';
+import { VOID, heldPaise, leftToRefund, metadataOf, paise, refundedByPayment, rupees } from './clinic-bill-register';
 
 const RUPEES = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0, maximumFractionDigits: 2 });
 const PAYMENT_INVOICE = { invoice: { select: { id: true, invoiceNo: true, total: true } } } as const;
@@ -292,6 +293,7 @@ export class BillingService {
    */
   async updateInvoice(id: string, updateInvoiceDto: UpdateInvoiceDto, branchId: string) {
     const invoice = await this.findInvoiceById(id, branchId);
+    if (invoice.status === VOID) throw new BadRequestException(`Bill ${invoice.invoiceNo} is void, so it cannot be changed.`);
 
     const updateData: any = {};
 
@@ -328,18 +330,38 @@ export class BillingService {
       if (replaceItems) await tx.newInvoiceItem.deleteMany({ where: { invoiceId: id } });
       const updated = await tx.newInvoice.update({ where: { id }, data: updateData, include });
       if (total === undefined) return updated;
-      if (updated.received > total) {
+      if (paise(updated.received) > paise(total)) {
         throw new BadRequestException(
           `Bill ${invoice.invoiceNo} has already received ${RUPEES.format(updated.received)}, so its total cannot go below that. Refund the difference first, then change the bill.`,
         );
       }
-      return tx.newInvoice.update({ where: { id }, data: { balance: total - updated.received }, include });
+      return tx.newInvoice.update({ where: { id }, data: { balance: rupees(paise(total) - paise(updated.received)) }, include });
     });
   }
 
-  async cancelInvoice(id: string, branchId: string, _reason?: string) {
-    // Current schema has no status/cancel semantics; avoid destructive delete by returning a clear error
-    throw new BadRequestException('Invoice cancellation is not supported in the current schema');
+  /**
+   * @cc [owner:nareshshah139,label:calculation;security] invoice-void
+   * Voiding MUST need a reason and MUST mark the bill CANCELLED with that reason only while it holds
+   * no money, in one conditional write, so a payment racing the void either lands first and the void
+   * is refused, or finds the bill void and is refused. Voiding a void bill MUST change nothing.
+   */
+  async cancelInvoice(id: string, branchId: string, reason?: string) {
+    const why = reason?.trim();
+    if (!why) throw new BadRequestException('Give a reason for voiding the bill.');
+    const invoice = await this.findInvoiceById(id, branchId);
+    if (invoice.status === VOID) return invoice;
+    const metadata = JSON.stringify({ ...metadataOf(invoice.metadata), void: { reason: why, at: new Date().toISOString() } });
+    const voided = await this.prisma.newInvoice.updateMany({
+      where: { id, branchId, status: { not: VOID }, received: { lt: 0.005 } },
+      data: { status: VOID, metadata },
+    });
+    const current = await this.findInvoiceById(id, branchId);
+    if (voided.count === 0 && current.status !== VOID) {
+      throw new BadRequestException(
+        `Bill ${invoice.invoiceNo} has received ${RUPEES.format(current.received)}. Refund it first, then void the bill.`,
+      );
+    }
+    return current;
   }
 
   /**
@@ -349,16 +371,19 @@ export class BillingService {
    * PENDING and leave the invoice unchanged until confirmPayment completes it, which applies it once
    * however often it is called. So received MUST equal the invoice's COMPLETED payments less refunds.
    * An amount at or below 0 or above the balance MUST fail naming what is due, with nothing written,
-   * also when two payments race for the same balance. The invoice MUST belong to the authenticated
-   * branch, otherwise nothing is written.
+   * also when two payments race for the same balance. The amount and the balance MUST be compared
+   * and written in whole paise, so collecting the balance shown settles the bill. The invoice MUST
+   * belong to the authenticated branch, otherwise nothing is written.
    */
   async processPayment(paymentDto: PaymentDto, branchId: string) {
-    const { invoiceId, amount, method, reference, gateway } = paymentDto;
+    const { invoiceId, method, reference, gateway } = paymentDto;
+    const amount = rupees(paise(paymentDto.amount));
     if (!(amount > 0)) throw new BadRequestException('Enter a payment above ₹0.');
     const invoice = await this.findInvoiceById(invoiceId, branchId);
+    if (invoice.status === VOID) throw new BadRequestException(this.refusal(invoice, VOID, 0, amount));
 
     if (gateway) {
-      if (amount > invoice.balance) throw new BadRequestException(this.overDue(invoice, invoice.balance, amount));
+      if (paise(amount) > paise(invoice.balance)) throw new BadRequestException(this.refusal(invoice, invoice.status, invoice.balance, amount));
       return this.prisma.newPayment.create({
         data: { invoiceId, amount, mode: method as any, reference: reference ?? null, gateway, reconStatus: 'PENDING' },
         include: PAYMENT_INVOICE,
@@ -405,8 +430,8 @@ export class BillingService {
   }
 
   /**
-   * Adds money in hand to an invoice. The balance check and the write are one conditional update,
-   * so of two payments racing for the same balance the second finds it already taken.
+   * Adds money in hand to an invoice. It reads the balance under the bill's row lock, so of two
+   * payments racing for the same balance the second reads what the first left.
    */
   private async receive(
     tx: Prisma.TransactionClient,
@@ -414,17 +439,27 @@ export class BillingService {
     amount: number,
     Refusal: new (message: string) => Error,
   ) {
-    const applied = await tx.newInvoice.updateMany({
-      where: { id: invoice.id, balance: { gte: amount } },
-      data: { received: { increment: amount }, balance: { decrement: amount } },
+    const bill = await this.lockedMoney(tx, invoice.id);
+    const taken = paise(amount);
+    if (bill.status === VOID || taken > bill.balance) {
+      throw new Refusal(this.refusal(invoice, bill.status, rupees(bill.balance), amount));
+    }
+    await tx.newInvoice.update({
+      where: { id: invoice.id },
+      data: { received: rupees(bill.received + taken), balance: rupees(bill.balance - taken) },
     });
-    if (applied.count === 1) return;
-    const { balance } = await tx.newInvoice.findUniqueOrThrow({ where: { id: invoice.id }, select: { balance: true } });
-    throw new Refusal(this.overDue(invoice, balance, amount));
   }
 
-  private overDue(invoice: { invoiceNo: string }, balance: number, amount: number) {
+  /** Locks the bill's row until the transaction ends and reads its money in paise. */
+  private async lockedMoney(tx: Prisma.TransactionClient, invoiceId: string) {
+    const [bill] = await tx.$queryRaw<{ status: string; received: number; balance: number }[]>`
+      SELECT status, received, balance FROM new_invoices WHERE id = ${invoiceId} FOR UPDATE`;
+    return { status: bill.status, received: paise(bill.received), balance: paise(bill.balance) };
+  }
+
+  private refusal(invoice: { invoiceNo: string }, status: string, balance: number, amount: number) {
     const refused = `so ${RUPEES.format(amount)} cannot be recorded.`;
+    if (status === VOID) return `Bill ${invoice.invoiceNo} is void, ${refused}`;
     return balance > 0
       ? `Only ${RUPEES.format(balance)} is due on bill ${invoice.invoiceNo}, ${refused}`
       : `Bill ${invoice.invoiceNo} is already paid in full, ${refused}`;
@@ -433,18 +468,19 @@ export class BillingService {
   /**
    * @cc [owner:nareshshah139,label:calculation;security] refund-bounds
    * A refund MUST target a COMPLETED, non-refund payment in the authenticated branch and MUST be
-   * above 0, at most the payment amount, and at most what the invoice still holds as received,
-   * also when two refunds race for the same received amount. Any other request MUST fail with
-   * nothing written. A valid refund MUST add a negative payment and lower received and raise
-   * balance by that amount, in one transaction.
+   * above 0, at most what that payment has left after its earlier refunds, and at most what the
+   * invoice still holds as received, also when two refunds race. Any other request MUST fail with
+   * nothing written. A valid refund MUST add a negative payment linked to the payment it refunds
+   * and lower received and raise balance by that amount, in one transaction.
    */
   /**
-   * @cc [owner:nareshshah139,label:calculation;target] refund-total-per-payment
-   * The refunds of one payment MUST NOT add up to more than that payment. Today refund rows carry
-   * no link to their payment, so this does not hold. This is a target obligation, not a pass claim.
+   * @cc [owner:nareshshah139,label:calculation;concurrency] refund-total-per-payment
+   * The refunds of one payment MUST NOT add up to more than that payment. Each refund row links to
+   * its payment (refundOfId), and the bill's refunds MUST be summed under the bill's row lock, so of
+   * two refunds racing for one payment the second sees the first.
    */
   async processRefund(refundDto: RefundDto, branchId: string) {
-    const { paymentId, amount, reason, notes, gatewayResponse } = refundDto as any;
+    const { paymentId, amount, notes } = refundDto;
 
     // Fetch payment and validate branch via invoice → patient.branchId
     const payment = await this.prisma.newPayment.findFirst({
@@ -464,33 +500,50 @@ export class BillingService {
       throw new BadRequestException('Can only refund completed payments');
     }
 
-    if (amount <= 0) {
+    const refund = paise(amount);
+    if (!(refund > 0)) {
       throw new BadRequestException('Refund amount must be greater than 0');
     }
 
-    if (amount > payment.amount) {
+    if (refund > heldPaise(payment.amount)) {
       throw new BadRequestException('Refund amount exceeds original payment amount');
     }
 
     // Represent refund as a negative payment (cash refund)
     return this.prisma.$transaction(async (tx) => {
-      const applied = await tx.newInvoice.updateMany({
-        where: { id: payment.invoiceId, received: { gte: amount } },
-        data: { received: { decrement: amount }, balance: { increment: amount } },
+      const bill = await this.lockedMoney(tx, payment.invoiceId);
+      const payments = await tx.newPayment.findMany({
+        where: { invoiceId: payment.invoiceId, reconStatus: 'COMPLETED' },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        select: { id: true, amount: true, mode: true, refundOfId: true, createdAt: true },
       });
-      if (applied.count === 0) throw new BadRequestException('Refund amount exceeds the amount still received on the invoice');
+      const left = leftToRefund(payment, refundedByPayment(payments));
+      if (refund > left) throw new BadRequestException(this.refundRefusal(payment.amount, left, refund));
+      if (refund > bill.received) throw new BadRequestException('Refund amount exceeds the amount still received on the invoice');
+      await tx.newInvoice.update({
+        where: { id: payment.invoiceId },
+        data: { received: rupees(bill.received - refund), balance: rupees(bill.balance + refund) },
+      });
       return tx.newPayment.create({
         data: {
           invoiceId: payment.invoiceId,
-          amount: -amount,
+          amount: -rupees(refund),
           mode: payment.mode,
           reference: (notes ? `REFUND: ${notes}` : 'REFUND') as any,
           gateway: null,
           reconStatus: 'COMPLETED',
+          refundOfId: payment.id,
         },
         include: PAYMENT_INVOICE,
       });
     });
+  }
+
+  private refundRefusal(paid: number, left: number, refund: number) {
+    const refused = `so ${RUPEES.format(rupees(refund))} cannot be refunded.`;
+    return left > 0
+      ? `Only ${RUPEES.format(rupees(left))} of this ${RUPEES.format(paid)} payment is left to refund, ${refused}`
+      : `This ${RUPEES.format(paid)} payment is already refunded in full, ${refused}`;
   }
 
   async processBulkPayment(bulkPaymentDto: BulkPaymentDto, branchId: string) {
@@ -508,17 +561,17 @@ export class BillingService {
       throw new NotFoundException('One or more invoices not found');
     }
 
-    // Calculate total amount for all invoices based on current balance
-    const calculatedTotal = invoices.reduce((sum, invoice) => sum + Math.max(invoice.balance, 0), 0);
+    const owed = invoices.map((invoice) => Math.max(paise(invoice.balance), 0));
+    const calculatedTotal = owed.reduce((sum, due) => sum + due, 0);
 
-    if (totalAmount !== calculatedTotal) {
-      throw new BadRequestException(`Total amount mismatch. Expected: ${calculatedTotal}, Provided: ${totalAmount}`);
+    if (paise(totalAmount) !== calculatedTotal) {
+      throw new BadRequestException(`Total amount mismatch. Expected: ${rupees(calculatedTotal)}, Provided: ${totalAmount}`);
     }
 
     const payments = await this.prisma.$transaction(async (tx) => {
       const recorded = [] as Awaited<ReturnType<BillingService['payAtDesk']>>[];
-      for (const invoice of invoices) {
-        if (invoice.balance > 0) recorded.push(await this.payAtDesk(tx, invoice, invoice.balance, method, reference));
+      for (const [i, invoice] of invoices.entries()) {
+        if (owed[i] > 0) recorded.push(await this.payAtDesk(tx, invoice, rupees(owed[i]), method, reference));
       }
       return recorded;
     });
@@ -660,6 +713,7 @@ export class BillingService {
       branchId,
       ...(patientId && { patientId }),
       balance: { gt: 0 },
+      status: { not: VOID },
     };
 
     const invoices = await this.prisma.newInvoice.findMany({
@@ -757,7 +811,7 @@ export class BillingService {
    * An invoice total MUST equal the line amounts after line discount percent, less the overall
    * discount percent, plus GST per line on the line-discounted amount (before the overall discount).
    * A line with a gstRate of 0 or no gstRate MUST add no tax here; note that the HTTP DTOs default
-   * an omitted gstRate to 18 before it reaches this method. Totals are not rounded to paise.
+   * an omitted gstRate to 18 before it reaches this method. The total MUST be rounded to whole paise.
    */
   private calculateInvoiceTotals(items: any[], discount: number = 0) {
     const subtotal = items.reduce((sum, item) => {
@@ -777,7 +831,7 @@ export class BillingService {
       return sum + (discountedItemTotal * gstRate / 100);
     }, 0);
 
-    const totalAmount = discountedSubtotal + gstAmount;
+    const totalAmount = rupees(paise(discountedSubtotal + gstAmount));
 
     return { subtotal, discount: discountAmount, gstAmount, totalAmount };
   }

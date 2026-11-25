@@ -28,8 +28,11 @@ import {
   downloadCsv,
 } from "./workspace-model";
 import { NativeSelect } from '@/components/ui/native-select';
+import { useConfirm } from '@/components/ui/confirm-dialog';
+import { LINE_COLUMNS, blankOptionalCellsToZero, firstLineProblem, summariseLines, workflowKindSpec } from './workflow-document-kinds';
 
 const DAY_TEXT_KINDS = ["SUPPLIER_RETURN", "CREDIT_NOTE"];
+const cellValue = (text: string) => (text === "" ? "" : Number(text));
 
 type Props = {
   kind: string;
@@ -102,6 +105,8 @@ export function WorkflowDocumentEditor({
   onInvoice,
 }: Props) {
   const { user } = useDashboardUser();
+  const [confirm, confirmDialog] = useConfirm();
+  const kindSpec = workflowKindSpec(kind);
   const recoveryKey = `inventory-document:${user?.branchId}:${user?.id}:${kind}:${id || draftKey || recoveryRequestKey || "new"}:${initial?.purchaseInvoiceId || initial?.sourceId || ""}`;
   const [ready, setReady] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);
@@ -139,6 +144,7 @@ export function WorkflowDocumentEditor({
     [selected, setSelected] = useState<string[]>([]);
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
+    [lineProblem, setLineProblem] = useState(""),
     [notice, setNotice] = useState(""),
     [recording, setRecording] = useState<HTMLElement | null>(null),
     [recordedCredit, setRecordedCredit] = useState<{ notice: string; id: string; available: number } | null>(null),
@@ -415,7 +421,8 @@ export function WorkflowDocumentEditor({
   }, [kind, saleSearch, salePage]);
   const payload = (key: string, value: any) =>
     setForm((f: any) => ({ ...f, payload: { ...f.payload, [key]: value } }));
-  const updateLine = (index: number, key: string, value: any) =>
+  const updateLine = (index: number, key: string, value: any) => {
+    setLineProblem("");
     setForm((f: any) => ({
       ...f,
       payload: {
@@ -425,6 +432,7 @@ export function WorkflowDocumentEditor({
         ),
       },
     }));
+  };
   const add = (item: any, source?: any) => {
     payload("lines", [
       ...form.payload.lines,
@@ -536,6 +544,24 @@ export function WorkflowDocumentEditor({
       feedback.current?.focus();
       return;
     }
+    const savesEdits = editable && action !== "CANCEL" && action !== "REVERSE";
+    const problem = savesEdits ? firstLineProblem(kind, form.payload.lines) : null;
+    setLineProblem(problem ?? "");
+    if (problem) {
+      setNotice("");
+      setError("");
+      feedback.current?.focus();
+      return;
+    }
+    const outgoing = savesEdits ? { ...form, payload: { ...form.payload, lines: blankOptionalCellsToZero(kind, form.payload.lines) } } : form;
+    const irreversible = action ? kindSpec.irreversibleActions[action] : undefined;
+    if (irreversible && !(await confirm({
+      title: irreversible.title,
+      description: irreversible.effect({ ...summariseLines(outgoing.payload.lines), status: doc?.status }),
+      confirmLabel: irreversible.confirmLabel,
+      destructive: true,
+    }))) return;
+    if (lock.current) return;
     lock.current = true;
     setBusy(true);
     setError("");
@@ -545,18 +571,18 @@ export function WorkflowDocumentEditor({
     let saved = doc;
     let dispatched = false;
     try {
-      if (editable && action !== "CANCEL" && action !== "REVERSE") {
-        markPending(doc ? "save" : "create", doc);
+      if (savesEdits) {
+        markPending(doc ? "save" : "create", doc, outgoing);
         dispatched = true;
         saved = doc
-          ? await apiClient.patch<any>(`/inventory/workspace/documents/${doc.id}`, { ...form, version: doc.version })
-          : await apiClient.post<any>("/inventory/workspace/documents", form);
+          ? await apiClient.patch<any>(`/inventory/workspace/documents/${doc.id}`, { ...outgoing, version: doc.version })
+          : await apiClient.post<any>("/inventory/workspace/documents", outgoing);
         if (generation !== routeGeneration.current) return;
         apply(saved);
-        sessionStorage.setItem(recoveryKey, JSON.stringify({ schemaVersion: 2, documentId: saved.id, documentVersion: saved.version, form }));
+        sessionStorage.setItem(recoveryKey, JSON.stringify({ schemaVersion: 2, documentId: saved.id, documentVersion: saved.version, form: outgoing }));
       }
       if (action) {
-        markPending("transition", saved, form, action);
+        markPending("transition", saved, outgoing, action);
         dispatched = true;
         const result = await apiClient.post<any>(`/inventory/workspace/documents/${saved.id}/transition`, {
           version: saved.version, action, reason: reversal || form.payload.reason,
@@ -648,6 +674,7 @@ export function WorkflowDocumentEditor({
   if (!ready || loadedRecoveryKey.current !== recoveryKey) return <p role="status">Loading document…</p>;
   return (
     <div className="space-y-5">
+      {confirmDialog}
       <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b bg-background py-3 print:hidden">
         <InventoryAction label={`Back to ${definition.label.toLowerCase()}`} variant="ghost" onClick={onBack} disabled={busy}>
           <ArrowLeft className="h-4 w-4" />
@@ -672,63 +699,20 @@ export function WorkflowDocumentEditor({
           )}
         </div>
       </div>
-      <section aria-label="Document outcome" className="space-y-2 rounded-md border p-4">
-        <p>{presentation.happened}</p>
-        <p>{presentation.stockExplanation}</p>
-        <p>{presentation.recovery}</p>
-        {presentation.checkLabel && (
-          <Button variant="outline" onClick={checkSavedStatus} disabled={busy}>{presentation.checkLabel}</Button>
-        )}
-        {knowledge.state === "known" && <Button variant="outline" onClick={checkSavedStatus} disabled={busy}>Reload saved record</Button>}
-        {doc && (["ORDERED", "CONVERTED"].includes(doc.status) || (doc.kind === "SHORTBOOK" && ["PART_RECEIVED", "RECEIVED", "CANCELLED"].includes(doc.status))) && (() => {
-          const destinationEvent = [...(doc.events || [])].reverse().find((event: any) => event.detail?.destinationId || event.detail?.orderId);
-          const destination = destinationEvent?.detail?.destinationId || destinationEvent?.detail?.orderId;
-          const destinationKind = doc.kind === "SHORTBOOK" ? "PURCHASE_ORDER" : "COUNTER_SALE";
-          return destination ? <Button variant="outline" onClick={() => onOpen(destinationKind, destination)}>Open linked {destinationKind === "PURCHASE_ORDER" ? "purchase order" : "sale draft"}</Button> : <a className="block underline" href={`?area=${destinationKind === "PURCHASE_ORDER" ? "reorder" : "sales"}&view=${destinationKind}&search=${encodeURIComponent(doc.reference)}`}>Find the linked {destinationKind === "PURCHASE_ORDER" ? "purchase order" : "sale draft"}</a>;
-        })()}
-        {doc?.status === "REVERSED" && (() => {
-          const correction = [...(doc.events || [])].reverse().find((event: any) => event.detail?.correctionId)?.detail?.correctionId;
-          return correction ? <Button variant="outline" onClick={() => onOpen("CORRECTION", correction)}>Open linked correction</Button> : null;
-        })()}
-        {doc?.kind === "PURCHASE_ORDER" && ["APPROVED", "PART_RECEIVED", "RECEIVED", "CANCELLED", "SENT"].includes(doc.status) && <a className="block underline" href={`?area=purchases&view=INWARD_CHALLAN&sourceId=${encodeURIComponent(doc.id)}`}>Review linked receipts</a>}
-        {(presentation.stockEffect === "unknown" || presentation.auditRecovery) && <a className="block underline" href="?area=stock&view=COUNT">Open Stock counts</a>}
-        {kind === "TARGET_REVIEW" && <a className="block underline" href="?area=reorder&view=TARGET_REVIEW">Open Reorder target review</a>}
-        {(!canWrite || presentation.stockEffect === "unknown" || error) && (
-          <label className="block text-sm">Recovery handoff
-            <textarea readOnly className={inputClass + " h-24"} value={`Branch ${user?.branchId || "unknown"}; ${kind}; document ${doc?.id || (knowledge.state !== "new" && knowledge.state !== "known" && knowledge.ref.kind === "saved" ? knowledge.ref.id : id || "not yet confirmed")}; request ${knowledge.state !== "new" && knowledge.state !== "known" && knowledge.ref.kind === "request" ? knowledge.ref.requestKey || "missing" : form.requestKey || "unknown"}; reference ${form.reference || "unknown"}${initial?.purchaseInvoiceId ? `; source invoice ${initial.purchaseInvoiceId}` : ""}. ${presentation.stockExplanation} ${presentation.recovery}${pendingRecovery.current?.pending ? ` Pending action: ${pendingRecovery.current.pending.action || pendingRecovery.current.pending.operation}. ${pendingRecovery.current.pending.reason || ""}` : ""} Recovery link: ${typeof window === "undefined" ? "" : window.location.origin + window.location.pathname}?area=${workflowKinds[kind]?.area || "stock"}&view=${encodeURIComponent(kind)}&${doc?.id || id ? `document=${encodeURIComponent(doc?.id || id!)}` : `recoverRequest=${encodeURIComponent(recoveryRequestKey || (knowledge.state !== "new" && knowledge.state !== "known" && knowledge.ref.kind === "request" ? knowledge.ref.requestKey : form.requestKey) || "")}`}${pendingRecovery.current?.pending?.operation && pendingRecovery.current.pending.operation !== "create" ? `&recoverOperation=${pendingRecovery.current.pending.operation}&recoverVersion=${pendingRecovery.current.documentVersion ?? doc?.version ?? ""}` : ""}`} />
-          </label>
-        )}
-      </section>
-      {guard?.recovery && (
-        <section aria-label="Recovery steps" className="space-y-2 rounded-md border p-4">
-          {guard.stockEffect === "NONE" && <p>This rejected attempt made no stock change. Earlier recorded movements remain unchanged.</p>}
-          <p>{guard.recovery.action === "CORRECT_FIELD" ? "Correct the identified quantity. Do not change a truthful observation to bypass a stock guard." : "Inspect the linked batch and blocking records. Confirm a real release, loss or supplier return before starting a fresh physical count. Do not change a truthful observation to bypass a stock guard."}</p>
-          {guard.recovery.inventoryId && <a className="underline" href={`?area=stock&view=list&item=${encodeURIComponent(guard.recovery.inventoryId)}`}>Inspect batch balance and holds</a>}
-          {guard.recovery.sourceId && <Button variant="link" onClick={() => onOpen(guard.recovery.sourceKind || "HOLD", guard.recovery.sourceId)}>Open blocking source hold</Button>}
-          {(guard.recovery.documents || []).map((entry: any) => <Button key={entry.id} variant="link" onClick={() => onOpen(entry.kind, entry.id)}>Open {entry.reference || entry.id}</Button>)}
-          {guard.recovery.action === "REVERSE_DEPENDENCIES" && <p>A manager must inspect and reverse only the incorrect downstream returns or disposals before reversing this record.</p>}
-          {!canWrite && <p>Share this record with a colleague who has the required inventory write or approval permission.</p>}
-        </section>
-      )}
-      {linkedSource && (
-        <Button
-          variant="link"
-          className="px-0"
-          onClick={() => onOpen(linkedSource.kind, linkedSource.id)}
-        >
-          View linked {workflowKinds[linkedSource.kind]?.label.toLowerCase()}:{" "}
-          {linkedSource.reference}
-        </Button>
-      )}
       <header>
         <h2 className="text-xl font-semibold">
           {doc?.reference || definition.label}
         </h2>
         <p className="mt-1 max-w-3xl text-muted-foreground">
-          {definition.help}
+          {doc && doc.status !== "DRAFT" ? presentation.happened : kindSpec.outcomeSummary}
         </p>
       </header>
       <div ref={feedback} tabIndex={-1} aria-live="polite">
+        {lineProblem && (
+          <p role="alert" className="rounded-md border border-destructive p-3 text-destructive">
+            {lineProblem}
+          </p>
+        )}
         {error && (
           <p
             role="alert"
@@ -771,6 +755,61 @@ export function WorkflowDocumentEditor({
           </div>
         )}
       </div>
+      <section aria-label="Document status" className="space-y-2">
+        <details open={presentation.stockEffect === "unknown" || !canWrite || !!error} className="rounded-md border p-3 text-sm">
+          <summary className="cursor-pointer font-medium">What this means for stock and what to do next</summary>
+          <div className="mt-2 space-y-2">
+            <p>{presentation.stockExplanation}</p>
+            <p>{presentation.recovery}</p>
+          </div>
+        </details>
+        {presentation.checkLabel && (
+          <Button variant="outline" onClick={checkSavedStatus} disabled={busy}>{presentation.checkLabel}</Button>
+        )}
+        {knowledge.state === "known" && <Button variant="outline" onClick={checkSavedStatus} disabled={busy}>Reload saved record</Button>}
+        {doc && (["ORDERED", "CONVERTED"].includes(doc.status) || (doc.kind === "SHORTBOOK" && ["PART_RECEIVED", "RECEIVED", "CANCELLED"].includes(doc.status))) && (() => {
+          const destinationEvent = [...(doc.events || [])].reverse().find((event: any) => event.detail?.destinationId || event.detail?.orderId);
+          const destination = destinationEvent?.detail?.destinationId || destinationEvent?.detail?.orderId;
+          const destinationKind = doc.kind === "SHORTBOOK" ? "PURCHASE_ORDER" : "COUNTER_SALE";
+          return destination ? <Button variant="outline" onClick={() => onOpen(destinationKind, destination)}>Open linked {destinationKind === "PURCHASE_ORDER" ? "purchase order" : "sale draft"}</Button> : <a className="block underline" href={`?area=${destinationKind === "PURCHASE_ORDER" ? "reorder" : "sales"}&view=${destinationKind}&search=${encodeURIComponent(doc.reference)}`}>Find the linked {destinationKind === "PURCHASE_ORDER" ? "purchase order" : "sale draft"}</a>;
+        })()}
+        {doc?.status === "REVERSED" && (() => {
+          const correction = [...(doc.events || [])].reverse().find((event: any) => event.detail?.correctionId)?.detail?.correctionId;
+          return correction ? <Button variant="outline" onClick={() => onOpen("CORRECTION", correction)}>Open linked correction</Button> : null;
+        })()}
+        {doc?.kind === "PURCHASE_ORDER" && ["APPROVED", "PART_RECEIVED", "RECEIVED", "CANCELLED", "SENT"].includes(doc.status) && <a className="block underline" href={`?area=purchases&view=INWARD_CHALLAN&sourceId=${encodeURIComponent(doc.id)}`}>Review linked receipts</a>}
+        {(presentation.stockEffect === "unknown" || presentation.auditRecovery) && <a className="block underline" href="?area=stock&view=COUNT">Open Stock counts</a>}
+        {kind === "TARGET_REVIEW" && <a className="block underline" href="?area=reorder&view=TARGET_REVIEW">Open Reorder target review</a>}
+        {(!canWrite || presentation.stockEffect === "unknown" || error) && (
+          <details open={presentation.stockEffect === "unknown"} className="text-sm">
+            <summary className="cursor-pointer font-medium">Details to share with a colleague</summary>
+            <label className="mt-2 block">Recovery details for a colleague (contains reference codes)
+              <textarea readOnly className={inputClass + " h-24"} value={`Branch ${user?.branchId || "unknown"}; ${kind}; document ${doc?.id || (knowledge.state !== "new" && knowledge.state !== "known" && knowledge.ref.kind === "saved" ? knowledge.ref.id : id || "not yet confirmed")}; request ${knowledge.state !== "new" && knowledge.state !== "known" && knowledge.ref.kind === "request" ? knowledge.ref.requestKey || "missing" : form.requestKey || "unknown"}; reference ${form.reference || "unknown"}${initial?.purchaseInvoiceId ? `; source invoice ${initial.purchaseInvoiceId}` : ""}. ${presentation.stockExplanation} ${presentation.recovery}${pendingRecovery.current?.pending ? ` Pending action: ${pendingRecovery.current.pending.action || pendingRecovery.current.pending.operation}. ${pendingRecovery.current.pending.reason || ""}` : ""} Recovery link: ${typeof window === "undefined" ? "" : window.location.origin + window.location.pathname}?area=${workflowKinds[kind]?.area || "stock"}&view=${encodeURIComponent(kind)}&${doc?.id || id ? `document=${encodeURIComponent(doc?.id || id!)}` : `recoverRequest=${encodeURIComponent(recoveryRequestKey || (knowledge.state !== "new" && knowledge.state !== "known" && knowledge.ref.kind === "request" ? knowledge.ref.requestKey : form.requestKey) || "")}`}${pendingRecovery.current?.pending?.operation && pendingRecovery.current.pending.operation !== "create" ? `&recoverOperation=${pendingRecovery.current.pending.operation}&recoverVersion=${pendingRecovery.current.documentVersion ?? doc?.version ?? ""}` : ""}`} />
+            </label>
+          </details>
+        )}
+      </section>
+      {guard?.recovery && (
+        <section aria-label="Recovery steps" className="space-y-2 rounded-md border p-4">
+          {guard.stockEffect === "NONE" && <p>This rejected attempt made no stock change. Earlier recorded movements remain unchanged.</p>}
+          <p>{guard.recovery.action === "CORRECT_FIELD" ? "Correct the identified quantity. Do not change a truthful observation to bypass a stock guard." : "Inspect the linked batch and blocking records. Confirm a real release, loss or supplier return before starting a fresh physical count. Do not change a truthful observation to bypass a stock guard."}</p>
+          {guard.recovery.inventoryId && <a className="underline" href={`?area=stock&view=list&item=${encodeURIComponent(guard.recovery.inventoryId)}`}>Inspect batch balance and holds</a>}
+          {guard.recovery.sourceId && <Button variant="link" onClick={() => onOpen(guard.recovery.sourceKind || "HOLD", guard.recovery.sourceId)}>Open blocking source hold</Button>}
+          {(guard.recovery.documents || []).map((entry: any) => <Button key={entry.id} variant="link" onClick={() => onOpen(entry.kind, entry.id)}>Open {entry.reference || "linked record"}</Button>)}
+          {guard.recovery.action === "REVERSE_DEPENDENCIES" && <p>A manager must inspect and reverse only the incorrect downstream returns or disposals before reversing this record.</p>}
+          {!canWrite && <p>Share this record with a colleague who has the required inventory write or approval permission.</p>}
+        </section>
+      )}
+      {linkedSource && (
+        <Button
+          variant="link"
+          className="px-0"
+          onClick={() => onOpen(linkedSource.kind, linkedSource.id)}
+        >
+          View linked {workflowKinds[linkedSource.kind]?.label.toLowerCase()}:{" "}
+          {linkedSource.reference}
+        </Button>
+      )}
       <fieldset
         disabled={!editable || !canWrite || busy}
         className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
@@ -1156,13 +1195,10 @@ export function WorkflowDocumentEditor({
                 </>
               ) : (
                 <>
-                  <th className="p-3">Quantity</th>
-                  <th className="p-3">Free</th>
-                  <th className="p-3">Rate excl. GST</th>
-                  <th className="p-3">Discount %</th>
-                  <th className="p-3">Scheme ₹</th>
-                  <th className="p-3">GST %</th>
-                  <th className="p-3">Total</th>
+                  {kindSpec.columns.map((f) => (
+                    <th key={f} className="p-3">{f === "freeQuantity" ? "Free" : LINE_COLUMNS[f].label}</th>
+                  ))}
+                  {kindSpec.commercial && <th className="p-3">Total</th>}
                 </>
               )}
               {kind === "SALES_RETURN" && <th className="p-3">Disposition</th>}
@@ -1216,7 +1252,7 @@ export function WorkflowDocumentEditor({
                     {l.expiryDate && ` · ${displayUtcDate(l.expiryDate)}`}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    MRP {fmtMoney(l.mrp)} ·{" "}
+                    {kindSpec.commercial && <>MRP {fmtMoney(l.mrp)} · </>}
                     {l.location || "Location not recorded"}
                     {l.available != null
                       ? ` · ${l.available} ${l.unit} available at selection`
@@ -1228,42 +1264,31 @@ export function WorkflowDocumentEditor({
                     <td className="p-3">
                       {l.beforeMin ?? "—"} / {l.beforeMax ?? "—"}
                     </td>
-                    {["minStockLevel", "maxStockLevel"].map((f) => (
+                    {(["minStockLevel", "maxStockLevel"] as const).map((f) => (
                       <td key={f} className="p-3">
                         <input
                           className={`${inputClass} w-24`}
                           type="number"
                           min="0"
-                          aria-label={`${f} ${index + 1}`}
+                          aria-label={`${LINE_COLUMNS[f].label}, row ${index + 1}`}
                           value={l[f] ?? 0}
                           disabled={!editable || busy}
-                          onChange={(e) =>
-                            updateLine(index, f, Number(e.target.value))
-                          }
+                          onChange={(e) => updateLine(index, f, cellValue(e.target.value))}
                         />
                       </td>
                     ))}
                   </>
                 ) : (
                   <>
-                    {[
-                      "quantity",
-                      "freeQuantity",
-                      "unitPrice",
-                      "discountPercent",
-                      "schemeAmount",
-                      "gstRate",
-                    ].map((f) => (
+                    {kindSpec.columns.map((f) => (
                       <td key={f} className="p-2 text-right tabular-nums">
                         <input
                           className={`${inputClass} w-24`}
                           style={{ minWidth: "5.5rem" }}
                           type="number"
                           min="0"
-                          step={
-                            ["quantity", "freeQuantity"].includes(f) ? 1 : 0.01
-                          }
-                          aria-label={`${f} ${index + 1}`}
+                          step={LINE_COLUMNS[f].step}
+                          aria-label={`${LINE_COLUMNS[f].label}, row ${index + 1}`}
                           value={l[f] ?? 0}
                           disabled={
                             !editable ||
@@ -1271,13 +1296,11 @@ export function WorkflowDocumentEditor({
                             (kind === "SALES_RETURN" &&
                               !["quantity", "freeQuantity"].includes(f))
                           }
-                          onChange={(e) =>
-                            updateLine(index, f, Number(e.target.value))
-                          }
+                          onChange={(e) => updateLine(index, f, cellValue(e.target.value))}
                         />
                       </td>
                     ))}
-                    <td className="whitespace-nowrap p-3 text-right tabular-nums">
+                    {kindSpec.commercial && <td className="whitespace-nowrap p-3 text-right tabular-nums">
                       {fmtMoney(
                         !editable && l.total != null
                           ? l.total
@@ -1294,7 +1317,7 @@ export function WorkflowDocumentEditor({
                                 Number(l.schemeAmount || 0)) *
                               (1 + Number(l.gstRate || 0) / 100),
                       )}
-                    </td>
+                    </td>}
                   </>
                 )}
                 {kind === "SALES_RETURN" && (
@@ -1369,7 +1392,7 @@ export function WorkflowDocumentEditor({
           </tbody>
         </table>
       </div>
-      {!["COUNT", "HOLD", "TARGET_REVIEW", "CORRECTION"].includes(kind) && (
+      {kindSpec.commercial && (
         <p className="text-right text-lg">
           Taxable {fmtMoney(totals.taxable)}{" "}
           <span className="mx-3 text-muted-foreground">+</span> GST{" "}
@@ -1590,7 +1613,7 @@ export function WorkflowDocumentEditor({
             {doc.events.map((e: any) => (
               <li key={e.id} className="py-3 text-sm">
                 {displayClinicDateTime(e.createdAt)} ·{" "}
-                {e.actorName || e.actorId} · {e.action === "RESOLVE_OUTCOME" ? "Interrupted attempt resolved" : e.action} ·{" "}
+                {e.actorName || "Unknown user"} · {e.action === "RESOLVE_OUTCOME" ? "Interrupted attempt resolved" : e.action} ·{" "}
                 {labelStatus(e.toStatus)}
                 {e.reason && ` · ${e.reason}`}
                 {e.detail && (

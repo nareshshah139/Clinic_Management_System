@@ -11,7 +11,7 @@ import { pdfFileName } from '@/lib/pdf-file-name';
  */
 export async function downloadInvoicePdf(
   sourceDocument: Document,
-  { invoiceNumber, patientName, date }: { invoiceNumber: string; patientName?: string | null; date?: string | Date | null },
+  { title = 'Invoice', invoiceNumber, patientName, date }: { title?: string; invoiceNumber: string; patientName?: string | null; date?: string | Date | null },
 ): Promise<void> {
   const source = sourceDocument.body.cloneNode(true) as HTMLElement;
   source.querySelectorAll('.no-print, script, iframe, object, embed').forEach(element => element.remove());
@@ -37,7 +37,7 @@ export async function downloadInvoicePdf(
     const { default: html2pdf } = await import('html2pdf.js');
     await html2pdf().set({
       margin: 0,
-      filename: pdfFileName(`Invoice ${invoiceNumber || 'draft'}`, patientName, date),
+      filename: pdfFileName(`${title} ${invoiceNumber || 'draft'}`, patientName, date),
       image: { type: 'jpeg', quality: 0.98 },
       html2canvas: {
         scale: 2, useCORS: true, letterRendering: true,

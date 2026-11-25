@@ -340,6 +340,7 @@ export function PharmacyInvoiceBuilderFixed({
   const [searchResults, setSearchResults] = useState<Drug[]>([]);
   const [items, setItems] = useState<InvoiceItem[]>(() => (draft ? savedLines(draft) : []));
   const [prescriptionData, setPrescriptionData] = useState<any>(null);
+  const [suppliedLineCount, setSuppliedLineCount] = useState(0);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(draft?.patient ?? null);
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(draft?.doctor ?? null);
   const [patientSearchQuery, setPatientSearchQuery] = useState(() =>
@@ -610,9 +611,18 @@ export function PharmacyInvoiceBuilderFixed({
           occurrences.set(snapshot, occurrence + 1);
           return `prescription_${prescriptionId}_${encodeURIComponent(snapshot)}_${occurrence}`;
         });
-        const invoiceItems: InvoiceItem[] = await Promise.all(
-          prescriptionItemsRaw.map(async (item: any, index: number) => {
+        const prefilledItems = await Promise.all(
+          prescriptionItemsRaw.map(async (item: any, index: number): Promise<InvoiceItem | null> => {
             const stock = stockItems[index];
+            const invoiceItemId = sourceLineIds[index];
+            const existingItem = previousPrefilledMap.get(invoiceItemId);
+            // Preserve pharmacist changes when retrying a failed inventory read.
+            const substituted = existingItem?.substituted === true;
+            const filledQuantity = stock?.billingQuantity
+              ? stock.billingQuantity.quantity
+              : firstPositiveNumber(item.quantity, item.prescribedQuantity, item.totalQuantity, item.qty) || 1;
+            const keepQuantity = Boolean(existingItem && (existingItem.quantityConfirmed || substituted || !stock));
+            if (filledQuantity === 0 && !keepQuantity) return null;
             let drug: Drug | undefined;
             let stockStatus: InvoiceItem['stockStatus'] = stock?.stockStatus || 'CHECK_FAILED';
             try {
@@ -626,14 +636,8 @@ export function PharmacyInvoiceBuilderFixed({
               lookupFailed = true;
             }
 
-              const invoiceItemId = sourceLineIds[index];
-              const existingItem = previousPrefilledMap.get(invoiceItemId);
-              // Preserve pharmacist changes when retrying a failed inventory read.
-              const substituted = existingItem?.substituted === true;
               const reviewedDrug = substituted ? existingItem.drug : drug;
               const sameProduct = Boolean(existingItem?.drugId && existingItem.drugId === reviewedDrug?.id);
-              const filledQuantity = firstPositiveNumber(item.quantity, item.prescribedQuantity, item.totalQuantity, item.qty, stock?.billingQuantity?.quantity) || 1;
-              const keepQuantity = Boolean(existingItem && (existingItem.quantityConfirmed || substituted || !stock));
 
               const invoiceItem: InvoiceItem = {
                 id: invoiceItemId,
@@ -678,8 +682,10 @@ export function PharmacyInvoiceBuilderFixed({
               return invoiceItem;
           })
         );
+        const invoiceItems = prefilledItems.filter((item): item is InvoiceItem => item !== null);
 
         if (request !== prescriptionRequestRef.current) return;
+        setSuppliedLineCount(prefilledItems.length - invoiceItems.length);
         if (lookupFailed) setPrefillError('Prescription loaded, but some inventory details could not be checked. Retry loading or select a replacement for the flagged items.');
 
         setItems((prevItems) => {
@@ -1834,6 +1840,7 @@ export function PharmacyInvoiceBuilderFixed({
     setItems([]);
     setBillDiscount(null);
     setPrescriptionData(null);
+    setSuppliedLineCount(0);
     setSelectedPatient(null);
     setSelectedDoctor(null);
     setPatientSearchQuery('');
@@ -1872,6 +1879,7 @@ export function PharmacyInvoiceBuilderFixed({
         <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 [&::-webkit-details-marker]:hidden">
           <h3 className="font-medium text-foreground">Linked Prescription</h3>
           <span>· {prescriptionItems.length} {prescriptionItems.length === 1 ? 'item' : 'items'}</span>
+          {suppliedLineCount > 0 && <span>· {suppliedLineCount} {suppliedLineCount === 1 ? 'line' : 'lines'} already supplied</span>}
           {unlinkedItems.length > 0 && <span className="font-medium text-warning-text">· {unlinkedItems.length} to link to inventory</span>}
           <ChevronDown className="ml-auto h-4 w-4 transition-transform group-open:rotate-180" aria-hidden />
         </summary>

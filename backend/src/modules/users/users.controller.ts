@@ -16,6 +16,8 @@ import { UserRole } from '@prisma/client';
  * Creating, editing or deleting a user, changing a user's role, permissions or status, and every
  * branch, permission and role write MUST succeed for OWNER, ADMIN and DOCTOR and MUST return 403
  * without writing for every other role, including when the caller targets their own record.
+ * Editing or deleting a branch MUST be limited to the caller's own branch; any other branch
+ * answers 404 without a write.
  */
 const MANAGE = [UserRole.OWNER, UserRole.ADMIN];
 
@@ -112,14 +114,14 @@ export class UsersController {
 
   @Patch('branches/:id')
   @Roles(...MANAGE)
-  updateBranch(@Param('id') id: string, @Body() updateBranchDto: UpdateBranchDto) {
-    return this.usersService.updateBranch(id, updateBranchDto);
+  updateBranch(@Param('id') id: string, @Body() updateBranchDto: UpdateBranchDto, @Request() req: AuthenticatedRequest) {
+    return this.usersService.updateBranch(id, updateBranchDto, req.user);
   }
 
   @Delete('branches/:id')
   @Roles(...MANAGE)
-  deleteBranch(@Param('id') id: string) {
-    return this.usersService.deleteBranch(id);
+  deleteBranch(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
+    return this.usersService.deleteBranch(id, req.user);
   }
 
   // Permission Management Endpoints

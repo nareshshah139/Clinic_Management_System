@@ -1,6 +1,7 @@
 'use client';
 
-import { ChevronDown, FileDown, Plus, Truck, Wallet } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { ChevronDown, FileDown, Plus, Truck } from 'lucide-react';
 import { getISTDateString } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import {
@@ -19,6 +20,9 @@ import { PURCHASE_QUERY, PURCHASE_REGISTERS, PURCHASE_REGISTER_COPY, exportHref,
 
 const NO_PARAMS = new URLSearchParams();
 const SHARED_PARAMS = ['gstin', 'from', 'to'];
+const ACCOUNT_TABS = [['payments', 'Payments & dues'], ['credits', 'Credits & vouchers']] as const;
+type AccountTab = (typeof ACCOUNT_TABS)[number][0];
+type BillsTab = PurchaseRegisterKind | AccountTab;
 
 function exportHrefFor(tab: PurchaseRegisterKind, searchParams: Pick<URLSearchParams, 'get' | 'toString'>, today: string) {
   if (tab === 'purchases') return exportHref(PURCHASE_REGISTER_COPY.purchases.endpoint, parseQuery(PURCHASE_QUERY, searchParams, today));
@@ -37,8 +41,8 @@ const carried = (params: Pick<URLSearchParams, 'get'>) => {
   return next;
 };
 
-const tabOf = (params: Pick<URLSearchParams, 'get'>): PurchaseRegisterKind =>
-  PURCHASE_REGISTERS.find((register) => register === params.get('tab')) ?? PURCHASE_REGISTERS[0];
+const tabOf = (params: Pick<URLSearchParams, 'get'>, accountTabs: readonly AccountTab[]): BillsTab =>
+  [...PURCHASE_REGISTERS, ...accountTabs].find((tab) => tab === params.get('tab')) ?? PURCHASE_REGISTERS[0];
 
 export function PurchaseBills({
   searchParams,
@@ -49,8 +53,8 @@ export function PurchaseBills({
   onNew,
   onOpenReturn,
   onNewReturn,
-  onLedger,
   onSuppliers,
+  accounts,
 }: {
   searchParams: Pick<URLSearchParams, 'get' | 'toString'>;
   onParamsChange: (params: URLSearchParams) => void;
@@ -60,32 +64,45 @@ export function PurchaseBills({
   onNew: () => void;
   onOpenReturn: (kind: ReturnKind, documentId: string) => void;
   onNewReturn: () => void;
-  onLedger: ((gstin?: string) => void) | null;
   onSuppliers: () => void;
+  accounts?: Partial<Record<AccountTab, ReactNode>>;
 }) {
-  const tab = tabOf(searchParams);
-  const withTab = (register: PurchaseRegisterKind, params: URLSearchParams) => {
+  const accountTabs = ACCOUNT_TABS.filter(([id]) => accounts?.[id]);
+  const tab = tabOf(searchParams, accountTabs.map(([id]) => id));
+  const activeRegister = PURCHASE_REGISTERS.find((kind) => kind === tab);
+  const withTab = (register: BillsTab, params: URLSearchParams) => {
     const next = new URLSearchParams(params);
     if (register !== PURCHASE_REGISTERS[0]) next.set('tab', register);
     return next;
   };
-  const exportUrl = () => exportHrefFor(tab, searchParams, getISTDateString());
+  const switchTab = (next: BillsTab, params = carried(searchParams)) => onTabChange(withTab(next, params));
+  const onLedger = accounts?.payments
+    ? (gstin?: string) => {
+        const params = carried(searchParams);
+        if (gstin) params.set('gstin', gstin);
+        switchTab('payments', params);
+      }
+    : null;
 
   return (
-    <Tabs value={tab} onValueChange={(value: string) => onTabChange(withTab(value as PurchaseRegisterKind, carried(searchParams)))}>
+    <Tabs value={tab} onValueChange={(value: string) => switchTab(value as BillsTab)}>
       <section aria-label="Purchase bills" className="flex min-w-0 flex-col gap-2">
-        <div className="flex items-center justify-between gap-2">
-          <TabsList aria-label="Purchase registers" className="shrink-0 flex-nowrap">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <TabsList aria-label="Purchase registers" className="justify-start">
             {PURCHASE_REGISTERS.map((register) => (
               <TabsTrigger key={register} value={register} className="min-h-10 px-3 text-sm sm:px-4">{PURCHASE_REGISTER_COPY[register].tab}</TabsTrigger>
             ))}
+            {accountTabs.map(([id, label]) => (
+              <TabsTrigger key={id} value={id} className="min-h-10 px-3 text-sm sm:px-4">{label}</TabsTrigger>
+            ))}
           </TabsList>
-          <div className="flex shrink-0 items-center gap-2">
-            {tab === 'returns' ? (
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            {tab === 'returns' && (
               <Button className="h-10 max-w-none! whitespace-nowrap! text-sm" aria-label="New return" onClick={onNewReturn}>
                 <Plus aria-hidden="true" /> New<span className="max-sm:hidden"> return</span>
               </Button>
-            ) : (
+            )}
+            {tab === 'purchases' && (
               <Button className="h-10 max-w-none! whitespace-nowrap! text-sm" aria-label="New purchase" onClick={onNew}>
                 <Plus aria-hidden="true" /> New<span className="max-sm:hidden"> purchase</span>
               </Button>
@@ -98,18 +115,13 @@ export function PurchaseBills({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
-                {PURCHASE_REGISTER_COPY[tab].exportable && (
+                {activeRegister && PURCHASE_REGISTER_COPY[activeRegister].exportable && (
                   <>
-                    <DropdownMenuItem onSelect={() => window.open(exportUrl(), '_blank')}>
+                    <DropdownMenuItem onSelect={() => window.open(exportHrefFor(activeRegister, searchParams, getISTDateString()), '_blank')}>
                       <FileDown aria-hidden="true" /> Export to Excel
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                   </>
-                )}
-                {onLedger && (
-                  <DropdownMenuItem onSelect={() => onLedger(searchParams.get('gstin') || undefined)}>
-                    <Wallet aria-hidden="true" /> Payments &amp; dues
-                  </DropdownMenuItem>
                 )}
                 <DropdownMenuItem onSelect={onSuppliers}>
                   <Truck aria-hidden="true" /> Suppliers
@@ -140,6 +152,11 @@ export function PurchaseBills({
                 onLedger={onLedger}
               />
             )}
+          </TabsContent>
+        ))}
+        {accountTabs.map(([id]) => (
+          <TabsContent key={id} value={id} className="min-w-0">
+            {accounts?.[id]}
           </TabsContent>
         ))}
       </section>

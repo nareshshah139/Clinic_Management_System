@@ -10,7 +10,7 @@ import { enumLabel } from "@/lib/labels";
 import { useDashboardUser } from "./dashboard-user-context";
 import { usePendingItemRequestCount } from "@/components/inventory/use-pending-item-requests";
 import { ITEM_REQUEST_APPROVER_ROLES } from "@/lib/inventory-item-requests";
-import { APPOINTMENT_READ_ROLES, ROOM_READ_ROLES } from "@/lib/appointment-access";
+import { can, type Capability } from "@/lib/role-capabilities";
 import type { LucideIcon } from "lucide-react";
 import {
   Calendar,
@@ -29,8 +29,10 @@ import {
   FileBarChart,
   Wallet,
   ReceiptIndianRupee,
+  CreditCard,
 } from "lucide-react";
-import { FEE_EDITOR_ROLES, FEE_LIST_PATH } from "@/components/appointments/appointment-billing-view";
+import { FEE_LIST_PATH } from "@/components/appointments/appointment-billing-view";
+import { PROCEDURES_PATH, useProcedureMenu } from "@/components/procedures/procedure-access";
 
 type PharmacySidebarSection = "desk" | "counter";
 
@@ -39,12 +41,9 @@ type NavigationItem = {
   section: "Overview" | "Clinical" | "Pharmacy" | "Admin";
   href: string;
   icon: LucideIcon;
-  allowedRoles: string[];
+  capability: Capability;
   pharmacySection?: PharmacySidebarSection;
 };
-
-/** The roles GET /pharmacy/reports/:reportId admits, so neither report link leads to a refusal. */
-const PHARMACY_REPORT_ROLES = ["OWNER", "ADMIN", "MANAGER", "DOCTOR", "PHARMACIST", "ACCOUNTANT"];
 
 /**
  * @cc [owner:nareshshah139,label:product] single-inventory-entry
@@ -56,134 +55,101 @@ const navigation: NavigationItem[] = [
     name: "Dashboard", section: "Overview",
     href: "/dashboard",
     icon: Home,
-    allowedRoles: [
-      "OWNER",
-      "ADMIN",
-      "MANAGER",
-      "DOCTOR",
-      "NURSE",
-      "RECEPTION",
-      "PHARMACIST",
-      "ACCOUNTANT",
-    ],
+    capability: "dashboard",
   },
   {
     name: "Patients", section: "Clinical",
     href: "/dashboard/patients",
     icon: Users,
-    allowedRoles: ["OWNER", "ADMIN", "MANAGER", "DOCTOR", "NURSE", "RECEPTION"],
+    capability: "patients",
   },
   {
     name: "Appointments", section: "Clinical",
     href: "/dashboard/appointments",
     icon: Calendar,
-    allowedRoles: APPOINTMENT_READ_ROLES,
+    capability: "appointments",
   },
   {
     name: "Visits", section: "Clinical",
     href: "/dashboard/visits",
     icon: Stethoscope,
-    allowedRoles: ["OWNER", "ADMIN", "MANAGER", "DOCTOR", "NURSE"],
+    capability: "visits",
   },
   {
     name: "Procedures", section: "Clinical",
-    href: "/dashboard/procedures",
+    href: PROCEDURES_PATH,
     icon: Activity,
-    allowedRoles: ["OWNER", "ADMIN", "MANAGER", "DOCTOR"],
+    capability: "procedures",
   },
   {
     name: "Rooms", section: "Clinical",
     href: "/dashboard/rooms",
     icon: MapPin,
-    allowedRoles: ROOM_READ_ROLES,
+    capability: "rooms",
   },
   {
     name: "Pharmacy Desk", section: "Pharmacy",
     href: "/dashboard/pharmacy?section=desk",
     icon: Pill,
     pharmacySection: "desk",
-    allowedRoles: ["ADMIN", "DOCTOR", "PHARMACIST", "RECEPTION"],
+    capability: "pharmacy-desk",
   },
   {
     name: "Pharmacy Counter", section: "Pharmacy",
     href: "/dashboard/pharmacy?section=counter",
     icon: ClipboardCheck,
     pharmacySection: "counter",
-    allowedRoles: ["ADMIN", "DOCTOR", "PHARMACIST", "RECEPTION"],
+    capability: "pharmacy-counter",
   },
   {
     name: "Sales", section: "Pharmacy",
     href: "/dashboard/pharmacy/sales",
     icon: ShoppingBag,
-    allowedRoles: ["OWNER", "ADMIN", "DOCTOR", "PHARMACIST"],
+    capability: "pharmacy-sales",
   },
   {
     name: "Inventory", section: "Pharmacy",
     href: "/dashboard/inventory",
     icon: Package,
-    allowedRoles: ["OWNER", "ADMIN", "MANAGER", "DOCTOR", "PHARMACIST", "RECEPTION"],
+    capability: "inventory",
   },
   {
     name: "Daily Collection", section: "Pharmacy",
     href: "/dashboard/pharmacy/reports?report=daily-collection",
     icon: Wallet,
-    allowedRoles: PHARMACY_REPORT_ROLES,
+    capability: "pharmacy-reports",
   },
   {
     name: "Pharmacy Report", section: "Pharmacy",
     href: "/dashboard/pharmacy/reports",
     icon: FileBarChart,
-    allowedRoles: PHARMACY_REPORT_ROLES,
+    capability: "pharmacy-reports",
+  },
+  {
+    name: "Billing", section: "Admin",
+    href: "/dashboard/billing",
+    icon: CreditCard,
+    capability: "billing",
   },
   {
     name: "Reports", section: "Admin",
     href: "/dashboard/reports",
     icon: BarChart3,
-    allowedRoles: ["OWNER", "ADMIN", "MANAGER"],
+    capability: "reports",
   },
   {
     name: "Users", section: "Admin",
     href: "/dashboard/users",
     icon: UserIcon,
-    allowedRoles: ["OWNER", "ADMIN", "MANAGER"],
+    capability: "users",
   },
   {
     name: "Fee list", section: "Admin",
     href: FEE_LIST_PATH,
     icon: ReceiptIndianRupee,
-    allowedRoles: FEE_EDITOR_ROLES,
+    capability: "fees",
   },
 ];
-
-const defaultAllowedRoles = new Set<string>([
-  "OWNER",
-  "ADMIN",
-  "MANAGER",
-  "DOCTOR",
-  "NURSE",
-  "RECEPTION",
-  "PHARMACIST",
-  "ACCOUNTANT",
-]);
-
-const filterNavigationByRole = (
-  items: NavigationItem[],
-  role: string | undefined,
-) => {
-  if (!role) {
-    return items.filter(
-      (item) =>
-        item.allowedRoles?.some((r) => defaultAllowedRoles.has(r)) ?? true,
-    );
-  }
-
-  return items.filter((item) => {
-    if (!item.allowedRoles || item.allowedRoles.length === 0) {
-      return true;
-    }
-    return item.allowedRoles.includes(role);
-  });
-};
 
 function getActivePharmacySection(
   pathname: string,
@@ -222,9 +188,10 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   const role = user?.role;
   const pendingItemRequests = usePendingItemRequestCount(ITEM_REQUEST_APPROVER_ROLES.includes(role || ""));
 
+  const showProcedures = useProcedureMenu(role);
   const navigationItems = useMemo(
-    () => filterNavigationByRole(navigation, role),
-    [role],
+    () => navigation.filter((item) => (item.href === PROCEDURES_PATH ? showProcedures : can(role, item.capability))),
+    [role, showProcedures],
   );
   const activePharmacySection = getActivePharmacySection(
     pathname,

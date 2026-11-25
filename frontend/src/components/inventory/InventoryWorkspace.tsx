@@ -19,7 +19,8 @@ import { canRecordSupplierPayments } from "./purchase/purchase-register-model";
 import { splitText, type ReconciliationCards } from "./counts/count-model";
 import { Split } from "./counts/count-parts";
 import { usePendingApprovals } from "./use-pending-item-requests";
-import { nextWorkspaceSearch } from "./workspace-url";
+import { movedWorkspaceView, nextWorkspaceSearch } from "./workspace-url";
+import { WorkspaceTaskNav, type TaskGroup } from "./WorkspaceTaskNav";
 import { ITEM_REQUEST_APPROVER_ROLES } from "@/lib/inventory-item-requests";
 import { useDashboardUser } from "@/components/layout/dashboard-user-context";
 import {
@@ -32,6 +33,7 @@ import {
   returnDestination,
 } from "./workspace-model";
 import { NativeSelect } from '@/components/ui/native-select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const lazyView = <P,>(load: () => Promise<ComponentType<P>>) =>
   dynamic(load, { loading: () => <LoadingSkeleton label="Loading…" /> }) as ComponentType<P>;
@@ -40,7 +42,6 @@ const PurchaseLearningCard = dynamic(() => import("@/components/pharmacy/Purchas
 const PurchaseLedger = lazyView(() => import("@/components/pharmacy/PurchaseLedger").then((m) => m.PurchaseLedger));
 const DistributorAnalytics = lazyView(() => import("@/components/pharmacy/DistributorAnalytics").then((m) => m.DistributorAnalytics));
 const PharmacyInventoryStarterImport = lazyView(() => import("@/components/pharmacy/PharmacyInventoryStarterImport").then((m) => m.PharmacyInventoryStarterImport));
-const PharmacyInvoiceList = lazyView(() => import("@/components/pharmacy/PharmacyInvoiceList").then((m) => m.PharmacyInvoiceList));
 const TradeTermsWorkspace = lazyView(() => import("@/components/pharmacy/TradeTermsWorkspace").then((m) => m.TradeTermsWorkspace));
 const SupplierCreditPanel = lazyView(() => import("./SupplierCreditPanel").then((m) => m.SupplierCreditPanel));
 const ReplenishmentCenter = lazyView(() => import("./ReplenishmentCenter").then((m) => m.ReplenishmentCenter));
@@ -53,55 +54,29 @@ const StockCounts = lazyView(() => import("./counts/StockCounts").then((m) => m.
 const InventoryApprovals = lazyView(() => import("./InventoryApprovals").then((m) => m.InventoryApprovals));
 const InventoryLedger = lazyView(() => import("./InventoryLedger").then((m) => m.InventoryLedger));
 
-const areas = [
-  ["today", "Today"],
-  ["purchases", "Purchases"],
-  ["stock", "Stock"],
-  ["sales", "Sales"],
-  ["reorder", "Reorder"],
+const AREAS: { id: string; label: string; groups: TaskGroup[] }[] = [
+  { id: "today", label: "Today", groups: [] },
+  { id: "purchases", label: "Purchases", groups: [
+    { label: "Bills", tasks: [["register", "Purchase bills"], ["intake", "Bill intake"]] },
+    { label: "Deliveries", tasks: [["INWARD_CHALLAN", "Inward challans"], ["GATE_PASS", "Gate passes"]] },
+    { label: "Suppliers", tasks: [["suppliers", "Suppliers"], ["terms", "Terms of Trade"], ["analytics", "Purchase costs"]] },
+  ] },
+  { id: "stock", label: "Stock", groups: [
+    { label: "Find & review", tasks: [["list", "Stock list"], ["ledger", "Stock ledger"], ["optimize", "Stock optimization"]] },
+    { label: "Count & approve", tasks: [["COUNT", "Stock counts"], ["approvals", "Approve corrections"]] },
+    { label: "Adjust", tasks: [["LOSS", "Loss & breakage"], ["HOLD", "Blocked stock"], ["CORRECTION", "Corrections"]] },
+    { label: "Opening stock", tasks: [["OPENING_STOCK", "Manual opening stock"], ["opening", "Opening stock import"]] },
+  ] },
+  { id: "sales", label: "Sales", groups: [
+    { label: "Sales", tasks: [["COUNTER_SALE", "Counter sales"], ["QUOTATION", "Quotations"], ["SALES_RETURN", "Customer returns"]] },
+  ] },
+  { id: "reorder", label: "Reorder", groups: [
+    { label: "Order", tasks: [["SHORTBOOK", "Shortbook"], ["PURCHASE_ORDER", "Purchase orders"]] },
+    { label: "Targets", tasks: [["TARGET_REVIEW", "Target proposals"], ["targets", "Manual targets & exclusions"]] },
+    { label: "Automation", tasks: [["settings", "Automation settings"], ["monitor", "Monitor"]] },
+  ] },
 ];
-const menus: Record<string, string[][]> = {
-  today: [],
-  purchases: [
-    ["register", "Purchase bills"],
-    ["intake", "Scan or enter bill"],
-    ["csv", "Import CSV"],
-    ["gmail", "Gmail intake"],
-    ["suppliers", "Suppliers"],
-    ["terms", "Terms of Trade"],
-    ["ledger", "Payments & dues"],
-    ["credits", "Credits & vouchers"],
-    ["INWARD_CHALLAN", "Inward challans"],
-    ["GATE_PASS", "Gate passes"],
-    ["analytics", "Purchase costs"],
-  ],
-  stock: [
-    ["list", "Stock list"],
-    ["optimize", "Stock optimization"],
-    ["ledger", "Stock ledger"],
-    ["approvals", "Approve corrections"],
-    ["COUNT", "Stock counts"],
-    ["LOSS", "Loss & breakage"],
-    ["HOLD", "Blocked stock"],
-    ["CORRECTION", "Corrections"],
-    ["OPENING_STOCK", "Manual opening stock"],
-    ["opening", "Opening stock import"],
-  ],
-  sales: [
-    ["COUNTER_SALE", "Counter sales"],
-    ["QUOTATION", "Quotations"],
-    ["SALES_RETURN", "Customer returns"],
-    ["history", "Patient invoice history"],
-  ],
-  reorder: [
-    ["SHORTBOOK", "Shortbook"],
-    ["PURCHASE_ORDER", "Purchase orders"],
-    ["TARGET_REVIEW", "Target proposals"],
-    ["targets", "Manual targets & exclusions"],
-    ["settings", "Automation settings"],
-    ["monitor", "Monitor"],
-  ],
-};
+const INTAKE_METHODS = [["scan", "Scan or enter"], ["csv", "Import CSV"], ["gmail", "Gmail"]] as const;
 /**
  * @cc [owner:nareshshah139,label:product] workspace-named-task-navigation
  * Every inventory task MUST have an in-app route back to its list; area, view, page and filters
@@ -126,27 +101,26 @@ const menus: Record<string, string[][]> = {
  * Failed capability reads MUST hide stale access and expose an explicit retry. Refresh and
  * actor changes MUST fetch capabilities again; older responses cannot restore superseded access.
  */
-/** Reports moved to Pharmacy Report (CR-33); old Inventory links land on the same report there. */
-const MOVED_REPORTS: Record<string, string> = {
-  reports: "/dashboard/pharmacy/reports?report=gst-summary",
-  daywise: "/dashboard/pharmacy/reports?report=day-wise-summary",
-  margin: "/dashboard/pharmacy/reports?report=item-margin",
-};
-
 export function InventoryWorkspace() {
   const { user } = useDashboardUser();
   const canReadEdits = ["OWNER", "ADMIN", "DOCTOR", "PHARMACIST"].includes(user?.role || "");
   const canSeeApprovals = canReadEdits || user?.role === "RECEPTION";
-  const taskVisible = ([id]: string[]) => id !== "approvals" || canSeeApprovals;
   const pending = usePendingApprovals({ items: ITEM_REQUEST_APPROVER_ROLES.includes(user?.role || ""), edits: canReadEdits });
   const pendingApprovals = (pending.items ?? 0) + (pending.edits ?? 0);
   const taskLabel = (id: string, label: string) => (id === "approvals" && pendingApprovals > 0 ? `${label} (${pendingApprovals})` : label);
-  const params = useSearchParams(),
+  const searchParams = useSearchParams(),
     router = useRouter(),
     path = usePathname(),
+    moved = movedWorkspaceView(searchParams),
+    params = moved && "search" in moved ? moved.search : searchParams,
     query = Object.fromEntries(params.entries()),
     area = query.area || "today",
-    view = query.view || menus[area]?.[0]?.[0] || "";
+    areaTasks = AREAS.find(({ id }) => id === area),
+    view = query.view || areaTasks?.groups[0]?.tasks[0][0] || "";
+  const movedTo = !moved ? "" : "href" in moved ? moved.href : `${path}?${moved.search}`;
+  useEffect(() => {
+    if (movedTo) router.replace(movedTo, { scroll: false });
+  }, [movedTo, router]);
   const actor = `${user?.id}:${user?.branchId}`;
   const [permissions, setPermissions] = useState<{ actor: string; caps: any } | null>(null),
     [error, setError] = useState(""),
@@ -204,13 +178,11 @@ export function InventoryWorkspace() {
     void loadPermissions();
     return () => { permissionRequest.current += 1; };
   }, [loadPermissions]);
-  const availableTasks = (menus[area] || []).filter((task) => taskVisible(task)
-    && (task[0] !== "ledger" || area !== "purchases" || caps?.ledger)
-    && (task[0] !== "COUNT" || caps?.kinds?.COUNT?.read));
-  const primaryCount = area === "stock" ? 5 : 3;
-  const primaryTasks = availableTasks.slice(0, primaryCount);
-  const moreTasks = availableTasks.slice(primaryCount);
-  const switchTask = (id: string, extra: Record<string, string> = {}) => navigate({ view: id, ...extra });
+  const taskGroups = (areaTasks?.groups ?? [])
+    .map((group) => ({ ...group, tasks: group.tasks.filter(([id]) => (id !== "approvals" || canSeeApprovals) && (id !== "COUNT" || caps?.kinds?.COUNT?.read)) }))
+    .filter((group) => group.tasks.length > 0);
+  const switchTask = (id: string) => navigate({ view: id });
+  const intakeMethod = INTAKE_METHODS.find(([id]) => id === query.method)?.[0] ?? "scan";
   const purchaseRegisterParams = (next: URLSearchParams) => {
     const merged = new URLSearchParams({ area: "purchases", view: "register" });
     next.forEach((value, key) => merged.set(key, value));
@@ -243,7 +215,7 @@ export function InventoryWorkspace() {
         aria-label="Inventory areas"
         className="-mx-4 flex gap-1 overflow-x-auto border-b px-4 pb-2 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 print:hidden"
       >
-        {areas.map(([id, label]) => (
+        {AREAS.map(({ id, label }) => (
           <Button
             key={id}
             className="shrink-0 px-3 text-sm sm:min-w-24 sm:px-2"
@@ -255,50 +227,14 @@ export function InventoryWorkspace() {
           </Button>
         ))}
       </nav>
-      {menus[area]?.length > 0 && (
-        <label className="block text-sm md:hidden">
-          Task
-          <NativeSelect
-            aria-label="Inventory task"
-            className="h-10 w-full min-w-0"
-            value={view}
-            onChange={(e) => switchTask(e.target.value)}
-          >
-            {availableTasks.map(([id, label]) => (
-              <option key={id} value={id}>
-                {taskLabel(id, label)}
-              </option>
-            ))}
-          </NativeSelect>
-        </label>
+      {areaTasks && taskGroups.length > 0 && (
+        <WorkspaceTaskNav key={area} label={`${areaTasks.label} tasks`} groups={taskGroups} current={view} taskLabel={taskLabel} onSelect={switchTask} />
       )}
       {area === "stock" && (
-        <button type="button" className="block text-left text-sm underline underline-offset-4 md:hidden"
+        <button type="button" className="block rounded-sm text-left text-sm underline underline-offset-4 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 print:hidden"
           onClick={() => router.push(`${path}?area=purchases&view=register&tab=returns`, { scroll: false })}>
           Supplier returns are now in Purchase bills › Returns
         </button>
-      )}
-      {menus[area]?.length > 0 && (
-        <nav
-          aria-label={`${area} tasks`}
-          className="hidden flex-wrap gap-2 md:flex print:hidden"
-        >
-          {primaryTasks.map(([id, label]) => (
-            <Button key={id} size="sm" variant={view === id ? "secondary" : "ghost"}
-              aria-current={view === id ? "page" : undefined} onClick={() => switchTask(id)}>{taskLabel(id, label)}</Button>
-          ))}
-          {area === "stock" && (
-            <button type="button" className="self-center rounded-sm px-2 text-sm underline underline-offset-4 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-              onClick={() => router.push(`${path}?area=purchases&view=register&tab=returns`, { scroll: false })}>
-              Supplier returns are now in Purchase bills › Returns
-            </button>
-          )}
-          {moreTasks.length > 0 && <NativeSelect aria-label="More inventory tasks" className="h-10 max-w-72"
-            value={moreTasks.some(([id]) => id === view) ? view : ""} onChange={event => switchTask(event.target.value)}>
-            <option value="" disabled>More tasks…</option>
-            {moreTasks.map(([id, label]) => <option key={id} value={id}>{taskLabel(id, label)}</option>)}
-          </NativeSelect>}
-        </nav>
       )}
       {caps && (area === "today" || (area === "stock" && ["list", "optimize"].includes(view) && !query.item)) && (
         <DataQualityStrip
@@ -364,38 +300,49 @@ export function InventoryWorkspace() {
             </>
           )}
           {area === "purchases" && view === "intake" && (
-            <PurchaseInvoiceWorkbench
-              invoiceId={query.invoice}
-              recoveryAttemptId={query.attempt}
-              recoveryActorId={query.actor}
-              recoverySourceIds={query.sources?.split(",").filter(Boolean)}
-              receiptId={query.receipt}
-              intakeId={query.intake}
-              importedDraft={importedDraft}
-              onImported={() => setImportedDraft(null)}
-              onBack={back}
-              onInvoice={invoice}
-              draftKey={query.new}
-              onNew={() => {
-                setImportedDraft(null);
-                navigate({
-                  invoice: "",
-                  receipt: "",
-                  intake: "",
-                  new: requestKey(),
-                });
-              }}
-            />
-          )}
-          {area === "purchases" && ["csv", "gmail"].includes(view) && (
-            <AlternateInvoiceIntake
-              mode={view as "csv" | "gmail"}
-              onInvoice={invoice}
-              onDraft={(draft) => {
-                setImportedDraft(draft);
-                navigate({ view: "intake" });
-              }}
-            />
+            <Tabs value={intakeMethod} onValueChange={(method: string) => navigate({ view: "intake", method: method === "scan" ? "" : method })}>
+              <TabsList aria-label="Bill intake method" className="justify-start">
+                {INTAKE_METHODS.map(([id, label]) => (
+                  <TabsTrigger key={id} value={id} className="min-h-10 px-3 text-sm sm:px-4">{label}</TabsTrigger>
+                ))}
+              </TabsList>
+              <TabsContent value="scan">
+                <PurchaseInvoiceWorkbench
+                  invoiceId={query.invoice}
+                  recoveryAttemptId={query.attempt}
+                  recoveryActorId={query.actor}
+                  recoverySourceIds={query.sources?.split(",").filter(Boolean)}
+                  receiptId={query.receipt}
+                  intakeId={query.intake}
+                  importedDraft={importedDraft}
+                  onImported={() => setImportedDraft(null)}
+                  onBack={back}
+                  onInvoice={invoice}
+                  draftKey={query.new}
+                  onNew={() => {
+                    setImportedDraft(null);
+                    navigate({
+                      invoice: "",
+                      receipt: "",
+                      intake: "",
+                      new: requestKey(),
+                    });
+                  }}
+                />
+              </TabsContent>
+              {(["csv", "gmail"] as const).map((mode) => (
+                <TabsContent key={mode} value={mode}>
+                  <AlternateInvoiceIntake
+                    mode={mode}
+                    onInvoice={invoice}
+                    onDraft={(draft) => {
+                      setImportedDraft(draft);
+                      navigate({ view: "intake", method: "" });
+                    }}
+                  />
+                </TabsContent>
+              ))}
+            </Tabs>
           )}
           {area === "purchases" && view === "register" && (
             <>
@@ -408,8 +355,19 @@ export function InventoryWorkspace() {
               onOpenReturn={open}
               onNewReturn={() => task("SUPPLIER_RETURN")}
               onNew={() => navigate({ return: origin(), view: "intake", new: requestKey() })}
-              onLedger={caps.ledger ? (gstin?: string) => switchTask("ledger", { gstin: gstin ?? "" }) : null}
               onSuppliers={() => switchTask("suppliers")}
+              accounts={caps.ledger ? {
+                payments: <PurchaseLedger initialGstin={query.gstin} canWrite={caps.creditWrite} onInvoice={invoice} />,
+                credits: (
+                  <SupplierCreditPanel
+                    purchaseInvoiceId={query.bill}
+                    supplierGstin={query.gstin}
+                    canWrite={caps.creditWrite}
+                    onNew={() => task("CREDIT_NOTE")}
+                    onOpen={open}
+                  />
+                ),
+              } : undefined}
             />
             <PurchaseLearningCard />
             </>
@@ -418,40 +376,15 @@ export function InventoryWorkspace() {
             <SupplierWorkspace
               canCreate={caps.supplierWrite}
               canUpdate={caps.supplierUpdate}
-              onAccount={(gstin: string) => navigate({ view: "ledger", gstin })}
+              onAccount={(gstin: string) => navigate({ view: "register", tab: "payments", gstin })}
               onBills={(gstin: string) => navigate({ view: "register", gstin })}
             />
           )}
           {area === "purchases" && view === "terms" && <TradeTermsWorkspace />}
-          {area === "purchases" &&
-            view === "ledger" &&
-            (caps.ledger ? (
-              <PurchaseLedger
-                initialGstin={query.gstin}
-                canWrite={caps.creditWrite}
-                onInvoice={invoice}
-              />
-            ) : (
-              <p>Supplier payments require purchase-ledger permission.</p>
-            ))}
-          {area === "purchases" &&
-            view === "credits" &&
-            (caps.ledger ? (
-              <SupplierCreditPanel
-                purchaseInvoiceId={query.bill}
-                supplierGstin={query.gstin}
-                canWrite={caps.creditWrite}
-                onNew={() => task("CREDIT_NOTE")}
-                onOpen={open}
-              />
-            ) : (
-              <p>Supplier credits require purchase-ledger permission.</p>
-            ))}
-          {area === "purchases" && MOVED_REPORTS[view] && <MovedReport href={MOVED_REPORTS[view]} />}
+          {moved && "href" in moved && <MovedView href={moved.href} label={moved.label} />}
           {area === "purchases" && view === "analytics" && (
             <DistributorAnalytics />
           )}
-          {area === "sales" && view === "history" && <PharmacyInvoiceList />}
 
           {view !== "TARGET_REVIEW" &&
           view !== "COUNT" &&
@@ -625,7 +558,7 @@ function WorkspaceToday({ navigate, open }: any) {
             label: "Overdue supplier bills",
             count: data.supplierOverdue.count,
             detail: `Outstanding ${fmtMoney(data.supplierOverdue.amount)}. Open the supplier account to review and allocate payment.`,
-            target: { area: "purchases", view: "ledger" },
+            target: { area: "purchases", view: "register", tab: "payments" },
           },
         ]
       : []),
@@ -1111,14 +1044,10 @@ function SupplierWorkspace({ canCreate, canUpdate, onAccount, onBills }: any) {
   );
 }
 
-function MovedReport({ href }: { href: string }) {
-  const router = useRouter();
-  useEffect(() => {
-    router.replace(href);
-  }, [href, router]);
+function MovedView({ href, label }: { href: string; label: string }) {
   return (
     <p className="text-base">
-      This report is now under <Link href={href} className="font-medium underline">Pharmacy Report</Link>. Opening it…
+      This page is now under <Link href={href} className="font-medium underline">{label}</Link>. Opening it…
     </p>
   );
 }

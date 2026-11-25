@@ -17,6 +17,8 @@ import { PaymentMode } from '@prisma/client';
 import { UUID_OR_CUID_REGEX } from './ids';
 import { IsPaymentMode } from './payment-mode';
 
+const PAISE = '$property must be in rupees with at most two decimal places';
+
 export enum InvoiceStatus {
   DRAFT = 'DRAFT',
   PENDING = 'PENDING',
@@ -165,7 +167,7 @@ export class PaymentDto {
   @Matches(UUID_OR_CUID_REGEX, { message: 'invoiceId must be a UUID or CUID' })
   invoiceId: string;
 
-  @IsNumber()
+  @IsNumber({ maxDecimalPlaces: 2 }, { message: PAISE })
   @Min(0.01)
   amount: number;
 
@@ -201,7 +203,7 @@ export class RefundDto {
   @Matches(UUID_OR_CUID_REGEX, { message: 'paymentId must be a UUID or CUID' })
   paymentId: string;
 
-  @IsNumber()
+  @IsNumber({ maxDecimalPlaces: 2 }, { message: PAISE })
   @Min(0.01)
   amount: number;
 
@@ -223,7 +225,7 @@ export class BulkPaymentDto {
   @Matches(UUID_OR_CUID_REGEX, { each: true, message: 'each invoiceId must be a UUID or CUID' })
   invoiceIds: string[];
 
-  @IsNumber()
+  @IsNumber({ maxDecimalPlaces: 2 }, { message: PAISE })
   @Min(0.01)
   totalAmount: number;
 

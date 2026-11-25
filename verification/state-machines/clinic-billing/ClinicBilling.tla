@@ -14,9 +14,10 @@
 
    MODE "before" is the code before the edit fix, kept as a regression
    control. "code" is the code today: the edit reads received under the row
-   lock it writes with and refuses a total below it. "fixed" is the smallest
-   set of guards that makes every rule hold. The other modes are fixed with
-   one guard removed. *)
+   lock it writes with and refuses a total below it, and a refund is linked
+   to its payment and capped by what that payment has left. "fixed" is the
+   smallest set of guards that makes every rule hold. The other modes are
+   fixed with one guard removed. *)
 EXTENDS Naturals, Sequences
 
 CONSTANTS StartTotal, Totals, PayAmounts, RefundAmount, MaxRows, Confirmers, MODE
@@ -33,7 +34,7 @@ EditReadsInsideWrite == MODE \notin {"before", "staleBalance"}
 \* The edit refuses a total below what the bill has already received.
 EditRefusesBelowReceived == MODE \notin {"before", "editBelowReceived"}
 \* A refund is linked to its payment and capped by what that payment has left.
-RefundCappedPerPayment == MODE \notin {"before", "code", "unlinkedRefund"}
+RefundCappedPerPayment == MODE \notin {"before", "unlinkedRefund"}
 \* confirmPayment's updateMany WHERE reconStatus = 'PENDING'.
 ConfirmUsesCAS == MODE # "confirmWithoutCAS"
 \* A job that closes a gateway payment nobody confirmed.
@@ -127,7 +128,8 @@ DeskConfirms(c) ==
   /\ UNCHANGED <<total, edit>>
 
 \* processRefund: the payment must be COMPLETED and at least the refund; the
-\* bill must still hold that much as received.
+\* bill must still hold that much as received. Under the bill's row lock, the
+\* refunds already linked to the payment plus this one must stay within it.
 DeskRefunds(p) ==
   /\ Len(pays) < MaxRows
   /\ p <= Len(pays)

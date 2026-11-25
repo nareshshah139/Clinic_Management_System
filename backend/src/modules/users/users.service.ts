@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException, UnauthorizedException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../shared/database/prisma.service';
 import { CreateUserDto, UpdateUserDto, ChangePasswordDto, UpdateProfileDto, AssignRoleDto, UpdatePermissionsDto, UserStatusDto, CreateBranchDto, UpdateBranchDto, CreatePermissionDto, UpdatePermissionDto, CreateRoleDto, UpdateRoleDto } from './dto/user.dto';
 import { QueryUsersDto, QueryBranchesDto, QueryPermissionsDto, QueryRolesDto, UserStatisticsDto, UserActivityDto, UserDashboardDto } from './dto/query-user.dto';
@@ -336,7 +336,7 @@ export class UsersService {
     // Verify current password
     const isCurrentPasswordValid = await bcrypt.compare(changePasswordDto.currentPassword, user.password);
     if (!isCurrentPasswordValid) {
-      throw new UnauthorizedException('Current password is incorrect');
+      throw new BadRequestException('Current password is incorrect');
     }
 
     // Verify new password confirmation
@@ -544,14 +544,16 @@ export class UsersService {
     return branch;
   }
 
-  async updateBranch(id: string, updateBranchDto: UpdateBranchDto) {
-    const existingBranch = await this.prisma.branch.findUnique({
-      where: { id },
-    });
-
-    if (!existingBranch) {
+  private async ownBranch(id: string, actor: { branchId: string }) {
+    const branch = id === actor.branchId ? await this.prisma.branch.findUnique({ where: { id } }) : null;
+    if (!branch) {
       throw new NotFoundException('Branch not found');
     }
+    return branch;
+  }
+
+  async updateBranch(id: string, updateBranchDto: UpdateBranchDto, actor: { id: string; branchId: string }) {
+    const existingBranch = await this.ownBranch(id, actor);
 
     // Check if branch name already exists (excluding current branch)
     if (updateBranchDto.name && updateBranchDto.name !== existingBranch.name) {
@@ -567,22 +569,24 @@ export class UsersService {
       }
     }
 
-    const branch = await this.prisma.branch.update({
-      where: { id },
-      data: updateBranchDto,
-    });
+    const changes: Prisma.BranchUpdateInput = Object.fromEntries(Object.entries(updateBranchDto).filter(([, value]) => value !== undefined));
+    const before: Record<string, unknown> = existingBranch;
 
-    return branch;
+    return this.prisma.$transaction(async (tx) => {
+      const branch = await tx.branch.update({ where: { id }, data: changes });
+      await tx.auditLog.create({
+        data: {
+          userId: actor.id, action: 'BRANCH_UPDATED', entity: 'Branch', entityId: id,
+          oldValues: JSON.stringify(Object.fromEntries(Object.keys(changes).map((key) => [key, before[key]]))),
+          newValues: JSON.stringify(changes),
+        },
+      });
+      return branch;
+    });
   }
 
-  async deleteBranch(id: string) {
-    const branch = await this.prisma.branch.findUnique({
-      where: { id },
-    });
-
-    if (!branch) {
-      throw new NotFoundException('Branch not found');
-    }
+  async deleteBranch(id: string, actor: { id: string; branchId: string }) {
+    const branch = await this.ownBranch(id, actor);
 
     // Check if branch has users
     const userCount = await this.prisma.user.count({
@@ -593,8 +597,14 @@ export class UsersService {
       throw new BadRequestException('Cannot delete branch with existing users');
     }
 
-    await this.prisma.branch.delete({
-      where: { id },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.branch.delete({ where: { id } });
+      await tx.auditLog.create({
+        data: {
+          userId: actor.id, action: 'BRANCH_DELETED', entity: 'Branch', entityId: id,
+          oldValues: JSON.stringify({ ...branch, metadata: undefined }),
+        },
+      });
     });
 
     return { message: 'Branch deleted successfully' };
