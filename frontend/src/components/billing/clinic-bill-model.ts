@@ -38,7 +38,7 @@ export type ClinicReceipt = {
   clinic: ClinicIdentity;
   notes: string | null;
   items: { id: string; name: string; qty: number; unitPrice: number; discount: number; gstRate: number; total: number }[];
-  payments: { id: string; amount: number; mode: string; reference: string | null; paidAt: string }[];
+  payments: { id: string; amount: number; mode: string; reference: string | null; paidAt: string; refundable: number }[];
 };
 
 export const BILLING_PATH = '/dashboard/billing';

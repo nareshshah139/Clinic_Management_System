@@ -93,6 +93,7 @@ export type ClinicReceipt = {
     mode: string;
     reference: string | null;
     paidAt: string;
+    refundable: number;
   }[];
 };
 
@@ -103,6 +104,28 @@ const SETTLED = 0.005;
 /** Bill money is compared and changed in whole paise; the columns hold rupees as floats. */
 export const paise = (rupees: number) => Math.round(rupees * 100);
 export const rupees = (paise: number) => paise / 100;
+
+/** What a payment brought in less the refunds linked to it, in paise. */
+export const leftToRefund = (
+  payment: { amount: number },
+  refunds: { amount: number }[],
+) =>
+  refunds.reduce(
+    (left, refund) => left + paise(refund.amount),
+    paise(payment.amount),
+  );
+
+/** What the desk may still refund on a payment: what is left of it, at most what the bill holds. */
+export const refundableOf = (
+  payment: { id: string; amount: number },
+  payments: { amount: number; refundOfId: string | null }[],
+  received: number,
+) => {
+  const refunds = payments.filter((p) => p.refundOfId === payment.id);
+  return rupees(
+    Math.max(0, Math.min(leftToRefund(payment, refunds), paise(received))),
+  );
+};
 
 const person = {
   select: { id: true, firstName: true, lastName: true },

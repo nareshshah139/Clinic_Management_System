@@ -27,8 +27,8 @@ const receipt = (over: Partial<ClinicReceipt['bill']> = {}): ClinicReceipt => ({
     { id: 'i2', name: 'Dressing', qty: 2, unitPrice: 250, discount: 0, gstRate: 0, total: 500 },
   ],
   payments: [
-    { id: 'pay1', amount: 1000, mode: 'UPI', reference: null, paidAt: '2026-11-25T05:00:00.000Z' },
-    { id: 'pay2', amount: -200, mode: 'UPI', reference: 'REFUND: Goodwill', paidAt: '2026-11-25T06:00:00.000Z' },
+    { id: 'pay1', amount: 1000, mode: 'UPI', reference: null, paidAt: '2026-11-25T05:00:00.000Z', refundable: 800 },
+    { id: 'pay2', amount: -200, mode: 'UPI', reference: 'REFUND: Goodwill', paidAt: '2026-11-25T06:00:00.000Z', refundable: 0 },
   ],
 });
 

@@ -98,6 +98,9 @@ function setup(
           return null;
         return { ...row, invoice };
       }),
+      findMany: jest.fn(async ({ where }) =>
+        payments.filter((p: any) => p.refundOfId === where.refundOfId),
+      ),
     },
   };
   prisma.$transaction = jest.fn(async (command: any) => command(prisma));

@@ -48,8 +48,9 @@ type Refund = { paymentId: string; amount: string; reason: string };
  * @cc [owner:nareshshah139,label:product] clinic-bill-dialog
  * Opening a bill MUST show its lines, payments and refunds, and what is paid and due, as the server
  * has them now. It MUST offer Collect payment only on a bill with something due, Refund only on a
- * payment and Void only on a bill with nothing received, each only where the viewer's actions allow
- * it, and MUST reload the bill from the server after every change.
+ * payment the server says has money left to refund (defaulting to that amount) and Void only on a
+ * bill with nothing received, each only where the viewer's actions allow it, and MUST reload the
+ * bill from the server after every change.
  */
 export function ClinicBillDialog({ billId, actions, collecting = false, onClose, onChanged }: {
   billId: string;
@@ -117,10 +118,9 @@ export function ClinicBillDialog({ billId, actions, collecting = false, onClose,
   const payValue = parseRupees(amount);
   const payInvalid = payValue !== null && (Number.isNaN(payValue) || payValue <= 0 || payValue > bill.due);
   const canCollect = actions.collect && !voided && bill.due > 0;
-  const refundable = (paymentAmount: number) => Math.min(paymentAmount, bill.paid);
   const refundValue = refund ? parseRupees(refund.amount) : null;
   const refundPayment = refund ? receipt.payments.find((p) => p.id === refund.paymentId) : undefined;
-  const refundInvalid = !refundPayment || refundValue === null || Number.isNaN(refundValue) || refundValue <= 0 || refundValue > refundable(refundPayment.amount);
+  const refundInvalid = !refundPayment || refundValue === null || Number.isNaN(refundValue) || refundValue <= 0 || refundValue > refundPayment.refundable;
   const blocked = voidBlockedReason(bill);
 
   const collect = async () => {
@@ -206,8 +206,8 @@ export function ClinicBillDialog({ billId, actions, collecting = false, onClose,
                       {p.amount < 0 ? `Refund ${rupee(-p.amount)}` : rupee(p.amount)} {paymentModeLabel(p.mode)}
                       {p.reference ? ` · ${p.reference}` : ''} · {displayClinicDateTime(p.paidAt)}
                     </span>
-                    {actions.refund && p.amount > 0 && bill.paid > 0 && refund?.paymentId !== p.id && (
-                      <Button type="button" size="sm" variant="ghost" className="h-8" onClick={() => setRefund({ paymentId: p.id, amount: String(refundable(p.amount)), reason: '' })}>
+                    {actions.refund && p.refundable > 0 && refund?.paymentId !== p.id && (
+                      <Button type="button" size="sm" variant="ghost" className="h-8" onClick={() => setRefund({ paymentId: p.id, amount: String(p.refundable), reason: '' })}>
                         Refund
                       </Button>
                     )}

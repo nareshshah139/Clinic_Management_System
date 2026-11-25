@@ -19,7 +19,7 @@ import {
   RevenueReportDto,
   OutstandingInvoicesDto,
 } from './dto/query-billing.dto';
-import { VOID, metadataOf, paise, rupees } from './clinic-bill-register';
+import { VOID, leftToRefund, metadataOf, paise, rupees } from './clinic-bill-register';
 
 const RUPEES = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0, maximumFractionDigits: 2 });
 const PAYMENT_INVOICE = { invoice: { select: { id: true, invoiceNo: true, total: true } } } as const;
@@ -468,15 +468,16 @@ export class BillingService {
   /**
    * @cc [owner:nareshshah139,label:calculation;security] refund-bounds
    * A refund MUST target a COMPLETED, non-refund payment in the authenticated branch and MUST be
-   * above 0, at most the payment amount, and at most what the invoice still holds as received,
-   * also when two refunds race for the same received amount. Any other request MUST fail with
-   * nothing written. A valid refund MUST add a negative payment and lower received and raise
-   * balance by that amount, in one transaction.
+   * above 0, at most what that payment has left after its earlier refunds, and at most what the
+   * invoice still holds as received, also when two refunds race. Any other request MUST fail with
+   * nothing written. A valid refund MUST add a negative payment linked to the payment it refunds
+   * and lower received and raise balance by that amount, in one transaction.
    */
   /**
-   * @cc [owner:nareshshah139,label:calculation;target] refund-total-per-payment
-   * The refunds of one payment MUST NOT add up to more than that payment. Today refund rows carry
-   * no link to their payment, so this does not hold. This is a target obligation, not a pass claim.
+   * @cc [owner:nareshshah139,label:calculation;concurrency] refund-total-per-payment
+   * The refunds of one payment MUST NOT add up to more than that payment. Each refund row links to
+   * its payment (refundOfId), and the refunds already linked MUST be summed under the bill's row
+   * lock, so of two refunds racing for one payment the second sees the first.
    */
   async processRefund(refundDto: RefundDto, branchId: string) {
     const { paymentId, amount, notes } = refundDto;
@@ -511,6 +512,9 @@ export class BillingService {
     // Represent refund as a negative payment (cash refund)
     return this.prisma.$transaction(async (tx) => {
       const bill = await this.lockedMoney(tx, payment.invoiceId);
+      const refunds = await tx.newPayment.findMany({ where: { refundOfId: payment.id }, select: { amount: true } });
+      const left = leftToRefund(payment, refunds);
+      if (refund > left) throw new BadRequestException(this.refundRefusal(payment.amount, left, refund));
       if (refund > bill.received) throw new BadRequestException('Refund amount exceeds the amount still received on the invoice');
       await tx.newInvoice.update({
         where: { id: payment.invoiceId },
@@ -524,10 +528,18 @@ export class BillingService {
           reference: (notes ? `REFUND: ${notes}` : 'REFUND') as any,
           gateway: null,
           reconStatus: 'COMPLETED',
+          refundOfId: payment.id,
         },
         include: PAYMENT_INVOICE,
       });
     });
+  }
+
+  private refundRefusal(paid: number, left: number, refund: number) {
+    const refused = `so ${RUPEES.format(rupees(refund))} cannot be refunded.`;
+    return left > 0
+      ? `Only ${RUPEES.format(rupees(left))} of this ${RUPEES.format(paid)} payment is left to refund, ${refused}`
+      : `This ${RUPEES.format(paid)} payment is already refunded in full, ${refused}`;
   }
 
   async processBulkPayment(bulkPaymentDto: BulkPaymentDto, branchId: string) {

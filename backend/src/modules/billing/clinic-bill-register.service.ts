@@ -10,6 +10,7 @@ import {
   billRow,
   orderBy,
   receiptClinic,
+  refundableOf,
   searchWhere,
   type ClinicBillQuery,
   type ClinicBillRegister,
@@ -125,6 +126,7 @@ export class ClinicBillRegisterService {
         mode: payment.mode,
         reference: payment.reference,
         paidAt: payment.createdAt.toISOString(),
+        refundable: refundableOf(payment, bill.payments, bill.received),
       })),
     };
   }

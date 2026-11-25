@@ -1,27 +1,17 @@
 # Clinic bill payments, code mode
 
-TLC explored 24673 states and 71718 steps. The chart has 4 states and 7 arrows.
+TLC explored 23623 states and 68596 steps. The chart has 3 states and 5 arrows.
 
 | Rule | Kind | Result |
 | --- | --- | --- |
 | TypeOK | invariant | holds |
 | BalanceMatches | invariant | holds |
 | ReceivedWithinTotal | invariant | holds |
-| RefundsWithinPayment | invariant | breaks |
+| RefundsWithinPayment | invariant | holds |
 | ReceivedMatchesPayments | invariant | holds |
 | GatewayPaymentSettles | property | breaks |
 
-Holds: TypeOK, BalanceMatches, ReceivedWithinTotal, ReceivedMatchesPayments.
-
-## RefundsWithinPayment breaks
-
-The refunds of one payment never add up to more than that payment.
-
-1. Money due
-2. the desk takes a payment: Money due
-3. the desk takes a payment: Paid in full
-4. the admin refunds a payment: Money due
-5. the admin refunds a payment: Bill wrong: a payment is refunded twice
+Holds: TypeOK, BalanceMatches, ReceivedWithinTotal, RefundsWithinPayment, ReceivedMatchesPayments.
 
 ## GatewayPaymentSettles breaks
 
