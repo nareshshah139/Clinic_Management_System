@@ -2,6 +2,7 @@ import { ConflictException, Injectable, Logger } from '@nestjs/common';
 import { AppointmentStatus, Prisma, VisitType } from '@prisma/client';
 import { PrismaService } from '../../shared/database/prisma.service';
 import { AppointmentsService } from '../appointments/appointments.service';
+import { procedureRoomIds } from '../appointments/procedure-room';
 import { SchedulingUtils } from '../appointments/utils/scheduling.utils';
 import { istClock } from '../doctor-availability/availability';
 
@@ -66,13 +67,6 @@ function summarize(appointment: { id: string; date: Date; slot: string; doctor: 
 
 const existing = (review: Review, date: string): ReviewBooking => ({ status: 'existing', appointment: summarize(review), date });
 
-async function followPlan(tx: Prisma.TransactionClient, review: Review, visit: { plan: string | null; createdAt: Date }) {
-  const kind = reviewKind(visit.plan, istClock(visit.createdAt).date);
-  if (review.reviewRequestedProcedure === kind.reviewRequestedProcedure) return undefined;
-  const rewritten = await tx.appointment.updateMany({ where: { id: review.id, status: { in: MOVABLE } }, data: kind });
-  return rewritten.count === 1 ? review.id : undefined;
-}
-
 const UNCHANGED_REQUEST: Record<AppointmentStatus, (review: Review, date: string) => ReviewBooking> = {
   SCHEDULED: existing,
   CONFIRMED: existing,
@@ -123,6 +117,12 @@ export class ReviewBookingService {
    * the recorded one, null counting as none; when it is the same the desk's edits stay, and a CHECKED_IN or
    * IN_PROGRESS review is never rewritten, including one checked in after it was read. A rewritten review's calendar
    * event MUST be synced after the transaction commits.
+   * A PROCEDURE review is booked into a procedure room (an active room of the branch whose type contains procedure,
+   * operation or surgery): slot by slot in that order it tries the rooms by name, then id, and takes the first free
+   * pair; when no slot has a free room it books the first free slot without one. A rewrite to a procedure review also
+   * takes the first free procedure room at the review's date and slot (none when none is free) unless it already holds
+   * one, a rewrite back to OPD clears the room, and a renamed procedure keeps its room. A room is assigned or cleared only
+   * while the review keeps the status, room, date and slot it was read with.
    */
   async book(visitId: string, branchId: string, callerUserId?: string): Promise<ReviewBooking> {
     try {
@@ -160,12 +160,12 @@ export class ReviewBookingService {
     const newest = reviews[0];
     if (newest && requestedDay(newest) === date) {
       const current = open ?? newest;
-      const updatedId = open ? await followPlan(tx, open, visit) : undefined;
+      const updatedId = open ? await this.followPlan(tx, open, visit, branchId) : undefined;
       return { outcome: UNCHANGED_REQUEST[current.status](current, date), updatedId };
     }
     if (open && dayOf(open.date) === date) {
       await tx.appointment.update({ where: { id: open.id }, data: { reviewRequestedFor: new Date(date) } });
-      return { outcome: existing(open, date), updatedId: await followPlan(tx, open, visit) };
+      return { outcome: existing(open, date), updatedId: await this.followPlan(tx, open, visit, branchId) };
     }
     if (open && !MOVABLE.includes(open.status)) {
       return { outcome: { status: 'in-progress', appointment: summarize(open), date } };
@@ -186,6 +186,22 @@ export class ReviewBookingService {
       booked: day.booked,
       cancelledId: open.id,
     };
+  }
+
+  private async followPlan(tx: Prisma.TransactionClient, review: Review, visit: { plan: string | null; createdAt: Date }, branchId: string) {
+    const kind = reviewKind(visit.plan, istClock(visit.createdAt).date);
+    if (!MOVABLE.includes(review.status) || review.reviewRequestedProcedure === kind.reviewRequestedProcedure) return undefined;
+    let roomId: string | null | undefined;
+    if (kind.visitType === VisitType.OPD) roomId = null;
+    else if (review.reviewRequestedProcedure === null) {
+      const rooms = await procedureRoomIds(tx, branchId);
+      if (!review.roomId || !rooms.includes(review.roomId)) roomId = await this.appointments.firstFreeRoom(tx, review, rooms, branchId);
+    }
+    const unchanged = roomId === undefined
+      ? { status: { in: MOVABLE } }
+      : { status: review.status, roomId: review.roomId, date: review.date, slot: review.slot };
+    const rewritten = await tx.appointment.updateMany({ where: { id: review.id, ...unchanged }, data: { ...kind, roomId } });
+    return rewritten.count === 1 ? review.id : undefined;
   }
 
   private async bookDay(
@@ -210,14 +226,21 @@ export class ReviewBookingService {
 
     const { availableSlots } = await this.appointments.getAvailableSlots({ doctorId: visit.doctorId, date, calendar: 'SCHEDULED' }, branchId);
     const patientFree = availableSlots.filter((slot) => patientDay.every((other) => !SchedulingUtils.doTimeSlotsOverlap(slot, other.slot)));
-    for (const slot of patientFree) {
+    const kind = reviewKind(visit.plan, istClock(visit.createdAt).date);
+    const rooms = kind.visitType === VisitType.PROCEDURE ? await procedureRoomIds(tx, branchId) : [];
+    const attempts = [
+      ...patientFree.flatMap((slot) => rooms.map((roomId) => ({ slot, roomId }))),
+      ...patientFree.map((slot) => ({ slot, roomId: undefined })),
+    ];
+    for (const { slot, roomId } of attempts) {
       try {
         const booked = await this.appointments.bookInTransaction(tx, {
           patientId: visit.patientId,
           doctorId: visit.doctorId,
           date,
           slot,
-          ...reviewKind(visit.plan, istClock(visit.createdAt).date),
+          roomId,
+          ...kind,
           source: 'review',
           calendar: 'SCHEDULED',
           reviewOfVisitId: visit.id,

@@ -40,6 +40,8 @@ databaseTests('Review booking on PostgreSQL', () => {
     await db.branch.create({ data: { id: 'branch', name: 'Branch', address: 'Synthetic' } });
     await db.user.create({ data: { id: 'doctor', firstName: 'Synthetic', lastName: 'Doctor', email: 'doctor@example.test', password: 'x', role: 'DOCTOR', branchId: 'branch' } });
     await db.patient.create({ data: { id: 'patient', name: 'Synthetic Patient', gender: 'F', phone: '9000000000', branchId: 'branch' } });
+    await db.user.create({ data: { id: 'other-doctor', firstName: 'Other', lastName: 'Doctor', email: 'other-doctor@example.test', password: 'x', role: 'DOCTOR', branchId: 'branch' } });
+    await db.patient.create({ data: { id: 'other-patient', name: 'Other Patient', gender: 'M', phone: '9000000001', branchId: 'branch' } });
     appointments = new AppointmentsService(db as PrismaService);
     visits = new VisitsService(db as PrismaService);
     controller = new VisitsController(visits, new ReviewBookingService(db as PrismaService, appointments));
@@ -166,6 +168,105 @@ databaseTests('Review booking on PostgreSQL', () => {
     const open = await db.appointment.findFirstOrThrow({ where: { reviewOfVisitId: visit.id, status: 'SCHEDULED' } });
     expect(open.reviewRequestedFor?.toISOString().slice(0, 10)).toBe('2099-03-08');
   }, 60000);
+
+  describe('procedure rooms', () => {
+    afterEach(() => db.room.updateMany({ data: { isActive: false } }));
+
+    const room = (name: string, type = 'Procedure Room', isActive = true) => db.room.create({ data: { name, type, isActive, branchId: 'branch' } });
+    const occupy = (roomId: string, date: string, slot: string) =>
+      db.appointment.create({ data: { patientId: 'other-patient', doctorId: 'other-doctor', date: new Date(date), slot, roomId, branchId: 'branch', status: 'SCHEDULED' } });
+    const reviewOf = (visitId: string) => db.appointment.findFirstOrThrow({ where: { reviewOfVisitId: visitId, status: 'SCHEDULED' } });
+    const peel = { procedurePlanned: 'Chemical peel' };
+
+    it('books the review into the procedure room that is free at the first slot', async () => {
+      await room('A Consultation Room', 'Consultation Room');
+      await room('B Retired Procedure Room', 'Procedure Room', false);
+      const first = await room('C Procedure Room 1');
+      const second = await room('D Procedure Room 2');
+      await occupy(first.id, '2099-05-04', '09:00-09:30');
+      const visit = await visitFor('2099-05-04', peel);
+
+      expect((await controller.complete(visit.id, {} as any, request)).reviewAppointment.status).toBe('booked');
+
+      expect(await reviewOf(visit.id)).toMatchObject({ visitType: 'PROCEDURE', slot: '09:00-09:30', roomId: second.id });
+    }, 60000);
+
+    it('takes the procedure room that comes first by name when several are free', async () => {
+      await room('Procedure Room B');
+      const first = await room('Procedure Room A');
+      const visit = await visitFor('2099-05-05', peel);
+
+      await controller.complete(visit.id, {} as any, request);
+
+      expect(await reviewOf(visit.id)).toMatchObject({ slot: '09:00-09:30', roomId: first.id });
+    }, 60000);
+
+    it('moves to the next slot when every procedure room is taken at the first one', async () => {
+      const first = await room('Procedure Room A');
+      const second = await room('Procedure Room B');
+      await occupy(first.id, '2099-05-06', '09:00-09:30');
+      await occupy(second.id, '2099-05-06', '09:00-09:30');
+      const visit = await visitFor('2099-05-06', peel);
+
+      expect((await controller.complete(visit.id, {} as any, request)).reviewAppointment.status).toBe('booked');
+
+      expect(await reviewOf(visit.id)).toMatchObject({ slot: '09:30-10:00', roomId: first.id });
+    }, 60000);
+
+    it('still books the first free slot, without a room, when every procedure room is taken all day', async () => {
+      const first = await room('Procedure Room A');
+      const second = await room('Procedure Room B');
+      const { availableSlots } = await appointments.getAvailableSlots({ doctorId: 'doctor', date: '2099-05-07', calendar: 'SCHEDULED' }, 'branch');
+      for (const slot of availableSlots) {
+        await occupy(first.id, '2099-05-07', slot);
+        await occupy(second.id, '2099-05-07', slot);
+      }
+      const visit = await visitFor('2099-05-07', peel);
+
+      expect((await controller.complete(visit.id, {} as any, request)).reviewAppointment.status).toBe('booked');
+
+      expect(await reviewOf(visit.id)).toMatchObject({ visitType: 'PROCEDURE', slot: availableSlots[0], roomId: null });
+    }, 60000);
+
+    it('gives an OPD review no room', async () => {
+      await room('Procedure Room A');
+      const visit = await visitFor('2099-05-08');
+
+      expect((await controller.complete(visit.id, {} as any, request)).reviewAppointment.status).toBe('booked');
+
+      expect(await reviewOf(visit.id)).toMatchObject({ visitType: 'OPD', roomId: null });
+    }, 60000);
+
+    it('gives a booked OPD review the free procedure room when a procedure is planned, and takes it back when the procedure is cleared', async () => {
+      const first = await room('Procedure Room A');
+      const second = await room('Procedure Room B');
+      const visit = await visitFor('2099-05-09');
+      await controller.complete(visit.id, {} as any, request);
+      expect(await reviewOf(visit.id)).toMatchObject({ visitType: 'OPD', slot: '09:00-09:30', roomId: null });
+      await occupy(first.id, '2099-05-09', '09:00-09:30');
+
+      await db.visit.update({ where: { id: visit.id }, data: { plan: JSON.stringify(peel) } });
+      expect((await controller.complete(visit.id, {} as any, request)).reviewAppointment.status).toBe('existing');
+      expect(await reviewOf(visit.id)).toMatchObject({ visitType: 'PROCEDURE', roomId: second.id });
+
+      await db.visit.update({ where: { id: visit.id }, data: { plan: JSON.stringify({ procedurePlanned: '' }) } });
+      expect((await controller.complete(visit.id, {} as any, request)).reviewAppointment.status).toBe('existing');
+      expect(await reviewOf(visit.id)).toMatchObject({ visitType: 'OPD', roomId: null });
+    }, 60000);
+
+    it('does not count the review itself as the one holding its procedure room', async () => {
+      const first = await room('Procedure Room A');
+      await room('Procedure Room B');
+      const visit = await visitFor('2099-05-10');
+      await controller.complete(visit.id, {} as any, request);
+      await db.appointment.update({ where: { id: (await reviewOf(visit.id)).id }, data: { roomId: first.id } });
+
+      await db.visit.update({ where: { id: visit.id }, data: { plan: JSON.stringify(peel) } });
+      await controller.complete(visit.id, {} as any, request);
+
+      expect(await reviewOf(visit.id)).toMatchObject({ visitType: 'PROCEDURE', roomId: first.id });
+    }, 60000);
+  });
 
   it('answers 409 when the desk reopens a review while another is pending', async () => {
     const visit = await visitFor('2099-03-09');

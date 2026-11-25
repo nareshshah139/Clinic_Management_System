@@ -321,6 +321,31 @@ export class AppointmentsService {
       .catch(() => void 0);
   }
 
+  async firstFreeRoom(
+    tx: Prisma.TransactionClient,
+    appointment: { id: string; doctorId: string; date: Date; slot: string; status: AppointmentStatus },
+    roomIds: readonly string[],
+    branchId: string,
+  ): Promise<string | undefined> {
+    const calendar = calendarOf(appointment.status);
+    if (!calendar) return undefined;
+    const date = appointment.date.toISOString().slice(0, 10);
+    for (const roomId of roomIds) {
+      await this.lockSchedule(tx, branchId, appointment.doctorId, roomId, date);
+      try {
+        await this.assertSlotBookable(tx, 'Scheduling conflict detected', appointment.doctorId, roomId, date, appointment.slot, branchId, {
+          calendar,
+          excludeAppointmentId: appointment.id,
+          roomOnly: true,
+        });
+        return roomId;
+      } catch (error) {
+        if (!(error instanceof ConflictException)) throw error;
+      }
+    }
+    return undefined;
+  }
+
   notifyUpdated(id: string, callerUserId?: string) {
     void this.googleCalendar
       ?.syncAppointmentEvent(id, callerUserId)
