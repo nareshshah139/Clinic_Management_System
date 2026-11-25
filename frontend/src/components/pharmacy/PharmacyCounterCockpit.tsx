@@ -7,12 +7,14 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Check,
+  CheckCheck,
   ClipboardCheck,
   MessageSquarePlus,
   MoreHorizontal,
   Plus,
   Receipt,
   RefreshCw,
+  Search,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -60,6 +62,8 @@ type DispenseLifecycle =
   | 'Dispensed'
   | 'Cancelled';
 
+type QueueCounts = Record<QueueStatus, number> & { paused?: number };
+
 type QueueMedication = {
   sourceLineKey?: string;
   lineId?: string;
@@ -95,6 +99,7 @@ type QueueEntry = {
     id: string;
     name: string;
     patientCode?: string | null;
+    phone?: string | null;
   };
   doctor: {
     id: string;
@@ -126,7 +131,7 @@ type QueueResponse = {
   pagination: {
     total: number;
   };
-  counts?: Record<QueueStatus, number>;
+  counts?: QueueCounts;
 };
 
 type PharmacyBillingPrefill = {
@@ -193,11 +198,12 @@ type ReasonDraft = { prescriptionId: string | null; type: string | null; note: s
 const QUEUE_PAGE_SIZE = 25;
 const QUEUE_ENDPOINT = '/pharmacy/prescription-queue';
 
-const QUEUE_FILTERS: ReadonlyArray<{ id: string; label: string; status?: QueueStatus }> = [
+const QUEUE_FILTERS: ReadonlyArray<{ id: string; label: string; status?: QueueStatus; paused?: boolean }> = [
   { id: 'all', label: 'All' },
   { id: 'waiting', label: 'Waiting', status: 'pending' },
   { id: 'partial', label: 'Partial', status: 'partial' },
-  { id: 'paused', label: 'Paused', status: 'expired' },
+  { id: 'paused', label: 'Paused', status: 'expired', paused: true },
+  { id: 'expired', label: 'Expired', status: 'expired', paused: false },
   { id: 'done', label: 'Done', status: 'dispensed' },
 ];
 
@@ -209,6 +215,39 @@ const QUEUE_STATUS_AS_DISPENSE: Record<QueueStatus, DispenseTaskStatus> = {
   dispensed: 'DISPENSED',
   expired: 'PAUSED',
 };
+
+const stockCoversLine = (stock: StockCheckItem | undefined, medication: QueueMedication) => {
+  if (!stock || (stock.stockStatus !== 'IN_STOCK' && stock.stockStatus !== 'LOW_STOCK')) return false;
+  const needed =
+    medication.prescribedQuantity === null
+      ? 1
+      : Math.max(0, medication.prescribedQuantity - medication.dispensedQuantity);
+  return stock.totalNonExpiredStock >= Math.max(needed, 1);
+};
+
+const matchesSearch = (entry: QueueEntry, search: string) => {
+  const needle = search.trim().toLowerCase();
+  if (!needle) return true;
+  const digits = needle.replace(/\D/g, '');
+  return (
+    entry.patient.name.toLowerCase().includes(needle) ||
+    (entry.patient.patientCode ?? '').toLowerCase().includes(needle) ||
+    entry.prescriptionId.toLowerCase().includes(needle) ||
+    (digits.length > 0 && (entry.patient.phone ?? '').replace(/\D/g, '').includes(digits))
+  );
+};
+
+function resolveTaskLine(task: QueueEntry, entry: QueueEntry, medication: QueueMedication) {
+  const line = medication.lineId
+    ? task.medications.find((item) => item.lineId === medication.lineId)
+    : medication.sourceLineKey
+      ? task.medications.find((item) => item.sourceLineKey === medication.sourceLineKey)
+      : task.medications[entry.medications.indexOf(medication)];
+  if (!line?.lineId || line.drugName !== medication.drugName) {
+    throw new Error('Prescription line no longer exists');
+  }
+  return line;
+}
 
 const isBillable = (entry: QueueEntry) => entry.dispensingEligible !== false && entry.status !== 'dispensed';
 
@@ -267,8 +306,10 @@ export function PharmacyCounterCockpit({
   const [queueTotal, setQueueTotal] = useState(0);
   const [queuePages, setQueuePages] = useState(1);
   const [filter, setFilter] = useState<QueueFilter>(QUEUE_FILTERS[0]);
-  const [statusCounts, setStatusCounts] = useState<Record<QueueStatus, number> | null>(null);
+  const [statusCounts, setStatusCounts] = useState<QueueCounts | null>(null);
+  const [search, setSearch] = useState('');
   const queueRequest = useRef(0);
+  const stockOwner = useRef<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(
     prefill?.prescriptionId || null,
   );
@@ -325,6 +366,7 @@ export function PharmacyCounterCockpit({
             page: index + 1,
             limit: QUEUE_PAGE_SIZE,
             status: filter.status,
+            paused: filter.paused,
           }),
         ),
       );
@@ -388,19 +430,22 @@ export function PharmacyCounterCockpit({
 
   useEffect(() => {
     const refresh = () => { void loadQueue(); };
+    const refreshOnFocus = () => { if (!taskCommandInFlight.current) void loadQueue(); };
     window.addEventListener('pharmacy-invoices-refresh', refresh);
     window.addEventListener('inventory-stock-refresh', refresh);
-    window.addEventListener('focus', refresh);
+    window.addEventListener('focus', refreshOnFocus);
     return () => {
       window.removeEventListener('pharmacy-invoices-refresh', refresh);
       window.removeEventListener('inventory-stock-refresh', refresh);
-      window.removeEventListener('focus', refresh);
+      window.removeEventListener('focus', refreshOnFocus);
     };
   }, [loadQueue]);
 
   useEffect(() => {
     let current = true;
-    setStockItems([]);
+    const refreshing = stockOwner.current === activeId;
+    stockOwner.current = activeId;
+    if (!refreshing) setStockItems([]);
     setStockError(null);
     if (!activeId) {
       setLoadingStock(false);
@@ -409,7 +454,7 @@ export function PharmacyCounterCockpit({
 
     const loadStock = async () => {
       try {
-        setLoadingStock(true);
+        if (!refreshing) setLoadingStock(true);
         const response = await apiClient.get<StockCheckResponse>(
           `/pharmacy/prescription-queue/${activeId}/stock-check`,
         );
@@ -491,34 +536,6 @@ export function PharmacyCounterCockpit({
     [activeEntry, ensureDispenseTask, reasonFields, replaceQueueEntry],
   );
 
-  const selectQueueEntry = useCallback(
-    async (entry: QueueEntry) => {
-      if (taskCommandInFlight.current) return;
-      setActiveId(entry.prescriptionId);
-      if (entry.dispensingEligible === false) return;
-      taskCommandInFlight.current = true;
-      try {
-        setSavingTask(true);
-        setError(null);
-        const task = await ensureDispenseTask(entry);
-        if (task.dispenseStatus === 'QUEUED') {
-          const updated = await apiClient.patch<QueueEntry>(
-            `/pharmacy/dispense-tasks/${task.dispenseTaskId}/status`,
-            { status: 'IN_REVIEW' },
-          );
-          replaceQueueEntry(updated);
-        }
-      } catch (err) {
-        console.error('Failed to start dispense review:', err);
-        setError('Unable to start medicine review. Select the prescription to retry.');
-      } finally {
-        taskCommandInFlight.current = false;
-        setSavingTask(false);
-      }
-    },
-    [ensureDispenseTask, replaceQueueEntry],
-  );
-
   const updateLineAction = useCallback(
     async (medication: QueueMedication, action: LineAction) => {
       if (!activeEntry || taskCommandInFlight.current) return;
@@ -527,14 +544,7 @@ export function PharmacyCounterCockpit({
         setSavingTask(true);
         setError(null);
         const task = await ensureDispenseTask(activeEntry);
-        const line = medication.lineId
-          ? task.medications.find(item => item.lineId === medication.lineId)
-          : medication.sourceLineKey
-            ? task.medications.find(item => item.sourceLineKey === medication.sourceLineKey)
-            : task.medications[activeEntry.medications.indexOf(medication)];
-        if (!line?.lineId || line.drugName !== medication.drugName) {
-          throw new Error('Prescription line no longer exists');
-        }
+        const line = resolveTaskLine(task, activeEntry, medication);
         const updated = await apiClient.patch<QueueEntry>(
           `/pharmacy/dispense-tasks/${task.dispenseTaskId}/lines/${line.lineId}`,
           { action: backendActionFromLineAction(action), ...reasonFields(action) },
@@ -550,6 +560,44 @@ export function PharmacyCounterCockpit({
     },
     [activeEntry, ensureDispenseTask, reasonFields, replaceQueueEntry],
   );
+
+  const acceptableMedications = useMemo(
+    () =>
+      activeEntry && activeEntry.dispensingEligible !== false
+        ? activeEntry.medications.filter(
+            (medication, index) =>
+              (medication.action || 'pending') === 'pending' &&
+              stockCoversLine(stockByLine[medication.sourceLineKey ?? String(index)], medication),
+          )
+        : [],
+    [activeEntry, stockByLine],
+  );
+
+  const acceptAllAvailable = useCallback(async () => {
+    if (!activeEntry || taskCommandInFlight.current || acceptableMedications.length === 0) return;
+    taskCommandInFlight.current = true;
+    try {
+      setSavingTask(true);
+      setError(null);
+      const task = await ensureDispenseTask(activeEntry);
+      for (const medication of acceptableMedications) {
+        const line = resolveTaskLine(task, activeEntry, medication);
+        const updated = await apiClient.patch<QueueEntry>(
+          `/pharmacy/dispense-tasks/${task.dispenseTaskId}/lines/${line.lineId}`,
+          { action: backendActionFromLineAction('accepted'), ...reasonFields('accepted') },
+        );
+        replaceQueueEntry(updated);
+      }
+    } catch (err) {
+      console.error('Failed to accept available medicines:', err);
+      setError('Unable to accept every available medicine. Lines already accepted were saved.');
+    } finally {
+      taskCommandInFlight.current = false;
+      setSavingTask(false);
+    }
+  }, [acceptableMedications, activeEntry, ensureDispenseTask, reasonFields, replaceQueueEntry]);
+
+  const visibleQueue = useMemo(() => queue.filter((entry) => matchesSearch(entry, search)), [queue, search]);
 
   const queueEmpty = !loadingQueue && queue.length === 0 && (Boolean(error) || !filter.status);
 
@@ -589,7 +637,10 @@ export function PharmacyCounterCockpit({
         ) : (
           <div className="grid min-h-0 flex-1 divide-y divide-border xl:grid-cols-[300px_minmax(0,1fr)] xl:divide-x xl:divide-y-0">
             <QueueList
-              queue={queue}
+              queue={visibleQueue}
+              loadedCount={queue.length}
+              search={search}
+              onSearch={setSearch}
               queueTotal={queueTotal}
               filter={filter}
               statusCounts={statusCounts}
@@ -601,7 +652,7 @@ export function PharmacyCounterCockpit({
               loading={loadingQueue}
               refreshDisabled={loadingQueue || savingTask}
               onRefresh={loadQueue}
-              onSelect={selectQueueEntry}
+              onSelect={(entry) => setActiveId(entry.prescriptionId)}
               onBill={onOpenBilling ? (entry) => onOpenBilling(billingPrefill(entry)) : undefined}
               onShowMore={queuePages * QUEUE_PAGE_SIZE < queueTotal ? () => setQueuePages((pages) => pages + 1) : undefined}
             />
@@ -611,6 +662,8 @@ export function PharmacyCounterCockpit({
               stockByLine={stockByLine}
               loadingStock={loadingStock}
               setLineAction={updateLineAction}
+              acceptableCount={acceptableMedications.length}
+              onAcceptAll={acceptAllAvailable}
               onInventoryLinked={onOpenBilling ? async () => setStockReloadKey((key) => key + 1) : undefined}
               activeLifecycle={activeLifecycle}
               reviewedLineCount={reviewedLineCount}
@@ -630,6 +683,9 @@ export function PharmacyCounterCockpit({
 
 function QueueList({
   queue,
+  loadedCount,
+  search,
+  onSearch,
   queueTotal,
   filter,
   statusCounts,
@@ -643,9 +699,12 @@ function QueueList({
   onShowMore,
 }: {
   queue: QueueEntry[];
+  loadedCount: number;
+  search: string;
+  onSearch: (value: string) => void;
   queueTotal: number;
   filter: QueueFilter;
-  statusCounts: Record<QueueStatus, number> | null;
+  statusCounts: QueueCounts | null;
   onFilter: (filter: QueueFilter) => void;
   activeId: string | null;
   loading: boolean;
@@ -655,12 +714,15 @@ function QueueList({
   onBill?: (entry: QueueEntry) => void;
   onShowMore?: () => void;
 }) {
-  const countFor = (option: QueueFilter) =>
-    statusCounts
-      ? option.status
-        ? statusCounts[option.status]
-        : Object.values(statusCounts).reduce((sum, count) => sum + count, 0)
-      : null;
+  const countFor = (option: QueueFilter) => {
+    if (!statusCounts) return null;
+    if (!option.status) {
+      return statusCounts.pending + statusCounts.partial + statusCounts.expired + statusCounts.dispensed;
+    }
+    if (option.status !== 'expired') return statusCounts[option.status];
+    const paused = statusCounts.paused ?? 0;
+    return option.paused ? paused : statusCounts.expired - paused;
+  };
   const allCount = countFor(QUEUE_FILTERS[0]);
   const filters = QUEUE_FILTERS.filter(
     (option) => !option.status || option.id === filter.id || countFor(option) !== 0,
@@ -719,12 +781,28 @@ function QueueList({
         </div>
       ) : null}
 
+      <div className="shrink-0 px-4 pt-2">
+        <div className="relative">
+          <Search aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            type="search"
+            value={search}
+            onChange={(event) => onSearch(event.target.value)}
+            placeholder="Name, phone or Rx number"
+            aria-label="Search queue"
+            className="h-8 pl-8"
+          />
+        </div>
+      </div>
+
       <div className="relative mt-2 min-h-40 flex-1">
         <div className="max-h-72 overflow-y-auto px-2 pb-2 xl:absolute xl:inset-0 xl:max-h-none">
-          {loading && queue.length === 0 ? (
+          {loading && loadedCount === 0 ? (
             <LoadingSkeleton label="Loading prescription queue…" className="px-2" />
           ) : queue.length === 0 ? (
-            <p className="px-2.5 py-2 text-sm text-muted-foreground">No items match this filter.</p>
+            <p className="px-2.5 py-2 text-sm text-muted-foreground">
+              {search.trim() ? `No loaded prescriptions match "${search.trim()}".` : 'No items match this filter.'}
+            </p>
           ) : (
             <ul aria-label="Prescription queue" className="space-y-0.5">
               {queue.map((entry) => (
@@ -738,10 +816,12 @@ function QueueList({
               ))}
             </ul>
           )}
-          {queueTotal > queue.length && queue.length > 0 ? (
+          {queueTotal > loadedCount && loadedCount > 0 ? (
             <div className="flex items-center justify-between gap-2 px-2.5 pt-2">
               <p className="text-xs text-muted-foreground">
-                Showing {queue.length} of {queueTotal}
+                {search.trim()
+                  ? `Searching ${loadedCount} loaded of ${queueTotal}`
+                  : `Showing ${loadedCount} of ${queueTotal}`}
               </p>
               {onShowMore ? (
                 <Button size="sm" variant="ghost" onClick={onShowMore} disabled={loading}>
@@ -773,7 +853,7 @@ function QueueRow({
     .filter(Boolean)
     .join(' · ');
   return (
-    <li className={cn('flex items-center gap-1 rounded-md transition-colors hover:bg-muted/60', active && 'bg-muted hover:bg-muted')}>
+    <li className={cn('flex items-center gap-1 rounded-md transition-colors hover:bg-muted/60', active && 'bg-muted hover:bg-muted/90')}>
       <button
         type="button"
         onClick={onSelect}
@@ -812,6 +892,8 @@ function DispenseReview({
   stockByLine,
   loadingStock,
   setLineAction,
+  acceptableCount,
+  onAcceptAll,
   onInventoryLinked,
   activeLifecycle,
   reviewedLineCount,
@@ -826,6 +908,8 @@ function DispenseReview({
   stockByLine: Record<string, StockCheckItem>;
   loadingStock: boolean;
   setLineAction: (medication: QueueMedication, action: LineAction) => void;
+  acceptableCount: number;
+  onAcceptAll: () => void;
   onInventoryLinked?: () => Promise<void>;
   activeLifecycle: DispenseLifecycle;
   reviewedLineCount: number;
@@ -857,6 +941,18 @@ function DispenseReview({
       )
     : [];
   const hasNote = Boolean(reason.type || reason.note.trim());
+  const pendingLines = activeEntry.medications.filter((line) => (line.action || 'pending') === 'pending').length;
+  const unavailableLines = activeEntry.medications.filter((line) => line.action === 'unavailable').length;
+  const showsReady = typeof nextStep === 'object' && nextStep !== null && nextStep.status === 'READY_TO_BILL';
+  const actionHint = !eligible
+    ? 'This prescription is expired or inactive, so it cannot be billed or changed.'
+    : showsReady && !readyForBilling
+      ? pendingLines > 0
+        ? `Ready to bill is off until ${plural(pendingLines, 'medicine')} ${pendingLines === 1 ? 'is' : 'are'} reviewed.`
+        : unavailableLines > 0
+          ? `Ready to bill is off while ${plural(unavailableLines, 'medicine')} ${unavailableLines === 1 ? 'is' : 'are'} unavailable. Bill the available medicines, or change the review.`
+          : null
+      : null;
 
   return (
     <section aria-labelledby="counter-review-patient" className="@container flex min-h-0 flex-col">
@@ -876,9 +972,17 @@ function DispenseReview({
             </PurchaseHelp>
           </div>
         </div>
-        <p className="text-xs tabular-nums text-muted-foreground">
-          {reviewedLineCount}/{activeEntry.medications.length} lines reviewed
-        </p>
+        <div className="flex items-center gap-2">
+          {acceptableCount > 0 ? (
+            <Button size="sm" variant="outline" onClick={onAcceptAll} disabled={savingTask || loadingStock || !eligible}>
+              <CheckCheck />
+              Accept all available ({acceptableCount})
+            </Button>
+          ) : null}
+          <p className="text-xs tabular-nums text-muted-foreground">
+            {reviewedLineCount}/{activeEntry.medications.length} lines reviewed
+          </p>
+        </div>
       </div>
 
       <div className="mt-1 flex-1">
@@ -945,6 +1049,11 @@ function DispenseReview({
             />
           </div>
         ) : null}
+        {actionHint ? (
+          <p id="counter-action-hint" className="px-4 pt-2 text-xs text-muted-foreground">
+            {actionHint}
+          </p>
+        ) : null}
         <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5">
           <Button
             variant="ghost"
@@ -976,7 +1085,7 @@ function DispenseReview({
             ) : null}
             {activeEntry.linkedInvoiceIds.length > 0 ? (
               <Button asChild size="sm" variant="outline">
-                <Link href={`/dashboard/pharmacy/invoices?search=${encodeURIComponent(activeEntry.patient.name)}`}>
+                <Link href={`/dashboard/pharmacy/sales?field=patient&q=${encodeURIComponent(activeEntry.patient.name)}`}>
                   Collect payment
                 </Link>
               </Button>
@@ -992,11 +1101,17 @@ function DispenseReview({
                 Bill
               </Button>
             ) : null}
+            {eligible && entryLifecycle(activeEntry) === 'Queued' ? (
+              <Button size="sm" variant="outline" onClick={() => onUpdateStatus('IN_REVIEW')} disabled={savingTask}>
+                Start review
+              </Button>
+            ) : null}
             {typeof nextStep === 'object' && nextStep !== null ? (
               <Button
                 size="sm"
                 onClick={() => onUpdateStatus(nextStep.status)}
                 disabled={savingTask || !eligible || (nextStep.status === 'READY_TO_BILL' && !readyForBilling)}
+                aria-describedby={actionHint ? 'counter-action-hint' : undefined}
               >
                 {nextStep.label}
               </Button>
@@ -1108,7 +1223,7 @@ function MedicationRow({
           onClick={() => setAction('accepted')}
           className={cn(
             action === 'accepted' &&
-              'border-success-border bg-success-soft text-success-text hover:bg-success-soft hover:text-success-text',
+              'border-success-border bg-success-soft text-success-text hover:bg-success-soft/90 hover:text-success-text',
           )}
         >
           {action === 'accepted' ? <Check /> : null}
@@ -1126,7 +1241,7 @@ function MedicationRow({
               }
               className={cn(
                 exception
-                  ? 'border-warning-border bg-warning-soft text-warning-text hover:bg-warning-soft hover:text-warning-text'
+                  ? 'border-warning-border bg-warning-soft text-warning-text hover:bg-warning-soft/90 hover:text-warning-text'
                   : 'px-2',
               )}
             >

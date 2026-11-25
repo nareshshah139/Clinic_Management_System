@@ -109,14 +109,88 @@ it('creates a task before applying an explicit status action', async () => {
   expect(screen.getByRole('button', { name: /Patient rx-1/ })).toHaveTextContent('Paused');
 });
 
-it('starts review through explicit pull when staff select a prescription without a task', async () => {
+it('previews a prescription without changing any backend state', async () => {
+  get.mockImplementation(async url => url.endsWith('/stock-check') ? stock(10) : { data: [entry(), entry('rx-2')], pagination: { total: 2 } });
+  render(<PharmacyCounterCockpit {...props} />);
+  await screen.findByText('10 available');
+  fireEvent.click(screen.getByRole('button', { name: /Patient rx-2/ }));
+  await screen.findByRole('region', { name: 'Patient rx-2' });
+  expect(apiClient.post).not.toHaveBeenCalled();
+  expect(apiClient.patch).not.toHaveBeenCalled();
+});
+
+it('moves to review only when the pharmacist presses Start review', async () => {
   (apiClient.post as jest.Mock).mockResolvedValue({ data: preparedEntry() });
   (apiClient.patch as jest.Mock).mockResolvedValue({ ...preparedEntry(), dispenseStatus: 'IN_REVIEW' });
   render(<PharmacyCounterCockpit {...props} />);
   await screen.findByText('10 available');
-  fireEvent.click(screen.getByRole('button', { name: /Patient rx-1/ }));
-  await waitFor(() => expect(apiClient.patch).toHaveBeenCalledWith('/pharmacy/dispense-tasks/task-1/status', { status: 'IN_REVIEW' }));
+  expect(apiClient.patch).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Start review' }));
+  await waitFor(() => expect(apiClient.patch).toHaveBeenCalledWith('/pharmacy/dispense-tasks/task-1/status', expect.objectContaining({ status: 'IN_REVIEW' })));
   expect(screen.getByRole('button', { name: /Patient rx-1/ })).toHaveTextContent('In review');
+  expect(screen.queryByRole('button', { name: 'Start review' })).not.toBeInTheDocument();
+});
+
+it('Accept all available accepts only lines the stock covers, in one step', async () => {
+  const lines = [
+    { drugName: 'Medicine A', prescribedQuantity: 2, dispensedQuantity: 0, coverageStatus: 'not_started', sourceLineKey: 'a', lineId: 'line-a', action: 'pending' },
+    { drugName: 'Medicine B', prescribedQuantity: 2, dispensedQuantity: 0, coverageStatus: 'not_started', sourceLineKey: 'b', lineId: 'line-b', action: 'pending' },
+    { drugName: 'Medicine C', prescribedQuantity: 5, dispensedQuantity: 0, coverageStatus: 'not_started', sourceLineKey: 'c', lineId: 'line-c', action: 'pending' },
+  ];
+  const task = { ...entry(), dispenseTaskId: 'task-1', dispenseStatus: 'IN_REVIEW', medications: lines };
+  const item = (key: string, name: string, status: string, quantity: number) => ({
+    sourceLineKey: key, drugName: name, inventoryItemId: 'inv', stockName: name, stockStatus: status,
+    totalNonExpiredStock: quantity, batches: [], lowStock: false, nearExpiry: false,
+  });
+  get.mockImplementation(async url => url.endsWith('/stock-check')
+    ? { items: [item('a', 'Medicine A', 'IN_STOCK', 10), item('b', 'Medicine B', 'OUT_OF_STOCK', 0), item('c', 'Medicine C', 'LOW_STOCK', 3)] }
+    : { data: [task], pagination: { total: 1 } });
+  (apiClient.patch as jest.Mock).mockImplementation(async (url: string) => ({
+    ...task,
+    medications: lines.map(line => url.endsWith(`/${line.lineId}`) ? { ...line, action: 'accepted' } : line),
+  }));
+  render(<PharmacyCounterCockpit {...props} />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Accept all available (1)' }));
+  await waitFor(() => expect(apiClient.patch).toHaveBeenCalledTimes(1));
+  expect(apiClient.patch).toHaveBeenCalledWith('/pharmacy/dispense-tasks/task-1/lines/line-a', { action: 'ACCEPTED', reasonType: undefined, reasonNote: undefined });
+  expect(apiClient.post).not.toHaveBeenCalled();
+});
+
+it('Accept all available accepts every in-stock line with a payload each', async () => {
+  const lines = ['a', 'b'].map(key => ({ drugName: `Medicine ${key.toUpperCase()}`, prescribedQuantity: 1, dispensedQuantity: 0, coverageStatus: 'not_started', sourceLineKey: key, lineId: `line-${key}`, action: 'pending' }));
+  const task = { ...entry(), dispenseTaskId: 'task-1', dispenseStatus: 'IN_REVIEW', medications: lines };
+  get.mockImplementation(async url => url.endsWith('/stock-check')
+    ? { items: lines.map(line => ({ sourceLineKey: line.sourceLineKey, drugName: line.drugName, inventoryItemId: 'inv', stockName: line.drugName, stockStatus: 'IN_STOCK', totalNonExpiredStock: 9, batches: [], lowStock: false, nearExpiry: false })) }
+    : { data: [task], pagination: { total: 1 } });
+  (apiClient.patch as jest.Mock).mockResolvedValue(task);
+  render(<PharmacyCounterCockpit {...props} />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Accept all available (2)' }));
+  await waitFor(() => expect(apiClient.patch).toHaveBeenCalledTimes(2));
+  expect((apiClient.patch as jest.Mock).mock.calls.map(([url, body]) => [url, body.action])).toEqual([
+    ['/pharmacy/dispense-tasks/task-1/lines/line-a', 'ACCEPTED'],
+    ['/pharmacy/dispense-tasks/task-1/lines/line-b', 'ACCEPTED'],
+  ]);
+});
+
+it('says why Ready to bill is off when a line is unavailable', async () => {
+  const task = { ...entry(), dispenseTaskId: 'task-1', dispenseStatus: 'IN_REVIEW', medications: [{ ...entry().medications[0], lineId: 'line-1', action: 'unavailable' }] };
+  get.mockImplementation(async url => url.endsWith('/stock-check') ? stock(10) : { data: [task], pagination: { total: 1 } });
+  render(<PharmacyCounterCockpit {...props} />);
+  await screen.findByText('10 available');
+  expect(screen.getByRole('button', { name: 'Ready to bill' })).toBeDisabled();
+  expect(screen.getByText(/Ready to bill is off while 1 medicine is unavailable/)).toBeInTheDocument();
+});
+
+it('keeps the review editable while a window-focus refresh rechecks stock', async () => {
+  render(<PharmacyCounterCockpit {...props} />);
+  await screen.findByText('10 available');
+  let finishStock: (value: any) => void = () => undefined;
+  get.mockImplementation(async url => url.endsWith('/stock-check') ? new Promise(resolve => { finishStock = resolve; }) : { data: [entry()], pagination: { total: 1 } });
+  act(() => { window.dispatchEvent(new Event('focus')); });
+  await waitFor(() => expect(get).toHaveBeenCalledWith('/pharmacy/prescription-queue/rx-1/stock-check'));
+  expect(screen.getByRole('button', { name: 'Accept', exact: true })).toBeEnabled();
+  await act(async () => finishStock(stock(4)));
+  await screen.findByText('4 available');
 });
 
 it('refreshes invoice coverage after checkout without creating a task during refresh', async () => {

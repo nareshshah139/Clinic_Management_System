@@ -53,7 +53,7 @@ type QueueEntry = {
   dispensingEligible?: boolean;
   prescriptionId: string;
   prescriptionUpdatedAt?: Date;
-  patient: { id: string; name: string; patientCode?: string | null };
+  patient: { id: string; name: string; patientCode?: string | null; phone?: string | null };
   doctor: { id: string; name: string };
   createdAt: Date;
   pendingHours: number;
@@ -102,7 +102,7 @@ type LoadedPrescription = {
   items: string;
   createdAt: Date;
   visit: {
-    patient: { id: string; name: string; patientCode?: string | null };
+    patient: { id: string; name: string; patientCode?: string | null; phone?: string | null };
     doctor: { id: string; firstName: string; lastName: string };
   };
   pharmacyInvoices: LoadedInvoice[];
@@ -257,8 +257,8 @@ export class PharmacyPrescriptionQueueService {
     const limit = Math.min(this.toPositiveInt(query.limit, 20), 100);
     const now = new Date();
     return this.prisma.$transaction(async (tx) => {
-      const [selection] = await tx.$queryRaw<{ ids: string[]; total: number; lifecycle: Record<string, PrescriptionQueueLifecycle>; counts: Partial<Record<PrescriptionQueueStatus, number>> }[]>(
-        queueStatusPage(branchId, query.status, page, limit, now),
+      const [selection] = await tx.$queryRaw<{ ids: string[]; total: number; lifecycle: Record<string, PrescriptionQueueLifecycle>; counts: Partial<Record<PrescriptionQueueStatus | 'paused', number>> }[]>(
+        queueStatusPage(branchId, query.status, page, limit, now, query.paused),
       );
       const prescriptions = await this.withInvoiceInventory(tx, await tx.prescription.findMany({
         where: { id: { in: selection.ids } },
@@ -275,7 +275,10 @@ export class PharmacyPrescriptionQueueService {
       return {
         data: selection.ids.map(id => entryById.get(id)!),
         pagination: { page, limit, total: selection.total, pages: Math.ceil(selection.total / limit) },
-        counts: Object.fromEntries(Object.values(PrescriptionQueueStatus).map(status => [status, selection.counts?.[status] ?? 0])),
+        counts: {
+          ...Object.fromEntries(Object.values(PrescriptionQueueStatus).map(status => [status, selection.counts?.[status] ?? 0])),
+          paused: selection.counts?.paused ?? 0,
+        },
       };
     }, { isolationLevel: 'RepeatableRead' });
   }
@@ -1099,6 +1102,7 @@ export class PharmacyPrescriptionQueueService {
               id: true,
               name: true,
               patientCode: true,
+              phone: true,
             },
           },
           doctor: {
