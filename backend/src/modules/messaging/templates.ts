@@ -12,6 +12,8 @@ const BODY: Record<string, string[]> = {
   check_in_reminder: ['clinic'],
   review_reminder: ['clinic', 'date', 'time', 'doctor'],
   portal_sign_in_code: ['code'],
+  // Its button is a static URL to /p, approved with the template; it carries no token.
+  portal_reply_notice: ['clinic'],
 };
 
 /**

@@ -84,6 +84,11 @@ GET /google-calendar/status | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,
 GET /google-calendar/status/:doctorId | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 GET /health | public
 GET /internal/portal/ping | public
+GET /internal/portal/records/appointments | public
+GET /internal/portal/records/check-ins | public
+GET /internal/portal/records/home | public
+GET /internal/portal/records/messages | public
+GET /internal/portal/records/visits | public
 GET /internal/portal/session | public
 GET /inventory/alerts/expiry | roles: ADMIN,PHARMACIST,RECEPTION | permissions: inventory:alerts:expiry
 GET /inventory/alerts/low-stock | roles: ADMIN,PHARMACIST,RECEPTION | permissions: inventory:alerts:lowStock
@@ -344,6 +349,7 @@ POST /follow-ups/messages/:id/confirm | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,
 POST /follow-ups/tracks/:id/stop | roles: DOCTOR,ADMIN,OWNER | permissions: -
 POST /google-calendar/disconnect | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 POST /google-calendar/exchange | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
+POST /internal/portal/records/messages | public
 POST /internal/portal/session/profile | public
 POST /internal/portal/sign-in/code | public
 POST /internal/portal/sign-in/verify | public

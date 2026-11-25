@@ -13,7 +13,7 @@ export const CARE_PRIORITY: Partial<Record<P, number>> = {
 export const isCare = (p: P) => p in CARE_PRIORITY;
 
 /** Messages that need OPTED_IN consent and the confirmed number at send time (PP-13). */
-export const needsConsent = (p: P) => isCare(p) || p === P.APPOINTMENT_CONFIRMATION;
+export const needsConsent = (p: P) => isCare(p) || p === P.APPOINTMENT_CONFIRMATION || p === P.PORTAL_REPLY_NOTICE;
 
 export function kolkataDay(at: Date): string {
   return new Date(at.getTime() + IST_OFFSET_MS).toISOString().slice(0, 10);

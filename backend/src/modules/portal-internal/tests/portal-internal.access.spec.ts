@@ -8,9 +8,11 @@ import request from 'supertest';
 import ts from 'typescript';
 import { JwtAuthGuard } from '../../../shared/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../shared/guards/roles.guard';
+import { diagnosticValidationPipe } from '../../../shared/logging/http-observability';
 import { canonicalBody, encodeCaller, signPortalCall, type PortalCaller } from '../portal-call';
 import { Caller, PortalInternal } from '../portal-internal.decorator';
 import { PrismaService } from '../../../shared/database/prisma.service';
+import { PortalRecordsService } from '../../portal/records.service';
 import { SignInService } from '../../portal/sign-in.service';
 import { PortalInternalModule } from '../portal-internal.module';
 import vector from './portal-call.vector.json';
@@ -39,17 +41,30 @@ function headers({ method, path: p, body, caller = PATIENT, ts = Date.now() }: S
 }
 
 const LIVE_SESSION = 'L'.repeat(43);
+const CHOSEN_SESSION = 'C'.repeat(43);
 
 describe('/internal/portal (signed portal calls)', () => {
   let app: INestApplication;
   const signIn = {
     requestCode: jest.fn(async () => 'sent'),
     verifyCode: jest.fn(async (): Promise<unknown> => ({ ok: false, reason: 'wrong' })),
-    resolve: jest.fn(async (token: string) =>
-      token === LIVE_SESSION ? { session: { id: 's1', identityId: 'i1' }, phoneE164: '+919800000001', profiles: [], chosen: null } : null),
+    resolve: jest.fn(async (token: string) => {
+      const base = { session: { id: 's1', identityId: 'i1' }, phoneE164: '+919800000001', profiles: [] };
+      if (token === LIVE_SESSION) return { ...base, chosen: null };
+      if (token === CHOSEN_SESSION) return { ...base, chosen: { patientId: 'p1', branchId: 'b1' } };
+      return null;
+    }),
     profileList: jest.fn(async () => ({ profiles: [{ ref: 'r'.repeat(22), firstName: 'Asha', branch: 'Banjara Hills' }], chosen: null })),
     chooseProfile: jest.fn(async () => true),
     signOut: jest.fn(async () => undefined),
+  };
+  const records = {
+    home: jest.fn(async () => ({ home: true })),
+    appointments: jest.fn(async () => []),
+    visits: jest.fn(async () => []),
+    checkIns: jest.fn(async () => []),
+    messages: jest.fn(async () => []),
+    write: jest.fn(async () => ({ sent: true })),
   };
   const http = () => request(app.getHttpServer());
 
@@ -65,8 +80,10 @@ describe('/internal/portal (signed portal calls)', () => {
     })
       .overrideProvider(PrismaService).useValue({})
       .overrideProvider(SignInService).useValue(signIn)
+      .overrideProvider(PortalRecordsService).useValue(records)
       .compile();
     app = moduleRef.createNestApplication();
+    app.useGlobalPipes(diagnosticValidationPipe());
     await app.init();
   });
   afterAll(() => app.close());
@@ -210,6 +227,36 @@ describe('/internal/portal (signed portal calls)', () => {
     await post('/internal/portal/sign-out', {}, SESSION).expect(200);
     await post('/internal/portal/sign-out-everywhere', {}, SESSION).expect(200);
     expect(signIn.signOut.mock.calls).toEqual([[principal, false], [principal, true]]);
+  });
+
+  it.each([
+    ['GET', '/internal/portal/records/home', 'home'],
+    ['GET', '/internal/portal/records/appointments', 'appointments'],
+    ['GET', '/internal/portal/records/visits', 'visits'],
+    ['GET', '/internal/portal/records/check-ins', 'checkIns'],
+    ['GET', '/internal/portal/records/messages', 'messages'],
+    ['POST', '/internal/portal/records/messages', 'write'],
+  ] as const)('%s %s opens only the profile chosen in a live session', async (method, p, fn) => {
+    const body = method === 'GET' ? undefined : { body: 'Is the rash worse?', clientKey: '3f0c1a7e-2b4d-4c8e-9a6f-1d2e3f4a5b6c' };
+    const call = (caller: PortalCaller) => {
+      const req = method === 'GET' ? http().get(p) : http().post(p);
+      return req.set(headers({ method, path: p, body, caller })).send(body as object);
+    };
+    for (const caller of [{ kind: 'anonymous' }, PATIENT, { kind: 'session', token: 'U'.repeat(43) }] as PortalCaller[]) {
+      expect((await call(caller)).status).toBe(401);
+    }
+    const unchosen = await call(SESSION);
+    expect([unchosen.status, unchosen.body.message]).toEqual([401, 'Choose whose records to open.']);
+    expect(records[fn]).not.toHaveBeenCalled();
+    expect((await call({ kind: 'session', token: CHOSEN_SESSION })).status).toBe(200);
+    const patient = { kind: 'portal-patient', sessionId: 's1', identityId: 'i1', patientId: 'p1', branchId: 'b1' };
+    expect(records[fn].mock.calls[0]).toEqual(body ? [patient, body] : [patient]);
+  });
+
+  it('refuses a malformed patient message before it reaches the records', async () => {
+    const caller: PortalCaller = { kind: 'session', token: CHOSEN_SESSION };
+    await post('/internal/portal/records/messages', { body: '', clientKey: 'not-a-uuid' }, caller).expect(400);
+    expect(records.write).not.toHaveBeenCalled();
   });
 
   it('matches the shared test vector the portal service also checks', () => {

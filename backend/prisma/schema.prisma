@@ -2373,6 +2373,7 @@ enum OutboundMessagePurpose {
   OPT_OUT_CONFIRMATION
   STAFF_REPLY
   PORTAL_SIGN_IN_CODE
+  PORTAL_REPLY_NOTICE
 }
 
 model OutboundMessage {
@@ -2462,6 +2463,8 @@ model PatientMessage {
   assignedById      String?
   authorKind        String
   readAt            DateTime?
+  /// Set on a message written in the portal: a repeated submit with the same key adds nothing (PP-86).
+  clientKey         String?           @unique
   createdAt         DateTime          @default(now())
   patient           Patient?          @relation(fields: [patientId], references: [id], onDelete: SetNull)
   attachments       ResponseAttachment[]

@@ -1,14 +1,13 @@
 import { Body, Controller, Get, HttpCode, Logger, Post, UnauthorizedException } from '@nestjs/common';
 import { Caller, PortalInternal } from './portal-internal.decorator';
 import type { PortalCaller } from './portal-call';
-import type { PortalIdentityPrincipal } from '../portal/principal';
+import { identityOf } from './session-caller';
 import { ChooseProfileDto, CodeRequestDto, VerifyDto } from '../portal/sign-in.dto';
 import { CODE_REJECTED_MESSAGE, CODE_REQUEST_ANSWER, SignInService } from '../portal/sign-in.service';
 
 /** Every code request is answered after this long, whatever happened (PP-55). */
 export const codeAnswerMs = () => Number(process.env.PORTAL_CODE_ANSWER_MS) || 1500;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const SIGNED_OUT = 'This portal session has ended.';
 
 /**
  * Sign-in, profile choice and sign-out for the patient portal service (PP-55 to PP-61).
@@ -21,12 +20,7 @@ export class InternalSignInController {
 
   constructor(private readonly signIn: SignInService) {}
 
-  private async principal(caller: PortalCaller): Promise<PortalIdentityPrincipal> {
-    if (caller.kind !== 'session') throw new UnauthorizedException(SIGNED_OUT);
-    const resolved = await this.signIn.resolve(caller.token);
-    if (!resolved) throw new UnauthorizedException(SIGNED_OUT);
-    return { kind: 'portal-identity', sessionId: resolved.session.id, identityId: resolved.session.identityId, phoneE164: resolved.phoneE164 };
-  }
+  private principal = (caller: PortalCaller) => identityOf(this.signIn, caller);
 
   @Post('sign-in/code')
   @HttpCode(200)

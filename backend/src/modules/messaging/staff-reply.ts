@@ -34,10 +34,34 @@ export async function staffReplyStatus(db: Db, patientId: string | null, now: Da
   if (profile.consentState === 'OPTED_OUT') return blocked('opted-out');
   if (profile.consentState !== 'OPTED_IN' || !profile.phoneConfirmedAt || !profile.phoneE164) return blocked('number-not-confirmed');
   const last = await db.patientMessage.findFirst({
-    where: { phoneE164: profile.phoneE164, direction: 'INBOUND' },
+    where: { phoneE164: profile.phoneE164, direction: 'INBOUND', channel: 'WHATSAPP' },
     orderBy: { createdAt: 'desc' },
     select: { createdAt: true },
   });
   if (!last || now.getTime() - last.createdAt.getTime() >= REPLY_WINDOW_MS) return blocked('window-closed');
   return { canReply: true, toE164: profile.phoneE164, windowClosesAt: new Date(last.createdAt.getTime() + REPLY_WINDOW_MS) };
+}
+
+export type ReplyRoute =
+  | { via: 'whatsapp'; toE164: string; windowClosesAt: Date }
+  | { via: 'portal'; toE164: string; message: string }
+  | { via: null; reason: ReplyBlock; message: string };
+
+export const PORTAL_REPLY_TEXT =
+  'The WhatsApp window is closed. Your reply goes to the patient portal, and the patient gets a WhatsApp notice to read it there.';
+
+/**
+ * @cc [owner:nareshshah139,label:product] closed-window-reply-goes-to-portal
+ * When the only block on a staff reply is the closed 24-hour window and the patient's portal is on,
+ * the reply MUST be kept in the portal thread and one templated notice with the portal link queued
+ * (PP-65); every other block stays a block.
+ */
+export async function staffReplyRoute(db: Db, patientId: string | null, now: Date): Promise<ReplyRoute> {
+  const status = await staffReplyStatus(db, patientId, now);
+  if (status.canReply) return { via: 'whatsapp', toE164: status.toE164, windowClosesAt: status.windowClosesAt };
+  if (status.reason === 'window-closed' && patientId) {
+    const profile = await db.patientPortalProfile.findUnique({ where: { patientId }, select: { portalEnabled: true, phoneE164: true } });
+    if (profile?.portalEnabled && profile.phoneE164) return { via: 'portal', toE164: profile.phoneE164, message: PORTAL_REPLY_TEXT };
+  }
+  return { via: null, reason: status.reason, message: status.message };
 }
