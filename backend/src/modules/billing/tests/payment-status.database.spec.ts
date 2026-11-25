@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import { execFileSync } from 'child_process';
 import { resolve } from 'path';
 import { BillingService } from '../billing.service';
+import { ClinicBillRegisterService } from '../clinic-bill-register.service';
 import { InvoiceNumbersService } from '../../../shared/numbering/invoice-numbers.service';
 import { ReportsService } from '../../reports/reports.service';
 import { PharmacyReportsService } from '../../pharmacy/pharmacy-reports.service';
@@ -17,6 +18,7 @@ databaseTests('Clinic payments on PostgreSQL', () => {
   let admin: PrismaClient;
   let db: PrismaClient;
   let billing: BillingService;
+  let register: ClinicBillRegisterService;
   let revenue: ReportsService;
   let pharmacyReports: PharmacyReportsService;
   let created = false;
@@ -37,6 +39,7 @@ databaseTests('Clinic payments on PostgreSQL', () => {
     await db.patient.create({ data: { id: 'patient', name: 'Meera Shah', gender: 'F', phone: '9000000000', branchId: 'branch' } });
     await db.user.create({ data: { id: 'doc', firstName: 'Asha', lastName: 'Rao', email: 'doc@example.test', password: 'x', role: 'DOCTOR', branchId: 'branch' } });
     billing = new BillingService(db as any, new InvoiceNumbersService(db as any));
+    register = new ClinicBillRegisterService(db as any);
     revenue = new ReportsService(db as any);
     pharmacyReports = new PharmacyReportsService(db as any, new PharmacyComplianceService(db as any));
   }, 120000);
@@ -135,6 +138,54 @@ databaseTests('Clinic payments on PostgreSQL', () => {
 
     await billing.confirmPayment(payment.id, 'branch');
     expect(await money(invoice.id)).toEqual({ received: 300, balance: 200, payments: [[300, 'UPI', 'COMPLETED']] });
+  });
+
+  it('settles a ₹600.30 bill when the desk collects ₹200.10 and then exactly the ₹400.20 shown as due', async () => {
+    const invoice = await bill(600.3);
+    await pay(invoice.id, 200.1);
+    expect((await register.receipt(invoice.id, 'branch')).bill.due).toBe(400.2);
+    await pay(invoice.id, 400.2, { method: 'UPI' });
+    expect(await money(invoice.id)).toEqual({
+      received: 600.3,
+      balance: 0,
+      payments: [[200.1, 'CASH', 'COMPLETED'], [400.2, 'UPI', 'COMPLETED']],
+    });
+    const { status, paid, due } = (await register.receipt(invoice.id, 'branch')).bill;
+    expect([status, paid, due]).toEqual(['PAID', 600.3, 0]);
+  });
+
+  it('starts and confirms a gateway payment of exactly the ₹400.20 shown as due', async () => {
+    const invoice = await bill(600.3);
+    await pay(invoice.id, 200.1);
+    const online = await pay(invoice.id, 400.2, { method: 'UPI', gateway: 'razorpay' });
+    await billing.confirmPayment(online.id, 'branch');
+    expect(await money(invoice.id)).toEqual({
+      received: 600.3,
+      balance: 0,
+      payments: [[200.1, 'CASH', 'COMPLETED'], [400.2, 'UPI', 'COMPLETED']],
+    });
+  });
+
+  it('settles two ₹600.30 bills part paid ₹200.10 with one bulk payment of the ₹800.40 still due', async () => {
+    const first = await bill(600.3);
+    const second = await bill(600.3);
+    await pay(first.id, 200.1);
+    await pay(second.id, 200.1);
+    await billing.processBulkPayment({ invoiceIds: [first.id, second.id], totalAmount: 800.4, method: 'UPI' } as any, 'branch');
+    const settled = { received: 600.3, balance: 0, payments: [[200.1, 'CASH', 'COMPLETED'], [400.2, 'UPI', 'COMPLETED']] };
+    expect([await money(first.id), await money(second.id)]).toEqual([settled, settled]);
+  });
+
+  it('refunds a ₹600.30 payment in full as ₹200.10 and then ₹400.20', async () => {
+    const invoice = await bill(600.3);
+    const payment = await pay(invoice.id, 600.3);
+    await billing.processRefund({ paymentId: payment.id, amount: 200.1 } as any, 'branch');
+    await billing.processRefund({ paymentId: payment.id, amount: 400.2 } as any, 'branch');
+    expect(await money(invoice.id)).toEqual({
+      received: 0,
+      balance: 600.3,
+      payments: [[600.3, 'CASH', 'COMPLETED'], [-200.1, 'CASH', 'COMPLETED'], [-400.2, 'CASH', 'COMPLETED']],
+    });
   });
 
   it('does not confirm a gateway payment once the desk has collected what was due', async () => {

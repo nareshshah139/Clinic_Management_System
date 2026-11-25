@@ -70,6 +70,16 @@ databaseTests('Clinic invoice updates on PostgreSQL', () => {
     expect(updated.total).toBe(900);
   });
 
+  it('re-saves a bill paid to the paisa shown when its GST total runs past the paisa', async () => {
+    const peel = item('Peel', 508.71, 1, { gstRate: 18 });
+    const invoice = await billing.createInvoice({ patientId: 'patient', items: [peel] } as any, 'branch');
+    await billing.processPayment({ invoiceId: invoice.id, amount: 600.28, method: 'CASH' } as any, 'branch');
+
+    const updated = await billing.updateInvoice(invoice.id, { items: [peel] } as any, 'branch');
+
+    expect([updated.received, updated.balance]).toEqual([600.28, 0]);
+  });
+
   it('bills a GST-exempt (0%) service without GST, on create and on update', async () => {
     const invoice = await billing.createInvoice({ patientId: 'patient', items: [item('Exempt consult', 1000, 1, { gstRate: 0 })] } as any, 'branch');
     expect(invoice.total).toBe(1000);
