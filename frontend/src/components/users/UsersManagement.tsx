@@ -568,8 +568,8 @@ export default function UsersManagement() {
               title: "Adding users",
               items: [
                 "Press New User to create a staff account",
-                "Choose the role: Admin, Doctor, Nurse, Receptionist, Manager or Pharmacist",
-                "Enter their name, phone and a starting password",
+                "Choose the role: Owner, Admin, Manager, Doctor, Nurse, Receptionist, Pharmacist, Accountant or Lab technician",
+                "Enter their name, email, phone and a starting password of 8 to 20 characters",
               ]
             },
             {

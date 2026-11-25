@@ -16,25 +16,25 @@ export default function PatientsPage() {
               {
                 title: "Adding Patients",
                 items: [
-                  "Click 'Add Patient' to create a new patient record",
-                  "Fill in required fields: name, contact, date of birth",
-                  "Add optional information like address, medical history, and insurance details"
+                  "Press New Patient to create a patient record",
+                  "First name, gender and phone are required",
+                  "Age, email, address, ABHA ID, emergency contact and primary doctor are optional",
+                  "For a walk-in, set Patient Type to Walk-in and choose a doctor to book their next free slot"
                 ]
               },
               {
                 title: "Search & Filter",
                 items: [
-                  "Use the search bar to find patients by name, phone, or email",
-                  "Filter patients by status, gender, or date range",
-                  "Click on a patient row to view their detailed profile"
+                  "Search by name, phone, ABHA ID or email",
+                  "Filter by gender, consultation type, or patients added or seen in the last week or month",
+                  "Click a patient row to open their profile"
                 ]
               },
               {
-                title: "Patient Records",
+                title: "Patient Profile",
                 items: [
-                  "View complete visit history and medical records",
-                  "Track patient progress and treatment plans",
-                  "Access photos, prescriptions, and invoices from patient profile"
+                  "Info shows contact details, History lists past visits, and Uploads is where you add photos",
+                  "Start a new visit, resume the last one, or book an appointment from the top of the profile"
                 ]
               }
             ]}

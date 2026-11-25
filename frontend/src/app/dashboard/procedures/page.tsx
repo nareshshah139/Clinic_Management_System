@@ -545,17 +545,16 @@ export default function ProceduresPage() {
                   items: [
                     "Select patient, doctor, and nurse/therapist for the procedure",
                     "Choose the treatment machine (Endymed, Fotona, Soprano, Hydrafacial)",
-                    "Fill in session number and body parts being treated",
-                    "Record shot counts and skin type assessments"
+                    "Fill in the session number and the body parts treated",
+                    "Record begin and end shot counts and the skin type assessment"
                   ]
                 },
                 {
                   title: "Machine Parameters",
                   items: [
-                    "Configure parameters specific to the selected machine",
-                    "Enter values for each pass of the treatment",
-                    "Different machines have different parameter sets",
-                    "All values are recorded for safety and compliance"
+                    "Choosing a machine opens its own parameter table",
+                    "Enter a value for each pass. Hydrafacial has one pass, the other machines eight",
+                    "Patient, doctor and machine are required to save"
                   ]
                 },
                 {

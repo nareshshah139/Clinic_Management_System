@@ -23,28 +23,24 @@ export default function RoomsPage() {
             {
               title: "Calendar View",
               items: [
-                "View all room occupancy in a visual calendar format",
-                "See which appointments are assigned to each room",
-                "Identify available time slots across all rooms",
-                "Click on appointments to view details or reassign rooms"
+                "See each active room's bookings for one day, hour by hour",
+                "Filter by room type or search by room name",
+                "Click a booking to see the patient, doctor and visit type, then open it in Appointments"
               ]
             },
             {
-              title: "Managing Rooms",
+              title: "Manage Rooms (Admin, Doctor, Owner)",
               items: [
-                "Add new rooms with name, type, and capacity",
-                "Configure room amenities and equipment",
-                "Set room availability schedules",
-                "Mark rooms as active or inactive as needed"
+                "Add a room with a name, type and capacity",
+                "Use the switch to make a room inactive. Inactive rooms leave the calendar",
+                "Delete only works for a room that has never had an appointment"
               ]
             },
             {
               title: "Room Assignment",
               items: [
-                "Assign rooms to appointments during booking",
-                "Reassign rooms if conflicts arise",
-                "View room utilization metrics",
-                "Track room cleaning and maintenance schedules"
+                "Pick a room in the booking dialog when you book an appointment",
+                "Procedures need a room. For other visits it is optional"
               ]
             }
           ]}
