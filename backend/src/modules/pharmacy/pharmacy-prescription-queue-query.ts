@@ -241,6 +241,6 @@ export function queueStatusPage(
       coalesce((SELECT jsonb_object_agg(p.id, jsonb_build_object('id', p.id, 'status', p.prescription_status, 'expired', p.clinically_expired))
         FROM branch_prescriptions p JOIN page_ids page ON page.id = p.id), '{}'::jsonb) AS lifecycle,
       coalesce((SELECT jsonb_object_agg(visible_status, total) FROM (
-        SELECT visible_status, count(*)::int AS total FROM visible_statuses GROUP BY visible_status) counted), '{}'::jsonb)
-      || jsonb_build_object('paused', (SELECT count(*)::int FROM visible_statuses WHERE visible_status = 'expired' AND workflow_status = 'PAUSED')) AS counts`;
+        SELECT visible_status, count(*)::int AS total FROM visible_statuses GROUP BY visible_status) counted), '{}'::jsonb) AS counts,
+      (SELECT count(*)::int FROM visible_statuses WHERE visible_status = 'expired' AND workflow_status = 'PAUSED') AS paused`;
 }

@@ -176,7 +176,7 @@ databaseTests('Queue coverage in selling units with PostgreSQL', () => {
     expect(page.data.map(entry => entry.prescriptionId).sort()).toEqual(
       cases.filter(([, , , status]) => status === PrescriptionQueueStatus.DISPENSED).map(([id]) => id).sort(),
     );
-    expect(page.counts).toEqual(Object.fromEntries(statuses.map(status => [status, [...list.values()].filter(listed => listed === status).length])));
+    expect(page.counts).toEqual({ ...Object.fromEntries(statuses.map(status => [status, [...list.values()].filter(listed => listed === status).length])), paused: 0 });
   });
 
   it('marks a prescription dispensed after billing exactly what the stock check suggests', async () => {
