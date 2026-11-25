@@ -1,3 +1,4 @@
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { act, render, screen } from '@testing-library/react';
 import { Toaster } from '@/components/ui/toaster';
 import { toast, useToast } from '@/hooks/use-toast';
@@ -101,14 +102,36 @@ describe('how long a notification stays', () => {
     expect(screen.queryByText('Could not save the visit')).not.toBeInTheDocument();
   });
 
-  it('keeps an error that carries a support reference until the person dismisses it', () => {
+  it('keeps an error that carries a support reference on screen for thirty seconds', () => {
     render(<Toaster />);
     act(() => {
       toast({ variant: 'destructive', title: 'Could not save the visit', description: 'The server failed. (Reference: 69e9a011-77b5-4a85-a164-a11fe4c8d75b)' });
     });
 
-    act(() => jest.advanceTimersByTime(10 * 60_000));
-
+    act(() => jest.advanceTimersByTime(29_000));
     expect(screen.getByText('Reference: 69e9a011-77b5-4a85-a164-a11fe4c8d75b')).toBeInTheDocument();
+
+    act(() => jest.advanceTimersByTime(1_100));
+    expect(screen.queryByText('Reference: 69e9a011-77b5-4a85-a164-a11fe4c8d75b')).not.toBeInTheDocument();
+  });
+
+  it('clears notifications that were open when a dialog opens, so their close button never lands on the dialog', () => {
+    render(<Toaster />);
+    act(() => {
+      toast({ variant: 'destructive', title: 'Export failed', description: 'The server failed. (Reference: 69e9a011-77b5-4a85-a164-a11fe4c8d75b)' });
+    });
+    expect(screen.getByText('Export failed')).toBeInTheDocument();
+
+    render(
+      <Dialog open>
+        <DialogContent>
+          <DialogTitle>New patient</DialogTitle>
+        </DialogContent>
+      </Dialog>,
+    );
+    act(() => jest.advanceTimersByTime(1_000));
+
+    expect(screen.queryByText('Export failed')).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'New patient' })).toBeInTheDocument();
   });
 });

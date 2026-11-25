@@ -13,9 +13,10 @@ import { useToast } from "@/hooks/use-toast"
 import { splitErrorReference } from "@/lib/utils"
 
 const ERROR_DURATION_MS = 10_000
+const REFERENCE_DURATION_MS = 30_000
 
 function durationFor(variant: ToastProps["variant"], reference: string | undefined) {
-  if (reference) return Infinity
+  if (reference) return REFERENCE_DURATION_MS
   return variant === "destructive" ? ERROR_DURATION_MS : undefined
 }
 

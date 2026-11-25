@@ -5,6 +5,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { XIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { dismissAllToasts } from "@/hooks/use-toast"
 
 function Dialog({
   ...props
@@ -54,6 +55,9 @@ function DialogContent({
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
 }) {
+  // A modal makes toasts that were already open unclickable, so their close button would land on
+  // the overlay and close this dialog instead.
+  React.useEffect(() => dismissAllToasts(), [])
   return (
     <DialogPortal data-slot="dialog-portal">
       <DialogOverlay />
