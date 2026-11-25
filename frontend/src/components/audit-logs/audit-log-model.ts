@@ -141,7 +141,9 @@ export type FieldChange = { field: string; label: string; before: string | null;
 
 const withoutLoadedRelations = (before: unknown, after: unknown) =>
   isPlainObject(before) && isPlainObject(after)
-    ? Object.fromEntries(Object.entries(after).filter(([key, value]) => key in before || !isPlainObject(value)))
+    ? Object.fromEntries(
+        Object.entries(after).filter(([key, value]) => key in before || !isPlainObject(value) || !(`${key}Id` in before)),
+      )
     : after;
 
 export function fieldChanges(entry: AuditEntry): FieldChange[] {

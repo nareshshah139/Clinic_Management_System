@@ -92,4 +92,16 @@ describe('the fields an entry changed, for deletions and loaded relations', () =
     );
     expect(changes.map((change) => change.label)).toEqual(['Phone']);
   });
+
+  it('keeps a record linked in by a change, such as the product a purchase line was matched to', () => {
+    const changes = fieldChanges(
+      entry({
+        action: 'MATCH_CONFIRMED',
+        entity: 'PharmacyPurchaseInvoiceItem',
+        oldValues: JSON.stringify({ item: { name: 'Paracetamol 500' } }),
+        newValues: JSON.stringify({ item: { name: 'Paracetamol 500' }, drug: { name: 'Paracetamol 500 mg Tablets' } }),
+      }),
+    );
+    expect(changes.map((change) => [change.label, change.after])).toEqual([['Drug › Name', 'Paracetamol 500 mg Tablets']]);
+  });
 });

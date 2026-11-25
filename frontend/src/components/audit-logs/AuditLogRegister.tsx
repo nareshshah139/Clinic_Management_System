@@ -79,7 +79,7 @@ export function AuditLogRegister({
       type="button"
       onClick={() => setOpen(entry)}
       aria-label={`${summary(entry)}, show details`}
-      className="rounded-sm text-left font-semibold underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      className="block w-full rounded-sm text-left font-semibold underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
     >
       {summary(entry)}
     </button>

@@ -2,6 +2,15 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import AuditLogsPage from '@/app/dashboard/audit-logs/page';
 import { apiClient } from '@/lib/api';
 import type { AuditEntry } from '@/components/audit-logs/audit-log-model';
+import { DashboardUserProvider } from '@/components/layout/dashboard-user-context';
+import type { User } from '@/lib/types';
+
+const renderPage = (role = 'OWNER') =>
+  render(
+    <DashboardUserProvider value={{ user: { id: 'me', role } as unknown as User, loading: false, refresh: jest.fn(), logout: jest.fn() }}>
+      <AuditLogsPage />
+    </DashboardUserProvider>,
+  );
 
 let mockQuery = '';
 const mockReplace = jest.fn();
@@ -84,7 +93,7 @@ beforeEach(() => {
 const table = () => within(screen.getByRole('table', { name: 'Audit log' }));
 
 it('lists this financial year’s changes newest first, in plain words with who made them', async () => {
-  render(<AuditLogsPage />);
+  renderPage();
   expect(await table().findByRole('button', { name: 'Voided bill, show details' })).toBeInTheDocument();
   expect(lastList()).toMatchObject({
     page: 1,
@@ -106,7 +115,7 @@ it('lists this financial year’s changes newest first, in plain words with who 
 });
 
 it('opens an entry to show each changed field before and after', async () => {
-  render(<AuditLogsPage />);
+  renderPage();
   fireEvent.click(await table().findByRole('button', { name: 'Changed patient, show details' }));
   const dialog = within(await screen.findByRole('dialog', { name: 'Changed patient' }));
   const phone = dialog.getByText('Phone').closest('li')!;
@@ -117,7 +126,7 @@ it('opens an entry to show each changed field before and after', async () => {
 });
 
 it('shows why a bill was voided rather than its stored data', async () => {
-  render(<AuditLogsPage />);
+  renderPage();
   fireEvent.click(await table().findByRole('button', { name: 'Voided bill, show details' }));
   const dialog = within(await screen.findByRole('dialog', { name: 'Voided bill' }));
   expect(dialog.getByText('Status').closest('li')).toHaveTextContent('Set toCancelled');
@@ -125,7 +134,7 @@ it('shows why a bill was voided rather than its stored data', async () => {
 });
 
 it('filters by who, what happened and record, offering each in plain words', async () => {
-  render(<AuditLogsPage />);
+  renderPage();
   await table().findByRole('button', { name: 'Voided bill, show details' });
   const who = await screen.findByRole('combobox', { name: 'Who' });
   await waitFor(() => expect(within(who).getAllByRole('option').map((o) => o.textContent)).toEqual(['Anyone', 'Asha Rao', 'Ravi Kumar']));
@@ -148,7 +157,13 @@ it('filters by who, what happened and record, offering each in plain words', asy
 
 it('tells a role the server refuses that it has no access, without a broken table', async () => {
   serve({ denied: true });
-  render(<AuditLogsPage />);
+  renderPage();
   expect(await screen.findByText('You don’t have access to the audit log.')).toBeInTheDocument();
   expect(screen.queryByRole('table')).not.toBeInTheDocument();
+});
+
+it('tells a doctor who opens the address directly that the audit log is not theirs, without loading it', async () => {
+  renderPage('DOCTOR');
+  expect(await screen.findByText('You don’t have access to the audit log.')).toBeInTheDocument();
+  expect(get).not.toHaveBeenCalledWith('/audit-logs', expect.anything());
 });
