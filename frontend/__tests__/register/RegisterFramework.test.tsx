@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import postcss, { type AtRule, type Rule } from 'postcss';
+import postcss, { type AtRule, type Node, type Rule } from 'postcss';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Printer } from 'lucide-react';
@@ -146,7 +146,7 @@ describe('DateRangeFilter custom dates', () => {
 describe('globals.css focus styles', () => {
   const css = postcss.parse(fs.readFileSync(path.join(__dirname, '../../src/app/globals.css'), 'utf8'));
   const inLayer = (rule: Rule) => {
-    for (let node = rule.parent; node; node = node.parent) {
+    for (let node: Node | undefined = rule.parent; node; node = node.parent) {
       if (node.type === 'atrule' && (node as AtRule).name === 'layer') return true;
     }
     return false;
