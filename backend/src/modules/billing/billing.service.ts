@@ -514,7 +514,7 @@ export class BillingService {
       const bill = await this.lockedMoney(tx, payment.invoiceId);
       const payments = await tx.newPayment.findMany({
         where: { invoiceId: payment.invoiceId, reconStatus: 'COMPLETED' },
-        orderBy: { createdAt: 'asc' },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
         select: { id: true, amount: true, mode: true, refundOfId: true, createdAt: true },
       });
       const left = leftToRefund(payment, refundedByPayment(payments));
@@ -811,7 +811,7 @@ export class BillingService {
    * An invoice total MUST equal the line amounts after line discount percent, less the overall
    * discount percent, plus GST per line on the line-discounted amount (before the overall discount).
    * A line with a gstRate of 0 or no gstRate MUST add no tax here; note that the HTTP DTOs default
-   * an omitted gstRate to 18 before it reaches this method. Totals are not rounded to paise.
+   * an omitted gstRate to 18 before it reaches this method. The total MUST be rounded to whole paise.
    */
   private calculateInvoiceTotals(items: any[], discount: number = 0) {
     const subtotal = items.reduce((sum, item) => {

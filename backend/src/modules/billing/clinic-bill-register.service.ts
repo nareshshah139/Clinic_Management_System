@@ -102,7 +102,7 @@ export class ClinicBillRegisterService {
         items: { orderBy: { createdAt: 'asc' } },
         payments: {
           where: { reconStatus: 'COMPLETED' },
-          orderBy: { createdAt: 'asc' },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
         },
       },
     });

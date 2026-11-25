@@ -1,5 +1,6 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { BillingService } from '../billing.service';
+import { paise } from '../clinic-bill-register';
 
 type Invoice = {
   id: string;
@@ -174,6 +175,15 @@ describe('billing invoice totals', () => {
   it('rounds a total with fractional paise to the nearest paisa the desk can collect', async () => {
     const data = await totalFor([{ qty: 3, unitPrice: 33.33, gstRate: 18 }]);
     expect([data.total, data.balance]).toEqual([117.99, 117.99]);
+  });
+
+  it('rounds a half paisa away from zero, as Postgres ROUND does, for refunds too', () => {
+    expect([paise(264.025), paise(-264.025), paise(-0.004), paise(NaN)]).toEqual([26403, -26403, 0, NaN]);
+  });
+
+  it('rounds a discounted GST total just under half a paisa down, not up', async () => {
+    const data = await totalFor([{ qty: 1, unitPrice: 1620.02, gstRate: 18, discount: 17.38 }], 4.26);
+    expect(data.total).toBe(1522.36);
   });
 
   it('charges GST on the line amounts even when the overall discount is a hundred percent', async () => {

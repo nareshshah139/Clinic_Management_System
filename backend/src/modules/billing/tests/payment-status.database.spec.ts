@@ -301,11 +301,37 @@ databaseTests('Clinic payments on PostgreSQL', () => {
     expect([row.total, row.received, row.balance]).toEqual([264.03, 264.03, 0]);
   });
 
+  const toWholePaise = async () => {
+    const sql = readFileSync(resolve('prisma/migrations/20261125150000_clinic_bill_whole_paise/migration.sql'), 'utf8');
+    for (const statement of sql.split(';').filter((s) => s.replace(/--.*$/gm, '').trim())) await db.$executeRawUnsafe(statement);
+  };
+
+  it('keeps a bill paid when it was settled a fraction of a paisa under its total before the migration', async () => {
+    const invoice = await bill(264.025);
+    await pay(invoice.id, 264.02);
+    await db.newInvoice.update({ where: { id: invoice.id }, data: { total: 264.025, received: 264.02, balance: 264.025 - 264.02 } });
+    expect((await register.receipt(invoice.id, 'branch')).bill.status).toBe('PAID');
+    await toWholePaise();
+    await toWholePaise();
+    const { status, amount, paid, due } = (await register.receipt(invoice.id, 'branch')).bill;
+    expect([status, amount, paid, due]).toEqual(['PAID', 264.02, 264.02, 0]);
+  });
+
+  it('rounds a payment saved with a half paisa the same way as the bill it paid', async () => {
+    const invoice = await bill(264.025);
+    const payment = await pay(invoice.id, 264.03);
+    await db.newPayment.update({ where: { id: payment.id }, data: { amount: 264.025 } });
+    await db.newInvoice.update({ where: { id: invoice.id }, data: { total: 264.025, received: 264.025, balance: 0 } });
+    await toWholePaise();
+    const receipt = await register.receipt(invoice.id, 'branch');
+    expect([receipt.bill.amount, receipt.bill.paid, receipt.bill.due]).toEqual([264.03, 264.03, 0]);
+    expect(receipt.payments.map((p) => p.amount)).toEqual([264.03]);
+  });
+
   it('rounds a bill saved with a fraction of a paisa to whole paise when migrated', async () => {
     const invoice = await bill(264.025);
     await db.newInvoice.update({ where: { id: invoice.id }, data: { total: 264.025, received: 100.01, balance: 164.015 } });
-    const sql = readFileSync(resolve('prisma/migrations/20261125150000_clinic_bill_whole_paise/migration.sql'), 'utf8');
-    for (const statement of sql.split(';').filter((s) => s.replace(/--.*$/gm, '').trim())) await db.$executeRawUnsafe(statement);
+    await toWholePaise();
 
     const shown = (await register.receipt(invoice.id, 'branch')).bill;
     expect([shown.amount, shown.due]).toEqual([264.03, 164.02]);

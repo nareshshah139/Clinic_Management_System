@@ -103,10 +103,12 @@ const SETTLED = 0.005;
 
 /**
  * Bill money is compared and changed in whole paise; the columns hold rupees as floats. A half paisa
- * rounds up, as Postgres ROUND does, which 264.025 * 100 = 26402.4999… would otherwise miss.
+ * rounds away from zero, as Postgres ROUND does, which 264.025 * 100 = 26402.4999… would otherwise miss.
  */
-export const paise = (rupees: number) =>
-  Math.round(Number((rupees * 100).toPrecision(12)));
+export const paise = (rupees: number) => {
+  const whole = Math.round(Math.abs(Number((rupees * 100).toPrecision(15))));
+  return rupees < 0 && whole ? -whole : whole;
+};
 export const rupees = (paise: number) => paise / 100;
 
 type BillPayment = {
