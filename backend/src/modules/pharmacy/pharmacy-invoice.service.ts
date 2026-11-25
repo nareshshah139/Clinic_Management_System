@@ -33,6 +33,7 @@ import {
 } from './bill-pricing';
 import { draftBillNumber, isIssuedBillNumber, issuedNumberContains } from './bill-number';
 import { LEDGER_STATUSES, ledgerPaid } from './pharmacy-ledger';
+import { splitIntraState } from './pharmacy-gst-reports';
 
 type DraftFence = { checkoutRequestKey: string; checkoutPayloadHash: string };
 
@@ -1746,9 +1747,10 @@ export class PharmacyInvoiceService {
         existing.taxableAmount + line.taxableAmount,
       );
       existing.totalTax = this.money(existing.totalTax + line.taxAmount);
-      existing.cgst = this.money(existing.totalTax / 2);
-      existing.sgst = this.money(existing.totalTax / 2);
-      existing.igst = 0;
+      const { cgst, sgst, igst } = splitIntraState(existing.totalTax);
+      existing.cgst = cgst;
+      existing.sgst = sgst;
+      existing.igst = igst;
       existing.grossAmount = this.money(
         existing.taxableAmount + existing.totalTax,
       );

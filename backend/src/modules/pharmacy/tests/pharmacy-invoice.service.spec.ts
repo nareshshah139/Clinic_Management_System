@@ -370,6 +370,59 @@ describe('PharmacyInvoiceService defensive stock confirmation', () => {
     );
   });
 
+  it('splits an odd-paise slab tax so CGST and SGST add up to it exactly', async () => {
+    prisma.pharmacyInvoice.findFirst.mockResolvedValue({
+      id: 'invoice-1',
+      invoiceNumber: 'PHI-2026-002',
+      status: 'CONFIRMED',
+      invoiceDate: new Date('2026-05-04T10:00:00.000Z'),
+      subtotal: 10.2,
+      discountAmount: 0,
+      taxAmount: 0.51,
+      totalAmount: 10.71,
+      billingName: 'John Doe',
+      patient: { id: 'patient-1', name: 'John Doe' },
+      doctor: null,
+      branch: { id: branchId, name: 'Main Branch' },
+      payments: [],
+      items: [
+        {
+          id: 'invoice-item-1',
+          itemType: 'DRUG',
+          drugId: 'drug-1',
+          quantity: 1,
+          unitPrice: 10.2,
+          discountPercent: 0,
+          discountAmount: 0,
+          taxPercent: 5,
+          taxAmount: 0.51,
+          totalAmount: 10.71,
+          drug: { id: 'drug-1', name: 'Folvite 5mg' },
+          package: null,
+        },
+      ],
+    });
+    prisma.stockTransaction.findMany.mockResolvedValue([]);
+
+    const { gstSummary } = await service.getPrintData(
+      'invoice-1',
+      branchId,
+      {},
+    );
+
+    expect(gstSummary).toEqual([
+      {
+        taxPercent: 5,
+        taxableAmount: 10.2,
+        cgst: 0.26,
+        sgst: 0.25,
+        igst: 0,
+        totalTax: 0.51,
+        grossAmount: 10.71,
+      },
+    ]);
+  });
+
   it('does not build print data for invoices outside the branch', async () => {
     prisma.pharmacyInvoice.findFirst.mockResolvedValue(null);
 
