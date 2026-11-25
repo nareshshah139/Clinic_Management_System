@@ -219,20 +219,27 @@ const QUEUE_STATUS_AS_DISPENSE: Record<QueueStatus, DispenseTaskStatus> = {
 
 const linesStockCovers = (medications: QueueMedication[], stockByLine: Record<string, StockCheckItem>) => {
   const left = new Map<string, number>();
-  return medications.filter((medication, index) => {
-    const action = medication.action || 'pending';
-    const stock = stockByLine[medication.sourceLineKey ?? String(index)];
-    if ((action !== 'pending' && action !== 'accepted') || !stock) return false;
-    const batches = (stock.batches ?? []).map((batch) => ({ id: batch.id, units: left.get(batch.id) ?? batch.currentStock }));
-    const available = batches.reduce((sum, batch) => sum + batch.units, 0);
-    if (action === 'pending' && available < Math.max(stock.remainingBillingQuantity, 1)) return false;
+  const stockOf = (medication: QueueMedication, index: number) => stockByLine[medication.sourceLineKey ?? String(index)];
+  const unitsLeft = (stock: StockCheckItem) => (stock.batches ?? []).reduce((sum, batch) => sum + (left.get(batch.id) ?? batch.currentStock), 0);
+  const claim = (stock: StockCheckItem) => {
     let owed = stock.remainingBillingQuantity;
-    for (const batch of batches) {
-      const taken = Math.min(owed, batch.units);
-      left.set(batch.id, batch.units - taken);
+    for (const batch of stock.batches ?? []) {
+      const units = left.get(batch.id) ?? batch.currentStock;
+      const taken = Math.min(owed, units);
+      left.set(batch.id, units - taken);
       owed -= taken;
     }
-    return action === 'pending';
+  };
+  medications.forEach((medication, index) => {
+    const stock = stockOf(medication, index);
+    if (medication.action === 'accepted' && stock) claim(stock);
+  });
+  return medications.filter((medication, index) => {
+    const stock = stockOf(medication, index);
+    if ((medication.action || 'pending') !== 'pending' || !stock) return false;
+    if (unitsLeft(stock) < Math.max(stock.remainingBillingQuantity, 1)) return false;
+    claim(stock);
+    return true;
   });
 };
 

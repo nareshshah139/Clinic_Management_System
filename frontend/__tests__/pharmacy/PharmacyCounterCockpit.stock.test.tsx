@@ -220,6 +220,18 @@ it('Accept all available leaves stock an accepted line already claims', async ()
   expect(acceptedLineUrls()).toEqual([['/pharmacy/dispense-tasks/task-1/lines/line-c', 'ACCEPTED']]);
 });
 
+it('Accept all available leaves stock an accepted line claims even when that line comes later', async () => {
+  const task = reviewTask([tabletLine('a', { prescribedQuantity: 4 }), tabletLine('b', { prescribedQuantity: 4, action: 'accepted' }), tabletLine('c', { drugName: 'Folvite', prescribedQuantity: 1 })]);
+  get.mockImplementation(async url => url.endsWith('/stock-check')
+    ? { items: [stripStock('a', 4, [{ id: 'batch-1', currentStock: 6 }]), stripStock('b', 4, [{ id: 'batch-1', currentStock: 6 }]), { ...stripStock('c', 1, [{ id: 'batch-9', currentStock: 1 }]), drugName: 'Folvite', stockName: 'Folvite' }] }
+    : { data: [task], pagination: { total: 1 } });
+  (apiClient.patch as jest.Mock).mockResolvedValue(task);
+  render(<PharmacyCounterCockpit {...props} />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Accept all available (1)' }));
+  await waitFor(() => expect(apiClient.patch).toHaveBeenCalledTimes(1));
+  expect(acceptedLineUrls()).toEqual([['/pharmacy/dispense-tasks/task-1/lines/line-c', 'ACCEPTED']]);
+});
+
 it('says why Ready to bill is off when a line is unavailable', async () => {
   const task = { ...entry(), dispenseTaskId: 'task-1', dispenseStatus: 'IN_REVIEW', medications: [{ ...entry().medications[0], lineId: 'line-1', action: 'unavailable' }] };
   get.mockImplementation(async url => url.endsWith('/stock-check') ? stock(10) : { data: [task], pagination: { total: 1 } });
