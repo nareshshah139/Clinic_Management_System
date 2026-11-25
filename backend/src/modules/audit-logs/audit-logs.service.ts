@@ -14,7 +14,17 @@ export class AuditLogsService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(query: QueryAuditLogsDto) {
+  /**
+   * @cc [owner:nareshshah139,label:security] audit-log-branch-scope
+   * Every read MUST return only entries made by staff of the reader's branch, so one clinic never
+   * sees another's changes. An entry with no user belongs to no branch and MUST NOT be returned.
+   */
+  private async madeInBranch(branchId: string): Promise<Prisma.AuditLogWhereInput> {
+    const staff = await this.prisma.user.findMany({ where: { branchId }, select: { id: true } });
+    return { userId: { in: staff.map((member) => member.id) } };
+  }
+
+  async findAll(query: QueryAuditLogsDto, branchId: string) {
     const {
       page = 1,
       limit = 50,
@@ -32,8 +42,7 @@ export class AuditLogsService {
     const skip = (page - 1) * limit;
     const take = Math.min(limit, 100); // Max 100 items per page
 
-    // Build where clause
-    const where: Prisma.AuditLogWhereInput = {};
+    const where: Prisma.AuditLogWhereInput = { AND: [await this.madeInBranch(branchId)] };
 
     if (entity) {
       where.entity = entity;
@@ -91,17 +100,18 @@ export class AuditLogsService {
     };
   }
 
-  async findOne(id: string) {
-    return this.prisma.auditLog.findUnique({
-      where: { id },
+  async findOne(id: string, branchId: string) {
+    return this.prisma.auditLog.findFirst({
+      where: { id, AND: [await this.madeInBranch(branchId)] },
     });
   }
 
-  async findByEntity(entity: string, entityId: string) {
+  async findByEntity(entity: string, entityId: string, branchId: string) {
     return this.prisma.auditLog.findMany({
       where: {
         entity,
         entityId,
+        AND: [await this.madeInBranch(branchId)],
       },
       orderBy: {
         timestamp: 'desc',
@@ -109,11 +119,11 @@ export class AuditLogsService {
     });
   }
 
-  async findByUser(userId: string, query: QueryAuditLogsDto) {
+  async findByUser(userId: string, query: QueryAuditLogsDto, branchId: string) {
     const { page = 1, limit = 50, startDate, endDate } = query;
     const skip = (page - 1) * limit;
 
-    const where: Prisma.AuditLogWhereInput = { userId };
+    const where: Prisma.AuditLogWhereInput = { userId, AND: [await this.madeInBranch(branchId)] };
 
     if (startDate || endDate) {
       where.timestamp = {};
@@ -146,8 +156,8 @@ export class AuditLogsService {
     };
   }
 
-  async getStatistics(startDate?: string, endDate?: string) {
-    const where: Prisma.AuditLogWhereInput = {};
+  async getStatistics(startDate: string | undefined, endDate: string | undefined, branchId: string) {
+    const where: Prisma.AuditLogWhereInput = { AND: [await this.madeInBranch(branchId)] };
 
     if (startDate || endDate) {
       where.timestamp = {};
@@ -177,7 +187,6 @@ export class AuditLogsService {
         where,
         _count: { entity: true },
         orderBy: { _count: { entity: 'desc' } },
-        take: 10,
       }),
       this.prisma.auditLog.groupBy({
         by: ['userId'],
@@ -209,10 +218,10 @@ export class AuditLogsService {
    * @cc [owner:nareshshah139] audit-export-shape
    * CSV export MUST return encoded text; JSON export MUST retain structured records.
    */
-  async exportLogs(query: QueryAuditLogsDto, format: 'csv'): Promise<string>;
-  async exportLogs(query: QueryAuditLogsDto, format?: 'json'): Promise<Awaited<ReturnType<AuditLogsService['findAll']>>['data']>;
-  async exportLogs(query: QueryAuditLogsDto, format: 'json' | 'csv' = 'json') {
-    const result = await this.findAll({ ...query, limit: 10000 }); // Max export limit
+  async exportLogs(query: QueryAuditLogsDto, format: 'csv', branchId: string): Promise<string>;
+  async exportLogs(query: QueryAuditLogsDto, format: 'json', branchId: string): Promise<Awaited<ReturnType<AuditLogsService['findAll']>>['data']>;
+  async exportLogs(query: QueryAuditLogsDto, format: 'json' | 'csv', branchId: string) {
+    const result = await this.findAll({ ...query, limit: 10000 }, branchId); // Max export limit
 
     if (format === 'csv') {
       return this.convertToCSV(result.data);
