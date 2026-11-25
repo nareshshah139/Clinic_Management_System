@@ -27,6 +27,7 @@ async function confirmDialog(page, text) {
   const handle = await dialog.evaluateHandle((d, t) => [...d.querySelectorAll('button')].find(b => b.textContent.trim() === t && !b.disabled), text);
   await handle.asElement().click();
   await handle.dispose();
+  await page.waitForSelector('[role="alertdialog"]', {hidden:true});
 }
 async function until(read, predicate) {
   for (let i=0;i<100;i++) {
