@@ -149,7 +149,7 @@ describe('how long a notification stays', () => {
     );
     act(() => jest.advanceTimersByTime(1_000));
     expect(screen.getByText('Patient archived')).toBeVisible();
-    act(() => jest.advanceTimersByTime(4_000));
+    act(() => jest.advanceTimersByTime(3_000));
     expect(screen.getByText('Patient archived')).toBeVisible();
   });
 
@@ -169,5 +169,24 @@ describe('how long a notification stays', () => {
     act(() => jest.advanceTimersByTime(1_000));
 
     expect(screen.getByText('Patient archived')).toBeInTheDocument();
+  });
+
+  it('sets notifications aside for a dialog whose field takes focus as it opens', () => {
+    render(<Toaster />);
+    act(() => {
+      toast({ title: 'Stock saved' });
+    });
+
+    render(
+      <Dialog open>
+        <DialogContent>
+          <DialogTitle>Edit stock</DialogTitle>
+          <input aria-label="Quantity" autoFocus defaultValue="4" />
+        </DialogContent>
+      </Dialog>,
+    );
+    act(() => jest.advanceTimersByTime(1_000));
+
+    expect(screen.queryByText('Stock saved')).not.toBeInTheDocument();
   });
 });

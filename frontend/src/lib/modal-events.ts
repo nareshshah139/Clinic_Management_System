@@ -5,5 +5,9 @@
 export const MODAL_OPENED = 'linae:modal-opened';
 export const MODAL_CLOSED = 'linae:modal-closed';
 
-export const announceModalOpened = () => window.dispatchEvent(new Event(MODAL_OPENED));
-export const announceModalClosed = () => window.dispatchEvent(new Event(MODAL_CLOSED));
+export const announceModalOpened = (): void => {
+  window.dispatchEvent(new Event(MODAL_OPENED));
+};
+export const announceModalClosed = (): void => {
+  window.dispatchEvent(new Event(MODAL_CLOSED));
+};
