@@ -21,7 +21,7 @@ export interface MyProcedureAccess {
 
 /** Whether the menu offers Procedures: always to roles that view it, to other roles only while they may record. */
 export function useProcedureMenu(role: string | undefined): boolean {
-  const viewer = !role || PROCEDURE_VIEW_ROLES.includes(role);
+  const viewer = !!role && PROCEDURE_VIEW_ROLES.includes(role);
   const grantable = !!role && GRANTABLE_RECORD_ROLES.includes(role);
   const [mayRecord, setMayRecord] = useState(false);
 
