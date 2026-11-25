@@ -133,6 +133,15 @@ describe('onboarding tours', () => {
     remove.mockRestore();
   });
 
+  it('closes the reception tour when the page under the header changes', async () => {
+    routeTo('/dashboard/pharmacy');
+    const { rerender } = render(<ReceptionistTour />);
+    await startTour('Start tour');
+    routeTo('/dashboard');
+    await act(async () => { rerender(<ReceptionistTour />); });
+    await waitFor(() => expect(document.querySelector('.introjs-tooltip, .introjs-overlay')).toBeNull());
+  });
+
   it('removes an open tour when its page goes away', async () => {
     const { unmount } = render(<><DoctorTour /><div data-tour="visit-bar">Asha Rao</div></>);
     await startTour('Visit workflow tour');

@@ -99,9 +99,10 @@ export const RECEPTIONIST_TOURS: Readonly<Record<string, readonly TourStep[]>> =
 const fallback: readonly TourStep[] = [{ title: 'Tours', intro: replay.intro }];
 
 export function ReceptionistTour() {
-  const steps = RECEPTIONIST_TOURS[usePathname()] ?? fallback;
+  const pathname = usePathname();
+  const steps = RECEPTIONIST_TOURS[pathname] ?? fallback;
   return (
-    <TourButton steps={steps} label="Start tour">
+    <TourButton key={pathname} steps={steps} label="Start tour">
       <span>Start tour</span>
     </TourButton>
   );
