@@ -226,16 +226,17 @@
   }
 }
 
-/* Accessibility enhancements */
-/* Strong visible focus for keyboard users */
-*:focus-visible {
-  outline: 3px solid var(--ring);
-  outline-offset: 2px;
-}
+/* Strong visible focus for keyboard users. In the base layer so a control's own focus utilities (outline-none plus a ring) replace it instead of stacking a second ring. */
+@layer base {
+  *:focus-visible {
+    outline: 3px solid var(--ring);
+    outline-offset: 2px;
+  }
 
-/* Containers focused by script (tabindex=-1 regions, alerts, headings) still announce, but do not ring the whole block. */
-[tabindex="-1"]:not(a, button, input, select, textarea, summary, [role="button"], [role="link"], [role="option"], [role^="menuitem"], [role="tab"], [role="treeitem"], [role="gridcell"], [role="radio"], [role="checkbox"], [role="switch"]):focus-visible {
-  outline: none;
+  /* Containers focused by script (tabindex=-1 regions, alerts, headings) still announce, but do not ring the whole block. */
+  [tabindex="-1"]:not(a, button, input, select, textarea, summary, [role="button"], [role="link"], [role="option"], [role^="menuitem"], [role="tab"], [role="treeitem"], [role="gridcell"], [role="radio"], [role="checkbox"], [role="switch"]):focus-visible {
+    outline: none;
+  }
 }
 
 /* Reduced motion: every transition and animation in the app (dialogs, skeletons,
