@@ -84,8 +84,8 @@ describe('Daily Collection in the main menu', () => {
 const CLINIC_AND_PHARMACY = ['Dashboard', 'Patients', 'Appointments', 'Visits', 'Procedures', 'Rooms', 'Pharmacy Desk', 'Pharmacy Counter', 'Sales', 'Inventory', 'Daily Collection', 'Pharmacy Report'];
 
 it.each([
-  ['OWNER', [...CLINIC_AND_PHARMACY, 'Billing', 'Reports', 'Users', 'Fee list']],
-  ['ADMIN', [...CLINIC_AND_PHARMACY, 'Billing', 'Reports', 'Users', 'Fee list']],
+  ['OWNER', [...CLINIC_AND_PHARMACY, 'Billing', 'Reports', 'Users', 'Fee list', 'Audit log']],
+  ['ADMIN', [...CLINIC_AND_PHARMACY, 'Billing', 'Reports', 'Users', 'Fee list', 'Audit log']],
   ['MANAGER', ['Dashboard', 'Patients', 'Appointments', 'Visits', 'Procedures', 'Pharmacy Desk', 'Pharmacy Counter', 'Inventory', 'Daily Collection', 'Pharmacy Report', 'Reports', 'Users']],
   ['DOCTOR', [...CLINIC_AND_PHARMACY, 'Billing', 'Reports']],
   ['NURSE', ['Dashboard', 'Patients', 'Appointments', 'Visits', 'Rooms']],
@@ -96,6 +96,15 @@ it.each([
   mockRole = role as string;
   render(<Sidebar />);
   expect(within(screen.getByRole('navigation', { name: 'Main navigation' })).getAllByRole('link').map((a) => a.textContent)).toEqual(expected);
+});
+
+it.each([
+  ['OWNER', true], ['ADMIN', true], ['MANAGER', false], ['DOCTOR', false], ['NURSE', false], ['RECEPTION', false], ['PHARMACIST', false], ['ACCOUNTANT', false],
+])('offers the audit log to %s: %s', (role, shown) => {
+  mockRole = role as string;
+  render(<Sidebar />);
+  const link = within(screen.getByRole('navigation', { name: 'Main navigation' })).queryByRole('link', { name: 'Audit log' });
+  expect(link?.getAttribute('href') ?? null).toBe(shown ? '/dashboard/audit-logs' : null);
 });
 
 it('offers Billing under Admin and sends it to the clinic billing page', () => {

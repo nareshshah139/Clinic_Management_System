@@ -1,6 +1,7 @@
 import { ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ROLE_CAPABILITIES, ROLES, rolesWith, type Capability, type Role } from '../../../../frontend/src/lib/role-capabilities';
+import { AuditLogsController } from '../../modules/audit-logs/audit-logs.controller';
 import { AuthController } from '../../modules/auth/auth.controller';
 import { AppointmentsController } from '../../modules/appointments/appointments.controller';
 import { BillingController } from '../../modules/billing/billing.controller';
@@ -37,6 +38,7 @@ const FIRST_READS: Record<Exclude<Capability, 'dashboard' | 'backup'>, FirstRead
   reports: [read(ReportsController, 'generateRevenueReport')],
   users: [read(UsersController, 'findAllUsers')],
   fees: [read(ClinicFeesController, 'list')],
+  'audit-logs': [read(AuditLogsController, 'findAll'), read(AuditLogsController, 'getStatistics'), read(UsersController, 'findAllUsers')],
 };
 
 const reflector = new Reflector();
