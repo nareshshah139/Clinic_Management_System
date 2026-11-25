@@ -34,12 +34,13 @@ it('keeps each request context inside deferred handlers and their asynchronous w
 });
 
 it('PP-88: names the actor kind from the route a request reached', async () => {
-  expect(actorKindOf('/api/portal/task/answer', null)).toBe('task link');
-  expect(actorKindOf('/portal/task?x=1', null)).toBe('task link');
-  expect(actorKindOf('/api/portal/me', 'patient-user')).toBe('portal');
-  expect(actorKindOf('/api/portal/taskx', null)).toBe('portal');
+  expect(actorKindOf('/internal/portal/task/responses', null)).toBe('task link');
+  expect(actorKindOf('/internal/portal/task?x=1', null)).toBe('task link');
+  expect(actorKindOf('/internal/portal/records/messages', null)).toBe('portal');
+  expect(actorKindOf('/internal/portal/taskx', null)).toBe('portal');
   expect(actorKindOf('/api/webhooks/whatsapp', null)).toBe('webhook');
   expect(actorKindOf('/webhooks/whatsapp?hub.mode=subscribe', null)).toBe('webhook');
+  expect(actorKindOf('/portal/task/responses', null)).toBe('system');
   expect(actorKindOf('/patients/p1/portal', 'staff-1')).toBe('staff');
   expect(actorKindOf('/api/webhooks/whatsappx', null)).toBe('system');
   expect(actorKindOf('/api/health', null)).toBe('system');

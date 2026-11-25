@@ -109,7 +109,7 @@ function engineEnv() {
   return {
     ...(query && { PRISMA_QUERY_ENGINE_LIBRARY: path.join(dir, query) }),
     ...(schema && { PRISMA_SCHEMA_ENGINE_BINARY: path.join(dir, schema) }),
-    ...Object.fromEntries(["HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY", "NODE_EXTRA_CA_CERTS", "SSL_CERT_FILE", "PORTAL_SERVICE_SECRET"].filter((k) => process.env[k]).map((k) => [k, process.env[k]])),
+    ...Object.fromEntries(["HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY", "NODE_EXTRA_CA_CERTS", "SSL_CERT_FILE", "PORTAL_SERVICE_SECRET", "PORTAL_BASE_URL"].filter((k) => process.env[k]).map((k) => [k, process.env[k]])),
   };
 }
 
@@ -286,7 +286,7 @@ async function bootStack(opts = {}) {
     }
 
     const backendPort = await freePort();
-    // The portal refuses writes whose Origin is not PORTAL_BASE_URL's (PP-59), so the stack's own frontend is it.
+    // Task links point at PORTAL_BASE_URL/t: pass the portal service's address to prove the patient page.
     const nextPort = await freePort();
     env.PORTAL_BASE_URL ??= `http://127.0.0.1:${nextPort}`;
     const bfd = logFd("backend");

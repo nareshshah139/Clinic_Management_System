@@ -13,7 +13,9 @@ const fake = require("./fake-meta.cjs");
 const IST_MS = 330 * 60 * 1000;
 const DAY_MS = 24 * 3600 * 1000;
 const STAFF_REPLY = "Please come in tomorrow at 10. Avoid scratching.";
-const PHONE = { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 };
+const PHONE = { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2, ignoreHTTPSErrors: true };
+// The patient page lives in the portal service (clinic-patient-portal); launch the stack with PORTAL_BASE_URL set to it.
+const PORTAL = (arg("portal", process.env.PORTAL_BASE_URL) ?? "").replace(/\/$/, "");
 const DESK = { viewport: { width: 1366, height: 900 } };
 const q = (s) => `'${String(s).replace(/'/g, "''")}'`;
 const istDay = (ms) => new Date(ms + IST_MS).toISOString().slice(0, 10);
@@ -156,7 +158,7 @@ async function main() {
     const h = r.headers();
     if (r.url().includes(token) || String(h.referer ?? "").includes(token)) leaks.push({ url: r.url().slice(0, 200), referer: h.referer ?? null });
   });
-  await phone.goto(`${state.base}/p/t#${token}`, { waitUntil: "networkidle", timeout: 180000 });
+  await phone.goto(`${PORTAL}/t#${token}`, { waitUntil: "networkidle", timeout: 180000 });
   await phone.getByRole("button", { name: /send|submit/i }).last().waitFor({ timeout: 120000 });
   c.ok("token left the address bar", !phone.url().includes(token) && !phone.url().includes("#"), phone.url());
   const pageText = await phone.locator("body").innerText();
@@ -173,7 +175,7 @@ async function main() {
   await phone.locator('input[type="file"]').first().setInputFiles(photoPath);
   await phone.locator("img").first().waitFor();
   await shot(phone, "06-patient-answers-with-photo");
-  const submitWait = phone.waitForResponse((r) => r.request().method() === "POST" && r.url().includes("/api/portal/"), { timeout: 120000 });
+  const submitWait = phone.waitForResponse((r) => r.request().method() === "POST" && r.url().includes("/api/task/"), { timeout: 120000 });
   await phone.getByRole("button", { name: /send|submit/i }).last().click();
   const submitted = await submitWait;
   c.ok("answer POST succeeded", submitted.status() < 300, submitted.status());

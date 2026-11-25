@@ -7,7 +7,7 @@ Reception confirms a patient's WhatsApp number, a doctor completes a visit with 
 - `loop-confirm-number`: "Patient agreed to WhatsApp" queues a `number_confirmation` template; typing its 6-digit code under "Confirm number" makes consent `OPTED_IN` with a confirmed number (Release 1a consent, sent through PP-11/PP-12).
 - `loop-plan-picker`: the visit form's "Follow-up plan" select lists "No follow-up" first; completing the visit with "Two-week skin check" starts one ACTIVE track with two check-ins (PP-26, PP-27).
 - `loop-scheduler`: on the shifted clock the send pass opens the day-3 check-in, makes one task link and sends `check_in_opened` with the token only in the URL-button parameter, inside the 09:00-20:00 window (PP-14, PP-30, PP-31, PP-35).
-- `loop-task-page`: `/p/t#<token>` at 390px drops the fragment from the address bar, greets the patient by first name with the clinic and doctor, shows no surname, and never puts the token in a request URL, referrer, storage or cookie (PP-36, PP-40).
+- `loop-task-page`: the portal service's `/t#<token>` at 390px drops the fragment from the address bar, greets the patient by first name with the clinic and doctor, shows no surname, and never puts the token in a request URL, referrer, storage or cookie (PP-36, PP-40).
 - `loop-photo-answer`: a severity of 9 plus a 3000×4000 camera JPEG with EXIF saves one response pinned to the instrument version with one photo, flags it URGENT and shows the call-the-clinic screen (PP-42, PP-44).
 - `loop-inbound`: a signed webhook message from the patient is stored, acknowledged with `patient_message_ack`, and opens a "Patient message" item; an unsigned post gets 401 (Release 1a inbound webhook).
 - `loop-staff-reply`: reception claims the message item, sends a reply that fake Meta receives as free text, and resolves it as "Replied on WhatsApp" (PP-49, PP-50, PP-51).
@@ -19,7 +19,7 @@ Reception confirms a patient's WhatsApp number, a doctor completes a visit with 
 
 - Reception: sidebar **Patients** → a patient → **Info** tab → "WhatsApp and patient portal" card.
 - Doctor: patient page → **Start new visit** → fill Chief complaints, Diagnosis and Follow-up instructions → section "Follow-up and language" → **Follow-up plan** or **Review date** → **Complete Visit**.
-- Patient: the WhatsApp message's button opens `/p/t#<token>` (no login).
+- Patient: the WhatsApp message's button opens the portal service's `/t#<token>` (no login). Run the portal (clinic-patient-portal) behind its `scripts/https-proxy.cjs`, launch the stack with `PORTAL_BASE_URL` set to that HTTPS address and `PORTAL_SERVICE_SECRET` shared with the portal.
 - Staff: sidebar **Clinical → Follow-ups** (`/dashboard/follow-ups`, PP-47) → **Needs attention** → an item → Claim / Send reply / Resolve.
 
 ## Driving it with Playwright
