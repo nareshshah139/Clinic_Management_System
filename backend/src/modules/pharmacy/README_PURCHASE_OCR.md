@@ -195,7 +195,9 @@ different value, restarts support.
 
 Each application rechecks the current product: it must be active in the same branch,
 and strength, dosage form, pack and manufacturer must agree with the line as read.
-A failing check leaves the line as read. Applied lessons appear on the line or header
+A failing check leaves the line as read. Each `learnedCorrections` entry is a reversible patch:
+`restore` holds the form fields as read (a product lesson restores product, manufacturer and pack) and
+`restoreFlags` the flags the lesson removed, so Undo puts the line back exactly as read. Applied lessons appear on the line or header
 as `learnedCorrections` and in `learning.applied` on extraction and import
 responses. The `OCR_EXTRACTED` audit lists applied lessons; `AUTOMATIC_REVIEWED`
 lists the trusted lessons a bill relied on. Set
@@ -216,10 +218,12 @@ supplier", for the product chosen for the same spelling and pack.
   `LESSON_OVERRIDDEN`; this should fall), raw OCR correction rate, auto-commit rate,
   override rate (`LESSON_OVERRIDDEN / (LESSON_KEPT + LESSON_OVERRIDDEN)`), and active
   lessons by tier.
-- `GET /pharmacy/purchase-invoices/learning/lessons` (read permission).
+- `GET /pharmacy/purchase-invoices/learning/lessons` (read permission). Lists supplier lessons
+  only; the cross-supplier (`*`) suggestions are a ranking aid derived from them and are not listed.
 - `POST /pharmacy/purchase-invoices/learning/lessons/forget` with `{ lessonKey }`
   (review permission). Revokes the lesson's examples and audits `LESSON_FORGOTTEN`.
-  The lesson returns only from new reviewed bills.
+  The lesson returns only from new reviewed bills. A `*` key is refused with 400; forget the
+  supplier's own lesson instead.
 
 Deploy migration `20261124100000_purchase_ocr_learning` (additive: one table, two
 nullable columns) before this backend and regenerate Prisma Client. Bills committed

@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { Prisma, PrismaClient } from '@prisma/client';
 import {
   deriveLessons, LearningDrug, LearningExample, LearningExampleRow, Lesson, parseLessonKey, summarizeLearningMetrics,
@@ -9,6 +10,8 @@ const learningDrugSelect = {
   id: true, branchId: true, name: true, manufacturerName: true, packSizeLabel: true, strength: true,
   dosageForm: true, type: true, isActive: true, isDiscontinued: true,
 } satisfies Prisma.DrugSelect;
+
+const CROSS_SUPPLIER = '*';
 
 const asExample = (row: Prisma.PharmacyPurchaseLearningExampleGetPayload<{}>) => row as unknown as LearningExample;
 
@@ -59,16 +62,17 @@ export async function recordPurchaseOutcome(tx: Pick<Prisma.TransactionClient, '
 export async function listPurchaseLessons(db: LearningDb, branchId: string) {
   const examples = await humanExamples(db, branchId);
   return deriveLessons(examples, await branchDrugs(db, branchId, examples))
+    .filter(lesson => lesson.supplierGstin !== CROSS_SUPPLIER)
     .sort((a, b) => b.lastAt.getTime() - a.lastAt.getTime() || a.key.localeCompare(b.key));
 }
 
 export async function forgetPurchaseLesson(db: Pick<PrismaClient, '$transaction'>, branchId: string, key: string, userId: string) {
   const lesson = parseLessonKey(key);
   if (!lesson) return null;
+  if (lesson.supplierGstin === CROSS_SUPPLIER) throw new BadRequestException("This lesson is shared across suppliers and cannot be forgotten. Forget the supplier's own lesson instead.");
   return db.$transaction(async tx => {
     const revoked = await tx.pharmacyPurchaseLearningExample.updateMany({
-      where: { branchId, field: lesson.field, rawKey: lesson.rawKey, revokedAt: null,
-        ...(lesson.supplierGstin === '*' ? {} : { supplierGstin: lesson.supplierGstin }) },
+      where: { branchId, field: lesson.field, rawKey: lesson.rawKey, revokedAt: null, supplierGstin: lesson.supplierGstin },
       data: { revokedAt: new Date() },
     });
     if (revoked.count) await tx.auditLog.create({ data: {
@@ -86,6 +90,6 @@ export async function purchaseLearningMetrics(db: LearningDb, branchId: string, 
   })) as unknown as LearningExample[];
   const lessons = await listPurchaseLessons(db, branchId);
   const activeLessons = { SUGGEST: 0, APPLY: 0, TRUSTED: 0 };
-  for (const lesson of lessons) if (lesson.supplierGstin !== '*') activeLessons[lesson.tier]++;
+  for (const lesson of lessons) activeLessons[lesson.tier]++;
   return { from: range.from, to: range.to, ...summarizeLearningMetrics(examples), activeLessons };
 }

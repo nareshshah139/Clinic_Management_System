@@ -41,7 +41,7 @@ import {
 import { PurchaseManualMatchSearch } from "./PurchaseManualMatchSearch";
 import { PurchaseSupplierReview } from "./PurchaseSupplierReview";
 import { PurchaseLearnedChips } from "./PurchaseLearnedChip";
-import { isLearnedFlag, parseLearnedCorrections, readLearnedCorrections, serializeLearnedCorrections, undoLearnedCorrection, withoutLearnedFlag, learnedFormKey, type LearnedCorrection } from "@/lib/purchase-learning";
+import { isLearnedFlag, parseLearnedCorrections, readLearnedCorrections, serializeLearnedCorrections, undoLearnedCorrection, flagsAfterUndo, learnedFormKey, type LearnedCorrection } from "@/lib/purchase-learning";
 import { AgreedTermHint, AgreedTermsPanel, useAgreedTerms } from "./AgreedTerms";
 import { PurchaseOcrChecklist } from "./PurchaseOcrChecklist";
 import { PurchaseReviewSummary } from "./PurchaseReviewSummary";
@@ -1547,8 +1547,8 @@ function PurchaseInvoiceEditor({
     invalidatePending();
     setManualReviewCandidateId(null);
     dropLearnedCheck("header", correction.field);
-    setHeader((current) => ({ ...current, [learnedFormKey(correction.field)]: correction.from }));
-    setHeaderFlags((current) => withoutLearnedFlag(current, correction.field));
+    setHeader((current) => ({ ...current, ...correction.restore }));
+    setHeaderFlags((current) => flagsAfterUndo(current, correction));
     setHeaderLearned((current) => current.filter((entry) => entry.field !== correction.field));
   };
 
