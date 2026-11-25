@@ -162,6 +162,7 @@ type StockCheckItem = {
   suggestions?: InventorySuggestion[];
   stockStatus: 'UNMATCHED' | 'OUT_OF_STOCK' | 'LOW_STOCK' | 'IN_STOCK';
   totalNonExpiredStock: number;
+  remainingBillingQuantity: number;
   batches?: StockBatch[];
   lowStock: boolean;
   nearExpiry: boolean;
@@ -216,13 +217,23 @@ const QUEUE_STATUS_AS_DISPENSE: Record<QueueStatus, DispenseTaskStatus> = {
   expired: 'PAUSED',
 };
 
-const stockCoversLine = (stock: StockCheckItem | undefined, medication: QueueMedication) => {
-  if (!stock || (stock.stockStatus !== 'IN_STOCK' && stock.stockStatus !== 'LOW_STOCK')) return false;
-  const needed =
-    medication.prescribedQuantity === null
-      ? 1
-      : Math.max(0, medication.prescribedQuantity - medication.dispensedQuantity);
-  return stock.totalNonExpiredStock >= Math.max(needed, 1);
+const linesStockCovers = (medications: QueueMedication[], stockByLine: Record<string, StockCheckItem>) => {
+  const left = new Map<string, number>();
+  return medications.filter((medication, index) => {
+    const action = medication.action || 'pending';
+    const stock = stockByLine[medication.sourceLineKey ?? String(index)];
+    if ((action !== 'pending' && action !== 'accepted') || !stock) return false;
+    const batches = (stock.batches ?? []).map((batch) => ({ id: batch.id, units: left.get(batch.id) ?? batch.currentStock }));
+    const available = batches.reduce((sum, batch) => sum + batch.units, 0);
+    if (action === 'pending' && available < Math.max(stock.remainingBillingQuantity, 1)) return false;
+    let owed = stock.remainingBillingQuantity;
+    for (const batch of batches) {
+      const taken = Math.min(owed, batch.units);
+      left.set(batch.id, batch.units - taken);
+      owed -= taken;
+    }
+    return action === 'pending';
+  });
 };
 
 const matchesSearch = (entry: QueueEntry, search: string) => {
@@ -564,11 +575,7 @@ export function PharmacyCounterCockpit({
   const acceptableMedications = useMemo(
     () =>
       activeEntry && activeEntry.dispensingEligible !== false
-        ? activeEntry.medications.filter(
-            (medication, index) =>
-              (medication.action || 'pending') === 'pending' &&
-              stockCoversLine(stockByLine[medication.sourceLineKey ?? String(index)], medication),
-          )
+        ? linesStockCovers(activeEntry.medications, stockByLine)
         : [],
     [activeEntry, stockByLine],
   );

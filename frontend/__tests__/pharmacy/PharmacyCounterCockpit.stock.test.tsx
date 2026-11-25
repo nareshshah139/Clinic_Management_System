@@ -138,12 +138,12 @@ it('Accept all available accepts only lines the stock covers, in one step', asyn
     { drugName: 'Medicine C', prescribedQuantity: 5, dispensedQuantity: 0, coverageStatus: 'not_started', sourceLineKey: 'c', lineId: 'line-c', action: 'pending' },
   ];
   const task = { ...entry(), dispenseTaskId: 'task-1', dispenseStatus: 'IN_REVIEW', medications: lines };
-  const item = (key: string, name: string, status: string, quantity: number) => ({
-    sourceLineKey: key, drugName: name, inventoryItemId: 'inv', stockName: name, stockStatus: status,
-    totalNonExpiredStock: quantity, batches: [], lowStock: false, nearExpiry: false,
+  const item = (key: string, name: string, status: string, quantity: number, remainingBillingQuantity: number) => ({
+    sourceLineKey: key, drugName: name, inventoryItemId: `inv-${key}`, stockName: name, stockStatus: status, remainingBillingQuantity,
+    totalNonExpiredStock: quantity, batches: quantity ? [{ id: `batch-${key}`, currentStock: quantity, stockStatus: status }] : [], lowStock: false, nearExpiry: false,
   });
   get.mockImplementation(async url => url.endsWith('/stock-check')
-    ? { items: [item('a', 'Medicine A', 'IN_STOCK', 10), item('b', 'Medicine B', 'OUT_OF_STOCK', 0), item('c', 'Medicine C', 'LOW_STOCK', 3)] }
+    ? { items: [item('a', 'Medicine A', 'IN_STOCK', 10, 2), item('b', 'Medicine B', 'OUT_OF_STOCK', 0, 2), item('c', 'Medicine C', 'LOW_STOCK', 3, 5)] }
     : { data: [task], pagination: { total: 1 } });
   (apiClient.patch as jest.Mock).mockImplementation(async (url: string) => ({
     ...task,
@@ -160,7 +160,7 @@ it('Accept all available accepts every in-stock line with a payload each', async
   const lines = ['a', 'b'].map(key => ({ drugName: `Medicine ${key.toUpperCase()}`, prescribedQuantity: 1, dispensedQuantity: 0, coverageStatus: 'not_started', sourceLineKey: key, lineId: `line-${key}`, action: 'pending' }));
   const task = { ...entry(), dispenseTaskId: 'task-1', dispenseStatus: 'IN_REVIEW', medications: lines };
   get.mockImplementation(async url => url.endsWith('/stock-check')
-    ? { items: lines.map(line => ({ sourceLineKey: line.sourceLineKey, drugName: line.drugName, inventoryItemId: 'inv', stockName: line.drugName, stockStatus: 'IN_STOCK', totalNonExpiredStock: 9, batches: [], lowStock: false, nearExpiry: false })) }
+    ? { items: lines.map(line => ({ sourceLineKey: line.sourceLineKey, drugName: line.drugName, inventoryItemId: `inv-${line.sourceLineKey}`, stockName: line.drugName, stockStatus: 'IN_STOCK', remainingBillingQuantity: 1, totalNonExpiredStock: 9, batches: [{ id: `batch-${line.sourceLineKey}`, currentStock: 9, stockStatus: 'IN_STOCK' }], lowStock: false, nearExpiry: false })) }
     : { data: [task], pagination: { total: 1 } });
   (apiClient.patch as jest.Mock).mockResolvedValue(task);
   render(<PharmacyCounterCockpit {...props} />);
@@ -170,6 +170,54 @@ it('Accept all available accepts every in-stock line with a payload each', async
     ['/pharmacy/dispense-tasks/task-1/lines/line-a', 'ACCEPTED'],
     ['/pharmacy/dispense-tasks/task-1/lines/line-b', 'ACCEPTED'],
   ]);
+});
+
+const reviewTask = (lines: Array<Record<string, unknown>>) => ({ ...entry(), dispenseTaskId: 'task-1', dispenseStatus: 'IN_REVIEW', medications: lines });
+const tabletLine = (key: string, extra: Record<string, unknown> = {}) => ({
+  drugName: 'Tricogro tablet', prescribedQuantity: 30, dispensedQuantity: 0, coverageStatus: 'not_started', sourceLineKey: key, lineId: `line-${key}`, action: 'pending', ...extra,
+});
+const stripStock = (key: string, remainingBillingQuantity: number, batches: Array<{ id: string; currentStock: number }>) => ({
+  sourceLineKey: key, drugName: 'Tricogro tablet', inventoryItemId: 'inv-strips', stockName: 'Tricogro tablet', unit: 'STRIPS', stockStatus: 'IN_STOCK',
+  remainingBillingQuantity, totalNonExpiredStock: batches.reduce((sum, batch) => sum + batch.currentStock, 0),
+  batches: batches.map(batch => ({ ...batch, stockStatus: 'IN_STOCK' })), lowStock: false, nearExpiry: false,
+});
+const acceptedLineUrls = () => (apiClient.patch as jest.Mock).mock.calls.map(([url, body]) => [url, body.action]);
+
+it('Accept all available accepts 30 tablets when 3 strips of 10 are in stock', async () => {
+  const task = reviewTask([tabletLine('a')]);
+  get.mockImplementation(async url => url.endsWith('/stock-check')
+    ? { items: [stripStock('a', 3, [{ id: 'batch-1', currentStock: 3 }])] }
+    : { data: [task], pagination: { total: 1 } });
+  (apiClient.patch as jest.Mock).mockResolvedValue(task);
+  render(<PharmacyCounterCockpit {...props} />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Accept all available (1)' }));
+  await waitFor(() => expect(apiClient.patch).toHaveBeenCalledTimes(1));
+  expect(acceptedLineUrls()).toEqual([['/pharmacy/dispense-tasks/task-1/lines/line-a', 'ACCEPTED']]);
+});
+
+it('Accept all available accepts only the first of two lines that share stock covering one', async () => {
+  const task = reviewTask([tabletLine('a', { prescribedQuantity: 4 }), tabletLine('b', { prescribedQuantity: 4 })]);
+  const batches = [{ id: 'batch-1', currentStock: 2 }, { id: 'batch-2', currentStock: 4 }];
+  get.mockImplementation(async url => url.endsWith('/stock-check')
+    ? { items: [stripStock('a', 4, batches), stripStock('b', 4, batches)] }
+    : { data: [task], pagination: { total: 1 } });
+  (apiClient.patch as jest.Mock).mockResolvedValue(task);
+  render(<PharmacyCounterCockpit {...props} />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Accept all available (1)' }));
+  await waitFor(() => expect(apiClient.patch).toHaveBeenCalledTimes(1));
+  expect(acceptedLineUrls()).toEqual([['/pharmacy/dispense-tasks/task-1/lines/line-a', 'ACCEPTED']]);
+});
+
+it('Accept all available leaves stock an accepted line already claims', async () => {
+  const task = reviewTask([tabletLine('a', { prescribedQuantity: 4, action: 'accepted' }), tabletLine('b', { prescribedQuantity: 4 }), tabletLine('c', { drugName: 'Folvite', prescribedQuantity: 1 })]);
+  get.mockImplementation(async url => url.endsWith('/stock-check')
+    ? { items: [stripStock('a', 4, [{ id: 'batch-1', currentStock: 6 }]), stripStock('b', 4, [{ id: 'batch-1', currentStock: 6 }]), { ...stripStock('c', 1, [{ id: 'batch-9', currentStock: 1 }]), drugName: 'Folvite', stockName: 'Folvite' }] }
+    : { data: [task], pagination: { total: 1 } });
+  (apiClient.patch as jest.Mock).mockResolvedValue(task);
+  render(<PharmacyCounterCockpit {...props} />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Accept all available (1)' }));
+  await waitFor(() => expect(apiClient.patch).toHaveBeenCalledTimes(1));
+  expect(acceptedLineUrls()).toEqual([['/pharmacy/dispense-tasks/task-1/lines/line-c', 'ACCEPTED']]);
 });
 
 it('says why Ready to bill is off when a line is unavailable', async () => {

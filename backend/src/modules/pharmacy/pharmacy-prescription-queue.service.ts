@@ -1,6 +1,6 @@
 import { lineMetadata, matchPrescriptionLines, prescriptionLineKeys } from './pharmacy-prescription-line-identity';
 import { queueStatusPage, prescriptionQueueLifecycle, PrescriptionQueueLifecycle } from './pharmacy-prescription-queue-query';
-import { BillingInventory, billingQuantity, normalizeToken, prescribedNeed, sellingUnitValue, snapQuantity } from './pharmacy-billing-quantity';
+import { BillingInventory, billingQuantity, LineNeed, normalizeToken, prescribedNeed, sellingUnitValue, snapQuantity } from './pharmacy-billing-quantity';
 import { availableStock, inventoryIdentityInclude, prescriptionSourceKey, resolvePrescriptionInventory, searchClinicInventory } from './pharmacy-stock-identity';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../shared/database/prisma.service';
@@ -236,6 +236,17 @@ type DispenseTask = {
   lines?: DispenseTaskLine[];
 };
 
+function remainingBillingQuantity(medication: QueueMedication, inventory: BillingInventory | null): number {
+  const source = medication.sourceItem ?? medication;
+  if (medication.prescribedQuantity === null) return billingQuantity(source, inventory, medication.drugName).quantity;
+  const need: LineNeed = {
+    amount: medication.prescribedQuantity,
+    unit: prescribedNeed(source, medication.drugName)?.unit ?? 'selling_units',
+  };
+  const left = Math.max(0, need.amount - medication.dispensedQuantity);
+  return Math.ceil(snapQuantity(left / sellingUnitValue(need, source, inventory, medication.drugName)));
+}
+
 @Injectable()
 export class PharmacyPrescriptionQueueService {
   private readonly expiredAfterHours = 24;
@@ -358,6 +369,7 @@ export class PharmacyPrescriptionQueueService {
    * Countable items MUST bill in the inventory selling unit (doses divided by pack size for strips,
    * boxes and packs). Free-text instruction schedules MUST override the structured frequency and flag
    * a conflict. Lines with no computable schedule MUST fill 1 and be flagged. Flags MUST NOT block billing.
+   * Each line MUST also return remainingBillingQuantity: what it still needs after posted invoices, in that same unit.
    */
   /**
    * @cc [owner:nareshshah139,label:product] queue-stock-check-read-only
@@ -376,6 +388,7 @@ export class PharmacyPrescriptionQueueService {
           sourceLineKey: item.sourceLineKey,
           prescribedQuantity: item.prescribedQuantity,
           billingQuantity: billingQuantity(item.sourceItem ?? item, inventory, item.drugName),
+          remainingBillingQuantity: remainingBillingQuantity(item, inventory),
         };
       }),
     );

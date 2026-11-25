@@ -207,6 +207,25 @@ databaseTests('Queue coverage in selling units with PostgreSQL', () => {
     expect(detail.medications.map(m => m.coverageStatus)).toEqual(['covered', 'covered', 'covered', 'covered', 'covered']);
   });
 
+  it('reports what each line still needs in the unit its stock is counted in', async () => {
+    const at = await clinic('Remaining stock-unit need');
+    const tablet = { dosage: 1, dosageUnit: 'TABLET', ...thirtyDays };
+    await rx(at, 'remaining-need', [
+      line('tricogroStrips', tablet),
+      line('tricogroStrips', tablet),
+      line('folvite', { ...tablet, quantity: 5 }),
+      line('foitrax', tablet),
+      line('serum', { dosage: 2, dosageUnit: 'ML', ...thirtyDays }),
+      line('azithral', { dosage: 1, dosageUnit: 'TABLET', frequency: 'TWICE_DAILY', duration: 5, durationUnit: 'DAYS' }),
+      line('tricogroPieces', tablet),
+    ], confirmed(bill('tricogroStrips', 4), bill('folvite', 4), bill('tricogroPieces', 30)));
+
+    const items = (await queue.stockCheck('remaining-need', at.branchId)).items;
+    expect(items.map(item => [item.remainingBillingQuantity, item.unit])).toEqual([
+      [0, 'STRIPS'], [2, 'STRIPS'], [1, 'STRIPS'], [30, 'PIECES'], [1, 'BOTTLES'], [4, 'BOXES'], [0, 'PIECES'],
+    ]);
+  });
+
   it('agrees with detail coverage on every prescription in a seeded random branch', async () => {
     const at = await clinic('Random coverage agreement');
     const next = random(20261106);
