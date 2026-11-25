@@ -186,18 +186,18 @@ export class UpdateUserDto {
 
 export class ChangePasswordDto {
   @IsString()
-  @MinLength(8)
-  @MaxLength(20)
+  @MinLength(1)
+  @MaxLength(72)
   currentPassword: string;
 
   @IsString()
   @MinLength(8)
-  @MaxLength(20)
+  @MaxLength(72)
   newPassword: string;
 
   @IsString()
   @MinLength(8)
-  @MaxLength(20)
+  @MaxLength(72)
   confirmPassword: string;
 }
 
