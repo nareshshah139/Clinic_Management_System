@@ -406,58 +406,6 @@ function getTourStepsForPage(pathname: string): TourStep[] {
         tooltipClass: 'introjs-medium-tooltip',
       },
       {
-        element: '[data-tour="view-tabs"]',
-        intro: `
-          <div class="space-y-3">
-            <div class="flex items-center gap-2">
-              <h4 class="text-lg font-semibold">Step 3: Choose Your View</h4>
-            </div>
-            <p class="text-sm leading-relaxed mb-3">
-              Two powerful ways to visualize and manage appointments:
-            </p>
-            
-            <div class="grid gap-3">
-              <div class="bg-gradient-to-r from-info-soft to-info-soft p-3 rounded-lg border border-info-border">
-                <div class="flex items-center gap-2 mb-2">
-                  <div class="w-6 h-6 bg-info rounded-md flex items-center justify-center text-white text-xs font-bold">C</div>
-                  <strong class="text-info-text">Calendar View</strong>
-                  <span class="ml-auto text-xs bg-info text-white px-2 py-1 rounded-md">Recommended</span>
-                </div>
-                <ul class="text-xs text-info-text space-y-1 ml-8">
-                  <li>• Visual timeline of the entire day</li>
-                  <li>• See appointment gaps at a glance</li>
-                  <li>• Drag to select custom time ranges</li>
-                  <li>• Perfect for busy days</li>
-                </ul>
-              </div>
-              
-              <div class="bg-gradient-to-r from-success-soft to-success-soft p-3 rounded-lg border border-success-border">
-                <div class="flex items-center gap-2 mb-2">
-                  <div class="w-6 h-6 bg-success rounded-md flex items-center justify-center text-white text-xs font-bold">S</div>
-                  <strong class="text-success-text">Slots View</strong>
-                </div>
-                <ul class="text-xs text-success-text space-y-1 ml-8">
-                  <li>• Traditional time slot grid</li>
-                  <li>• Quick 15-minute increments</li>
-                  <li>• Familiar booking interface</li>
-                  <li>• Great for quick bookings</li>
-                </ul>
-              </div>
-            </div>
-            
-            <div class="bg-highlight-soft border border-highlight-border p-3 rounded-md text-xs mt-3">
-              <strong class="text-highlight-text">When to use what:</strong>
-              <p class="text-highlight-text mt-1">
-                Use <strong>Calendar</strong> when the schedule is complex or you need to see the big picture. 
-                Use <strong>Slots</strong> for straightforward, quick bookings.
-              </p>
-            </div>
-          </div>
-        `,
-        position: 'bottom',
-        tooltipClass: 'introjs-large-tooltip',
-      },
-      {
         intro: `
           <div class="space-y-3 p-1">
             <div class="flex items-center gap-2">
