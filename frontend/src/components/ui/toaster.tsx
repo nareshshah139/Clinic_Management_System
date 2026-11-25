@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast"
 import { splitErrorReference } from "@/lib/utils"
 import { MODAL_CLOSED, MODAL_OPENED } from "@/lib/modal-events"
 
+const DEFAULT_DURATION_MS = 5_000
 const ERROR_DURATION_MS = 10_000
 const REFERENCE_DURATION_MS = 30_000
 
@@ -22,24 +23,42 @@ function durationFor(variant: ToastProps["variant"], reference: string | undefin
   return variant === "destructive" ? ERROR_DURATION_MS : undefined
 }
 
+const referenceIn = (description: unknown) =>
+  typeof description === "string" ? splitErrorReference(description).reference : undefined
+
 export function Toaster() {
   const { toasts, toast, dismiss } = useToast()
   const latest = useRef({ toasts, toast, dismiss })
   latest.current = { toasts, toast, dismiss }
+  const shownAt = useRef(new Map<string, number>())
+  for (const t of toasts) if (!shownAt.current.has(t.id)) shownAt.current.set(t.id, Date.now())
 
   useEffect(() => {
     let depth = 0
-    let parked: typeof toasts = []
+    let parked: { toast: (typeof toasts)[number]; endsAt: number }[] = []
     const opened = () => {
       depth += 1
       const showing = latest.current.toasts.filter((t) => t.open)
       showing.forEach((t) => latest.current.dismiss(t.id))
-      parked = [...parked, ...showing]
+      parked = [
+        ...parked,
+        ...showing.map((t) => {
+          const lasts = t.duration ?? durationFor(t.variant, referenceIn(t.description)) ?? DEFAULT_DURATION_MS
+          return { toast: t, endsAt: (shownAt.current.get(t.id) ?? Date.now()) + lasts }
+        }),
+      ]
     }
     const closed = () => {
       depth = Math.max(0, depth - 1)
       if (depth > 0) return
-      parked.reverse().forEach(({ title, description, action, variant, duration }) => latest.current.toast({ title, description, action, variant, duration }))
+      // A toast comes back only for the time it had left: its action, such as an Undo, may be bound to that window.
+      const now = Date.now()
+      parked
+        .filter(({ endsAt }) => endsAt - now > 500)
+        .reverse()
+        .forEach(({ toast: { title, description, action, variant }, endsAt }) =>
+          latest.current.toast({ title, description, action, variant, duration: endsAt - now }),
+        )
       parked = []
     }
     window.addEventListener(MODAL_OPENED, opened)

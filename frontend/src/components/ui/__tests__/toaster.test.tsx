@@ -138,7 +138,7 @@ describe('how long a notification stays', () => {
     });
     expect(screen.getByText('Could not add the patient')).toBeVisible();
 
-    act(() => jest.advanceTimersByTime(60_000));
+    act(() => jest.advanceTimersByTime(1_000));
 
     rerender(
       <Dialog open={false}>
@@ -149,8 +149,33 @@ describe('how long a notification stays', () => {
     );
     act(() => jest.advanceTimersByTime(1_000));
     expect(screen.getByText('Patient archived')).toBeVisible();
-    act(() => jest.advanceTimersByTime(3_000));
-    expect(screen.getByText('Patient archived')).toBeVisible();
+    act(() => jest.advanceTimersByTime(2_100));
+    expect(screen.queryByText('Patient archived')).not.toBeInTheDocument();
+  });
+
+  it('does not bring back a notification whose time ran out while a dialog was open, so an Undo never outlives its window', () => {
+    render(<Toaster />);
+    act(() => {
+      toast({ title: 'Set off ₹200 of credit', duration: 30_000 });
+    });
+    const { rerender } = render(
+      <Dialog open>
+        <DialogContent>
+          <DialogTitle>Settings</DialogTitle>
+        </DialogContent>
+      </Dialog>,
+    );
+    act(() => jest.advanceTimersByTime(31_000));
+    rerender(
+      <Dialog open={false}>
+        <DialogContent>
+          <DialogTitle>Settings</DialogTitle>
+        </DialogContent>
+      </Dialog>,
+    );
+    act(() => jest.advanceTimersByTime(100));
+
+    expect(screen.queryByText('Set off ₹200 of credit')).not.toBeInTheDocument();
   });
 
   it('keeps notifications while a page holds a dialog that is closed', () => {
