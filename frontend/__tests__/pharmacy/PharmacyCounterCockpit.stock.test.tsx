@@ -188,7 +188,7 @@ it('keeps the review editable while a window-focus refresh rechecks stock', asyn
   get.mockImplementation(async url => url.endsWith('/stock-check') ? new Promise(resolve => { finishStock = resolve; }) : { data: [entry()], pagination: { total: 1 } });
   act(() => { window.dispatchEvent(new Event('focus')); });
   await waitFor(() => expect(get).toHaveBeenCalledWith('/pharmacy/prescription-queue/rx-1/stock-check'));
-  expect(screen.getByRole('button', { name: 'Accept', exact: true })).toBeEnabled();
+  expect(screen.getByRole('button', { name: 'Accept' })).toBeEnabled();
   await act(async () => finishStock(stock(4)));
   await screen.findByText('4 available');
 });
