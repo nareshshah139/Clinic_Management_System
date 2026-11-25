@@ -117,13 +117,13 @@ it('counts on the Today card the bills the register lists, not every unposted bi
 it.each([
   [true, 1],
   [false, 0],
-])('with ledger access %s, lists Payments & dues in the Purchases menu %i time(s)', async (ledger, listed) => {
+])('with ledger access %s, offers Payments & dues and Credits & vouchers on Purchase bills %i time(s)', async (ledger, listed) => {
   mockUrl.set('/dashboard/inventory?area=purchases&view=register');
   serve({ ledger, creditWrite: ledger });
   render(<InventoryWorkspace />);
   await screen.findByRole('tab', { name: 'Purchase' });
-  await waitFor(() => expect(screen.getAllByRole('option', { name: 'Suppliers' })).toHaveLength(2));
-  expect(screen.queryAllByRole('option', { name: 'Payments & dues' })).toHaveLength(listed * 2);
+  expect(screen.queryAllByRole('tab', { name: 'Payments & dues' })).toHaveLength(listed);
+  expect(screen.queryAllByRole('tab', { name: 'Credits & vouchers' })).toHaveLength(listed);
 });
 
 it('opens Purchases on the bills register', async () => {

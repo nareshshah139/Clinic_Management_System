@@ -23,3 +23,39 @@ export function nextWorkspaceSearch(current: URLSearchParams, changes: Record<st
   }
   return next;
 }
+
+type Move = { params: Record<string, string>; listOnly?: true } | { href: string; label: string };
+type WorkspaceMove = { search: URLSearchParams } | { href: string; label: string };
+
+const OPENS_RECORD = ["document", "new", "recoverRequest"];
+const SUPPLIER_RETURNS: Move = { params: { area: "purchases", view: "register", tab: "returns", type: "SUPPLIER_RETURN" }, listOnly: true };
+
+/**
+ * @cc [owner:nareshshah139,label:product] workspace-moved-views
+ * A retired `area/view` link MUST land on its new home: an in-app move rewrites only the named
+ * params and keeps the rest (filters, OAuth code/state); a move out of Inventory names its page.
+ * A list-only move leaves a link that opens a record where it is.
+ */
+const MOVED_VIEWS: Record<string, Move> = {
+  "purchases/csv": { params: { view: "intake", method: "csv" } },
+  "purchases/gmail": { params: { view: "intake", method: "gmail" } },
+  "purchases/ledger": { params: { view: "register", tab: "payments" } },
+  "purchases/credits": { params: { view: "register", tab: "credits" } },
+  "purchases/SUPPLIER_RETURN": SUPPLIER_RETURNS,
+  "stock/SUPPLIER_RETURN": SUPPLIER_RETURNS,
+  "purchases/CREDIT_NOTE": { params: { view: "register", tab: "returns", type: "CREDIT_NOTE" }, listOnly: true },
+  "purchases/reports": { href: "/dashboard/pharmacy/reports?report=gst-summary", label: "Pharmacy Report" },
+  "purchases/daywise": { href: "/dashboard/pharmacy/reports?report=day-wise-summary", label: "Pharmacy Report" },
+  "purchases/margin": { href: "/dashboard/pharmacy/reports?report=item-margin", label: "Pharmacy Report" },
+  "sales/history": { href: "/dashboard/pharmacy/sales", label: "Sales" },
+};
+
+export function movedWorkspaceView(current: URLSearchParams): WorkspaceMove | null {
+  const move = MOVED_VIEWS[`${current.get("area") || "today"}/${current.get("view") || ""}`];
+  if (!move) return null;
+  if ("href" in move) return move;
+  if (move.listOnly && OPENS_RECORD.some((key) => current.has(key))) return null;
+  const search = new URLSearchParams(current);
+  for (const [key, value] of Object.entries(move.params)) search.set(key, value);
+  return { search };
+}

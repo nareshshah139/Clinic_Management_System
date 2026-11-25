@@ -59,7 +59,6 @@ const registerCalls = () => get.mock.calls.filter(([url]) => url === '/pharmacy/
 const lastRequest = () => registerCalls().at(-1)![1] as Record<string, unknown>;
 const onParamsChange = jest.fn();
 const onOpen = jest.fn();
-const onLedger = jest.fn();
 
 function renderRegister(query = '', { canSettle = true, ledger = true } = {}) {
   return render(
@@ -70,7 +69,7 @@ function renderRegister(query = '', { canSettle = true, ledger = true } = {}) {
         canSettle={canSettle}
         onOpen={onOpen}
         onNew={jest.fn()}
-        onLedger={ledger ? onLedger : null}
+        accounts={ledger ? { payments: <p>Supplier payments</p>, credits: <p>Supplier credits</p> } : undefined}
         onSuppliers={jest.fn()}
       />
       <Toaster />
@@ -205,14 +204,17 @@ it('exports from the register endpoint with every filter on screen', async () =>
   open.mockRestore();
 });
 
-it('links Outstanding to Payments & dues for the filtered supplier, and hides it without ledger access', async () => {
+it('links Outstanding to the Payments & dues tab for the filtered supplier, and hides both without ledger access', async () => {
   const { unmount } = renderRegister('gstin=36ABCDE1234F1Z5');
   fireEvent.click(await screen.findByRole('button', { name: 'Outstanding in these 5 bills ₹1,950.00, open Payments & dues' }));
-  expect(onLedger.mock.calls).toEqual([['36ABCDE1234F1Z5']]);
+  expect(onParamsChange.mock.calls.at(-1)![0].toString()).toBe('gstin=36ABCDE1234F1Z5&tab=payments');
+  expect(screen.getByRole('tab', { name: 'Payments & dues' })).toBeInTheDocument();
   unmount();
 
   renderRegister('', { ledger: false });
   await screen.findByText('MED-7');
+  expect(screen.queryByRole('tab', { name: 'Payments & dues' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('tab', { name: 'Credits & vouchers' })).not.toBeInTheDocument();
   expect(screen.getAllByRole('status').find((el) => /^Bills/.test(el.textContent ?? ''))!.firstElementChild!.textContent).toBe('Bills ₹3,000.00 · Outstanding in these 5 bills ₹1,950.00');
   fireEvent.keyDown(screen.getByRole('button', { name: 'More' }), { key: 'Enter' });
   expect((await screen.findAllByRole('menuitem')).map((item) => item.textContent?.trim())).toEqual(['Export to Excel', 'Suppliers']);
