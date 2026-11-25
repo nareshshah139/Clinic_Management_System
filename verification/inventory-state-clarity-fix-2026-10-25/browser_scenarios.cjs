@@ -22,6 +22,12 @@ async function fillLabel(page, text, value) {
   await field.type(String(value));
   await handle.dispose();
 }
+async function confirmDialog(page, text) {
+  const dialog = await page.waitForSelector('[role="alertdialog"]', {visible:true});
+  const handle = await dialog.evaluateHandle((d, t) => [...d.querySelectorAll('button')].find(b => b.textContent.trim() === t && !b.disabled), text);
+  await handle.asElement().click();
+  await handle.dispose();
+}
 async function until(read, predicate) {
   for (let i=0;i<100;i++) {
     const value=await read();
@@ -55,6 +61,7 @@ exports.stock = async (f,s) => {
    };
  },id);
  await click(f.page,'Post stock loss');
+ await confirmDialog(f.page,'Post stock loss');
  await until(()=>f.db.inventoryWorkflowDocument.findUniqueOrThrow({where:{id}}),d=>d.status==='POSTED');
  await f.page.waitForFunction(()=>/could not be confirmed|could not confirm|not confirmed|Check saved status/.test(document.body.innerText));
  const text=await f.page.$eval('body',e=>e.innerText);
