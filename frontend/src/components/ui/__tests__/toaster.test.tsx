@@ -1,3 +1,4 @@
+import { StrictMode } from 'react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { act, render, screen } from '@testing-library/react';
 import { Toaster } from '@/components/ui/toaster';
@@ -147,9 +148,11 @@ describe('how long a notification stays', () => {
         </DialogContent>
       </Dialog>,
     );
-    act(() => jest.advanceTimersByTime(1_000));
+    act(() => jest.advanceTimersByTime(1));
     expect(screen.getByText('Patient archived')).toBeVisible();
-    act(() => jest.advanceTimersByTime(2_100));
+    act(() => jest.advanceTimersByTime(2_900));
+    expect(screen.getByText('Patient archived')).toBeVisible();
+    act(() => jest.advanceTimersByTime(200));
     expect(screen.queryByText('Patient archived')).not.toBeInTheDocument();
   });
 
@@ -213,5 +216,35 @@ describe('how long a notification stays', () => {
     act(() => jest.advanceTimersByTime(1_000));
 
     expect(screen.queryByText('Stock saved')).not.toBeInTheDocument();
+  });
+
+  it('parks a notification once, not twice, when React opens a dialog twice in development', () => {
+    render(<Toaster />);
+    act(() => {
+      toast({ title: 'Patient archived' });
+    });
+    const { rerender } = render(
+      <StrictMode>
+        <Dialog open>
+          <DialogContent>
+            <DialogTitle>New patient</DialogTitle>
+          </DialogContent>
+        </Dialog>
+      </StrictMode>,
+    );
+    act(() => jest.advanceTimersByTime(500));
+    expect(screen.queryByText('Patient archived')).not.toBeInTheDocument();
+
+    rerender(
+      <StrictMode>
+        <Dialog open={false}>
+          <DialogContent>
+            <DialogTitle>New patient</DialogTitle>
+          </DialogContent>
+        </Dialog>
+      </StrictMode>,
+    );
+    act(() => jest.advanceTimersByTime(500));
+    expect(screen.getAllByText('Patient archived')).toHaveLength(1);
   });
 });

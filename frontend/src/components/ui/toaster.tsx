@@ -31,14 +31,19 @@ export function Toaster() {
   const latest = useRef({ toasts, toast, dismiss })
   latest.current = { toasts, toast, dismiss }
   const shownAt = useRef(new Map<string, number>())
+  const current = new Set(toasts.map((t) => t.id))
+  for (const id of shownAt.current.keys()) if (!current.has(id)) shownAt.current.delete(id)
   for (const t of toasts) if (!shownAt.current.has(t.id)) shownAt.current.set(t.id, Date.now())
 
   useEffect(() => {
     let depth = 0
     let parked: { toast: (typeof toasts)[number]; endsAt: number }[] = []
+    let restoring: ReturnType<typeof setTimeout> | undefined
     const opened = () => {
+      // A dialog that closes and reopens at once, as React's development checks do, keeps its toasts parked.
+      clearTimeout(restoring)
       depth += 1
-      const showing = latest.current.toasts.filter((t) => t.open)
+      const showing = latest.current.toasts.filter((t) => t.open && !parked.some((held) => held.toast.id === t.id))
       showing.forEach((t) => latest.current.dismiss(t.id))
       parked = [
         ...parked,
@@ -48,9 +53,7 @@ export function Toaster() {
         }),
       ]
     }
-    const closed = () => {
-      depth = Math.max(0, depth - 1)
-      if (depth > 0) return
+    const restore = () => {
       // A toast comes back only for the time it had left: its action, such as an Undo, may be bound to that window.
       const now = Date.now()
       parked
@@ -61,9 +64,14 @@ export function Toaster() {
         )
       parked = []
     }
+    const closed = () => {
+      depth = Math.max(0, depth - 1)
+      if (depth === 0) restoring = setTimeout(restore, 0)
+    }
     window.addEventListener(MODAL_OPENED, opened)
     window.addEventListener(MODAL_CLOSED, closed)
     return () => {
+      clearTimeout(restoring)
       window.removeEventListener(MODAL_OPENED, opened)
       window.removeEventListener(MODAL_CLOSED, closed)
     }
