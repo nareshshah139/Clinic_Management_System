@@ -19,7 +19,7 @@ import {
   RevenueReportDto,
   OutstandingInvoicesDto,
 } from './dto/query-billing.dto';
-import { VOID, leftToRefund, metadataOf, paise, rupees } from './clinic-bill-register';
+import { VOID, leftToRefund, metadataOf, paise, refundedByPayment, rupees } from './clinic-bill-register';
 
 const RUPEES = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0, maximumFractionDigits: 2 });
 const PAYMENT_INVOICE = { invoice: { select: { id: true, invoiceNo: true, total: true } } } as const;
@@ -476,9 +476,8 @@ export class BillingService {
   /**
    * @cc [owner:nareshshah139,label:calculation;concurrency] refund-total-per-payment
    * The refunds of one payment MUST NOT add up to more than that payment. Each refund row links to
-   * its payment (refundOfId), and the refunds already linked MUST be summed under the bill's row
-   * lock, so of two refunds racing for one payment the second sees the first. Refunds stored before
-   * refundOfId existed carry no link and are not counted here.
+   * its payment (refundOfId), and the bill's refunds MUST be summed under the bill's row lock, so of
+   * two refunds racing for one payment the second sees the first.
    */
   async processRefund(refundDto: RefundDto, branchId: string) {
     const { paymentId, amount, notes } = refundDto;
@@ -513,8 +512,12 @@ export class BillingService {
     // Represent refund as a negative payment (cash refund)
     return this.prisma.$transaction(async (tx) => {
       const bill = await this.lockedMoney(tx, payment.invoiceId);
-      const refunds = await tx.newPayment.findMany({ where: { refundOfId: payment.id }, select: { amount: true } });
-      const left = leftToRefund(payment, refunds);
+      const payments = await tx.newPayment.findMany({
+        where: { invoiceId: payment.invoiceId, reconStatus: 'COMPLETED' },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, amount: true, mode: true, refundOfId: true },
+      });
+      const left = leftToRefund(payment, refundedByPayment(payments));
       if (refund > left) throw new BadRequestException(this.refundRefusal(payment.amount, left, refund));
       if (refund > bill.received) throw new BadRequestException('Refund amount exceeds the amount still received on the invoice');
       await tx.newInvoice.update({

@@ -99,7 +99,11 @@ function setup(
         return { ...row, invoice };
       }),
       findMany: jest.fn(async ({ where }) =>
-        payments.filter((p: any) => p.refundOfId === where.refundOfId),
+        payments.filter(
+          (p: any) =>
+            p.invoiceId === where.invoiceId &&
+            (p.reconStatus ?? 'COMPLETED') === where.reconStatus,
+        ),
       ),
     },
   };

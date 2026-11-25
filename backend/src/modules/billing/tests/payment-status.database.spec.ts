@@ -148,6 +148,27 @@ databaseTests('Clinic payments on PostgreSQL', () => {
     ]);
   });
 
+  it('counts a refund stored before refunds were linked against an older payment of its mode', async () => {
+    const invoice = await bill(1000);
+    const cash = await pay(invoice.id, 500);
+    const upi = await pay(invoice.id, 500, { method: 'UPI' });
+    await db.newPayment.create({ data: { invoiceId: invoice.id, amount: -500, mode: 'CASH', reference: 'REFUND', reconStatus: 'COMPLETED' } });
+    await db.newInvoice.update({ where: { id: invoice.id }, data: { received: 500, balance: 500 } });
+
+    const { payments } = await register.receipt(invoice.id, 'branch');
+    expect(payments.map((p) => [p.amount, p.mode, p.refundable])).toEqual([
+      [500, 'CASH', 0],
+      [500, 'UPI', 500],
+      [-500, 'CASH', 0],
+    ]);
+    await expect(billing.processRefund({ paymentId: cash.id, amount: 500 } as any, 'branch')).rejects.toMatchObject({
+      status: 400,
+      message: 'This ₹500 payment is already refunded in full, so ₹500 cannot be refunded.',
+    });
+    await billing.processRefund({ paymentId: upi.id, amount: 500 } as any, 'branch');
+    expect(await money(invoice.id)).toMatchObject({ received: 0, balance: 1000 });
+  });
+
   it('takes one of two simultaneous refunds of one payment that together exceed it', async () => {
     const invoice = await bill(1000);
     const cash = await pay(invoice.id, 500);

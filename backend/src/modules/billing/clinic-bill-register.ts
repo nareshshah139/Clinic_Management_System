@@ -105,27 +105,66 @@ const SETTLED = 0.005;
 export const paise = (rupees: number) => Math.round(rupees * 100);
 export const rupees = (paise: number) => paise / 100;
 
-/** What a payment brought in less the refunds linked to it, in paise. */
+type BillPayment = {
+  id: string;
+  amount: number;
+  mode: string;
+  refundOfId: string | null;
+};
+
+/**
+ * Paise already refunded from each completed payment of one bill, given in the order they were made.
+ * A refund linked by refundOfId counts against its payment. Refunds stored before that link existed
+ * are spread over the payments of their mode, oldest first, so a fully refunded old payment never
+ * looks refundable again.
+ */
+export const refundedByPayment = (payments: BillPayment[]) => {
+  const refunded = new Map<string, number>();
+  const paid = payments.filter((p) => paise(p.amount) > 0);
+  for (const p of payments) {
+    if (p.refundOfId)
+      refunded.set(
+        p.refundOfId,
+        (refunded.get(p.refundOfId) ?? 0) - paise(p.amount),
+      );
+  }
+  for (const legacy of payments.filter(
+    (p) => paise(p.amount) < 0 && !p.refundOfId,
+  )) {
+    let unplaced = -paise(legacy.amount);
+    for (const p of paid.filter((p) => p.mode === legacy.mode)) {
+      const taken = Math.min(
+        unplaced,
+        Math.max(0, paise(p.amount) - (refunded.get(p.id) ?? 0)),
+      );
+      refunded.set(p.id, (refunded.get(p.id) ?? 0) + taken);
+      unplaced -= taken;
+    }
+  }
+  return refunded;
+};
+
+/** What a payment brought in less what has been refunded from it, in paise. */
 export const leftToRefund = (
-  payment: { amount: number },
-  refunds: { amount: number }[],
-) =>
-  refunds.reduce(
-    (left, refund) => left + paise(refund.amount),
-    paise(payment.amount),
-  );
+  payment: { id: string; amount: number },
+  refunded: Map<string, number>,
+) => paise(payment.amount) - (refunded.get(payment.id) ?? 0);
 
 /** What the desk may still refund on a payment: what is left of it, at most what the bill holds. */
 export const refundableOf = (
   payment: { id: string; amount: number },
-  payments: { amount: number; refundOfId: string | null }[],
+  payments: BillPayment[],
   received: number,
-) => {
-  const refunds = payments.filter((p) => p.refundOfId === payment.id);
-  return rupees(
-    Math.max(0, Math.min(leftToRefund(payment, refunds), paise(received))),
+) =>
+  rupees(
+    Math.max(
+      0,
+      Math.min(
+        leftToRefund(payment, refundedByPayment(payments)),
+        paise(received),
+      ),
+    ),
   );
-};
 
 const person = {
   select: { id: true, firstName: true, lastName: true },
