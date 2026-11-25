@@ -4513,7 +4513,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const undo = useCallback(() => stepHistory(undoStackRef, redoStackRef), [stepHistory]);
   const redo = useCallback(() => stepHistory(redoStackRef, undoStackRef), [stepHistory]);
 
-  const shouldShowLearnedPlanPanel = true;
   const learnedPlanConfidenceLabel = useMemo(() => {
     if (!learnedPlan) return '';
     if (learnedPlan.confidence >= 0.84) return 'High confidence';
@@ -5249,7 +5248,19 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
             {/* Treatment */}
             <CollapsibleSection title="Treatment" section="treatment">
               <div className="space-y-3 overflow-visible">
-                {shouldShowLearnedPlanPanel && (
+                {!learnedPlan ? (
+                  <section aria-label="Treatment suggestions" title={learnedPlanDescription} className="flex min-w-0 items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm text-muted-foreground shadow-sm">
+                    <Sparkles className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                    <span className="shrink-0 font-semibold">Treatment suggestions</span>
+                    <span className={`min-w-0 truncate ${learningSourcesStatus === 'loading' ? 'animate-pulse' : ''}`}>{learnedPlanTitle}</span>
+                    {learningSourcesError && (
+                      <span className="ml-auto inline-flex min-w-0 items-center gap-1 text-xs text-warning-text">
+                        <AlertCircle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                        <span className="truncate">{learningSourcesError}</span>
+                      </span>
+                    )}
+                  </section>
+                ) : (
                   <div className="rounded-lg border bg-card px-5 py-5 text-foreground shadow-sm">
                     <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                       <div className="space-y-3">
@@ -5264,45 +5275,41 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                           </div>
                         </div>
 
-                        {learnedPlan && (
-                          <>
-                            <div className="flex flex-wrap gap-2 text-xs">
-                              <span className="inline-flex items-center rounded-full border bg-muted px-3 py-1 font-medium text-muted-foreground">
-                                {learnedPlan.sourceLabel}
-                              </span>
-                              <span className="inline-flex items-center rounded-full border border-success-border bg-success-soft px-3 py-1 font-medium text-success-text">
-                                {learnedPlanConfidenceLabel}
-                              </span>
-                              {learnedPlan.diagnosisText && (
-                                <span className="inline-flex items-center rounded-full border bg-muted px-3 py-1 font-medium text-muted-foreground">
-                                  Matched on {learnedPlan.diagnosisText}
-                                </span>
-                              )}
-                            </div>
+                        <div className="flex flex-wrap gap-2 text-xs">
+                          <span className="inline-flex items-center rounded-full border bg-muted px-3 py-1 font-medium text-muted-foreground">
+                            {learnedPlan.sourceLabel}
+                          </span>
+                          <span className="inline-flex items-center rounded-full border border-success-border bg-success-soft px-3 py-1 font-medium text-success-text">
+                            {learnedPlanConfidenceLabel}
+                          </span>
+                          {learnedPlan.diagnosisText && (
+                            <span className="inline-flex items-center rounded-full border bg-muted px-3 py-1 font-medium text-muted-foreground">
+                              Matched on {learnedPlan.diagnosisText}
+                            </span>
+                          )}
+                        </div>
 
-                            {learnedPlanVisibleComboNames.length > 0 && (
-                              <div className="flex flex-wrap gap-2">
-                                {learnedPlanVisibleComboNames.map((drugName) => (
-                                  <div
-                                    key={drugName}
-                                    className="inline-flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm font-medium text-foreground"
-                                  >
-                                    <Pill className="h-3.5 w-3.5 text-muted-foreground" />
-                                    <span>{drugName}</span>
-                                  </div>
-                                ))}
-                                {learnedPlanHiddenComboCount > 0 && (
-                                  <div className="inline-flex items-center rounded-lg border bg-muted px-3 py-2 text-sm font-medium text-muted-foreground">
-                                    +{learnedPlanHiddenComboCount} more
-                                  </div>
-                                )}
+                        {learnedPlanVisibleComboNames.length > 0 && (
+                          <div className="flex flex-wrap gap-2">
+                            {learnedPlanVisibleComboNames.map((drugName) => (
+                              <div
+                                key={drugName}
+                                className="inline-flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm font-medium text-foreground"
+                              >
+                                <Pill className="h-3.5 w-3.5 text-muted-foreground" />
+                                <span>{drugName}</span>
+                              </div>
+                            ))}
+                            {learnedPlanHiddenComboCount > 0 && (
+                              <div className="inline-flex items-center rounded-lg border bg-muted px-3 py-2 text-sm font-medium text-muted-foreground">
+                                +{learnedPlanHiddenComboCount} more
                               </div>
                             )}
+                          </div>
+                        )}
 
-                            {learnedPlan.supportingLabel && (
-                              <div className="text-xs text-muted-foreground">{learnedPlan.supportingLabel}</div>
-                            )}
-                          </>
+                        {learnedPlan.supportingLabel && (
+                          <div className="text-xs text-muted-foreground">{learnedPlan.supportingLabel}</div>
                         )}
                       </div>
 
@@ -5313,7 +5320,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                               <Pill className="h-3.5 w-3.5" />
                               Combo
                             </div>
-                            <div className="mt-2 text-lg font-semibold">{learnedPlan ? learnedPlan.comboDrugNames.length : '—'}</div>
+                            <div className="mt-2 text-lg font-semibold">{learnedPlan.comboDrugNames.length}</div>
                             <div className="text-xs text-muted-foreground">meds prefilled</div>
                           </div>
                           <div className="rounded-lg border bg-muted/60 p-3">
@@ -5321,7 +5328,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                               <CalendarDays className="h-3.5 w-3.5" />
                               Review
                             </div>
-                            <div className="mt-2 text-lg font-semibold">{learnedPlan?.reviewDays ? `${learnedPlan.reviewDays}d` : '—'}</div>
+                            <div className="mt-2 text-lg font-semibold">{learnedPlan.reviewDays ? `${learnedPlan.reviewDays}d` : '—'}</div>
                             <div className="text-xs text-muted-foreground">suggested window</div>
                           </div>
                           <div className="rounded-lg border bg-muted/60 p-3">
@@ -5329,7 +5336,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                               <FlaskConical className="h-3.5 w-3.5" />
                               Labs
                             </div>
-                            <div className="mt-2 text-lg font-semibold">{learnedPlan ? learnedPlan.investigations.length : '—'}</div>
+                            <div className="mt-2 text-lg font-semibold">{learnedPlan.investigations.length}</div>
                             <div className="text-xs text-muted-foreground">auto-suggested</div>
                           </div>
                           <div className="rounded-lg border bg-muted/60 p-3">
@@ -5337,23 +5344,21 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                               <Wand2 className="h-3.5 w-3.5" />
                               Evidence
                             </div>
-                            <div className="mt-2 text-lg font-semibold">{learnedPlan ? learnedPlan.evidenceCount : '—'}</div>
+                            <div className="mt-2 text-lg font-semibold">{learnedPlan.evidenceCount}</div>
                             <div className="text-xs text-muted-foreground">matching plans</div>
                           </div>
                         </div>
 
                         <div className="mt-3 flex flex-wrap gap-2">
-                          {learnedPlan && (
-                            <Button
-                              type="button"
-                              size="sm"
-                              onClick={() => { void applyLearnedPlan(learnedPlan, { force: true }); }}
-                            >
-                              <Wand2 className="mr-2 h-4 w-4" />
-                              Reapply learned plan
-                            </Button>
-                          )}
-                          {learnedPlan && treatmentHasMeaningfulData && !learnedPlanCurrent && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => { void applyLearnedPlan(learnedPlan, { force: true }); }}
+                          >
+                            <Wand2 className="mr-2 h-4 w-4" />
+                            Reapply learned plan
+                          </Button>
+                          {treatmentHasMeaningfulData && !learnedPlanCurrent && (
                             <Button
                               type="button"
                               size="sm"
