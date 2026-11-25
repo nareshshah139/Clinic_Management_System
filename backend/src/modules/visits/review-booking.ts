@@ -41,7 +41,7 @@ const dayOf = (date: Date) => date.toISOString().slice(0, 10);
 const dayRange = (date: string) => ({ gte: new Date(`${date}T00:00:00.000Z`), lte: new Date(`${date}T23:59:59.999Z`) });
 const requestedDay = (review: Review) => dayOf(review.reviewRequestedFor ?? review.date);
 
-export function reviewKind(plan: string | null, visitDay: string): { visitType: VisitType; notes: string } {
+export function reviewKind(plan: string | null, visitDay: string): { visitType: VisitType; notes: string; reviewRequestedProcedure: string | null } {
   let parsed: any = null;
   try {
     parsed = plan ? JSON.parse(plan) : null;
@@ -50,7 +50,9 @@ export function reviewKind(plan: string | null, visitDay: string): { visitType: 
   }
   const planned = typeof parsed?.procedurePlanned === 'string' ? parsed.procedurePlanned : parsed?.dermatology?.procedurePlanned;
   const procedure = typeof planned === 'string' ? planned.trim() : '';
-  return procedure ? { visitType: VisitType.PROCEDURE, notes: procedure } : { visitType: VisitType.OPD, notes: `Review after visit on ${visitDay}` };
+  return procedure
+    ? { visitType: VisitType.PROCEDURE, notes: procedure, reviewRequestedProcedure: procedure }
+    : { visitType: VisitType.OPD, notes: `Review after visit on ${visitDay}`, reviewRequestedProcedure: null };
 }
 
 function summarize(appointment: { id: string; date: Date; slot: string; doctor: { firstName: string | null; lastName: string | null } }): ReviewAppointment {
@@ -63,6 +65,13 @@ function summarize(appointment: { id: string; date: Date; slot: string; doctor: 
 }
 
 const existing = (review: Review, date: string): ReviewBooking => ({ status: 'existing', appointment: summarize(review), date });
+
+async function followPlan(tx: Prisma.TransactionClient, review: Review, visit: { plan: string | null; createdAt: Date }) {
+  const kind = reviewKind(visit.plan, istClock(visit.createdAt).date);
+  if (MOVABLE.includes(review.status) && review.reviewRequestedProcedure !== kind.reviewRequestedProcedure) {
+    await tx.appointment.update({ where: { id: review.id }, data: kind });
+  }
+}
 
 const UNCHANGED_REQUEST: Record<AppointmentStatus, (review: Review, date: string) => ReviewBooking> = {
   SCHEDULED: existing,
@@ -108,7 +117,11 @@ export class ReviewBookingService {
    * other doctors do not count. Otherwise every free SCHEDULED-calendar slot of the doctor that IST day that does not
    * overlap the patient's other appointments is tried in order until one books, and full means no such slot was left.
    * The booked appointment is a PROCEDURE appointment whose note is the trimmed "Procedure planned" text when the visit
-   * has any, and otherwise an OPD one whose note names the visit's IST date.
+   * has any, and otherwise an OPD one whose note names the visit's IST date. A booking records that procedure text, or
+   * none, as reviewRequestedProcedure. A SCHEDULED or CONFIRMED review reported as existing MUST be rewritten to the
+   * visit's current procedure (type, note and reviewRequestedProcedure) in the same transaction when that differs from
+   * the recorded one, null counting as none; when it is the same the desk's edits stay, and a CHECKED_IN or
+   * IN_PROGRESS review is never rewritten.
    */
   async book(visitId: string, branchId: string, callerUserId?: string): Promise<ReviewBooking> {
     try {
@@ -145,10 +158,12 @@ export class ReviewBookingService {
     const newest = reviews[0];
     if (newest && requestedDay(newest) === date) {
       const current = open ?? newest;
+      if (open) await followPlan(tx, open, visit);
       return { outcome: UNCHANGED_REQUEST[current.status](current, date) };
     }
     if (open && dayOf(open.date) === date) {
       await tx.appointment.update({ where: { id: open.id }, data: { reviewRequestedFor: new Date(date) } });
+      await followPlan(tx, open, visit);
       return { outcome: existing(open, date) };
     }
     if (open && !MOVABLE.includes(open.status)) {

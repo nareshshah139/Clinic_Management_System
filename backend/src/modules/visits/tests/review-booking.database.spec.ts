@@ -81,6 +81,18 @@ databaseTests('Review booking on PostgreSQL', () => {
     expect(review).toMatchObject({ visitType: 'PROCEDURE', notes: 'Chemical peel', source: 'review', status: 'SCHEDULED' });
   }, 60000);
 
+  it('rewrites the pending review when the planned procedure changes and the review date does not', async () => {
+    const visit = await visitFor('2099-03-21', { procedurePlanned: 'Chemical peel' });
+    expect((await controller.complete(visit.id, {} as any, request)).reviewAppointment.status).toBe('booked');
+    await db.visit.update({ where: { id: visit.id }, data: { plan: JSON.stringify({ procedurePlanned: 'PRP session' }) } });
+
+    expect((await controller.complete(visit.id, {} as any, request)).reviewAppointment.status).toBe('existing');
+
+    const rows = await db.appointment.findMany({ where: { reviewOfVisitId: visit.id } });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ status: 'SCHEDULED', visitType: 'PROCEDURE', notes: 'PRP session', reviewRequestedProcedure: 'PRP session' });
+  }, 60000);
+
   const reviewRow = async (visitId: string, slot: string, status: AppointmentStatus = 'SCHEDULED') => {
     const { followUp } = await db.visit.findUniqueOrThrow({ where: { id: visitId } });
     return db.appointment.create({ data: { patientId: 'patient', doctorId: 'doctor', date: followUp!, branchId: 'branch', reviewOfVisitId: visitId, slot, status } });
