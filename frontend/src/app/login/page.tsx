@@ -10,11 +10,13 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { apiClient } from '@/lib/api';
 import { splitErrorReference } from '@/lib/utils';
+import { NEXT_AFTER_LOGIN_KEY, SESSION_EXPIRED_REASON } from '@/lib/authRedirect';
 
 /**
  * @cc [owner:nareshshah139,label:security] login-local-redirect
- * Post-login destinations MUST be local absolute paths; missing or unsafe values fall back to
- * /dashboard, and local query strings and fragments remain intact.
+ * Post-login destinations MUST be local absolute paths; a missing next falls back to the path
+ * saved when the session expired, unsafe values fall back to /dashboard, and local query strings
+ * and fragments remain intact.
  */
 function loginDestination(next: string | null): string {
   if (!next || !next.startsWith('/') || next.startsWith('//') ||
@@ -22,6 +24,16 @@ function loginDestination(next: string | null): string {
     return '/dashboard';
   }
   return next;
+}
+
+function takeSavedDestination(): string | null {
+  try {
+    const saved = window.localStorage.getItem(NEXT_AFTER_LOGIN_KEY);
+    window.localStorage.removeItem(NEXT_AFTER_LOGIN_KEY);
+    return saved;
+  } catch {
+    return null;
+  }
 }
 
 function LoginPageInner() {
@@ -32,6 +44,7 @@ function LoginPageInner() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [missing, setMissing] = useState({ identifier: false, password: false });
+  const sessionExpired = search.get('reason') === SESSION_EXPIRED_REASON;
 
   const submit = async () => {
     const trimmedIdentifier = identifier.trim();
@@ -47,7 +60,8 @@ function LoginPageInner() {
       setLoading(true);
       setError(null);
       await apiClient.login(trimmedIdentifier, password);
-      router.replace(loginDestination(search.get('next')));
+      const saved = takeSavedDestination();
+      router.replace(loginDestination(search.get('next') ?? saved));
     } catch (e: any) {
       setError(e?.message || 'Login failed');
     } finally {
@@ -65,6 +79,11 @@ function LoginPageInner() {
         noValidate
         className="space-y-4"
       >
+        {sessionExpired && (
+          <p role="status" className="rounded-md border border-info-border bg-info-soft px-3 py-2 text-sm text-info-text">
+            Your session expired. Sign in again to continue where you left off.
+          </p>
+        )}
         <div className="space-y-1">
           <Label htmlFor="login-identifier">Phone or email</Label>
           <Input

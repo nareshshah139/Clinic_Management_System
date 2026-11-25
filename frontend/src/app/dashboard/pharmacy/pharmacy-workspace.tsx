@@ -383,12 +383,13 @@ function QuickAction({ icon, title, onClick }: { icon: ReactNode; title: string;
 }
 
 function PackagesPanel() {
+  const [createOpen, setCreateOpen] = useState(false);
   return (
     <Card>
       <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <CardTitle>Treatment packages</CardTitle>
-          <Dialog>
+          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
             <DialogTrigger asChild>
               <Button>
                 <Plus className="h-4 w-4 mr-2" /> Create package
@@ -401,10 +402,8 @@ function PackagesPanel() {
               <PharmacyPackageCreator onCreated={() => {
                 const ev = new CustomEvent('reload-packages');
                 window.dispatchEvent(ev);
-              }} onCancel={() => {
-                const modal = document.querySelector('[role="dialog"] button[aria-label="Close"]') as HTMLButtonElement | null;
-                modal?.click();
-              }} />
+                setCreateOpen(false);
+              }} onCancel={() => setCreateOpen(false)} />
             </DialogContent>
           </Dialog>
         </div>

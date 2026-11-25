@@ -24,6 +24,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useOverbookConfirm } from '@/components/appointments/useOverbookConfirm';
 import { overbookFlag } from '@/lib/overbooking';
 import { ToastAction } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import { VoiceFillButton } from '@/components/voice/VoiceFillButton';
 import { applyPatientVoiceFill, type PatientVoiceState } from '@/lib/voice-fill-patient';
 import type { VoiceFillFields } from '@/lib/voice-fill';
@@ -143,6 +144,7 @@ function patientCsvRow(patient: Patient): string[] {
 export default function PatientsManagement() {
   const router = useRouter();
   const { toast } = useToast();
+  const [confirm, confirmDialog] = useConfirm();
   const { sendWithOverbookConfirm, overbookDialog } = useOverbookConfirm();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [listLoading, setListLoading] = useState<boolean>(false);
@@ -702,34 +704,32 @@ export default function PatientsManagement() {
     }
   };
 
-  const handleUnlinkPortalUser = (patient: Patient) => {
+  const handleUnlinkPortalUser = async (patient: Patient) => {
     const patientName = formatPatientName(patient);
-    toast({
-      title: 'Confirm unlink',
+    const confirmed = await confirm({
+      title: 'Unlink portal access?',
       description: `Remove portal access for ${patientName}?`,
-      action: {
-        label: 'Confirm',
-        onClick: async () => {
-          try {
-            setActionLoading(true);
-            await apiClient.unlinkPortalUser(patient.id);
-            toast({
-              title: 'Portal user unlinked',
-              description: `Portal access has been removed for ${patientName}`,
-            });
-            await fetchPatients(currentPage);
-          } catch (err: any) {
-            toast({
-              title: 'Failed to unlink portal user',
-              description: err?.message || 'An error occurred',
-              variant: 'destructive',
-            });
-          } finally {
-            setActionLoading(false);
-          }
-        },
-      },
+      confirmLabel: 'Unlink',
+      destructive: true,
     });
+    if (!confirmed) return;
+    try {
+      setActionLoading(true);
+      await apiClient.unlinkPortalUser(patient.id);
+      toast({
+        title: 'Portal user unlinked',
+        description: `Portal access has been removed for ${patientName}`,
+      });
+      await fetchPatients(currentPage);
+    } catch (err: any) {
+      toast({
+        title: 'Failed to unlink portal user',
+        description: err?.message || 'An error occurred',
+        variant: 'destructive',
+      });
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const handleSendWhatsApp = async (patient: Patient) => {
@@ -1014,7 +1014,7 @@ export default function PatientsManagement() {
                 <SelectItem value="OTHER">Other</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={consultationTypeFilter} onValueChange={(v: 'ALL' | 'ONLINE' | 'OFFLINE') => setConsultationTypeFilter(v)}>
+            <Select value={consultationTypeFilter} onValueChange={(v: 'ALL' | 'ONLINE' | 'OFFLINE') => { setConsultationTypeFilter(v); setCurrentPage(1); }}>
               <SelectTrigger aria-label="Filter by consultation type" className="w-full sm:w-auto"><SelectValue placeholder="Consultation Type" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">All Consultations</SelectItem>
@@ -1030,7 +1030,7 @@ export default function PatientsManagement() {
                 <SelectItem value="LAST_1_MONTH">Last 1 Month</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={pageSize.toString()} onValueChange={(v: string) => setPageSize(parseInt(v, 10))}>
+            <Select value={pageSize.toString()} onValueChange={(v: string) => { setPageSize(parseInt(v, 10)); setCurrentPage(1); }}>
               <SelectTrigger aria-label="Patients per page" className="w-full sm:w-auto"><SelectValue placeholder="Per page" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="10">10 / page</SelectItem>
@@ -1206,6 +1206,7 @@ export default function PatientsManagement() {
         </CardContent>
       </Card>
       {overbookDialog}
+      {confirmDialog}
     </div>
   );
 } 

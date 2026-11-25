@@ -10,7 +10,7 @@ const nameOf = (decorator: ts.Decorator) => {
 };
 const hasPolicy = (node: ts.Node) => decorators(node).some(decorator => {
   const name = nameOf(decorator);
-  if (['Roles', 'Permissions', 'Public', 'Authenticated', 'Portal'].includes(name)) return true;
+  if (['Roles', 'Permissions', 'Public', 'Authenticated', 'Portal', 'PortalInternal'].includes(name)) return true;
   const expression = decorator.expression;
   return name === 'SetMetadata' && ts.isCallExpression(expression) &&
     expression.arguments[0] && ts.isStringLiteral(expression.arguments[0]) &&

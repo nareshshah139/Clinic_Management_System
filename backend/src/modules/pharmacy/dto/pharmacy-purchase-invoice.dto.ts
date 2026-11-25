@@ -110,6 +110,12 @@ export class CreatePharmacyPurchaseInvoiceItemDto {
   @Matches(/^[a-zA-Z0-9_-]{1,64}:[0-9]{1,3}$/)
   ocrSourceRef?: string;
 
+  @ApiPropertyOptional({ description: 'Machine-read line this row came from: <documentId>:<readId>:<index>' })
+  @IsOptional()
+  @IsString()
+  @Matches(/^[a-zA-Z0-9_-]{1,64}:[a-zA-Z0-9_-]{1,64}:[0-9]{1,3}$/)
+  ocrLineKey?: string;
+
   @ApiPropertyOptional({ example: 1 })
   @IsOptional()
   @Transform(toOptionalNumber)
@@ -619,6 +625,25 @@ export class SuggestPharmacyPurchaseMasterMatchesDto {
   @ValidateNested({ each: true })
   @Type(() => CreatePharmacyPurchaseInvoiceItemDto)
   items: CreatePharmacyPurchaseInvoiceItemDto[];
+
+  @ApiPropertyOptional({ description: 'Supplier GSTIN read from the invoice; ranks products chosen earlier for this supplier' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(15)
+  supplierGstin?: string;
+}
+
+export class QueryPurchaseLearningMetricsDto {
+  @IsOptional() @IsDateString() from?: string;
+  @IsOptional() @IsDateString() to?: string;
+}
+
+export class ForgetPurchaseLessonDto {
+  @ApiProperty({ description: 'Lesson key from GET learning/lessons' })
+  @IsString()
+  @MinLength(5)
+  @MaxLength(600)
+  lessonKey: string;
 }
 
 export class PurchaseProductCatalogDto {

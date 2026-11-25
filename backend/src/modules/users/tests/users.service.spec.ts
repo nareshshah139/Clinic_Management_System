@@ -260,7 +260,7 @@ describe('UsersService', () => {
       mockPrisma.user.findFirst.mockResolvedValue(existingUser);
       mockPrisma.user.update.mockResolvedValue(updatedUser);
 
-      const result = await service.updateUser('user-123', updateUserDto, 'branch-123');
+      const result = await service.updateUser('user-123', updateUserDto, 'branch-123', 'actor-1');
 
       expect(result).toEqual({
         ...updatedUser,
@@ -272,7 +272,7 @@ describe('UsersService', () => {
     it('should throw NotFoundException if user not found', async () => {
       mockPrisma.user.findFirst.mockResolvedValue(null);
 
-      await expect(service.updateUser('user-123', updateUserDto, 'branch-123')).rejects.toThrow(
+      await expect(service.updateUser('user-123', updateUserDto, 'branch-123', 'actor-1')).rejects.toThrow(
         NotFoundException,
       );
     });
@@ -291,7 +291,7 @@ describe('UsersService', () => {
       mockPrisma.visit.count.mockResolvedValue(0);
       mockPrisma.user.delete.mockResolvedValue(mockUser);
 
-      const result = await service.deleteUser('user-123', 'branch-123');
+      const result = await service.deleteUser('user-123', 'branch-123', 'actor-1');
 
       expect(result).toEqual({ message: 'User deleted successfully' });
     });
@@ -299,7 +299,7 @@ describe('UsersService', () => {
     it('should throw NotFoundException if user not found', async () => {
       mockPrisma.user.findFirst.mockResolvedValue(null);
 
-      await expect(service.deleteUser('user-123', 'branch-123')).rejects.toThrow(
+      await expect(service.deleteUser('user-123', 'branch-123', 'actor-1')).rejects.toThrow(
         NotFoundException,
       );
     });
@@ -308,7 +308,7 @@ describe('UsersService', () => {
       mockPrisma.user.findFirst.mockResolvedValue(mockUser);
       mockPrisma.appointment.count.mockResolvedValue(1);
 
-      await expect(service.deleteUser('user-123', 'branch-123')).rejects.toThrow(
+      await expect(service.deleteUser('user-123', 'branch-123', 'actor-1')).rejects.toThrow(
         BadRequestException,
       );
     });

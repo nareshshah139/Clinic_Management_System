@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import AppointmentsCalendar from './AppointmentsCalendar';
 
@@ -90,7 +90,7 @@ describe('AppointmentsCalendar patient search', () => {
     ]).toEqual([true, null]);
   });
 
-  it('still offers quick-create when a settled search has no matches', async () => {
+  it('does not open quick-create on its own when a settled search has no matches', async () => {
     getPatients.mockResolvedValue({ data: [] });
     const { user, input } = await setup();
 
@@ -98,6 +98,23 @@ describe('AppointmentsCalendar patient search', () => {
     await act(async () => { jest.advanceTimersByTime(400); });
 
     expect(getPatients).toHaveBeenCalledTimes(1);
-    expect(await screen.findByRole('dialog', { name: 'Add New Patient' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Add New Patient' })).not.toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /Create new patient "zzz"/ })).toBeInTheDocument();
+  });
+
+  it('opens quick-create on request and keeps the search text when it is cancelled', async () => {
+    getPatients.mockResolvedValue({ data: [] });
+    const { user, input } = await setup();
+
+    await user.type(input, 'Meeraa');
+    await act(async () => { jest.advanceTimersByTime(400); });
+    await user.click(await screen.findByRole('button', { name: /Create new patient "Meeraa"/ }));
+    const dialog = await screen.findByRole('dialog', { name: 'Add New Patient' });
+    expect(within(dialog).getByLabelText('First Name *')).toHaveValue('Meeraa');
+
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.queryByRole('dialog', { name: 'Add New Patient' })).not.toBeInTheDocument();
+    expect(input).toHaveValue('Meeraa');
   });
 });

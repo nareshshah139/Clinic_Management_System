@@ -117,7 +117,7 @@ describe('counting sheet', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sign off count' }));
     const dialog = await screen.findByRole('dialog', { name: 'Sign off this count' });
     expect(dialog).toHaveTextContent('Sign off this count3 items, 1 differs · Short −3 (−₹37.50)');
-    expect(within(dialog).getByText('System 10 · counted 7')).toBeInTheDocument();
+    expect(within(dialog).getByText('System 10 strips · counted 7 strips')).toBeInTheDocument();
     await act(async () => new Promise((resolve) => setTimeout(resolve, 350)));
     fireEvent.click(within(dialog).getByRole('button', { name: 'Sign off and send for approval' }));
     expect(await within(dialog).findByRole('alert')).toHaveTextContent('Say why these differ, for the approver.');
@@ -180,9 +180,9 @@ describe('signed record and decision', () => {
     expect(screen.getAllByRole('listitem')).toHaveLength(2);
     fireEvent.click(screen.getByRole('button', { name: 'Approve and adjust stock' }));
     const dialog = await screen.findByRole('dialog', { name: 'Approve and adjust stock' });
-    expect(within(dialog).getByRole('list', { name: 'Stock changes' })).toHaveTextContent('Isotroin 10 · B-a8 now →becomes 5It was 10 when counted; stock has moved since.−3 fewer than the system−₹37.50');
+    expect(within(dialog).getByRole('list', { name: 'Stock changes' })).toHaveTextContent('Isotroin 10 · B-a8 strips now →becomes 5 stripsIt was 10 strips when counted; stock has moved since.−3 strips fewer than the system−₹37.50');
     expect(within(dialog).getByText(/^Stock value changes by/)).toHaveTextContent('Stock value changes by −₹37.50');
-    expect(within(dialog).getByText('It was 10 when counted; stock has moved since.')).toBeInTheDocument();
+    expect(within(dialog).getByText('It was 10 strips when counted; stock has moved since.')).toBeInTheDocument();
     expect(within(dialog).getByLabelText('Reason (required)')).toHaveValue('Physical count signed by Anil Deshmukh on 06/11/2026');
     await act(async () => new Promise((resolve) => setTimeout(resolve, 350)));
     fireEvent.click(within(dialog).getByRole('button', { name: 'Approve and adjust stock' }));
@@ -294,7 +294,7 @@ describe('on-demand count picker', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Count an item or a shelf' });
     fireEvent.change(within(dialog).getByPlaceholderText('Item name, batch, or rack'), { target: { value: 'isot' } });
     expect(await within(dialog).findByText('Showing 1 of 27. Type more of the name or batch to narrow it down.')).toBeInTheDocument();
-    expect(within(dialog).getByText('Location not recorded ·', { exact: false })).toHaveTextContent('Location not recorded · 0 in stock');
+    expect(within(dialog).getByText('Location not recorded ·', { exact: false })).toHaveTextContent('Location not recorded · 0 strips in stock');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Count shelf Rack A2 · 3 batches' }));
     await waitFor(() => expect(within(dialog).getByRole('checkbox', { name: /Isotroin 10/ })).toBeChecked());
     expect(within(dialog).getByRole('checkbox', { name: /Adapalene Gel 15g/ })).toBeDisabled();
