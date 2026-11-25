@@ -3,8 +3,11 @@
 import { displayLocalDateHeading } from '@/lib/date-display';
 
 import { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { LoadingSkeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -15,6 +18,7 @@ import { RoomTypeIcon } from './room-type-icon';
 import { enumLabel } from '@/lib/labels';
 import { statusLabel } from '@/lib/status-variants';
 import type { RoomSchedule } from '@/lib/types';
+import { appointmentsHref } from '@/lib/appointments-link';
 import { AppointmentStatus } from '@cms/shared-types';
 
 import type { Room } from '@/lib/types';
@@ -27,10 +31,11 @@ import type { Room } from '@/lib/types';
 /**
  * @cc [owner:nareshshah139,label:product] room-calendar-label-wrapping
  * Appointment names and procedure notes MUST wrap within their appointment block and stay within the
- * scheduled time span; details remain available in the appointment tooltip when text is clipped.
+ * scheduled time span; details remain available by opening the appointment block when text is clipped.
  */
 export default function RoomCalendar() {
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState<string>(() => getISTDateString());
+  const latestScheduleRequest = useRef(0);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [roomSchedules, setRoomSchedules] = useState<Record<string, RoomSchedule>>({});
   const [selectedRoomType, setSelectedRoomType] = useState<string>('all');
@@ -38,16 +43,10 @@ export default function RoomCalendar() {
   const [search, setSearch] = useState('');
   const [gridMinutes, setGridMinutes] = useState<number>(30);
   const [scheduleError, setScheduleError] = useState(false);
-  const schedulesAbortRef = useRef<AbortController | null>(null);
   const fetchRoomsRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fetchSchedulesRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
-  // Tooltip state (fixed-position hover card)
-  const [hoveredApt, setHoveredApt] = useState<any | null>(null);
-  const [hoveredRoomInfo, setHoveredRoomInfo] = useState<{ name: string; type: string } | null>(null);
-  const [tooltipPos, setTooltipPos] = useState<{ top: number; left: number } | null>(null);
-  const [tooltipLocked, setTooltipLocked] = useState<boolean>(false);
-
+  const [openBooking, setOpenBooking] = useState<{ apt: RoomSchedule['appointments'][number]; room: { name: string; type: string } } | null>(null);
 
   const bookedRange = (() => {
     let min = Number.POSITIVE_INFINITY;
@@ -105,9 +104,9 @@ export default function RoomCalendar() {
   };
 
   const fetchRoomSchedules = async () => {
+    const requestId = ++latestScheduleRequest.current;
     try {
-      // Use clinic timezone (IST) date string to align with backend expectations
-      const dateStr = getISTDateString(selectedDate);
+      const dateStr = selectedDate;
       const schedules: Record<string, RoomSchedule> = {};
       let failed = false;
       const results = await Promise.all(
@@ -122,6 +121,7 @@ export default function RoomCalendar() {
           }
         })
       );
+      if (requestId !== latestScheduleRequest.current) return;
       for (const { id, schedule } of results) {
         if (schedule) schedules[id] = schedule;
       }
@@ -129,9 +129,9 @@ export default function RoomCalendar() {
       setScheduleError(failed);
     } catch (error: any) {
       console.error('Error fetching room schedules:', error?.message || error);
-      setScheduleError(true);
+      if (requestId === latestScheduleRequest.current) setScheduleError(true);
     } finally {
-      setLoading(false);
+      if (requestId === latestScheduleRequest.current) setLoading(false);
     }
   };
 
@@ -196,9 +196,9 @@ export default function RoomCalendar() {
   };
 
   const navigateDate = (direction: 'prev' | 'next') => {
-    const newDate = new Date(selectedDate);
-    newDate.setDate(selectedDate.getDate() + (direction === 'next' ? 1 : -1));
-    setSelectedDate(newDate);
+    const next = new Date(`${selectedDate}T00:00:00Z`);
+    next.setUTCDate(next.getUTCDate() + (direction === 'next' ? 1 : -1));
+    setSelectedDate(next.toISOString().slice(0, 10));
   };
 
   const scrollToCurrentHour = () => {
@@ -264,9 +264,16 @@ export default function RoomCalendar() {
             <div className="flex min-w-0 items-center gap-2 sm:min-w-[200px]">
               <Calendar className="h-5 w-5 text-info-text" />
               <h2 className="text-lg font-semibold">
-                {displayLocalDateHeading(selectedDate)}
+                {displayLocalDateHeading(new Date(`${selectedDate}T12:00:00`))}
               </h2>
             </div>
+            <Input
+              type="date"
+              aria-label="Date"
+              className="h-8 w-40"
+              value={selectedDate}
+              onChange={(e) => e.target.value && setSelectedDate(e.target.value)}
+            />
             <Button
               variant="outline"
               size="sm"
@@ -300,7 +307,7 @@ export default function RoomCalendar() {
           />
           <Button
             variant="outline"
-            onClick={() => setSelectedDate(new Date())}
+            onClick={() => setSelectedDate(getISTDateString())}
           >
             Today
           </Button>
@@ -425,7 +432,7 @@ export default function RoomCalendar() {
                 const schedule = roomSchedules[room.id];
                 const appointments = schedule?.appointments || [];
                 const total = dayTotal;
-                const dateStr = getISTDateString(selectedDate);
+                const dateStr = selectedDate;
                 const getColor = (vt: string, completed: boolean, slot: string) => {
                   const isPast = isSlotInPast(slot, dateStr);
                   
@@ -503,33 +510,13 @@ export default function RoomCalendar() {
                       const index = Math.max(0, overlapping.findIndex((b) => (b.id && apt.id ? b.id === apt.id : b.slot === apt.slot)));
                       const widthPct = 100 / Math.max(1, overlapping.length);
                       return (
-                        <div
+                        <button
+                          type="button"
                           key={`label-${room.id}-${idx}`}
-                          className="absolute group"
-                          style={{ top: `${topPct}%`, height: `${heightPct}%`, left: `${index * widthPct}%`, width: `${widthPct}%`, zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                          onMouseEnter={(e) => {
-                            const el = (e.currentTarget as HTMLElement) || null;
-                            if (!el || typeof el.getBoundingClientRect !== 'function') {
-                              // Element may be null if unmounted or event fired during layout changes
-                              setTooltipPos(null);
-                              return;
-                            }
-                            const rect = el.getBoundingClientRect();
-                            if (!rect) {
-                              setTooltipPos(null);
-                              return;
-                            }
-                            setTooltipPos({ top: rect.top + rect.height / 2, left: rect.right + 12 });
-                            setHoveredApt(apt);
-                            setHoveredRoomInfo({ name: room.name, type: room.type });
-                          }}
-                          onMouseLeave={() => {
-                            if (!tooltipLocked) {
-                              setHoveredApt(null);
-                              setHoveredRoomInfo(null);
-                              setTooltipPos(null);
-                            }
-                          }}
+                          aria-label={`${apt.patient.name}, ${apt.slot}, ${room.name}`}
+                          className="group absolute flex items-center justify-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          style={{ top: `${topPct}%`, height: `${heightPct}%`, left: `${index * widthPct}%`, width: `${widthPct}%`, zIndex: 10 }}
+                          onClick={() => setOpenBooking({ apt, room: { name: room.name, type: room.type } })}
                         >
                           <div className="w-full min-w-0 max-h-full overflow-hidden font-medium px-1 py-1 text-center transition-all duration-200 group-hover/col:opacity-40 hover:opacity-100" style={{ color: 'var(--foreground)', fontSize: 'calc(0.75rem + var(--app-text-increase, 0rem))', lineHeight: '1.2' }}>
                             <div className="whitespace-normal [overflow-wrap:anywhere] font-semibold">
@@ -539,9 +526,7 @@ export default function RoomCalendar() {
                               )}
                             </div>
                           </div>
-                          
-                          {/* Per-tile no inline tooltip: global fixed tooltip below */}
-                        </div>
+                        </button>
                       );
                     })}
                   </div>
@@ -554,68 +539,40 @@ export default function RoomCalendar() {
         </CardContent>
       </Card>
 
-      {/* Global fixed tooltip - avoids parent overflow clipping */}
-      {hoveredApt && tooltipPos && (
-        <div
-          className="fixed bg-white shadow-sm border border-border rounded-xl"
-          style={{
-            top: Math.max(8, tooltipPos.top - 120),
-            left: tooltipPos.left,
-            zIndex: 10000,
-            minWidth: 340,
-            minHeight: 240,
-            padding: 12,
-          }}
-          onMouseEnter={() => setTooltipLocked(true)}
-          onMouseLeave={() => {
-            setTooltipLocked(false);
-            setHoveredApt(null);
-            setHoveredRoomInfo(null);
-            setTooltipPos(null);
-          }}
-        >
-          <div className="text-sm space-y-2">
-            <div className="border-b border-border pb-2">
-              <div className="font-semibold text-foreground">{hoveredApt.patient?.name}</div>
-              <div className="text-xs text-muted-foreground">{getISTDateString(selectedDate)} • {hoveredApt.slot}</div>
-            </div>
-            <div>
-              {hoveredApt.patient?.phone && (
-                <div className="text-xs"><span className="font-medium text-foreground">Phone:</span> {hoveredApt.patient.phone}</div>
+      <Dialog open={openBooking !== null} onOpenChange={(open: boolean) => { if (!open) setOpenBooking(null); }}>
+        {openBooking && (
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>{openBooking.apt.patient?.name}</DialogTitle>
+              <DialogDescription>{displayLocalDateHeading(new Date(`${selectedDate}T12:00:00`))} • {openBooking.apt.slot}</DialogDescription>
+            </DialogHeader>
+            <dl className="space-y-1 text-sm [&_dt]:font-medium [&_dt]:text-foreground [&_dd]:text-muted-foreground">
+              {openBooking.apt.doctor && (
+                <div className="flex gap-2"><dt>Doctor:</dt><dd>Dr. {openBooking.apt.doctor.firstName} {openBooking.apt.doctor.lastName}</dd></div>
               )}
-              {hoveredApt.patient?.email && (
-                <div className="text-xs"><span className="font-medium text-foreground">Email:</span> {hoveredApt.patient.email}</div>
+              <div className="flex gap-2"><dt>Type:</dt><dd>{enumLabel('visitType', openBooking.apt.visitType || 'OPD')}</dd></div>
+              {openBooking.apt.status && (
+                <div className="flex gap-2"><dt>Status:</dt><dd>{statusLabel('appointment', openBooking.apt.status)}</dd></div>
               )}
-            </div>
-            <div>
-              {hoveredApt.doctor && (
-                <div className="text-xs"><span className="font-medium text-foreground">Doctor:</span> Dr. {hoveredApt.doctor.firstName} {hoveredApt.doctor.lastName}</div>
+              <div className="flex gap-2"><dt>Room:</dt><dd>{openBooking.room.name} ({openBooking.room.type})</dd></div>
+              {openBooking.apt.patient?.phone && (
+                <div className="flex gap-2"><dt>Phone:</dt><dd>{openBooking.apt.patient.phone}</dd></div>
               )}
-              <div className="text-xs">
-                <span className="font-medium text-foreground">Type:</span>
-                <span className={`ml-1 px-2 py-0.5 rounded-md text-xs font-medium ${
-                  hoveredApt.visitType === 'PROCEDURE' ? 'bg-destructive-soft text-destructive-text' :
-                  hoveredApt.visitType === 'TELEMED' ? 'bg-muted text-foreground' :
-                  'bg-info-soft text-info-text'
-                }`}>
-                  {enumLabel('visitType', hoveredApt.visitType || 'OPD')}
-                </span>
-              </div>
-              {hoveredApt.status && (
-                <div className="text-xs"><span className="font-medium text-foreground">Status:</span> {statusLabel('appointment', hoveredApt.status)}</div>
+              {openBooking.apt.patient?.email && (
+                <div className="flex gap-2"><dt>Email:</dt><dd>{openBooking.apt.patient.email}</dd></div>
               )}
-              {hoveredApt.visitType === 'PROCEDURE' && hoveredApt.notes && (
-                <div className="text-xs [overflow-wrap:anywhere]"><span className="font-medium text-foreground">Notes:</span> {hoveredApt.notes}</div>
+              {openBooking.apt.visitType === 'PROCEDURE' && openBooking.apt.notes && (
+                <div className="flex gap-2 [overflow-wrap:anywhere]"><dt>Notes:</dt><dd>{openBooking.apt.notes}</dd></div>
               )}
-            </div>
-            {hoveredRoomInfo && (
-              <div className="text-xs">
-                <span className="font-medium text-foreground">Room:</span> {hoveredRoomInfo.name} ({hoveredRoomInfo.type})
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+            </dl>
+            <DialogFooter>
+              <Button asChild>
+                <Link href={appointmentsHref(selectedDate, openBooking.apt.doctor?.id)}>Open in Appointments</Link>
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        )}
+      </Dialog>
 
       {/* Legend */}
       <Card className="gap-0 py-0">
