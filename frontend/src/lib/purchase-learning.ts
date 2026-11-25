@@ -61,11 +61,7 @@ const FIELD_LABELS: Record<string, string> = {
 
 export type UndoConflict = { field: string; label: string; current: string; restored: string };
 
-/**
- * Fields Undo would overwrite although the reviewer changed them after the lesson filled them in.
- * A key the correction has no `applied` value for (autosaved before `applied` existed) cannot be
- * judged, so it is skipped rather than reported as an edit.
- */
+// A correction autosaved before `applied` existed cannot tell a hand edit from the lesson's own value.
 export function undoConflicts(values: Record<string, unknown>, correction: LearnedCorrection): UndoConflict[] {
   return Object.entries(correction.restore).flatMap(([field, restored]): UndoConflict[] => {
     if (!(field in correction.applied)) return [];
