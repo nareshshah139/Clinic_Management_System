@@ -6,6 +6,7 @@ import { statusLabel, statusVariant, type StatusVariant } from '@/lib/status-var
 import { useToast } from '@/hooks/use-toast';
 import {
   isSlotInPast,
+  getISTDateString,
   formatPatientName,
   doTimeSlotsOverlap,
   hhmmToMinutes,
@@ -193,6 +194,9 @@ export default function CalendarColumn({
   // Same conservative count as the server: every booking in this calendar overlapping the span takes a place.
   const fits = (span: string) => appointments.filter(a => doTimeSlotsOverlap(a.slot, span)).length < maxBookingsPerSlot;
   const requiredMinutes = slotAction.kind === 'move' ? slotAction.minutes : FLEX_STEP_MIN;
+  const nowMin = nowHHMM ? hhmmToMinutes(nowHHMM) : null;
+  const dayOver = date < getISTDateString();
+  const startsLater = (span: string) => nowMin === null || hhmmToMinutes(span.split('-')[0]) > nowMin;
 
   return (
     <section
@@ -373,14 +377,13 @@ export default function CalendarColumn({
           const hasAny = overlappingAppointments.length > 0;
           const full = overlappingAppointments.length >= maxBookingsPerSlot;
           const primary = overlappingAppointments[0];
-          const past = isSlotInPast(slot, date);
           const isNewlyBooked = recentBookedSlot === slot || (primary?.slot === recentBookedSlot);
           const isBookingInProgress = bookingInProgress === slot;
           const [tileStartStr, tileEndStr] = slot.split('-');
           const tileStartMin = hhmmToMinutes(tileStartStr);
           const tileEndMin = hhmmToMinutes(tileEndStr);
+          const past = dayOver || (nowMin !== null && tileEndMin <= nowMin);
           const isHourStart = tileStartStr.endsWith(':00');
-          const nowMin = nowHHMM ? hhmmToMinutes(nowHHMM) : null;
           const showNowLine = nowMin !== null && nowMin >= tileStartMin && nowMin < tileEndMin;
 
           const inSelectionPreview = (() => {
@@ -402,6 +405,7 @@ export default function CalendarColumn({
 
           const findFirstFreeStart = (minutes: number): number | null => {
             for (let s = tileStartMin; s <= tileEndMin - minutes; s += FLEX_STEP_MIN) {
+              if (nowMin !== null && s <= nowMin) continue;
               if (fits(`${minutesToHHMM(s)}-${minutesToHHMM(s + minutes)}`)) return s;
             }
             return null;
@@ -479,10 +483,12 @@ export default function CalendarColumn({
                 const endHH = lo === hi ? addMinutesToHHMM(startHH, stepMinutes) : slots[hi].split('-')[1];
                 const span = `${startHH}-${endHH}`;
                 clearSelection();
-                if (fits(span)) {
+                if (fits(span) && startsLater(span)) {
                   onBook(span);
                 } else if (freeSpan) {
                   onBook(freeSpan);
+                } else if (fits(span)) {
+                  toast({ variant: 'destructive', title: 'That time has already started', description: 'Please select a later time.' });
                 } else {
                   toast({ variant: 'destructive', title: 'Overlaps existing appointment', description: 'Please select a free time range.' });
                 }
