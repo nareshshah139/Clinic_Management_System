@@ -29,7 +29,7 @@ export function verifyTaskToken(token: string, linkId: string): boolean {
 
 /** The one place that turns a token into the URL a patient opens. */
 export function taskLinkUrl(token: string): string {
-  return `${(process.env.PORTAL_BASE_URL ?? '').replace(/\/$/, '')}/p/t#${token}`;
+  return `${(process.env.PORTAL_BASE_URL ?? '').replace(/\/$/, '')}/t#${token}`;
 }
 
 /**

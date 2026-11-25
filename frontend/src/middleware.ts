@@ -1,24 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { paletteScriptHash, portalCsp } from '@/lib/portal/csp';
-
-async function portal(req: NextRequest) {
-  const nonce = btoa(crypto.randomUUID());
-  const csp = portalCsp(nonce, await paletteScriptHash(), process.env.NODE_ENV !== 'production');
-  const headers = new Headers(req.headers);
-  headers.set('x-nonce', nonce);
-  headers.set('Content-Security-Policy', csp);
-  const res = NextResponse.next({ request: { headers } });
-  res.headers.set('Content-Security-Policy', csp);
-  res.headers.set('Referrer-Policy', 'no-referrer');
-  res.headers.set('Cache-Control', 'no-store');
-  res.headers.set('X-Content-Type-Options', 'nosniff');
-  return res;
-}
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
-
-  if (pathname === '/p' || pathname.startsWith('/p/')) return portal(req);
 
   // OAuth providers redirect back without sending SameSite=Strict cookies on the
   // initial cross-site navigation. Let the client callback page load so it can
@@ -42,5 +25,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/p/:path*'],
+  matcher: ['/dashboard/:path*'],
 };

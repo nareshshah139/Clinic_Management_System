@@ -12,7 +12,10 @@ import { diagnosticValidationPipe } from '../../../shared/logging/http-observabi
 import { canonicalBody, encodeCaller, signPortalCall, type PortalCaller } from '../portal-call';
 import { Caller, PortalInternal } from '../portal-internal.decorator';
 import { PrismaService } from '../../../shared/database/prisma.service';
+import { deriveTaskToken, hashTaskToken } from '../../follow-ups/task-link';
+import { LINK_INACTIVE_BODY } from '../../portal/link-inactive';
 import { PortalRecordsService } from '../../portal/records.service';
+import { TaskPageService } from '../../portal/task.service';
 import { SignInService } from '../../portal/sign-in.service';
 import { PortalInternalModule } from '../portal-internal.module';
 import vector from './portal-call.vector.json';
@@ -66,6 +69,17 @@ describe('/internal/portal (signed portal calls)', () => {
     messages: jest.fn(async () => []),
     write: jest.fn(async () => ({ sent: true })),
   };
+  const links = new Map<string, unknown>();
+  const prisma = { portalTaskLink: { findUnique: jest.fn(async ({ where }: { where: { tokenHash: string } }) => links.get(where.tokenHash) ?? null) } };
+  const tasks = { page: jest.fn(async () => ({ page: true })), submit: jest.fn(async () => ({ status: 'saved', urgent: false })) };
+  const link = (id: string, revokedAt: Date | null, states: string[]) => {
+    const token = deriveTaskToken(id);
+    links.set(hashTaskToken(token), {
+      id, patientId: `patient-of-${id}`, revokedAt, patient: { branchId: 'A', portalProfile: { consentState: 'OPTED_IN', portalEnabled: true } },
+      checkIns: states.map((state, i) => ({ checkInId: `${id}-c${i}`, checkIn: { state, closesAt: new Date(Date.now() + 86_400_000) } })),
+    });
+    return token;
+  };
   const http = () => request(app.getHttpServer());
 
   beforeAll(async () => {
@@ -78,7 +92,8 @@ describe('/internal/portal (signed portal calls)', () => {
         { provide: APP_GUARD, useClass: ThrottlerGuard },
       ],
     })
-      .overrideProvider(PrismaService).useValue({})
+      .overrideProvider(PrismaService).useValue(prisma)
+      .overrideProvider(TaskPageService).useValue(tasks)
       .overrideProvider(SignInService).useValue(signIn)
       .overrideProvider(PortalRecordsService).useValue(records)
       .compile();
@@ -90,6 +105,7 @@ describe('/internal/portal (signed portal calls)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     process.env.PORTAL_SERVICE_SECRET = SECRET;
+    process.env.PORTAL_LINK_SECRET = 'portal-link-test-secret';
     process.env.PORTAL_CODE_ANSWER_MS = '30';
   });
   afterEach(() => {
@@ -257,6 +273,41 @@ describe('/internal/portal (signed portal calls)', () => {
     const caller: PortalCaller = { kind: 'session', token: CHOSEN_SESSION };
     await post('/internal/portal/records/messages', { body: '', clientKey: 'not-a-uuid' }, caller).expect(400);
     expect(records.write).not.toHaveBeenCalled();
+  });
+
+  it.each(['questions', 'responses'])('task/%s answers every non-link caller and every dead link with the same inactive body (PP-39)', async (route) => {
+    const p = `/internal/portal/task/${route}`;
+    const body = route === 'responses' ? { checkInId: 'x', answers: {} } : {};
+    const revoked = link('revoked', new Date(), ['OPEN']);
+    const callers: PortalCaller[] = [
+      { kind: 'anonymous' }, PATIENT, SESSION, { kind: 'session', token: CHOSEN_SESSION },
+      { kind: 'task-link', token: deriveTaskToken('never-issued') }, { kind: 'task-link', token: revoked },
+    ];
+    for (const caller of callers) {
+      const res = await post(p, body, caller);
+      expect([res.status, res.text, res.headers['cache-control']]).toEqual([404, LINK_INACTIVE_BODY, 'no-store']);
+    }
+    expect(tasks.page).not.toHaveBeenCalled();
+    expect(tasks.submit).not.toHaveBeenCalled();
+  });
+
+  it('builds the task principal from the signed token alone, with only OPEN check-ins (PP-84, LinkAnswersOnly)', async () => {
+    const token = link('live', null, ['OPEN', 'ANSWERED', 'OPEN']);
+    await post('/internal/portal/task/questions', { token: 'ignored', patientId: 'someone-else' }, { kind: 'task-link', token }).expect(200, { page: true });
+    const principal = { kind: 'task-link', linkId: 'live', patientId: 'patient-of-live', branchId: 'A', checkInIds: ['live-c0', 'live-c2'] };
+    expect(tasks.page).toHaveBeenCalledWith(principal);
+    expect(Object.isFrozen((tasks.page.mock.calls[0] as unknown[])[0])).toBe(true);
+    const answers = { checkInId: 'live-c0', answers: { severity: 3 } };
+    await post('/internal/portal/task/responses', answers, { kind: 'task-link', token }).expect(200);
+    expect(tasks.submit).toHaveBeenCalledWith(principal, answers);
+  });
+
+  it('sends no patient-entered text or photo to OpenAI (PP-90)', () => {
+    const walk = (dir: string): string[] =>
+      fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(dir, e.name)) : [path.join(dir, e.name)]));
+    const sources = ['../../portal', '..'].flatMap((d) => walk(path.resolve(__dirname, d))).filter((f) => f.endsWith('.ts') && !f.includes(`${path.sep}tests${path.sep}`));
+    expect(sources.length).toBeGreaterThan(10);
+    for (const f of sources) expect(fs.readFileSync(f, 'utf8')).not.toMatch(/openai|api\.openai\.com/i);
   });
 
   it('matches the shared test vector the portal service also checks', () => {

@@ -33,8 +33,8 @@ const PUBLIC_ROUTES = [
   'POST /internal/portal/sign-in/verify',
   'POST /internal/portal/sign-out',
   'POST /internal/portal/sign-out-everywhere',
-  'POST /portal/task/questions',
-  'POST /portal/task/responses',
+  'POST /internal/portal/task/questions',
+  'POST /internal/portal/task/responses',
   'POST /webhooks/whatsapp',
 ];
 

@@ -1,13 +1,6 @@
 import { Type } from 'class-transformer';
 import { ArrayMaxSize, IsObject, IsOptional, IsString, Matches, MaxLength, ValidateNested } from 'class-validator';
 
-class TokenBody {
-  @IsString()
-  token!: string;
-}
-
-export class QuestionsDto extends TokenBody {}
-
 export class PhotoDto {
   @IsString()
   @MaxLength(64)
@@ -18,7 +11,7 @@ export class PhotoDto {
   dataUrl!: string;
 }
 
-export class SubmitDto extends TokenBody {
+export class SubmitDto {
   @IsString()
   @MaxLength(64)
   checkInId!: string;

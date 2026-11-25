@@ -1,4 +1,3 @@
-import { Reflector } from '@nestjs/core';
 import { Logger } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import { execFileSync } from 'child_process';
@@ -12,8 +11,8 @@ import { PatientPortalService } from '../../patients/portal/patient-portal.servi
 import { syncPatientPhone } from '../../patients/portal/portal-profile';
 import { VisitsService } from '../../visits/visits.service';
 import { LinkInactive } from '../link-inactive';
-import { PortalGuard } from '../portal.guard';
-import { PRINCIPAL, TaskLinkPrincipal } from '../principal';
+import { taskLinkOf } from '../../portal-internal/task-link-caller';
+import type { TaskLinkPrincipal } from '../principal';
 import { TaskPageService } from '../task.service';
 
 const databaseTests = process.env.PORTAL_TASK_TEST_DATABASE_URL ? describe : describe.skip;
@@ -44,11 +43,7 @@ databaseTests('Task links and the patient task page on PostgreSQL', () => {
     await db.portalTaskLink.create({ data: { id: linkId, dedupeKey: `test:${linkId}`, patientId: p.id, tokenHash: hashTaskToken(token), checkIns: { create: [{ checkInId: first.id }] } } });
     return { patient: p, checkInId: first.id, token };
   };
-  const principalFor = async (token: string, client: PrismaClient = db): Promise<TaskLinkPrincipal> => {
-    const req: any = { body: { token }, method: 'POST', headers: { origin: 'https://portal.test' } };
-    await new PortalGuard(client as any, new Reflector(), {} as any).canActivate({ switchToHttp: () => ({ getRequest: () => req }), getHandler: () => principalFor } as any);
-    return req[PRINCIPAL];
-  };
+  const principalFor = (token: string, client: PrismaClient = db): Promise<TaskLinkPrincipal> => taskLinkOf(client as any, { kind: 'task-link', token });
   const answer = (severity: number, withPhoto = false) => ({
     answers: { severity, change: 'same' },
     photos: withPhoto ? [{ itemKey: 'photo', dataUrl: photo }] : [],

@@ -3,11 +3,12 @@ Controllers declaring the clinic staff policy MUST deny patient and lab technici
 except on routes explicitly declared public or authenticated and independently scoped.
 
 @cc [owner:nareshshah139,label:security] portal-principal-boundary
-Routes under /portal MUST take their scope only from the principal PortalGuard builds.
+Routes under /internal/portal MUST take their scope only from the signed caller PortalInternalGuard
+verifies, resolved by taskLinkOf, identityOf or patientOf.
 OwnDataOnly: a portal principal reads and writes only its own patient's data, and no portal
 route accepts a patient id. LinkAnswersOnly: a task-link principal reads only the questions of
 its OPEN check-ins and writes only their responses; it reads no stored answer.
 StaffCookieStaysStaff: a staff cookie or JWT never makes a portal principal, and a portal
 credential never authorises a staff route.
-A signed-in principal comes only from the __Host-portal_session cookie; a portal-patient
+A signed-in principal comes only from a session caller's token; a portal-patient
 principal names the profile the session chose, rebuilt from the confirmed number on every request.

@@ -53,8 +53,6 @@ export const PAGE_ROUTES = [
   '/dashboard/stock-predictions',
   '/dashboard/users',
   '/dashboard/visits',
-  '/p/records',
-  '/p/t',
 ] as const;
 export type RouteTemplate = (typeof PAGE_ROUTES)[number] | '/other';
 

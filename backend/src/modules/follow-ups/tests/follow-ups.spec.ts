@@ -36,7 +36,7 @@ describe('follow-up helpers', () => {
     expect(verifyTaskToken(token, 'tl_1')).toBe(true);
     expect(verifyTaskToken(token, 'tl_2')).toBe(false);
     expect(hashTaskToken(token)).toMatch(/^[0-9a-f]{64}$/);
-    expect(taskLinkUrl(token)).toBe(`https://portal.example.test/p/t#${token}`);
+    expect(taskLinkUrl(token)).toBe(`https://portal.example.test/t#${token}`);
   });
 
   it('PP-41: check-in and review templates carry the clinic, the token as a URL button, and nothing clinical', () => {

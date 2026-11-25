@@ -19,14 +19,6 @@ export const hashSessionToken = (token: string) => createHash('sha256').update(t
 
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
 
-export function sessionTokenFrom(cookieHeader: string | undefined): string | null {
-  if (!cookieHeader) return null;
-  const match = cookieHeader.match(/(?:^|;\s*)__Host-portal_session=([^;]+)/);
-  if (!match) return null;
-  const token = decodeURIComponent(match[1]);
-  return TOKEN.test(token) ? token : null;
-}
-
 function refSecret() {
   const s = process.env.PORTAL_CODE_SECRET || process.env.JWT_SECRET;
   if (!s) throw new Error('PORTAL_CODE_SECRET or JWT_SECRET must be set');

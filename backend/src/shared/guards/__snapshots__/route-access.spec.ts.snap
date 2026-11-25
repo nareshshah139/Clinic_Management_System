@@ -355,6 +355,8 @@ POST /internal/portal/sign-in/code | public
 POST /internal/portal/sign-in/verify | public
 POST /internal/portal/sign-out | public
 POST /internal/portal/sign-out-everywhere | public
+POST /internal/portal/task/questions | public
+POST /internal/portal/task/responses | public
 POST /inventory/adjustments | roles: ADMIN,PHARMACIST,RECEPTION | permissions: inventory:adjustment:create
 POST /inventory/imports/:id/retry-failed-rows | roles: ADMIN,PHARMACIST,RECEPTION | permissions: inventory:item:create
 POST /inventory/item-requests/:id/approve | roles: ADMIN,DOCTOR | permissions: inventory:item:approve
@@ -454,8 +456,6 @@ POST /pharmacy/purchase-ledger/payments/:id/reallocate | roles: ADMIN,PHARMACIST
 POST /pharmacy/purchase-ledger/payments/:id/reverse | roles: ADMIN,PHARMACIST,ACCOUNTANT,DOCTOR | permissions: pharmacy:purchase-ledger:write
 POST /pharmacy/reports/daily-collection/:day/counts | roles: OWNER,ADMIN,MANAGER,PHARMACIST,DOCTOR | permissions: pharmacy:compliance:audit
 POST /pharmacy/trade-terms/lookup | roles: OWNER,ADMIN,DOCTOR,PHARMACIST,RECEPTION,MANAGER,ACCOUNTANT | permissions: -
-POST /portal/task/questions | public
-POST /portal/task/responses | public
 POST /prescriptions | roles: DOCTOR,ADMIN,OWNER | permissions: -
 POST /prescriptions/:id/pdf | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -
 POST /prescriptions/:id/print-events | roles: OWNER,ADMIN,MANAGER,DOCTOR,NURSE,RECEPTION,PHARMACIST,ACCOUNTANT | permissions: -

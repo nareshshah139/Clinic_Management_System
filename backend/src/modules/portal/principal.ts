@@ -1,4 +1,4 @@
-/** The only credential a task-link route accepts; built by PortalGuard and nowhere else (PP-84). */
+/** The only credential a task-link route accepts; built by taskLinkOf and nowhere else (PP-84). */
 export type TaskLinkPrincipal = {
   readonly kind: 'task-link';
   readonly linkId: string;
@@ -25,7 +25,3 @@ export type PortalPatientPrincipal = {
   readonly branchId: string;
 };
 
-export type PortalPrincipal = TaskLinkPrincipal | PortalIdentityPrincipal | PortalPatientPrincipal;
-
-export const PRINCIPAL = Symbol('portal-principal');
-export type PortalRequest = { body?: unknown; method?: string; headers: Record<string, string | string[] | undefined>; [PRINCIPAL]?: PortalPrincipal };
