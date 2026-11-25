@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import PrescriptionBuilder from '@/components/visits/PrescriptionBuilder';
 
@@ -20,6 +21,18 @@ async function mount(items: object[]) {
   localStorage.setItem('rxDraft:undo-test:standalone', JSON.stringify({ items }));
   render(<PrescriptionBuilder patientId="undo-test" visitId={null} doctorId="doctor" />);
   await wait(1000);
+}
+
+function WithReviewDate() {
+  const [reviewDate, setReviewDate] = useState('');
+  return <PrescriptionBuilder patientId="undo-test" visitId={null} doctorId="doctor" reviewDate={reviewDate} onChangeReviewDate={setReviewDate} />;
+}
+async function mountWithReviewDate() {
+  jest.setSystemTime(new Date(2026, 2, 2, 9));
+  localStorage.setItem('rxDraft:undo-test:standalone', JSON.stringify({ items: [row('', 7)] }));
+  render(<WithReviewDate />);
+  await wait(1000);
+  return { instructions: screen.getByLabelText('Follow-up instructions') as HTMLInputElement, reviewDate: screen.getByLabelText('Review date') as HTMLInputElement };
 }
 
 beforeEach(() => {
@@ -66,5 +79,40 @@ describe('prescription undo and redo', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
 
     expect(medicineNames()[0]).toBe('Cetirizine 10');
+  });
+
+  it('undoing a follow-up shortcut also restores the review date it set, and redo sets it again', async () => {
+    const { instructions, reviewDate } = await mountWithReviewDate();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Follow up in 14 days' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Follow up in 30 days' }));
+    expect([instructions.value, reviewDate.value]).toEqual(['Follow up in 30 days', '2026-04-01']);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect([instructions.value, reviewDate.value]).toEqual(['Follow up in 14 days', '2026-03-16']);
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect([instructions.value, reviewDate.value]).toEqual(['', '']);
+    fireEvent.click(screen.getByRole('button', { name: 'Redo' }));
+    expect([instructions.value, reviewDate.value]).toEqual(['Follow up in 14 days', '2026-03-16']);
+  });
+
+  it('a review date chip is one undo step with the instructions it fills in', async () => {
+    const { instructions, reviewDate } = await mountWithReviewDate();
+
+    fireEvent.click(screen.getByRole('button', { name: '2w' }));
+    expect([instructions.value, reviewDate.value]).toEqual(['Follow up in 2 weeks', '2026-03-16']);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect([instructions.value, reviewDate.value]).toEqual(['', '']);
+  });
+
+  it('undoing a medicine edit keeps a review date the doctor typed afterwards', async () => {
+    const { reviewDate } = await mountWithReviewDate();
+
+    fireEvent.change(screen.getAllByPlaceholderText('Search medicine name...')[0], { target: { value: 'Cetirizine' } });
+    fireEvent.change(reviewDate, { target: { value: '2026-05-05' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+
+    expect([medicineNames()[0], reviewDate.value]).toEqual(['', '2026-05-05']);
   });
 });

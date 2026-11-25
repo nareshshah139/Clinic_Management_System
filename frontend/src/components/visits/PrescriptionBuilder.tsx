@@ -3361,11 +3361,11 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const [assets, setAssets] = useState<any[]>([]);
   const [printerProfiles, setPrinterProfiles] = useState<any[]>([]);
   const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
-  type HistorySnapshot = { items: PrescriptionItemForm[]; followUpInstructions: string };
+  type HistorySnapshot = { items: PrescriptionItemForm[]; followUpInstructions: string; reviewDate?: string };
   const undoStackRef = useRef<HistorySnapshot[]>([]);
   const redoStackRef = useRef<HistorySnapshot[]>([]);
-  const historyStateRef = useRef<HistorySnapshot>({ items, followUpInstructions });
-  historyStateRef.current = { items, followUpInstructions };
+  const historyStateRef = useRef<Required<HistorySnapshot>>({ items, followUpInstructions, reviewDate: reviewDate || '' });
+  historyStateRef.current = { items, followUpInstructions, reviewDate: reviewDate || '' };
   const historyBurstRef = useRef<{ key: string; at: number } | null>(null);
   // Computed effective margins (depend on printer profile and overrides)
   const effectiveTopMarginPx = useMemo(() => {
@@ -4313,16 +4313,21 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
 
   // Autosave & history
   const draftKey = useMemo(() => `rxDraft:${patientId}:${visitId || 'standalone'}`, [patientId, visitId]);
+  /** The review date is only part of steps that change it, so undo never reverts a date edit made outside the history. */
+  const historySnapshot = useCallback((withReviewDate: boolean): HistorySnapshot => {
+    const { reviewDate: date, ...rest } = historyStateRef.current;
+    return JSON.parse(JSON.stringify(withReviewDate ? { ...rest, reviewDate: date } : rest));
+  }, []);
   /** Call before a user change. Repeated calls with the same burst key less than 1.5s apart share one undo step. */
-  const recordHistory = useCallback((burstKey?: string) => {
+  const recordHistory = useCallback((burstKey?: string, withReviewDate = false) => {
     const now = Date.now();
     const burst = historyBurstRef.current;
     historyBurstRef.current = burstKey ? { key: burstKey, at: now } : null;
     if (burstKey && burst?.key === burstKey && now - burst.at < 1500) return;
-    undoStackRef.current.push(JSON.parse(JSON.stringify(historyStateRef.current)));
+    undoStackRef.current.push(historySnapshot(withReviewDate));
     if (undoStackRef.current.length > 50) undoStackRef.current.shift();
     redoStackRef.current = [];
-  }, []);
+  }, [historySnapshot]);
   /**
    * @cc [owner:nareshshah139,label:product] discarded-prescription-draft
    * When the parent has discarded this editor, persistence MUST NOT recreate
@@ -4499,11 +4504,12 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const stepHistory = useCallback((from: React.MutableRefObject<HistorySnapshot[]>, to: React.MutableRefObject<HistorySnapshot[]>) => {
     const target = from.current.pop();
     if (!target) return;
-    to.current.push(JSON.parse(JSON.stringify(historyStateRef.current)));
+    to.current.push(historySnapshot(target.reviewDate !== undefined));
     historyBurstRef.current = null;
     setItems(target.items);
     setFollowUpInstructions(target.followUpInstructions);
-  }, [setFollowUpInstructions]);
+    if (target.reviewDate !== undefined) onChangeReviewDate?.(target.reviewDate);
+  }, [setFollowUpInstructions, onChangeReviewDate, historySnapshot]);
   const undo = useCallback(() => stepHistory(undoStackRef, redoStackRef), [stepHistory]);
   const redo = useCallback(() => stepHistory(redoStackRef, undoStackRef), [stepHistory]);
 
@@ -4608,15 +4614,16 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     return Array.from(new Set(candidates)).slice(0, 6);
   }, [followUpInstructions, learnedPlan, parseFollowUpDays]);
   const applyFollowUpShortcut = useCallback((value: string) => {
-    recordHistory();
-    setFollowUpInstructions(value);
     const days = parseFollowUpDays(value);
+    recordHistory(undefined, Boolean(days && onChangeReviewDate));
+    setFollowUpInstructions(value);
     if (days && onChangeReviewDate) {
       onChangeReviewDate(formatSuggestedReviewDate(days));
     }
   }, [parseFollowUpDays, onChangeReviewDate, formatSuggestedReviewDate, recordHistory]);
   const applyReviewDateShortcut = useCallback((days: number) => {
     if (!onChangeReviewDate || days <= 0) return;
+    recordHistory(undefined, true);
     onChangeReviewDate(formatSuggestedReviewDate(days));
     if (!followUpInstructions.trim()) {
       const label = days % 7 === 0 && days >= 14
@@ -4624,7 +4631,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
         : `Follow up in ${days} days`;
       setFollowUpInstructions(label);
     }
-  }, [onChangeReviewDate, formatSuggestedReviewDate, followUpInstructions]);
+  }, [onChangeReviewDate, formatSuggestedReviewDate, followUpInstructions, recordHistory]);
   /**
    * @cc [owner:nareshshah139,label:product] visit-voice-preview-is-pure
    * Building the registry and previewing a draft MUST NOT change the form, and the preview MUST list only the registry
