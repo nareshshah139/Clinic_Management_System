@@ -681,8 +681,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const [vitalsPulse, setVitalsPulse, hydrateVitalsPulse] = useClinicalState<number | ''>('', 'vitalsPulse', dirtyClinicalFields);
   // Restore drug search states (now per-row)
   const [rowDrugQueries, setRowDrugQueries] = useState<Record<number, string>>({});
-  const [rowDrugResults, setRowDrugResults] = useState<Record<number, any[]>>({});
-  const [rowLoadingDrugs, setRowLoadingDrugs] = useState<Record<number, boolean>>({});
+  const [rowDrugResults, setRowDrugResults] = useState<Record<number, { query: string; items: any[] }>>({});
   const [activeSearchRow, setActiveSearchRow] = useState<number | null>(null);
   const [dropdownPosition, setDropdownPosition] = useState<DropdownPlacement | null>(null);
   const [activeDrugOption, setActiveDrugOption] = useState(-1);
@@ -1600,28 +1599,23 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     if (activeSearchRow === null) return;
     const row = activeSearchRow;
     const q = (rowDrugQueries[row] || '').trim();
+    if (q.length < 2) return;
     let current = true;
-    setRowLoadingDrugs(prev => ({ ...prev, [row]: q.length >= 2 }));
-    if (q.length < 2) {
-      setRowDrugResults(prev => ({ ...prev, [row]: [] }));
-      return;
-    }
-
     const t = setTimeout(async () => {
-      try {
-        const results = await apiClient.get<any[]>('/prescriptions/drugs/autocomplete', { q, limit: 10 });
-        if (current) {
-          setRowDrugResults(prev => ({ ...prev, [row]: results.slice(0, 10) }));
-          setActiveDrugOption(-1);
-        }
-      } catch {
-        if (current) setRowDrugResults(prev => ({ ...prev, [row]: [] }));
-      } finally {
-        if (current) setRowLoadingDrugs(prev => ({ ...prev, [row]: false }));
+      const items = await apiClient.get<any[]>('/prescriptions/drugs/autocomplete', { q, limit: 10 })
+        .then((results) => results.slice(0, 10), () => []);
+      if (current) {
+        setRowDrugResults(prev => ({ ...prev, [row]: { query: q, items } }));
+        setActiveDrugOption(-1);
       }
     }, 300);
     return () => { current = false; clearTimeout(t); };
   }, [rowDrugQueries, activeSearchRow]);
+
+  const drugMatchesForRow = (rowIdx: number) => {
+    const entry = rowDrugResults[rowIdx];
+    return entry && entry.query === (rowDrugQueries[rowIdx] || '').trim() ? entry.items : undefined;
+  };
 
   const searchDrugsForRow = (rowIdx: number, q: string) => {
     setRowDrugQueries(prev => ({ ...prev, [rowIdx]: q }));
@@ -2332,10 +2326,12 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   };
 
   const drugListOpen = activeSearchRow !== null && dropdownPosition !== null && (rowDrugQueries[activeSearchRow] || '').trim().length >= 2;
+  const activeDrugMatches = activeSearchRow === null ? undefined : drugMatchesForRow(activeSearchRow);
   const drugOptionId = (index: number) => `rx-drug-option-${index}`;
   const handleDrugInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, idx: number) => {
     const open = drugListOpen && activeSearchRow === idx;
-    const results = open ? rowDrugResults[idx] ?? [] : [];
+    const matches = drugMatchesForRow(idx);
+    const results = open ? matches ?? [] : [];
     const active = results[activeDrugOption];
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       if (results.length === 0) return;
@@ -2358,7 +2354,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     }
     if (e.key !== 'Enter' || e.shiftKey) return;
     e.preventDefault();
-    const loading = Boolean(rowLoadingDrugs[idx]);
+    const loading = !matches;
     if (open && (active || loading || results.length > 0)) {
       const choice = active ?? (loading ? undefined : results[0]);
       if (choice) addItemFromDrugToRow(idx, choice);
@@ -2413,7 +2409,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     });
     followDrugSelection(drug, selection);
     if (options?.clearSearch) {
-      setRowDrugResults(prev => ({ ...prev, [rowIdx]: [] }));
       setRowDrugQueries(prev => ({ ...prev, [rowIdx]: '' }));
       setActiveSearchRow(null);
     }
@@ -2486,7 +2481,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     setItems(rows);
     setRowDrugQueries({});
     setRowDrugResults({});
-    setRowLoadingDrugs({});
     setActiveSearchRow(null);
     setActiveRowIdx(focusIndex);
     setTimeout(() => inputRefs.current[focusIndex]?.focus(), 10);
@@ -5546,7 +5540,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                                 aria-autocomplete="list"
                                 aria-expanded={drugListOpen && activeSearchRow === idx}
                                 aria-controls="rx-drug-listbox"
-                                aria-activedescendant={drugListOpen && activeSearchRow === idx && rowDrugResults[idx]?.[activeDrugOption] ? drugOptionId(activeDrugOption) : undefined}
+                                aria-activedescendant={drugListOpen && activeSearchRow === idx && drugMatchesForRow(idx)?.[activeDrugOption] ? drugOptionId(activeDrugOption) : undefined}
                                 onKeyDown={(e) => handleDrugInputKeyDown(e, idx)}
                                 placeholder="Search medicine name..." 
                                 className="min-w-0 flex-1"
@@ -7240,14 +7234,14 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
           }}
           onMouseDown={(e) => e.preventDefault()}
         >
-          {rowLoadingDrugs[activeSearchRow] && (
+          {!activeDrugMatches && (
             <div className="px-3 py-2 text-xs text-muted-foreground">Searching…</div>
           )}
-          {!rowLoadingDrugs[activeSearchRow] && (!rowDrugResults[activeSearchRow] || rowDrugResults[activeSearchRow].length === 0) && (
+          {activeDrugMatches?.length === 0 && (
             <div className="px-3 py-2 text-xs text-muted-foreground">No results found</div>
           )}
           <div id="rx-drug-listbox" role="listbox" aria-label="Medicine matches">
-            {(rowDrugResults[activeSearchRow] ?? []).map((d: any, index: number) => (
+            {(activeDrugMatches ?? []).map((d: any, index: number) => (
               <div 
                 key={`${d.id}-${d.name}`} 
                 id={drugOptionId(index)}

@@ -87,6 +87,26 @@ describe('medicine search keyboard', () => {
     expect(document.activeElement).toBe(medicineInputs()[1]);
   });
 
+  it('after the query changes, the previous results cannot be picked before the new ones arrive', async () => {
+    get.mockImplementation((url: string, params: { q: string }) => Promise.resolve(url !== '/prescriptions/drugs/autocomplete' ? []
+      : params.q === 'azit' ? [{ id: 'azi', name: 'Azithromycin 500', dosageForm: 'TABLET' }]
+      : [{ id: 'amox', name: 'Amoxicillin 500', dosageForm: 'CAPSULE' }]));
+    const input = await typeMedicine('amox');
+    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual([expect.stringContaining('Amoxicillin 500')]);
+
+    fireEvent.change(input, { target: { value: 'azit' } });
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(medicineInputs().map((el) => el.value)).toEqual(['azit', '']);
+    expect(screen.queryAllByRole('option')).toEqual([]);
+    expect(screen.getByText('Searching…')).toBeInTheDocument();
+
+    await tick();
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await tick();
+    expect(medicineInputs().map((el) => el.value)).toEqual(['Azithromycin 500', '']);
+  });
+
   it('a mouse click on an option still selects it', async () => {
     await typeMedicine('amo');
 
