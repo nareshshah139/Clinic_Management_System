@@ -1,6 +1,7 @@
-import { IsString, IsOptional, IsEmail, IsEnum, IsBoolean, IsUUID, IsArray, IsDateString, MinLength, MaxLength, IsByteLength } from 'class-validator';
+import { IsString, IsOptional, IsEmail, IsEnum, IsBoolean, IsArray, IsDateString, MinLength, MaxLength, IsByteLength } from 'class-validator';
 import { BCRYPT_MAX_BYTES, PASSWORD_BYTES } from '../../auth/dto/password-reset.dto';
 import { UserRole, UserStatus } from '@prisma/client';
+import { IsEntityId } from '../../../shared/decorators/is-entity-id.decorator';
 
 // Runtime enums for class-validator to avoid undefined during decorator evaluation in some build environments
 export enum UserRoleEnum {
@@ -54,7 +55,7 @@ export class CreateUserDto {
   @IsOptional()
   status?: UserStatus;
 
-  @IsUUID()
+  @IsEntityId()
   @IsOptional()
   branchId?: string;
 

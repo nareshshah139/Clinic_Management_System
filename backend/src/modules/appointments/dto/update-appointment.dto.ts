@@ -1,5 +1,6 @@
-import { IsOptional, IsEnum, IsString, IsUUID, IsArray, IsBoolean } from 'class-validator';
+import { IsOptional, IsEnum, IsString, IsArray, IsBoolean } from 'class-validator';
 import type { AppointmentStatus } from '@prisma/client';
+import { IsEntityId } from '../../../shared/decorators/is-entity-id.decorator';
 
 // Runtime enum to ensure decorator evaluation doesn't receive undefined.
 export enum AppointmentStatusEnum {
@@ -18,7 +19,7 @@ export class UpdateAppointmentDto {
   status?: AppointmentStatus;
 
   @IsOptional()
-  @IsUUID()
+  @IsEntityId()
   roomId?: string;
 
   @IsOptional()
@@ -36,7 +37,7 @@ export class UpdateAppointmentDto {
 
 export class BulkUpdateAppointmentsDto {
   @IsArray()
-  @IsUUID('all', { each: true })
+  @IsEntityId({ each: true })
   appointmentIds: string[];
 
   @IsOptional()
