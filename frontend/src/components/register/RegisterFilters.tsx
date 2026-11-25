@@ -178,10 +178,22 @@ export function DateRangeFilter({ range, today, onChange }: { range: DayRange; t
   const active = presets.find((preset) => preset.range.from === range.from && preset.range.to === range.to)?.id ?? 'custom';
   const shown = `${formatDisplayDay(range.from)} – ${formatDisplayDay(range.to)}`;
 
-  useEffect(() => {
+  const reset = () => {
     setText({ from: formatDisplayDay(range.from), to: formatDisplayDay(range.to) });
     setError('');
-  }, [range.from, range.to]);
+  };
+
+  useEffect(reset, [range.from, range.to]);
+
+  const show = () => {
+    reset();
+    setOpen(true);
+  };
+
+  const close = () => {
+    setOpen(false);
+    trigger.current?.focus();
+  };
 
   const commit = () => {
     const from = parseDisplayDay(text.from);
@@ -197,6 +209,7 @@ export function DateRangeFilter({ range, today, onChange }: { range: DayRange; t
       return;
     }
     setError('');
+    close();
     if (from !== range.from || to !== range.to) onChange({ from, to });
   };
 
@@ -210,7 +223,7 @@ export function DateRangeFilter({ range, today, onChange }: { range: DayRange; t
           onChange={(event) => {
             const preset = presets.find((p) => p.id === event.target.value);
             if (preset) onChange(preset.range);
-            else setOpen(true);
+            else show();
           }}
         >
           {presets.map((preset) => (
@@ -224,7 +237,7 @@ export function DateRangeFilter({ range, today, onChange }: { range: DayRange; t
           aria-expanded={open}
           aria-controls={panelId}
           aria-label={`Change dates, ${shown.replace('–', 'to')}`}
-          onClick={() => setOpen((value) => !value)}
+          onClick={() => (open ? setOpen(false) : show())}
           className="inline-flex h-10 items-center gap-1 whitespace-nowrap rounded-md px-1 text-sm font-medium tabular-nums text-foreground underline decoration-border underline-offset-4 hover:decoration-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
         >
           <CalendarDays aria-hidden="true" className="size-4 shrink-0" />
@@ -243,7 +256,6 @@ export function DateRangeFilter({ range, today, onChange }: { range: DayRange; t
                   aria-invalid={!!error}
                   aria-describedby={error ? errorId : undefined}
                   onChange={(event) => setText((current) => ({ ...current, [bound]: event.target.value }))}
-                  onBlur={commit}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter') commit();
                   }}
@@ -256,6 +268,10 @@ export function DateRangeFilter({ range, today, onChange }: { range: DayRange; t
                 {error}
               </p>
             )}
+            <div className="flex basis-full justify-end gap-2">
+              <Button type="button" variant="ghost" className="h-10 text-sm" onClick={close}>Cancel</Button>
+              <Button type="button" className="h-10 text-sm" onClick={commit}>Apply</Button>
+            </div>
           </div>
         )}
       </div>

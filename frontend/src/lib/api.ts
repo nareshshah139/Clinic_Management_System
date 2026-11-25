@@ -31,6 +31,16 @@ const INVENTORY_EDITOR_REQUEST = /^\/inventory\/workspace\/(documents(\/by-reque
 const LONG_RUNNING_REQUEST = /^\/(prescriptions\/[^/?#]+\/(pdf|share)|pharmacy\/purchase-invoices\/[^/?#]+\/process|visits\/(translate|([^/?#]+\/)?transcribe(\/[^/?#]+)?)|auth\/backup)([?#]|$)/;
 const DEFAULT_TIMEOUT_MS = 30000;
 const LONG_RUNNING_TIMEOUT_MS = 120000;
+const MAX_RETRY_DELAY_MS = 5000;
+
+/** Status 0 means no response arrived. */
+function plainFailureMessage(status: number, isSafeMethod: boolean): string {
+  if (!status) {
+    return `Can't reach the server. Check your internet connection, then ${isSafeMethod ? 'try again' : 'check whether the save went through before trying again'}.`;
+  }
+  const problem = status >= 500 ? 'The server is having trouble right now.' : "The server sent a reply the app couldn't read.";
+  return `${problem} ${isSafeMethod ? 'Try again in a moment.' : 'Check whether the save went through before trying again.'}`;
+}
 
 export class ApiClient {
   private baseURL: string;
@@ -218,7 +228,11 @@ export class ApiClient {
             await new Promise((r) => setTimeout(r, backoffMs));
             continue;
           }
-          throw err;
+          const message = plainFailureMessage(0, isSafeMethod);
+          const apiErr: ApiError = new Error(message);
+          apiErr.body = { message };
+          apiErr.diagnosticCode = 'network_error';
+          throw apiErr;
         }
 
         if (!response.ok) {
@@ -243,21 +257,16 @@ export class ApiClient {
             if (delayMs <= 0) {
               delayMs = Math.min(3000, 500 * Math.pow(2, attempt)) + Math.floor(Math.random() * 250);
             }
-            await new Promise((r) => setTimeout(r, delayMs));
-            continue;
+            if (delayMs <= MAX_RETRY_DELAY_MS) {
+              await new Promise((r) => setTimeout(r, delayMs));
+              continue;
+            }
           }
 
           let body: { message?: string } | null = null;
           try {
             body = (await response.json()) as { message?: string };
-          } catch {
-            try {
-              const text = await response.text();
-              body = { message: text || 'Network error' };
-            } catch {
-              body = { message: 'Network error' };
-            }
-          }
+          } catch {}
 
           if (response.status === 401 && endpoint !== '/auth/login') {
             this.clearToken();
@@ -271,7 +280,10 @@ export class ApiClient {
           if (response.status === 429 && (!body?.message || body.message.startsWith('ThrottlerException'))) {
             body = { ...body, message: TOO_MANY_REQUESTS_MESSAGE };
           }
-          const apiErr: ApiError = new Error((body && body.message) || `HTTP ${response.status}`);
+          if (!body?.message || (response.status >= 500 && body.message === 'Internal server error')) {
+            body = { ...body, message: plainFailureMessage(response.status, isSafeMethod) };
+          }
+          const apiErr: ApiError = new Error(body.message);
           apiErr.status = response.status;
           apiErr.body = body;
           throw apiErr;
@@ -285,12 +297,10 @@ export class ApiClient {
         }
         const contentType = response.headers.get('content-type') || '';
         if (!contentType.includes('application/json')) {
-          // Surface a clear error so callers can handle gracefully instead of crashing on undefined
-          let text = '';
-          try { text = await response.text(); } catch {}
-          const apiErr: ApiError = new Error(text || 'Unexpected non-JSON response');
+          const message = plainFailureMessage(response.status, isSafeMethod);
+          const apiErr: ApiError = new Error(message);
           apiErr.status = response.status;
-          apiErr.body = { message: 'Unexpected non-JSON response' };
+          apiErr.body = { message };
           apiErr.diagnosticCode = 'invalid_response';
           throw apiErr;
         }

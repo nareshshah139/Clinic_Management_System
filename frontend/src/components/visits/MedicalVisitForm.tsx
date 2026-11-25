@@ -1758,12 +1758,12 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
 
   return (
     <div className="min-w-0 space-y-4">
-      <div data-visit-bar className="sticky -top-4 z-30 -mx-4 space-y-1.5 border-b bg-background px-4 py-1.5 md:-top-6 md:-mx-6 md:px-6">
+      <div data-visit-bar data-tour="visit-bar" className="sticky -top-4 z-30 -mx-4 space-y-1.5 border-b bg-background px-4 py-1.5 md:-top-6 md:-mx-6 md:px-6">
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5">
           <div className="flex min-w-64 flex-1 items-center gap-x-3">
             {identity}
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div data-tour="visit-save" className="flex flex-wrap items-center gap-2">
             <span className="text-xs text-muted-foreground" role="status" aria-live="polite">
               {editMode === 'locked' ? 'Completed. Read only.' : <>
               {editMode === 'amending' && 'Editing a completed visit. '}
@@ -1835,11 +1835,11 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
               Visit #{currentVisitNumber}
               <StatusBadge domain="visit" status={visitStatus} />
             </span>
-            <DoctorTour autoStart={false} />
+            <DoctorTour />
           </div>
         </div>
         {hasPermission('all') && (
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+          <div data-tour="visit-checklist" className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
             <ol aria-label="Needed to complete" className="flex flex-wrap items-center gap-x-3 gap-y-1">
               {requiredSteps.map(stepItem)}
             </ol>
@@ -1908,12 +1908,12 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <TabsList className="flex flex-wrap gap-1">
+          <TabsList data-tour="visit-tabs" className="flex flex-wrap gap-1">
             {tabs.map(tab => (
               <TabsTrigger key={tab.id} value={tab.id}>{tab.label}</TabsTrigger>
             ))}
           </TabsList>
-          <div ref={setToolbarTarget} className={activeTab === 'consultation' ? 'flex flex-wrap items-center gap-2' : 'hidden'} />
+          <div ref={setToolbarTarget} data-tour="rx-templates" className={activeTab === 'consultation' ? 'flex flex-wrap items-center gap-2' : 'hidden'} />
         </div>
 
             {/* Vitals Tab */}

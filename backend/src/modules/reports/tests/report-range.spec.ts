@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { reportRange } from '../report-range';
 
 const iso = ({ instants, period }: ReturnType<typeof reportRange>) => [instants.gte.toISOString(), instants.lt.toISOString(), period];
@@ -9,6 +10,12 @@ describe('reportRange', () => {
     expect(iso(reportRange({ startDate: '2026-10-12', endDate: '2026-11-11' }, now))).toEqual([
       '2026-10-11T18:30:00.000Z', '2026-11-11T18:30:00.000Z', '2026-10-12 to 2026-11-11',
     ]);
+  });
+
+  it('refuses a range whose start is after its end instead of reporting zeros', () => {
+    expect(() =>
+      reportRange({ startDate: '2026-11-25', endDate: '2026-10-01' }, now),
+    ).toThrow(BadRequestException);
   });
 
   it('keeps timestamp bounds as the instants they name', () => {

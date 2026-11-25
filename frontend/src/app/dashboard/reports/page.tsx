@@ -1,16 +1,18 @@
 'use client';
 
+import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { displayClinicDate, displayCalendarDate } from '@/lib/date-display';
 import { PageHeader } from '@/components/ui/page-header';
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState, useCallback, type FormEvent } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { LoadingSkeleton } from '@/components/ui/skeleton';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
 import { getErrorMessage } from '@/lib/utils';
-import { REPORT_EXPORT_TYPE, averageAgeFromBrackets } from '@/lib/reports-model';
+import { REPORT_EXPORT_TYPE } from '@/lib/reports-model';
 import { QuickGuide } from '@/components/common/QuickGuide';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
@@ -32,12 +34,16 @@ import {
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { paymentModeLabel } from '@/lib/clinic-payment-modes';
-import { addDays } from '@/lib/date-ranges';
+import { rangeError, type DayRange } from '@/lib/date-ranges';
 import { clinicToday } from '@/components/pharmacy/pharmacy-report-model';
-import { LOW_STOCK_DEFINITION, UPCOMING_DEFINITION } from '@/lib/clinic-counts';
+import { PeriodPicker } from '@/components/pharmacy/reports/ReportToolbar';
+import { reportHref } from '@/components/pharmacy/reports/report-catalog';
+import { LOW_STOCK_DEFINITION } from '@/lib/clinic-counts';
 import type { ReportTab } from '@/lib/reports-model';
 import { enumLabel } from '@/lib/labels';
-import type { StatusVariant } from '@/lib/status-variants';
+import { isCompleteRange, readReportParams, reportsHref, type ReportParams } from '@/components/reports/report-params';
+import { AgeGroupChart, DailyRevenueChart, type DailyRevenue } from '@/components/reports/ReportCharts';
+import { SystemAlertsBand, type SystemAlerts } from '@/components/reports/SystemAlertsBand';
 
 type ReportType = ReportTab;
 type ExportFormat = 'JSON' | 'CSV' | 'PDF' | 'EXCEL';
@@ -57,6 +63,7 @@ interface RevenueReportData {
   netRevenue: number;
   totalInvoices: number;
   paymentBreakdown?: PaymentBreakdown[];
+  dailyBreakdown?: DailyRevenue[];
   doctorBreakdown?: DoctorBreakdown[];
 }
 
@@ -64,6 +71,7 @@ interface PatientReportData {
   totalPatients: number;
   newPatients: number;
   returningPatients: number;
+  averageAge?: number | null;
   ageGroupBreakdown?: AgeGroupBreakdown[];
   genderBreakdown?: GenderBreakdown[];
   topVisitingPatients?: TopVisitingPatient[];
@@ -196,74 +204,72 @@ interface ReconciliationSummary {
   reconciliationRate: number;
 }
 
-interface SystemAlerts {
-  counts: {
-    overdueInvoices: number;
-    lowStockAlerts: number;
-    expiryAlerts: number;
-    pendingPayments: number;
-    upcomingAppointments: number;
-  };
-}
-
-type AlertCounts = SystemAlerts['counts'];
-const ALERT_ITEMS: Array<{ key: keyof AlertCounts; label: string; tone: StatusVariant; note?: string }> = [
-  { key: 'overdueInvoices', label: 'Overdue Invoices', tone: 'danger' },
-  { key: 'lowStockAlerts', label: 'Low Stock', tone: 'warning', note: LOW_STOCK_DEFINITION },
-  { key: 'expiryAlerts', label: 'Expiry Alerts', tone: 'warning' },
-  { key: 'pendingPayments', label: 'Pending Payments', tone: 'info' },
-  { key: 'upcomingAppointments', label: 'Upcoming Appointments', tone: 'neutral', note: UPCOMING_DEFINITION },
-];
-const TONE_RANK: StatusVariant[] = ['neutral', 'success', 'info', 'highlight', 'warning', 'danger'];
-const BAND_CLASS: Record<StatusVariant, string> = {
-  neutral: '', success: 'border-success-border bg-success-soft', info: 'border-info-border bg-info-soft',
-  highlight: 'border-highlight-border bg-highlight-soft', warning: 'border-warning-border bg-warning-soft', danger: 'border-destructive-border bg-destructive-soft',
-};
-const LABEL_CLASS: Record<StatusVariant, string> = {
-  neutral: 'text-muted-foreground', success: 'text-success-text', info: 'text-info-text',
-  highlight: 'text-highlight-text', warning: 'text-warning-text', danger: 'text-destructive-text',
-};
-
-function SystemAlertsBand({ counts }: { counts: AlertCounts }) {
-  const tones = ALERT_ITEMS.map((item) => (counts[item.key] > 0 ? item.tone : 'neutral'));
-  const band = tones.reduce((worst, tone) => (TONE_RANK.indexOf(tone) > TONE_RANK.indexOf(worst) ? tone : worst), 'neutral' as StatusVariant);
+function ClinicScopeNote() {
   return (
-    <Card className={`flex-row flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 ${BAND_CLASS[band]}`}>
-      <h2 className={`flex w-full items-center text-sm font-semibold sm:w-auto ${LABEL_CLASS[band] || 'text-foreground'}`}>
-        <AlertCircle className="h-4 w-4 mr-2" aria-hidden="true" />
-        System Alerts
-      </h2>
-      <dl className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-6 gap-y-1 text-sm">
-        {ALERT_ITEMS.map((item, index) => (
-          <div key={item.key} className="flex flex-wrap items-baseline gap-x-1.5">
-            <dt className={LABEL_CLASS[tones[index]]}>{item.label}</dt>
-            <dd className="font-semibold tabular-nums">{counts[item.key]}</dd>
-            {item.note && counts[item.key] > 0 && <dd className="text-xs text-muted-foreground">{item.note}</dd>}
-          </div>
-        ))}
-      </dl>
-    </Card>
+    <p className="text-sm text-muted-foreground">
+      Clinic bills only: consultations and procedures. Pharmacy sales are in{' '}
+      <Link href="/dashboard/pharmacy/reports" className="font-medium text-foreground underline underline-offset-4">Pharmacy Reports</Link>, and{' '}
+      <Link href={reportHref('daily-collection')} className="font-medium text-foreground underline underline-offset-4">Daily Collection</Link> shows both together.
+    </p>
   );
 }
 
-export default function ReportsPage() {
+/** Dates are drafted here and applied with Show report, so a half-typed date never fetches; a preset applies at once. */
+function ReportDates({ applied, today, loading, onApply }: { applied: DayRange; today: string; loading: boolean; onApply: (range: DayRange) => void }) {
+  const [draft, setDraft] = useState(applied);
+  useEffect(() => setDraft(applied), [applied]);
+  const complete = isCompleteRange(draft);
+  const problem = complete ? rangeError(draft) : null;
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    if (complete && !problem) onApply(draft);
+  };
+  return (
+    <form onSubmit={submit} aria-label="Report dates" className="flex flex-wrap items-end gap-2 [&_label]:flex [&_label]:flex-col [&_label]:gap-1 [&_label]:font-medium [&_input]:h-10 [&_input]:w-36">
+      <PeriodPicker
+        value={draft}
+        today={today}
+        onChange={setDraft}
+        onPreset={(range) => {
+          setDraft(range);
+          onApply(range);
+        }}
+      />
+      <Button type="submit" disabled={loading || !complete || Boolean(problem)}>
+        {loading ? 'Loading…' : 'Show report'}
+      </Button>
+      {problem && (
+        <p role="alert" className="basis-full text-sm font-medium text-destructive-text">
+          {problem}
+        </p>
+      )}
+    </form>
+  );
+}
+
+function ReportsWorkspace() {
   const { toast } = useToast();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const today = clinicToday();
+  const { tab: selectedReport, from, to } = readReportParams(searchParams, today);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<{ message: string; forbidden: boolean } | null>(null);
   const requestSeq = useRef(0);
-  const [selectedReport, setSelectedReport] = useState<ReportType>('revenue');
-  const [dateRange, setDateRange] = useState(() => {
-    const today = clinicToday();
-    return { startDate: addDays(today, -30), endDate: today };
-  });
   const [reportData, setReportData] = useState<ReportData>({});
   const [systemAlerts, setSystemAlerts] = useState<SystemAlerts | null>(null);
+  const [alertsError, setAlertsError] = useState<string | null>(null);
+  const dateRange = { startDate: from, endDate: to };
+  const applied = useMemo(() => ({ from, to }), [from, to]);
+
+  const navigate = (next: Partial<ReportParams>) =>
+    router.replace(reportsHref({ tab: selectedReport, from, to, ...next }), { scroll: false });
 
   const reportTypes = [
     {
       id: 'revenue' as ReportType,
       name: 'Revenue',
-      description: 'Financial performance and revenue analysis',
+      description: 'Clinic takings and revenue analysis',
       icon: DollarSign,
     },
     {
@@ -293,19 +299,17 @@ export default function ReportsPage() {
     {
       id: 'payments' as ReportType,
       name: 'Payments',
-      description: 'Payment methods and transaction analysis',
+      description: 'Clinic payment methods and transaction analysis',
       icon: TrendingUp,
     },
   ];
 
   const loadSystemData = useCallback(async () => {
     try {
-      const [alerts] = await Promise.all([
-        apiClient.get<SystemAlerts>('/reports/alerts'),
-      ]);
-      setSystemAlerts(alerts as SystemAlerts);
+      setAlertsError(null);
+      setSystemAlerts(await apiClient.get<SystemAlerts>('/reports/alerts'));
     } catch (error) {
-      console.error('Error loading system data:', error);
+      setAlertsError(getErrorMessage(error) || 'System alerts could not be loaded.');
     }
   }, []);
 
@@ -316,11 +320,8 @@ export default function ReportsPage() {
       setLoadError(null);
       setReportData(prev => ({ ...prev, [selectedReport]: undefined }));
       let response;
-      
-      const params = {
-        startDate: dateRange.startDate,
-        endDate: dateRange.endDate,
-      };
+
+      const params = { startDate: from, endDate: to };
 
       switch (selectedReport) {
         case 'revenue':
@@ -333,27 +334,27 @@ export default function ReportsPage() {
           response = await apiClient.getDoctorReport({ ...params, includePerformanceMetrics: true, includeRevenueMetrics: true });
           break;
         case 'appointments':
-          response = await apiClient.get('/reports/appointments', { 
-            ...params, 
-            includePeakHours: true, 
-            includeRoomUtilization: true, 
+          response = await apiClient.get('/reports/appointments', {
+            ...params,
+            includePeakHours: true,
+            includeRoomUtilization: true,
             includeWaitTimes: true,
-            includeCancellationReasons: true 
+            includeCancellationReasons: true
           });
           break;
         case 'inventory':
-          response = await apiClient.get('/reports/inventory', { 
-            ...params, 
-            includeLowStock: true, 
-            includeExpired: true, 
-            includeTransactionHistory: true 
+          response = await apiClient.get('/reports/inventory', {
+            ...params,
+            includeLowStock: true,
+            includeExpired: true,
+            includeTransactionHistory: true
           });
           break;
         case 'payments':
-          response = await apiClient.get('/reports/payments', { 
-            ...params, 
-            includeReconciliation: true, 
-            includeRefunds: true 
+          response = await apiClient.get('/reports/payments', {
+            ...params,
+            includeReconciliation: true,
+            includeRefunds: true
           });
           break;
         default:
@@ -374,12 +375,20 @@ export default function ReportsPage() {
     } finally {
       if (seq === requestSeq.current) setLoading(false);
     }
-  }, [selectedReport, dateRange]);
+  }, [selectedReport, from, to]);
 
   useEffect(() => {
     loadSystemData();
+  }, [loadSystemData]);
+
+  useEffect(() => {
     generateReport();
-  }, [loadSystemData, generateReport]);
+  }, [generateReport]);
+
+  const applyRange = (range: DayRange) => {
+    if (range.from === from && range.to === to) generateReport();
+    else navigate(range);
+  };
 
   const exportReport = async (format: ExportFormat) => {
     try {
@@ -393,8 +402,7 @@ export default function ReportsPage() {
       };
 
       const response = await apiClient.post('/reports/export', params) as { fileUrl?: string; fileName?: string };
-      
-      // Handle the data URL response
+
       if (response.fileUrl) {
         const link = document.createElement('a');
         link.href = response.fileUrl;
@@ -425,7 +433,7 @@ export default function ReportsPage() {
 
     return (
       <div className="space-y-6">
-        {/* Main Revenue Metrics */}
+        <ClinicScopeNote />
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           <Card className="gap-0 py-0">
             <CardContent className="p-4">
@@ -477,7 +485,18 @@ export default function ReportsPage() {
           </Card>
         </div>
 
-        {/* Payment Breakdown */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <BarChart3 className="h-5 w-5 mr-2" aria-hidden="true" />
+              Takings per day
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <DailyRevenueChart range={applied} days={data.dailyBreakdown ?? []} />
+          </CardContent>
+        </Card>
+
         {data.paymentBreakdown && data.paymentBreakdown.length > 0 && (
           <Card>
             <CardHeader>
@@ -505,7 +524,6 @@ export default function ReportsPage() {
           </Card>
         )}
 
-        {/* Doctor Revenue Breakdown */}
         {data.doctorBreakdown && data.doctorBreakdown.length > 0 && (
           <Card>
             <CardHeader>
@@ -539,7 +557,6 @@ export default function ReportsPage() {
   const renderPatientsReport = () => {
     const data = reportData.patients;
     if (!data) return null;
-    const averageAge = averageAgeFromBrackets(data.ageGroupBreakdown);
 
     return (
       <div className="space-y-6">
@@ -588,14 +605,27 @@ export default function ReportsPage() {
                   <p className="text-sm text-muted-foreground">Avg Age</p>
                 </div>
                 <p className="text-2xl font-bold">
-                  {averageAge ?? '—'}
+                  {data.averageAge == null ? '—' : Math.round(data.averageAge)}
                 </p>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Gender Breakdown */}
+        {data.ageGroupBreakdown && data.ageGroupBreakdown.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <BarChart3 className="h-5 w-5 mr-2" aria-hidden="true" />
+                Age Groups
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <AgeGroupChart groups={data.ageGroupBreakdown} />
+            </CardContent>
+          </Card>
+        )}
+
         {data.genderBreakdown && data.genderBreakdown.length > 0 && (
           <Card>
             <CardHeader>
@@ -902,7 +932,7 @@ export default function ReportsPage() {
                 <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Low Stock</p>
                 </div>
-                <p className="text-2xl font-bold text-destructive-text">
+                <p className="text-2xl font-bold text-warning-text">
                   {data.lowStockItems || 0}
                 </p>
                 <p className="text-xs text-muted-foreground">{LOW_STOCK_DEFINITION}</p>
@@ -915,7 +945,7 @@ export default function ReportsPage() {
                 <div className="mb-1">
                   <p className="text-sm text-muted-foreground">Out of Stock</p>
                 </div>
-                <p className="text-2xl font-bold text-warning-text">
+                <p className="text-2xl font-bold text-destructive-text">
                   {data.outOfStockItems || 0}
                 </p>
               </div>
@@ -951,29 +981,31 @@ export default function ReportsPage() {
           </Card>
         )}
 
-        {/* Low Stock Alerts */}
         {data.lowStockAlerts && data.lowStockAlerts.length > 0 && (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center">
-                <AlertCircle className="h-5 w-5 mr-2 text-destructive-text" />
+                <AlertCircle className="h-5 w-5 mr-2 text-warning-text" aria-hidden="true" />
                 Low Stock Alerts
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {data.lowStockAlerts.slice(0, 5).map((item: LowStockAlert, index: number) => (
-                  <div key={index} className="flex justify-between items-center p-3 bg-destructive-soft rounded-lg">
-                    <div>
-                      <p className="font-medium">{item.itemName}</p>
-                      <p className="text-sm text-destructive-text">Reorder Level: {item.reorderLevel}</p>
+                {data.lowStockAlerts.slice(0, 5).map((item: LowStockAlert, index: number) => {
+                  const out = item.currentStock <= 0;
+                  return (
+                    <div key={index} className={`flex justify-between items-center p-3 rounded-lg ${out ? 'bg-destructive-soft' : 'bg-warning-soft'}`}>
+                      <div>
+                        <p className="font-medium">{item.itemName}</p>
+                        <p className="text-sm text-muted-foreground">Minimum: {item.reorderLevel}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className={`font-bold ${out ? 'text-destructive-text' : 'text-warning-text'}`}>{item.currentStock} left</p>
+                        <Badge variant={out ? 'danger' : 'warning'}>{out ? 'Out of Stock' : 'Low Stock'}</Badge>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <p className="font-bold text-destructive-text">{item.currentStock} left</p>
-                      <Badge variant="destructive">Low Stock</Badge>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </CardContent>
           </Card>
@@ -988,7 +1020,7 @@ export default function ReportsPage() {
 
     return (
       <div className="space-y-6">
-        {/* Main Payment Metrics */}
+        <ClinicScopeNote />
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           <Card className="gap-0 py-0">
             <CardContent className="p-4">
@@ -1063,7 +1095,7 @@ export default function ReportsPage() {
                     <div>
                       <p className="text-lg font-bold">{formatCurrency(mode.totalAmount)}</p>
                       <p className="text-sm text-muted-foreground">{mode.transactionCount} {mode.transactionCount === 1 ? 'transaction' : 'transactions'}</p>
-                      <p className="text-sm text-success-text">Success: {formatPercentage(mode.successRate)}</p>
+                      <p className="text-sm text-muted-foreground">Successful: {formatPercentage(mode.successRate)}</p>
                     </div>
                   </div>
                 ))}
@@ -1172,21 +1204,22 @@ export default function ReportsPage() {
             {
               title: "Report Types",
               items: [
-                "Revenue Report: Financial performance and payment analysis",
+                "Revenue: clinic takings per day, by payment mode and by doctor. Pharmacy sales are in Pharmacy Reports",
                 "Patient Analytics: Demographics and visit statistics",
                 "Doctor Performance: Productivity and revenue metrics",
                 "Appointments: Scheduling patterns and completion rates",
                 "Inventory: Stock levels and sales analysis",
-                "Payments: Transaction analysis and reconciliation"
+                "Payments: clinic payment success by mode and reconciliation"
               ]
             },
             {
-              title: "Generating Reports",
+              title: "Choosing dates",
               items: [
                 "Select a report type from the tabs",
-                "Set date range using the date picker",
-                "Click 'Generate Report' to create the report",
-                "View detailed metrics and breakdowns"
+                "Pick a Period such as This month or This financial year; it applies at once",
+                "Or choose Choose dates…, type From and To as dd/mm/yyyy, and press Show report",
+                "The address bar keeps the report and dates, so a bookmark or shared link opens the same view",
+                "Click a System Alerts count to see the items behind it"
               ]
             },
             {
@@ -1201,9 +1234,15 @@ export default function ReportsPage() {
           ]}
         /></>} />
 
-      {systemAlerts?.counts && <SystemAlertsBand counts={systemAlerts.counts} />}
+      {systemAlerts?.counts && <SystemAlertsBand alerts={systemAlerts} />}
+      {alertsError && (
+        <p role="alert" className="flex flex-wrap items-center gap-2 text-sm text-destructive-text">
+          System alerts could not be loaded: {alertsError}
+          <Button variant="outline" size="sm" onClick={loadSystemData}>Retry alerts</Button>
+        </p>
+      )}
 
-      <Tabs value={selectedReport} onValueChange={(value: string) => setSelectedReport(value as ReportType)} className="gap-4">
+      <Tabs value={selectedReport} onValueChange={(value: string) => navigate({ tab: value as ReportType })} className="gap-4">
         <TabsList aria-label="Report" className="justify-start">
           {reportTypes.map((report) => (
             <TabsTrigger key={report.id} value={report.id} className="flex-none px-3">
@@ -1222,24 +1261,8 @@ export default function ReportsPage() {
                     Report for {displayCalendarDate(dateRange.startDate)} to {displayCalendarDate(dateRange.endDate)}
                   </CardDescription>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Input
-                    type="date"
-                    aria-label="From date"
-                    className="w-40"
-                    value={dateRange.startDate}
-                    onChange={(e) => setDateRange(prev => ({ ...prev, startDate: e.target.value }))}
-                  />
-                  <Input
-                    type="date"
-                    aria-label="To date"
-                    className="w-40"
-                    value={dateRange.endDate}
-                    onChange={(e) => setDateRange(prev => ({ ...prev, endDate: e.target.value }))}
-                  />
-                  <Button onClick={generateReport} disabled={loading}>
-                    {loading ? 'Generating...' : 'Generate Report'}
-                  </Button>
+                <div className="flex flex-wrap items-end gap-2">
+                  <ReportDates applied={applied} today={today} loading={loading} onApply={applyRange} />
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="outline" aria-label="Export report">
@@ -1265,4 +1288,12 @@ export default function ReportsPage() {
       </Tabs>
     </div>
   );
-} 
+}
+
+export default function ReportsPage() {
+  return (
+    <Suspense fallback={<LoadingSkeleton variant="cards" label="Loading reports…" />}>
+      <ReportsWorkspace />
+    </Suspense>
+  );
+}

@@ -245,12 +245,12 @@ describe('Password section', () => {
     expect(api.post).not.toHaveBeenCalled();
   });
 
-  it('explains a password outside 8 to 20 characters', async () => {
+  it('explains a password outside 8 to 72 characters', async () => {
     signInAs('RECEPTION');
     const { user } = await openSettings();
     await fill(user, 'old-pass-123', 'short', 'short');
     await user.click(screen.getByRole('button', { name: 'Change password' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('The new password must be 8 to 20 characters.');
+    expect(await screen.findByRole('alert')).toHaveTextContent('The new password must be 8 to 72 characters.');
     expect(api.post).not.toHaveBeenCalled();
   });
 

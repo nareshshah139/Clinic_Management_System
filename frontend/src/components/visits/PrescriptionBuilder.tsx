@@ -249,7 +249,7 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
   const collapsible = open !== undefined;
   const expanded = open ?? true;
   return (
-    <Card id={`consult-${section}`} className={`scroll-mt-40 gap-3 py-4 overflow-visible ${highlight ? 'bg-success-soft border-success-border' : ''}`}>
+    <Card id={`consult-${section}`} data-tour={`consult-${section}`} className={`scroll-mt-40 gap-3 py-4 overflow-visible ${highlight ? 'bg-success-soft border-success-border' : ''}`}>
       <CardHeader className="px-5">
         <div
           className="flex items-center justify-between w-full"
@@ -5868,7 +5868,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
             </div>
             </fieldset>
 
-            <div data-rx-actions className="sticky -bottom-4 z-20 flex items-center justify-between gap-3 border-t bg-background pb-4 pt-2 md:-bottom-6 md:pb-6">
+            <div data-rx-actions data-tour="rx-actions" className="sticky -bottom-4 z-20 flex items-center justify-between gap-3 border-t bg-background pb-4 pt-2 md:-bottom-6 md:pb-6">
               <div className="text-sm text-muted-foreground">Total items: {validItems.length} • Total qty: {totalQuantity}</div>
               <div className="flex gap-2">
                 <div className="hidden sm:flex items-center gap-2">

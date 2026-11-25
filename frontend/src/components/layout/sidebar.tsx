@@ -30,9 +30,11 @@ import {
   Wallet,
   ReceiptIndianRupee,
   CreditCard,
+  History,
 } from "lucide-react";
 import { FEE_LIST_PATH } from "@/components/appointments/appointment-billing-view";
 import { PROCEDURES_PATH, useProcedureMenu } from "@/components/procedures/procedure-access";
+import { AUDIT_LOGS_PATH } from "@/components/audit-logs/audit-log-model";
 
 type PharmacySidebarSection = "desk" | "counter";
 
@@ -148,6 +150,12 @@ const navigation: NavigationItem[] = [
     href: FEE_LIST_PATH,
     icon: ReceiptIndianRupee,
     capability: "fees",
+  },
+  {
+    name: "Audit log", section: "Admin",
+    href: AUDIT_LOGS_PATH,
+    icon: History,
+    capability: "audit-logs",
   },
 ];
 

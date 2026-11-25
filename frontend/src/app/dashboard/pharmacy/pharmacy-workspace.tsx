@@ -323,28 +323,27 @@ function PharmacyGuide() {
       title="Pharmacy Management Guide"
       sections={[
         {
-          title: 'Prescription & Auto-Fill',
+          title: 'Prescriptions',
           items: [
-            'Open prescriptions from Visits or the Rx queue',
-            'Review auto-loaded medicines before billing',
-            'Check stock warnings, alternatives, quantity, discount, and payment',
-            'Finalize only after pharmacist confirmation',
+            'Prescriptions saved in a visit wait in the Pharmacy Counter queue',
+            'Check each medicine against stock: accept it, substitute, edit, or mark it unavailable with a reason',
+            'Mark the prescription Ready to bill, then press Bill',
           ],
         },
         {
           title: 'Billing',
           items: [
             'Create GST pharmacy bills from Pharmacy Counter > New bill, or save one as a draft to finish later',
-            'Use payment modes such as cash, UPI, card, or insurance',
-            'Confirmed invoices deduct stock and keep patient records linked',
+            'Take payment by cash, UPI, card, net banking, wallet or insurance',
+            'Confirming a bill takes the medicines out of stock',
           ],
         },
         {
-          title: 'Inventory Controls',
+          title: 'Inventory',
           items: [
-            'Use Inventory > Pharmacy Control for Excel import',
-            'Use Inventory > Pharmacy Control for invoice scanning',
-            'Review batch expiry, reorder needs, supplier payments, and purchase costs in Inventory',
+            'Scan or type a supplier bill in Inventory > Purchases > Scan or enter bill',
+            'Import a supplier CSV in Inventory > Purchases > Import CSV',
+            'Inventory > Today lists the jobs due, such as low stock and expiring batches',
           ],
         },
       ]}

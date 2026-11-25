@@ -87,6 +87,7 @@ describe('/audit-logs access control', () => {
         expect(service.findByUser).toHaveBeenCalledWith(
           `user-${role}`,
           expect.anything(),
+          'branch-a',
         );
       });
     },

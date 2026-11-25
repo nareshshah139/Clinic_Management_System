@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { addDays, clinicDay, clinicInstants } from '../pharmacy/register-utils';
 import type { ReportPeriod } from './dto/reports.dto';
 
@@ -39,5 +40,8 @@ export function reportRange(
 ): ReportRange {
   const days = query.startDate && query.endDate ? { from: query.startDate, to: query.endDate } : periodDays(query.period, clinicDay(now));
   const { gte, lt } = clinicInstants(days.from, days.to) as { gte: Date; lt: Date };
+  if (gte >= lt) {
+    throw new BadRequestException('startDate must be on or before endDate');
+  }
   return { instants: { gte, lt }, period: `${clinicDay(gte)} to ${clinicDay(new Date(lt.getTime() - 1))}` };
 }

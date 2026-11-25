@@ -3,6 +3,24 @@ import ReportsPage from './page';
 import { apiClient } from '@/lib/api';
 
 jest.mock('@/components/common/QuickGuide', () => ({ QuickGuide: () => null }));
+let mockSearch = '';
+const mockListeners = new Set<() => void>();
+jest.mock('next/navigation', () => {
+  const { useSyncExternalStore } = jest.requireActual('react');
+  return {
+    usePathname: () => '/dashboard/reports',
+    useRouter: () => ({
+      replace: (href: string) => {
+        mockSearch = href.split('?')[1] ?? '';
+        mockListeners.forEach((listener) => listener());
+      },
+    }),
+    useSearchParams: () => new URLSearchParams(useSyncExternalStore((listener: () => void) => {
+      mockListeners.add(listener);
+      return () => mockListeners.delete(listener);
+    }, () => mockSearch)),
+  };
+});
 jest.mock('@/lib/api', () => ({
   apiClient: { get: jest.fn(), post: jest.fn(), getRevenueReport: jest.fn(), getPatientReport: jest.fn(), getDoctorReport: jest.fn() },
 }));
@@ -10,6 +28,7 @@ jest.mock('@/lib/api', () => ({
 const api = apiClient as unknown as Record<string, jest.Mock>;
 
 beforeEach(() => {
+  mockSearch = '';
   jest.useFakeTimers({ now: new Date('2026-11-11T19:00:00.000Z'), doNotFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'nextTick', 'setImmediate', 'queueMicrotask'] });
   api.get.mockResolvedValue({ counts: {} });
   api.getRevenueReport.mockResolvedValue({
@@ -65,9 +84,9 @@ it('switches reports from tabs and keeps the date range and actions with the rep
   expect(screen.getByRole('tab', { name: 'Patients' })).toHaveAttribute('aria-selected', 'true');
   const panel = screen.getByRole('tabpanel');
   expect(panel).toHaveTextContent('Patient demographics and statistics');
-  expect(within(panel).getByLabelText('From date')).toHaveValue('2026-10-13');
+  expect(within(panel).getByLabelText('From')).toHaveValue('13/10/2026');
   await waitFor(() => expect(api.getPatientReport).toHaveBeenCalled());
-  expect(await within(panel).findByRole('button', { name: 'Generate Report' })).toBeEnabled();
+  expect(await within(panel).findByRole('button', { name: 'Show report' })).toBeEnabled();
 });
 
 it('explains a count beside it only when there is something to act on', async () => {
