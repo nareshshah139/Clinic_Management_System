@@ -152,7 +152,7 @@ it('bills only what a partly billed prescription still owes and leaves supplied 
   expect(within(await row(names[3])).getByLabelText('Quantity')).toHaveValue(5);
   expect(screen.queryByRole('heading', { name: names[1], level: 4 })).not.toBeInTheDocument();
   expect(screen.queryByRole('heading', { name: names[2], level: 4 })).not.toBeInTheDocument();
-  expect(screen.getByText('2 lines already supplied')).toBeInTheDocument();
+  expect(screen.getByText('· 2 lines already supplied')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Print Preview' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Confirm Invoice' }));
   await waitFor(() => expect(api.post).toHaveBeenCalledWith('/pharmacy/invoices/checkout', expect.objectContaining({
