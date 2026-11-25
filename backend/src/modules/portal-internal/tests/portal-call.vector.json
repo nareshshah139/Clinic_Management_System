@@ -1,0 +1,9 @@
+{
+  "secret": "test-vector-secret-0123456789abcdef",
+  "method": "POST",
+  "path": "/internal/portal/records/messages?limit=20",
+  "ts": 1795600000000,
+  "body": "{\"text\":\"Rash is better. నమస్తే\",\"n\":1.5}",
+  "caller": "eyJraW5kIjoicGF0aWVudCIsInBob25lRTE2NCI6Iis5MTk4NzY1NDMyMTAiLCJwYXRpZW50SWQiOiJwYXRfMTIzIn0",
+  "signature": "98211e52bfa7bc73954a7b8a1d6cda8beb05e0168bb7ba9247debce680af7c77"
+}
