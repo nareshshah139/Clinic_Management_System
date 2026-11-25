@@ -548,6 +548,27 @@ export class ApiClient {
     return this.post<Partial<import('./types').VisitDetails>>(`/visits/${id}/complete`, data, opts);
   }
 
+  // Procedures
+  async getMyProcedureAccess() {
+    return this.get<import('@/components/procedures/procedure-access').MyProcedureAccess>('/procedures/access/me');
+  }
+
+  async getProcedureAccess() {
+    return this.get<import('@/components/procedures/procedure-access').ProcedureAccess>('/procedures/access');
+  }
+
+  async updateProcedureAccess(data: import('@/components/procedures/procedure-access').ProcedureAccess) {
+    return this.put<import('@/components/procedures/procedure-access').ProcedureAccess>('/procedures/access', data);
+  }
+
+  async createProcedure(data: Record<string, unknown>) {
+    return this.post('/procedures', data);
+  }
+
+  async updateProcedure(id: string, data: Record<string, unknown>) {
+    return this.patch(`/procedures/${id}`, data);
+  }
+
   async getPatientVisitHistory<T = unknown>(patientId: string, params?: { limit?: number; offset?: number; includeAppointments?: boolean; startDate?: string; endDate?: string }): Promise<T> {
     return this.get<T>(`/visits/patient/${patientId}/history`, params || {});
   }

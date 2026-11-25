@@ -31,6 +31,7 @@ import {
   ReceiptIndianRupee,
 } from "lucide-react";
 import { FEE_EDITOR_ROLES, FEE_LIST_PATH } from "@/components/appointments/appointment-billing-view";
+import { PROCEDURE_MENU_ROLES, PROCEDURES_PATH, useProcedureMenu } from "@/components/procedures/procedure-access";
 
 type PharmacySidebarSection = "desk" | "counter";
 
@@ -87,9 +88,9 @@ const navigation: NavigationItem[] = [
   },
   {
     name: "Procedures", section: "Clinical",
-    href: "/dashboard/procedures",
+    href: PROCEDURES_PATH,
     icon: Activity,
-    allowedRoles: ["OWNER", "ADMIN", "MANAGER", "DOCTOR"],
+    allowedRoles: PROCEDURE_MENU_ROLES,
   },
   {
     name: "Rooms", section: "Clinical",
@@ -222,9 +223,10 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   const role = user?.role;
   const pendingItemRequests = usePendingItemRequestCount(ITEM_REQUEST_APPROVER_ROLES.includes(role || ""));
 
+  const showProcedures = useProcedureMenu(role);
   const navigationItems = useMemo(
-    () => filterNavigationByRole(navigation, role),
-    [role],
+    () => filterNavigationByRole(navigation, role).filter((item) => item.href !== PROCEDURES_PATH || showProcedures),
+    [role, showProcedures],
   );
   const activePharmacySection = getActivePharmacySection(
     pathname,
