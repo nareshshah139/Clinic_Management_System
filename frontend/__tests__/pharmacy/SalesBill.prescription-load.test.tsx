@@ -139,6 +139,28 @@ it('fills the stock check billing quantity when an older prescription omitted ex
   expect(within(screen.getByRole('heading', { name: names[0], level: 4 }).closest('[data-invoice-item]') as HTMLElement).queryByText(review.message)).not.toBeInTheDocument();
 });
 
+it('bills only what a partly billed prescription still owes and leaves supplied lines off the bill', async () => {
+  const get = api.get.getMockImplementation()!;
+  const owed = [1, 0, 0, 5];
+  api.get.mockImplementation(async (url, query) => url.endsWith('/stock-check') ? { items: stock.map((item, index) => ({
+    ...item, billingQuantity: { quantity: owed[index], unit: 'STRIPS', review: null },
+  })) } as any : get(url, query));
+  render(<SalesBillPage />);
+  await loadPatient();
+  const row = async (name: string) => (await screen.findByRole('heading', { name, level: 4 })).closest('[data-invoice-item]') as HTMLElement;
+  expect(within(await row(names[0])).getByLabelText('Quantity')).toHaveValue(1);
+  expect(within(await row(names[3])).getByLabelText('Quantity')).toHaveValue(5);
+  expect(screen.queryByRole('heading', { name: names[1], level: 4 })).not.toBeInTheDocument();
+  expect(screen.queryByRole('heading', { name: names[2], level: 4 })).not.toBeInTheDocument();
+  expect(screen.getByText('2 lines already supplied')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Print Preview' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Confirm Invoice' }));
+  await waitFor(() => expect(api.post).toHaveBeenCalledWith('/pharmacy/invoices/checkout', expect.objectContaining({
+    prescriptionId: 'rx-0',
+    items: [expect.objectContaining({ drugId: 'drug-0', quantity: 1 }), expect.objectContaining({ drugId: 'drug-3', quantity: 5 })],
+  })));
+});
+
 it('retrying an inventory failure preserves removed lines and reviewed quantities', async () => {
   const get = api.get.getMockImplementation()!;
   let fail = true;
