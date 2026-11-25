@@ -121,8 +121,8 @@ export class ReviewBookingService {
    * operation or surgery): slot by slot in that order it tries the rooms by name, then id, and takes the first free
    * pair; when no slot has a free room it books the first free slot without one. A rewrite to a procedure review also
    * takes the first free procedure room at the review's date and slot (none when none is free) unless it already holds
-   * one, a rewrite back to OPD clears the room, and a renamed procedure keeps its room. A room is written only while
-   * the review keeps the status and room it was checked with.
+   * one, a rewrite back to OPD clears the room, and a renamed procedure keeps its room. A room is assigned or cleared only
+   * while the review keeps the status, room, date and slot it was read with.
    */
   async book(visitId: string, branchId: string, callerUserId?: string): Promise<ReviewBooking> {
     try {
@@ -190,14 +190,16 @@ export class ReviewBookingService {
 
   private async followPlan(tx: Prisma.TransactionClient, review: Review, visit: { plan: string | null; createdAt: Date }, branchId: string) {
     const kind = reviewKind(visit.plan, istClock(visit.createdAt).date);
-    if (review.reviewRequestedProcedure === kind.reviewRequestedProcedure) return undefined;
+    if (!MOVABLE.includes(review.status) || review.reviewRequestedProcedure === kind.reviewRequestedProcedure) return undefined;
     let roomId: string | null | undefined;
     if (kind.visitType === VisitType.OPD) roomId = null;
     else if (review.reviewRequestedProcedure === null) {
       const rooms = await procedureRoomIds(tx, branchId);
       if (!review.roomId || !rooms.includes(review.roomId)) roomId = await this.appointments.firstFreeRoom(tx, review, rooms, branchId);
     }
-    const unchanged = roomId ? { status: review.status, roomId: review.roomId } : { status: { in: MOVABLE } };
+    const unchanged = roomId === undefined
+      ? { status: { in: MOVABLE } }
+      : { status: review.status, roomId: review.roomId, date: review.date, slot: review.slot };
     const rewritten = await tx.appointment.updateMany({ where: { id: review.id, ...unchanged }, data: { ...kind, roomId } });
     return rewritten.count === 1 ? review.id : undefined;
   }

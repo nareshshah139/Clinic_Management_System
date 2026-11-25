@@ -47,6 +47,7 @@ function setup({ followUp = '2099-11-17', plan = null as string | null, slots = 
       update: jest.fn(async ({ where, data }: any) => Object.assign(store.find(r => r.id === where.id)!, data)),
       updateMany: jest.fn(async ({ where, data }: any) => {
         const row = store.find(r => r.id === where.id && (where.roomId === undefined || r.roomId === where.roomId)
+          && (where.slot === undefined || r.slot === where.slot) && (where.date === undefined || r.date.getTime() === where.date.getTime())
           && (where.status === undefined || (where.status.in ? where.status.in.includes(r.status) : r.status === where.status)));
         if (row) Object.assign(row, Object.fromEntries(Object.entries(data).filter(([, value]) => value !== undefined)));
         return { count: row ? 1 : 0 };
@@ -80,6 +81,7 @@ function setup({ followUp = '2099-11-17', plan = null as string | null, slots = 
     appointments,
     tx,
     setStatus: (id: string, status: string) => { store.find(r => r.id === id)!.status = status; },
+    setSlot: (id: string, slot: string) => { store.find(r => r.id === id)!.slot = slot; },
     book: () => service.book('v1', 'branch', 'user'),
     roomOf: (id: string) => store.find(r => r.id === id)!.roomId,
     stored: (id: string) => { const { visitType, notes, reviewRequestedProcedure } = store.find(r => r.id === id)!; return { visitType, notes, reviewRequestedProcedure }; },
@@ -441,6 +443,40 @@ describe('keeping a booked review in step with the planned procedure', () => {
       expect(await t.book()).toEqual(existingR1);
       expect(t.stored('r1')).toEqual(opd);
       expect(t.roomOf('r1')).toBeNull();
+      expect(t.appointments.notifyUpdated).not.toHaveBeenCalled();
+    });
+
+    it.each(['CHECKED_IN', 'IN_PROGRESS'])('leaves a %s review alone when a procedure is added and a room is free', async (status) => {
+      const t = setup({ plan: plan('Chemical peel'), rooms, rows: [review({ status })] });
+      expect(await t.book()).toEqual(existingR1);
+      expect(t.stored('r1')).toEqual(opd);
+      expect(t.roomOf('r1')).toBeNull();
+      expect(t.appointments.firstFreeRoom).not.toHaveBeenCalled();
+    });
+
+    it('writes no room when the desk moves the review to another slot between the read and the room check', async () => {
+      const t = setup({ plan: plan('Chemical peel'), rooms, rows: [review()] });
+      const check = t.appointments.firstFreeRoom.getMockImplementation()!;
+      t.appointments.firstFreeRoom.mockImplementationOnce(async (...args: any[]) => {
+        t.setSlot('r1', '11:00-11:30');
+        return check(...args);
+      });
+      expect(await t.book()).toEqual(existingR1);
+      expect(t.stored('r1')).toEqual(opd);
+      expect(t.roomOf('r1')).toBeNull();
+      expect(t.appointments.notifyUpdated).not.toHaveBeenCalled();
+    });
+
+    it('keeps the room when the desk confirms the review while the procedure is being cleared', async () => {
+      const t = setup({ plan: plan(''), rooms, rows: [review({ ...peel, roomId: 'room-a' })] });
+      const read = t.tx.appointment.findMany.getMockImplementation()!;
+      t.tx.appointment.findMany.mockImplementationOnce(async (args: any) => {
+        const rows = await read(args);
+        t.setStatus('r1', 'CONFIRMED');
+        return rows;
+      });
+      expect(await t.book()).toEqual(existingR1);
+      expect(t.roomOf('r1')).toBe('room-a');
       expect(t.appointments.notifyUpdated).not.toHaveBeenCalled();
     });
 
