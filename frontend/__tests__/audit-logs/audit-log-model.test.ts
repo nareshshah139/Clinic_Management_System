@@ -104,4 +104,15 @@ describe('the fields an entry changed, for deletions and loaded relations', () =
     );
     expect(changes.map((change) => [change.label, change.after])).toEqual([['Drug › Name', 'Paracetamol 500 mg Tablets']]);
   });
+
+  it('leaves out the creator loaded with an edited package when its creator did not change', () => {
+    const changes = fieldChanges(
+      entry({
+        entity: 'PharmacyPackage',
+        oldValues: JSON.stringify({ name: 'Acne care', createdBy: 'doc-1' }),
+        newValues: JSON.stringify({ name: 'Acne care plus', createdBy: 'doc-1', creator: { firstName: 'Asha', lastName: 'Rao' } }),
+      }),
+    );
+    expect(changes.map((change) => change.label)).toEqual(['Name']);
+  });
 });

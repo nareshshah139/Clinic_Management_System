@@ -134,4 +134,22 @@ describe('how long a notification stays', () => {
     expect(screen.queryByText('Export failed')).not.toBeInTheDocument();
     expect(screen.getByRole('dialog', { name: 'New patient' })).toBeInTheDocument();
   });
+
+  it('keeps notifications while a page holds a dialog that is closed', () => {
+    render(<Toaster />);
+    act(() => {
+      toast({ title: 'Patient archived' });
+    });
+
+    render(
+      <Dialog open={false}>
+        <DialogContent>
+          <DialogTitle>Quick create</DialogTitle>
+        </DialogContent>
+      </Dialog>,
+    );
+    act(() => jest.advanceTimersByTime(1_000));
+
+    expect(screen.getByText('Patient archived')).toBeInTheDocument();
+  });
 });

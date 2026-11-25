@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect } from "react"
 import {
   Toast,
   ToastClose,
@@ -11,6 +12,7 @@ import {
 } from "@/components/ui/toast"
 import { useToast } from "@/hooks/use-toast"
 import { splitErrorReference } from "@/lib/utils"
+import { MODAL_OPENED } from "@/lib/modal-events"
 
 const ERROR_DURATION_MS = 10_000
 const REFERENCE_DURATION_MS = 30_000
@@ -21,7 +23,13 @@ function durationFor(variant: ToastProps["variant"], reference: string | undefin
 }
 
 export function Toaster() {
-  const { toasts } = useToast()
+  const { toasts, dismiss } = useToast()
+
+  useEffect(() => {
+    const clear = () => dismiss()
+    window.addEventListener(MODAL_OPENED, clear)
+    return () => window.removeEventListener(MODAL_OPENED, clear)
+  }, [dismiss])
 
   return (
     <ToastProvider>
