@@ -634,8 +634,8 @@ export class SuggestPharmacyPurchaseMasterMatchesDto {
 }
 
 export class QueryPurchaseLearningMetricsDto {
-  @IsOptional() @IsDateString() from?: string;
-  @IsOptional() @IsDateString() to?: string;
+  @IsOptional() @IsDateString({ strict: true }) from?: string;
+  @IsOptional() @IsDateString({ strict: true }) to?: string;
 }
 
 export class ForgetPurchaseLessonDto {
