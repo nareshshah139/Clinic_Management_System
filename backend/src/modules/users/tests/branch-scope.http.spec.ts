@@ -18,11 +18,11 @@ describe('branch edits stay inside the caller’s own clinic branch, over HTTP',
   let audit: Array<Record<string, any>>;
   const db: any = {
     branch: {
-      findUnique: jest.fn(async ({ where }: any) => branches[where.id] ?? null),
+      findUnique: jest.fn(async ({ where }: any) => (branches[where.id] ? { ...branches[where.id] } : null)),
       findFirst: jest.fn(async ({ where }: any) =>
         Object.values(branches).find((branch) => branch.name === where.name && branch.id !== where.id?.not) ?? null),
       update: jest.fn(async ({ where, data }: any) =>
-        Object.assign(branches[where.id], Object.fromEntries(Object.entries(data).filter(([, value]) => value !== undefined)))),
+        ({ ...Object.assign(branches[where.id], Object.fromEntries(Object.entries(data).filter(([, value]) => value !== undefined))) })),
       delete: jest.fn(async ({ where }: any) => { const gone = branches[where.id]; delete branches[where.id]; return gone; }),
     },
     user: { count: jest.fn(async ({ where }: any) => members[where.branchId] ?? 0) },
