@@ -30,6 +30,7 @@ import {
   type ScreenshotSource,
 } from '@/lib/issue-report';
 import { ScreenshotRedactor } from './ScreenshotRedactor';
+import type { RedactionSession } from './redaction';
 
 const KINDS: Array<{ kind: IssueKind; label: string; icon: typeof Bug; title: string; details: string }> = [
   {
@@ -63,9 +64,24 @@ interface ReportIssueDialogProps {
 
 export function ReportIssueDialog({ state, dispatch, onSubmit }: ReportIssueDialogProps) {
   const [redacting, setRedacting] = useState<string | null>(null);
+  const [sessions, setSessions] = useState<Record<string, RedactionSession>>({});
   const close = () => dispatch({ type: 'closed' });
   const { status } = state;
   const editing = redacting ? state.draft.screenshots.find((shot) => shot.id === redacting) : undefined;
+  const liveSessions = Object.fromEntries(
+    state.draft.screenshots.flatMap((shot) => {
+      const session = sessions[shot.id];
+      return shot.state === 'ready' && session?.result === shot.blob ? [[shot.id, session] as const] : [];
+    }),
+  );
+  const session = editing ? liveSessions[editing.id] : undefined;
+  const { screenshots } = state.draft;
+  useEffect(() => {
+    setSessions((all) => {
+      const kept = Object.entries(all).filter(([id]) => screenshots.some((shot) => shot.id === id));
+      return kept.length === Object.keys(all).length ? all : Object.fromEntries(kept);
+    });
+  }, [screenshots]);
   return (
     <Dialog open={state.open} onOpenChange={(open: boolean) => !open && close()}>
       <DialogContent
@@ -78,14 +94,27 @@ export function ReportIssueDialog({ state, dispatch, onSubmit }: ReportIssueDial
         {status.phase === 'submitted' ? (
           <SuccessPanel number={status.number} url={status.url} onDone={close} />
         ) : (
-          <ReportForm state={state} dispatch={dispatch} onSubmit={onSubmit} onRedact={setRedacting} />
+          <ReportForm
+            state={state}
+            dispatch={dispatch}
+            onSubmit={onSubmit}
+            onRedact={setRedacting}
+            redactionCounts={Object.fromEntries(Object.entries(liveSessions).map(([id, kept]) => [id, kept.boxes.length]))}
+          />
         )}
       </DialogContent>
       {editing?.state === 'ready' && (
         <ScreenshotRedactor
-          blob={editing.blob}
-          onDone={(blob) => {
-            dispatch({ type: 'screenshotRedacted', id: editing.id, blob });
+          key={editing.id}
+          blob={session?.original ?? editing.blob}
+          initialBoxes={session?.boxes}
+          onDone={(result, boxes) => {
+            const original = session?.original ?? editing.blob;
+            setSessions((all) => {
+              const rest = Object.fromEntries(Object.entries(all).filter(([id]) => id !== editing.id));
+              return boxes.length ? { ...rest, [editing.id]: { original, boxes, result } } : rest;
+            });
+            dispatch({ type: 'screenshotRedacted', id: editing.id, blob: result });
             setRedacting(null);
           }}
           onCancel={() => setRedacting(null)}
@@ -95,7 +124,13 @@ export function ReportIssueDialog({ state, dispatch, onSubmit }: ReportIssueDial
   );
 }
 
-function ReportForm({ state, dispatch, onSubmit, onRedact }: ReportIssueDialogProps & { onRedact: (id: string) => void }) {
+function ReportForm({
+  state,
+  dispatch,
+  onSubmit,
+  onRedact,
+  redactionCounts,
+}: ReportIssueDialogProps & { onRedact: (id: string) => void; redactionCounts: Record<string, number> }) {
   const { draft, status, context } = state;
   const sending = status.phase === 'submitting';
   const attached = draft.screenshots.map((shot) => shot.id).join(',');
@@ -242,6 +277,7 @@ function ReportForm({ state, dispatch, onSubmit, onRedact }: ReportIssueDialogPr
                 key={shot.id}
                 shot={shot}
                 index={index}
+                redactions={redactionCounts[shot.id] ?? 0}
                 onRemove={() => dispatch({ type: 'screenshotRemoved', id: shot.id })}
                 onRedact={() => onRedact(shot.id)}
               />
@@ -429,11 +465,13 @@ function KindPicker({ value, onChange }: { value: IssueKind; onChange: (kind: Is
 function ScreenshotTile({
   shot,
   index,
+  redactions,
   onRemove,
   onRedact,
 }: {
   shot: Screenshot;
   index: number;
+  redactions: number;
   onRemove: () => void;
   onRedact: () => void;
 }) {
@@ -449,8 +487,15 @@ function ScreenshotTile({
   }
   return (
     <li className="relative h-36 w-full overflow-hidden rounded-md border bg-muted">
-      <button type="button" onClick={onRedact} aria-label={`Open ${name} to redact`} className="block size-full">
+      <button type="button" onClick={onRedact} aria-label={`Open ${name} to redact`} className="relative block size-full">
         {url && <img src={url} alt="" draggable={false} className="size-full object-contain" />}
+        <span
+          aria-hidden="true"
+          className="absolute bottom-1 left-1 flex items-center gap-1 rounded border bg-background/90 px-1.5 py-0.5 text-xs font-medium shadow-sm"
+        >
+          <EyeOff className="size-3" aria-hidden="true" />
+          {redactions > 0 ? `Redacted (${redactions})` : 'Redact'}
+        </span>
       </button>
       <button
         type="button"
@@ -459,14 +504,6 @@ function ScreenshotTile({
         className="absolute right-1 top-1 flex size-7 items-center justify-center rounded-full border bg-background/90 text-foreground shadow-sm hover:bg-background"
       >
         <X className="size-3.5" aria-hidden="true" />
-      </button>
-      <button
-        type="button"
-        onClick={onRedact}
-        className="absolute bottom-1 left-1 flex items-center gap-1 rounded border bg-background/90 px-1.5 py-0.5 text-xs font-medium shadow-sm hover:bg-background"
-      >
-        <EyeOff className="size-3" aria-hidden="true" />
-        Redact
       </button>
     </li>
   );
