@@ -757,13 +757,14 @@ export class PharmacyPurchaseInvoiceService {
   }
 
   async learningMetrics(branchId: string, query: { from?: string; to?: string }) {
-    const end = query.to ? new Date(query.to) : new Date();
-    const from = query.from ? new Date(query.from) : new Date(end.getTime() - 56 * 24 * 60 * 60 * 1000);
-    if (!Number.isFinite(from.getTime()) || !Number.isFinite(end.getTime()) || from > end) {
+    const wholeDay = !!query.to && /^\d{4}-\d{2}-\d{2}$/.test(query.to);
+    const day = 24 * 60 * 60 * 1000;
+    const parsedTo = query.to ? new Date(query.to) : new Date();
+    const to = wholeDay ? new Date(parsedTo.getTime() + day) : parsedTo;
+    const from = query.from ? new Date(query.from) : new Date(to.getTime() - 56 * day);
+    if (!Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime()) || (wholeDay ? from >= to : from > to)) {
       throw new BadRequestException('Choose a valid date range for OCR learning metrics.');
     }
-    const wholeDay = !!query.to && /^\d{4}-\d{2}-\d{2}$/.test(query.to);
-    const to = wholeDay ? new Date(end.getTime() + 24 * 60 * 60 * 1000) : end;
     return purchaseLearningMetrics(this.prisma, branchId, { from, to });
   }
 
