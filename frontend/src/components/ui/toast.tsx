@@ -16,7 +16,7 @@ const ToastViewport = React.forwardRef<
   <ToastPrimitives.Viewport
     ref={ref}
     className={cn(
-      "fixed top-0 right-0 z-[100] flex max-h-screen w-full sm:w-auto flex-col p-4 md:max-w-[420px]",
+      "pointer-events-none fixed top-14 right-0 z-[100] flex max-h-[calc(100dvh-3.5rem)] w-full flex-col gap-2 p-4 sm:w-auto md:top-16 md:max-h-[calc(100dvh-4rem)] md:max-w-[420px]",
       className
     )}
     {...props}
@@ -25,7 +25,7 @@ const ToastViewport = React.forwardRef<
 ToastViewport.displayName = ToastPrimitives.Viewport.displayName
 
 const toastVariants = cva(
-  "group pointer-events-auto relative flex w-full items-center justify-between space-x-4 overflow-hidden rounded-md border p-6 pr-8 shadow-sm transition-all data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-right-full data-[state=open]:slide-in-from-top-full data-[state=open]:sm:slide-in-from-top-full",
+  "group pointer-events-auto relative flex w-full items-center justify-between space-x-4 overflow-hidden rounded-md border p-6 pr-10 shadow-sm pointer-coarse:pr-12 transition-all data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-right-full data-[state=open]:slide-in-from-top-full data-[state=open]:sm:slide-in-from-top-full",
   {
     variants: {
       variant: {
@@ -80,13 +80,14 @@ const ToastClose = React.forwardRef<
   <ToastPrimitives.Close
     ref={ref}
     className={cn(
-      "absolute right-2 top-2 rounded-md p-1 text-foreground/50 opacity-0 transition-opacity hover:text-foreground focus:opacity-100 focus:outline-none focus:ring-2 group-hover:opacity-100 group-[.destructive]:text-destructive group-[.destructive]:hover:text-destructive-foreground group-[.destructive]:focus:ring-ring group-[.destructive]:focus:ring-offset-ring",
+      "absolute right-1 top-1 inline-flex size-8 items-center justify-center rounded-md text-current opacity-70 transition-opacity hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current pointer-coarse:size-11",
       className
     )}
     toast-close=""
+    aria-label="Dismiss notification"
     {...props}
   >
-    <X className="h-4 w-4" />
+    <X className="h-4 w-4" aria-hidden="true" />
   </ToastPrimitives.Close>
 ))
 ToastClose.displayName = ToastPrimitives.Close.displayName
