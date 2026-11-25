@@ -19,7 +19,7 @@ import {
   RevenueReportDto,
   OutstandingInvoicesDto,
 } from './dto/query-billing.dto';
-import { VOID, leftToRefund, metadataOf, paise, refundedByPayment, rupees } from './clinic-bill-register';
+import { VOID, heldPaise, leftToRefund, metadataOf, paise, refundedByPayment, rupees } from './clinic-bill-register';
 
 const RUPEES = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0, maximumFractionDigits: 2 });
 const PAYMENT_INVOICE = { invoice: { select: { id: true, invoiceNo: true, total: true } } } as const;
@@ -505,7 +505,7 @@ export class BillingService {
       throw new BadRequestException('Refund amount must be greater than 0');
     }
 
-    if (refund > paise(payment.amount)) {
+    if (refund > heldPaise(payment.amount)) {
       throw new BadRequestException('Refund amount exceeds original payment amount');
     }
 

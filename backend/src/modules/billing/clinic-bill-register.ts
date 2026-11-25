@@ -110,6 +110,9 @@ export const paise = (rupees: number) => {
   return rupees < 0 && whole ? -whole : whole;
 };
 export const rupees = (paise: number) => paise / 100;
+/** Whole paise a payment can give back: an old payment of 264.025 holds 26402, never 26403. */
+export const heldPaise = (rupees: number) =>
+  Math.max(0, Math.floor(Number((rupees * 100).toPrecision(15))));
 
 type BillPayment = {
   id: string;
@@ -142,9 +145,14 @@ export const refundedByPayment = (payments: BillPayment[]) => {
     const sources = paid.filter(
       (p) => p.mode === legacy.mode && p.createdAt <= legacy.createdAt,
     );
-    const whole = sources.find((p) => paise(p.amount) - used(p) >= unplaced);
+    const whole = sources.find(
+      (p) => heldPaise(p.amount) - used(p) >= unplaced,
+    );
     for (const p of whole ? [whole] : sources) {
-      const taken = Math.min(unplaced, Math.max(0, paise(p.amount) - used(p)));
+      const taken = Math.min(
+        unplaced,
+        Math.max(0, heldPaise(p.amount) - used(p)),
+      );
       take(p, taken);
       unplaced -= taken;
     }
@@ -152,11 +160,11 @@ export const refundedByPayment = (payments: BillPayment[]) => {
   return refunded;
 };
 
-/** What a payment brought in less what has been refunded from it, in paise. */
+/** The whole paise a payment brought in less what has been refunded from it. */
 export const leftToRefund = (
   payment: { id: string; amount: number },
   refunded: Map<string, number>,
-) => paise(payment.amount) - (refunded.get(payment.id) ?? 0);
+) => heldPaise(payment.amount) - (refunded.get(payment.id) ?? 0);
 
 /** What the desk may still refund on a payment: what is left of it, at most what the bill holds. */
 export const refundableOf = (

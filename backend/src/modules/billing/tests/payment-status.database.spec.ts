@@ -334,6 +334,20 @@ databaseTests('Clinic payments on PostgreSQL', () => {
     expect((await db.newPayment.findUniqueOrThrow({ where: { id: payment.id } })).amount).toBe(264.025);
   });
 
+  it('never refunds more than an old half-paisa payment holds, so the ledger never goes negative', async () => {
+    const invoice = await bill(264.025);
+    const payment = await pay(invoice.id, 264.03);
+    await db.newPayment.update({ where: { id: payment.id }, data: { amount: 264.025 } });
+    await db.newInvoice.update({ where: { id: invoice.id }, data: { total: 264.025, received: 264.025, balance: 0 } });
+    await toWholePaise();
+    const offered = (await register.receipt(invoice.id, 'branch')).payments[0].refundable;
+    expect(offered).toBe(264.02);
+    await expect(billing.processRefund({ paymentId: payment.id, amount: 264.03 } as any, 'branch')).rejects.toMatchObject({ status: 400 });
+    await billing.processRefund({ paymentId: payment.id, amount: offered } as any, 'branch');
+    const ledger = await db.newPayment.findMany({ where: { invoiceId: invoice.id } });
+    expect(ledger.reduce((sum, p) => sum + p.amount, 0)).toBeGreaterThanOrEqual(0);
+  });
+
   it('leaves split payments as they were taken, so the ledger still adds up to what the bill received', async () => {
     const invoice = await bill(100.01);
     const first = await pay(invoice.id, 50);
