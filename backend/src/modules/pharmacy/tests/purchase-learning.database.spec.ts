@@ -180,6 +180,7 @@ databaseTests('Purchase OCR learning with real PostgreSQL', () => {
     expect(throughToday.totals).toEqual(metrics.totals);
     expect(throughToday.totals.lines).toBe(7);
     expect(throughToday.totals.reviewerTouches).toBe(3);
+    await expect(service.learningMetrics(branchId, { from: '2026-12-01', to: '2026-11-30' })).rejects.toThrow('Choose a valid date range for OCR learning metrics.');
   }, 60000);
 
   it('forgets a lesson on request so the next bill is read as printed again', async () => {
