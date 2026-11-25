@@ -160,10 +160,10 @@ export class AppointmentsService {
    */
   async bookInTransaction(
     tx: Prisma.TransactionClient,
-    dto: CreateAppointmentDto & { reviewOfVisitId?: string; reviewRequestedFor?: string },
+    dto: CreateAppointmentDto & { reviewOfVisitId?: string; reviewRequestedFor?: string; reviewRequestedProcedure?: string | null },
     branchId: string,
   ) {
-    const { patientId, doctorId, roomId, date, slot, visitType, notes, source, reviewOfVisitId, reviewRequestedFor, calendar = 'SCHEDULED', allowOverbook = false } = dto;
+    const { patientId, doctorId, roomId, date, slot, visitType, notes, source, reviewOfVisitId, reviewRequestedFor, reviewRequestedProcedure, calendar = 'SCHEDULED', allowOverbook = false } = dto;
     await this.lockSchedule(tx, branchId, doctorId, roomId ?? null, date);
     await this.assertSlotBookable(tx, 'Scheduling conflict detected', doctorId, roomId ?? null, date, slot, branchId, { allowOverbook, calendar });
     const tokenNumber = await this.nextDoctorToken(tx, branchId, doctorId, date);
@@ -180,6 +180,7 @@ export class AppointmentsService {
         source,
         reviewOfVisitId,
         reviewRequestedFor: reviewRequestedFor ? new Date(reviewRequestedFor) : undefined,
+        reviewRequestedProcedure,
         branchId,
         tokenNumber,
         status: statusEnteringCalendar(calendar),
@@ -317,6 +318,12 @@ export class AppointmentsService {
     // Google Calendar sync (fire-and-forget; non-blocking)
     void this.googleCalendar
       ?.syncAppointmentEvent(appointment.id, callerUserId)
+      .catch(() => void 0);
+  }
+
+  notifyUpdated(id: string, callerUserId?: string) {
+    void this.googleCalendar
+      ?.syncAppointmentEvent(id, callerUserId)
       .catch(() => void 0);
   }
 
