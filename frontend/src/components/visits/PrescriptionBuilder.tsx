@@ -30,7 +30,7 @@ import { handleUnauthorizedRedirect } from '@/lib/authRedirect';
 import { getErrorMessage } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { ensureGlobalPrintStyles } from '@/lib/printStyles';
-import { inferTimingFromDosePattern, getAllFrequencyOptions, addCustomFrequency, getTimingOptionsForFrequency, TIMING_OPTIONS, getAllTimingOptions, addCustomTiming, getAllDosePatternOptions, addCustomDosePattern, getAllDurationUnitOptions, addCustomDurationUnit } from '@/lib/frequency';
+import { inferTimingFromDosePattern, PERIODIC_FREQUENCY_OPTIONS, getAllFrequencyOptions, addCustomFrequency, getTimingOptionsForFrequency, TIMING_OPTIONS, getAllTimingOptions, addCustomTiming, getAllDosePatternOptions, addCustomDosePattern, getAllDurationUnitOptions, addCustomDurationUnit } from '@/lib/frequency';
 import { printedMedicineName } from '@/lib/medicine-names';
 import { buildLearnedPrescriptionPlan, type LearnedPlanSuggestion } from '@/lib/prescription-learning';
 import { editRegimenRow, beginRegimenSelection, applyRegimenSuggestion, acceptRegimenField, regimenLabels, type RegimenField, type RegimenRow } from '@/lib/medicine-regimen-defaults';
@@ -2631,11 +2631,11 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
 
   const recentDrugsForPatient = useMemo(() => patientId ? getLocalSuggestions(`drugNames:${patientId}`, '', 5) : [], [patientId]);
   const recentDrugsGlobal = useMemo(() => getLocalSuggestions('drugNames', '', 5), []);
-  const frequencyPresets: Array<{ label: string; pattern?: string; frequency?: Frequency }> = [
+  const frequencyPresets: Array<{ label: string; pattern?: string; frequency?: Frequency; timing?: string }> = [
     { label: '1-0-1', pattern: '1-0-1' },
     { label: '0-1-0', pattern: '0-1-0' },
     { label: '1-1-1', pattern: '1-1-1' },
-    { label: 'HS', frequency: 'ONCE_DAILY' },
+    { label: 'HS', frequency: 'ONCE_DAILY', timing: 'HS' },
   ];
   const durationPresets: Array<{ label: string; duration: number; unit: DurationUnit }> = [
     { label: '5d', duration: 5, unit: 'DAYS' },
@@ -5456,7 +5456,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                           const presetFreq = p.frequency ?? (p.pattern ? inferFrequencyFromDosePattern(p.pattern) ?? 'ONCE_DAILY' : undefined);
                           const rawTiming = p.pattern ? inferTimingFromDosePattern(p.pattern) || undefined : undefined;
                           const allowed = presetFreq ? getTimingOptionsForFrequency(presetFreq) : TIMING_OPTIONS;
-                          const timing = rawTiming && allowed.includes(rawTiming) ? rawTiming : undefined;
+                          const timing = p.timing ?? (rawTiming && allowed.includes(rawTiming) ? rawTiming : undefined);
                           applyPresetToRow(target, {
                             dosePattern: p.pattern,
                             frequency: presetFreq,
@@ -5576,6 +5576,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                             <div>
                               <Select value={it.dosePattern || it.frequency || ''} onOpenChange={() => setActiveRowIdx(idx)} onValueChange={(v: string) => {
                                 if (v === '__CUSTOM__') { openCustomDialog('dosePattern', idx); return; }
+                                if ((PERIODIC_FREQUENCY_OPTIONS as readonly string[]).includes(v)) { updateItem(idx, { frequency: v, dosePattern: '' }); return; }
                                 const inferred = inferFrequencyFromDosePattern(v);
                                 const inferredTiming = inferTimingFromDosePattern(v);
                                 const patch: any = { dosePattern: v };
@@ -5589,7 +5590,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                               }}>
                                 <SelectTrigger className={rxSelect} aria-label={`Frequency for ${rowDescription(it.drugName, idx)}`}><SelectValue placeholder="Frequency" /></SelectTrigger>
                                 <SelectContent>
-                                  {Array.from(new Set([...dosePatternOptions, it.dosePattern || it.frequency].filter(Boolean))).map(p => (
+                                  {Array.from(new Set([...dosePatternOptions, ...PERIODIC_FREQUENCY_OPTIONS, it.dosePattern || it.frequency].filter(Boolean))).map(p => (
                                     <SelectItem key={p} value={p}>{prescriptionLabel('frequency', p)}</SelectItem>
                                   ))}
                                   <SelectItem value="__CUSTOM__" className="text-info-text border-t mt-1 pt-1">+ Custom...</SelectItem>
