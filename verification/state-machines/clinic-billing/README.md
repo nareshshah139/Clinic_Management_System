@@ -23,7 +23,7 @@ Amounts are in hundreds of rupees. The bill starts at 4. Payments and refunds ar
 | Model | Code |
 | --- | --- |
 | `DeskTakesPayment` | `processPayment` without a gateway, `billing.service.ts:350`, runs `payAtDesk`, `:365`, which calls `receive` and creates a `COMPLETED` row in one transaction |
-| `Receive` | `receive`, `:406`. One `updateMany` where `balance >= amount` adds to `received` and takes off `balance`, `:413`. |
+| `Receive` | `receive`, `:436`. It reads the bill under its row lock (`lockedMoney`, `SELECT ... FOR UPDATE`, `:454`), refuses an amount above `balance`, and adds to `received` and takes off `balance`. |
 | `DeskStartsGatewayPayment` | `processPayment` with a gateway checks the balance and creates a `PENDING` row, `:355` to `:358`. The bill is unchanged. |
 | `DeskOpensConfirm` | `confirmPayment`'s `findFirst`, `:380` |
 | `DeskConfirms` | the transaction at `:392`. `updateMany` where `reconStatus` is `PENDING`, `:394`, then `receive` once, `:397`. When `receive` refuses, the whole transaction rolls back. |
@@ -80,7 +80,7 @@ A gateway payment stays `PENDING` until someone calls `confirmPayment`. Nothing 
 
 The `fixed` mode does this in one conditional update. Prisma cannot write a column computed from another column, so the code takes the lock with the first write and computes from what it returns. Both are atomic against a payment or refund, and TLC checks the same `AdminSavesEdit` step for `code` and `fixed`.
 
-No other path in `billing.service.ts` writes `total` or `balance` from a stale read. `receive` and `processRefund` move both columns in one conditional `updateMany`, and `generate-samples` writes only bills it has just created.
+No other path in `billing.service.ts` writes `total` or `balance` from a stale read. `receive` and `processRefund` read both columns under the bill's row lock and write them in the same transaction, and `generate-samples` writes only bills it has just created.
 
 ### Left broken
 
@@ -129,7 +129,7 @@ No screen sends `PATCH /billing/invoices/:id`, `POST /billing/payments/:id/confi
 
 - `processBulkPayment`. It pays each bill's balance through `payAtDesk`, so it is the same `receive` as a desk payment.
 - Item replacement. An edit with new items deletes and recreates the item rows in the same transaction. The model keeps only the total it produces.
-- Rounding and GST. Totals are whole numbers.
+- Rounding and GST. Totals are whole numbers. The code compares and writes `received` and `balance` in whole paise (`paise` in `clinic-bill-register.ts`), so they carry no fraction of a paisa and compare exactly, as the model's whole numbers do.
 - `generate-samples`, which writes `received` and `balance` directly for demo data, `billing.service.ts:941` and `:956`. It writes a bill it has just created, so no other actor shares it.
 - The `status` column on `NewInvoice`. Billing code never writes it, though `reports.service.ts:1079` counts bills by it.
 - The legacy `Payment` model, which has no writer.

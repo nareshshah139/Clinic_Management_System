@@ -101,6 +101,9 @@ function setup(
     },
   };
   prisma.$transaction = jest.fn(async (command: any) => command(prisma));
+  prisma.$queryRaw = jest.fn(async (_sql: TemplateStringsArray, id: string) =>
+    invoices.filter((i) => i.id === id),
+  );
   const numbers: any = {
     reserve: jest.fn(async () => ({ sequence: 7, periodKey: '2611' })),
   };

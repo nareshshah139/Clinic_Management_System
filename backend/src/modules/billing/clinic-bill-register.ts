@@ -100,6 +100,10 @@ export const VOID = 'CANCELLED';
 /** Below one paisa: float balances that should read as settled. */
 const SETTLED = 0.005;
 
+/** Bill money is compared and changed in whole paise; the columns hold rupees as floats. */
+export const paise = (rupees: number) => Math.round(rupees * 100);
+export const rupees = (paise: number) => paise / 100;
+
 const person = {
   select: { id: true, firstName: true, lastName: true },
 } as const;
