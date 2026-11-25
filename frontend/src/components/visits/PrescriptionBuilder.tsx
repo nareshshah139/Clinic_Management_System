@@ -2371,6 +2371,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   }, [activeDrugOption]);
 
   const updateItem = (index: number, patch: Partial<PrescriptionItemForm>) => {
+    recordHistory(`${index}:${Object.keys(patch).sort().join(',')}`);
     setItems(prev => {
       const next = prev.map((it, i) => (i === index ? editRegimenRow(it, patch) : it));
       // If user types a drug name into the last row, append a new blank row
@@ -2402,6 +2403,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     showToast?: boolean;
   }) => {
     const selection = nextRegimenSelection();
+    recordHistory();
     setItems(prev => {
       const next = prev.map((item, index) => index === rowIdx ? selectDrugOnRow(item, drug, selection) : item);
       if (!hasTrailingBlank(next)) next.push(createBlankItem());
@@ -2540,6 +2542,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   };
 
   const removeItem = (index: number) => {
+    recordHistory();
     setItems(prev => prev.filter((_, i) => i !== index));
   };
 
@@ -2933,12 +2936,12 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
         foodInstructions: x.foodInstructions,
         pulseRegimen: x.pulseRegimen,
       }));
+      recordHistory();
       setItems(() => {
         const next = [...mapped];
         if (!hasTrailingBlank(next)) next.push(createBlankItem());
         return next;
       });
-      pushHistory();
       const md = typeof tpl.metadata === 'object' ? tpl.metadata : (tpl.metadata ? JSON.parse(tpl.metadata) : null);
 
       // Always clear+set every field so switching templates never leaves stale values behind
@@ -3362,8 +3365,12 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const [assets, setAssets] = useState<any[]>([]);
   const [printerProfiles, setPrinterProfiles] = useState<any[]>([]);
   const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
-  const undoStackRef = useRef<any[]>([]);
-  const redoStackRef = useRef<any[]>([]);
+  type HistorySnapshot = { items: PrescriptionItemForm[]; followUpInstructions: string };
+  const undoStackRef = useRef<HistorySnapshot[]>([]);
+  const redoStackRef = useRef<HistorySnapshot[]>([]);
+  const historyStateRef = useRef<HistorySnapshot>({ items, followUpInstructions });
+  historyStateRef.current = { items, followUpInstructions };
+  const historyBurstRef = useRef<{ key: string; at: number } | null>(null);
   // Computed effective margins (depend on printer profile and overrides)
   const effectiveTopMarginPx = useMemo(() => {
     const prof = activeProfileId ? (printerProfiles.find((p: any) => p.id === activeProfileId) || {}) : {};
@@ -4310,12 +4317,16 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
 
   // Autosave & history
   const draftKey = useMemo(() => `rxDraft:${patientId}:${visitId || 'standalone'}`, [patientId, visitId]);
-  const pushHistory = useCallback(() => {
-    const snapshot = { items: JSON.parse(JSON.stringify(items)), followUpInstructions };
-    undoStackRef.current.push(snapshot);
+  /** Call before a user change. Repeated calls with the same burst key less than 1.5s apart share one undo step. */
+  const recordHistory = useCallback((burstKey?: string) => {
+    const now = Date.now();
+    const burst = historyBurstRef.current;
+    historyBurstRef.current = burstKey ? { key: burstKey, at: now } : null;
+    if (burstKey && burst?.key === burstKey && now - burst.at < 1500) return;
+    undoStackRef.current.push(JSON.parse(JSON.stringify(historyStateRef.current)));
     if (undoStackRef.current.length > 50) undoStackRef.current.shift();
     redoStackRef.current = [];
-  }, [items, followUpInstructions]);
+  }, []);
   /**
    * @cc [owner:nareshshah139,label:product] discarded-prescription-draft
    * When the parent has discarded this editor, persistence MUST NOT recreate
@@ -4462,7 +4473,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
         if (typeof data?.avoidBreakInsideTables === 'boolean') setAvoidBreakInsideTables(data.avoidBreakInsideTables);
       }
     } catch {}
-    pushHistory();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftKey]);
   const latestDraftWriter = useRef(saveDraftNow);
@@ -4490,22 +4500,16 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       document.removeEventListener('visibilitychange', visHandler);
     };
   }, [saveDraftNow]);
-  const undo = useCallback(() => {
-    if (undoStackRef.current.length <= 1) return;
-    const cur = undoStackRef.current.pop();
-    if (!cur) return;
-    const prev = undoStackRef.current[undoStackRef.current.length - 1];
-    redoStackRef.current.push(cur);
-    setItems(JSON.parse(JSON.stringify(prev.items)));
-    setFollowUpInstructions(prev.followUpInstructions || '');
-  }, []);
-  const redo = useCallback(() => {
-    const next = redoStackRef.current.pop();
-    if (!next) return;
-    undoStackRef.current.push(next);
-    setItems(JSON.parse(JSON.stringify(next.items)));
-    setFollowUpInstructions(next.followUpInstructions || '');
-  }, []);
+  const stepHistory = useCallback((from: React.MutableRefObject<HistorySnapshot[]>, to: React.MutableRefObject<HistorySnapshot[]>) => {
+    const target = from.current.pop();
+    if (!target) return;
+    to.current.push(JSON.parse(JSON.stringify(historyStateRef.current)));
+    historyBurstRef.current = null;
+    setItems(target.items);
+    setFollowUpInstructions(target.followUpInstructions);
+  }, [setFollowUpInstructions]);
+  const undo = useCallback(() => stepHistory(undoStackRef, redoStackRef), [stepHistory]);
+  const redo = useCallback(() => stepHistory(redoStackRef, undoStackRef), [stepHistory]);
 
   const shouldShowLearnedPlanPanel = true;
   const learnedPlanConfidenceLabel = useMemo(() => {
@@ -4609,12 +4613,13 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     return Array.from(new Set(candidates)).slice(0, 6);
   }, [followUpInstructions, learnedPlan, parseFollowUpDays]);
   const applyFollowUpShortcut = useCallback((value: string) => {
+    recordHistory();
     setFollowUpInstructions(value);
     const days = parseFollowUpDays(value);
     if (days && onChangeReviewDate) {
       onChangeReviewDate(formatSuggestedReviewDate(days));
     }
-  }, [parseFollowUpDays, onChangeReviewDate, formatSuggestedReviewDate]);
+  }, [parseFollowUpDays, onChangeReviewDate, formatSuggestedReviewDate, recordHistory]);
   const applyReviewDateShortcut = useCallback((days: number) => {
     if (!onChangeReviewDate || days <= 0) return;
     onChangeReviewDate(formatSuggestedReviewDate(days));
@@ -4808,9 +4813,9 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                         });
                         if (!ok) return;
                         try { localStorage.removeItem(`rxDraft:${patientId}:${visitId || 'standalone'}`); } catch {}
+                        recordHistory();
                         setItems([]);
                         setFollowUpInstructions('');
-                        pushHistory();
                       }}
                     >
                       Clear prescription…
@@ -5805,7 +5810,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
                     <label className="text-sm text-foreground flex items-center gap-1">Follow-up Instructions{language !== 'EN' && (<Languages className="h-3.5 w-3.5 text-info-text" aria-label="Translated on print" />)}</label>
-                    <Input key="followup-instructions" id="visit-followup-instructions" aria-label="Follow-up instructions" placeholder="e.g., Review in 4 weeks" value={followUpInstructions} onChange={(e) => setFollowUpInstructions(e.target.value)} onBlur={(e) => pushRecent('followUp', e.target.value)} />
+                    <Input key="followup-instructions" id="visit-followup-instructions" aria-label="Follow-up instructions" placeholder="e.g., Review in 4 weeks" value={followUpInstructions} onChange={(e) => { recordHistory('followUp'); setFollowUpInstructions(e.target.value); }} onBlur={(e) => pushRecent('followUp', e.target.value)} />
                     {followUpSuggestions.length > 0 && (
                       <div className="mt-2 flex flex-wrap gap-2">
                         {followUpSuggestions.map((suggestion) => (
