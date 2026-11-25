@@ -101,8 +101,12 @@ export const VOID = 'CANCELLED';
 /** Below one paisa: float balances that should read as settled. */
 const SETTLED = 0.005;
 
-/** Bill money is compared and changed in whole paise; the columns hold rupees as floats. */
-export const paise = (rupees: number) => Math.round(rupees * 100);
+/**
+ * Bill money is compared and changed in whole paise; the columns hold rupees as floats. A half paisa
+ * rounds up, as Postgres ROUND does, which 264.025 * 100 = 26402.4999… would otherwise miss.
+ */
+export const paise = (rupees: number) =>
+  Math.round(Number((rupees * 100).toPrecision(12)));
 export const rupees = (paise: number) => paise / 100;
 
 type BillPayment = {

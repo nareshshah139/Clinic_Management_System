@@ -171,9 +171,9 @@ describe('billing invoice totals', () => {
     expect(data.total).toBeCloseTo(1000, 6);
   });
 
-  it('keeps fractional paise from non-round amounts', async () => {
+  it('rounds a total with fractional paise to the nearest paisa the desk can collect', async () => {
     const data = await totalFor([{ qty: 3, unitPrice: 33.33, gstRate: 18 }]);
-    expect(data.total).toBeCloseTo(117.9882, 4);
+    expect([data.total, data.balance]).toEqual([117.99, 117.99]);
   });
 
   it('charges GST on the line amounts even when the overall discount is a hundred percent', async () => {

@@ -831,7 +831,7 @@ export class BillingService {
       return sum + (discountedItemTotal * gstRate / 100);
     }, 0);
 
-    const totalAmount = discountedSubtotal + gstAmount;
+    const totalAmount = rupees(paise(discountedSubtotal + gstAmount));
 
     return { subtotal, discount: discountAmount, gstAmount, totalAmount };
   }

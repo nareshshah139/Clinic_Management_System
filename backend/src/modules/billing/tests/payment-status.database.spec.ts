@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { execFileSync } from 'child_process';
 import { resolve } from 'path';
+import { readFileSync } from 'fs';
 import { BillingService } from '../billing.service';
 import { ClinicBillRegisterService } from '../clinic-bill-register.service';
 import { InvoiceNumbersService } from '../../../shared/numbering/invoice-numbers.service';
@@ -271,6 +272,47 @@ databaseTests('Clinic payments on PostgreSQL', () => {
       balance: 600.3,
       payments: [[600.3, 'CASH', 'COMPLETED'], [-200.1, 'CASH', 'COMPLETED'], [-400.2, 'CASH', 'COMPLETED']],
     });
+  });
+
+  const gstBill = (unitPrice: number) =>
+    billing.createInvoice({ patientId: 'patient', items: [{ name: 'Procedure', quantity: 1, unitPrice, gstRate: 18, discount: 0 }] } as any, 'branch');
+
+  it('keeps a GST bill in whole paise, so collecting the balance shown never takes more than was billed', async () => {
+    const invoice = await gstBill(223.75);
+    await pay(invoice.id, 100.01);
+    const shown = (await register.receipt(invoice.id, 'branch')).bill;
+    expect([shown.amount, shown.due]).toEqual([264.03, 164.02]);
+    await pay(invoice.id, shown.due, { method: 'UPI' });
+    const row = await db.newInvoice.findUniqueOrThrow({ where: { id: invoice.id } });
+    expect([row.total, row.received, row.balance]).toEqual([264.03, 264.03, 0]);
+  });
+
+  it('rounds a bill saved with a fraction of a paisa to whole paise when migrated', async () => {
+    const invoice = await bill(264.025);
+    await db.newInvoice.update({ where: { id: invoice.id }, data: { total: 264.025, received: 100.01, balance: 164.015 } });
+    const sql = readFileSync(resolve('prisma/migrations/20261125150000_clinic_bill_whole_paise/migration.sql'), 'utf8');
+    for (const statement of sql.split(';').filter((s) => s.replace(/--.*$/gm, '').trim())) await db.$executeRawUnsafe(statement);
+
+    const shown = (await register.receipt(invoice.id, 'branch')).bill;
+    expect([shown.amount, shown.due]).toEqual([264.03, 164.02]);
+    await pay(invoice.id, shown.due);
+    const row = await db.newInvoice.findUniqueOrThrow({ where: { id: invoice.id } });
+    expect([row.total, row.received, row.balance]).toEqual([264.03, 264.03, 0]);
+  });
+
+  it('adds up the register in the same whole paise each GST bill was settled in', async () => {
+    await db.patient.create({ data: { id: 'gst-patient', name: 'Kiran Varma', gender: 'M', phone: '9000000001', branchId: 'branch' } });
+    const gst = () =>
+      billing.createInvoice({ patientId: 'gst-patient', items: [{ name: 'Procedure', quantity: 1, unitPrice: 508.7, gstRate: 18, discount: 0 }] } as any, 'branch');
+    for (const b of [await gst(), await gst()]) await pay(b.id, (await register.receipt(b.id, 'branch')).bill.due);
+    const today = clinicDay(new Date());
+    const { rows, totals } = await register.list(
+      { from: today, to: today, field: 'patient', q: 'Kiran Varma', sortBy: 'billedAt', sortDir: 'asc', page: 1, limit: 50 } as any,
+      { id: 'doc', role: 'OWNER' },
+      'branch',
+    );
+    expect(rows.map((r) => [r.amount, r.paid, r.due])).toEqual([[600.27, 600.27, 0], [600.27, 600.27, 0]]);
+    expect([totals.billed, totals.collected, totals.outstanding]).toEqual([1200.54, 1200.54, 0]);
   });
 
   it('does not confirm a gateway payment once the desk has collected what was due', async () => {
