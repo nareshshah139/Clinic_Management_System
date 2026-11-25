@@ -32,6 +32,14 @@ databaseTests('Reports over live billing tables on PostgreSQL', () => {
     }
     await db.patient.create({ data: { id: 'p', name: 'Synthetic P', gender: 'F', phone: '9000000001', branchId: 'A' } });
     await db.patient.create({ data: { id: 'q', name: 'Synthetic Q', gender: 'M', phone: '9000000002', branchId: 'B' } });
+    for (const [id, gender, age, phone] of [
+      ['r', 'F', 25, '9000000003'],
+      ['s', 'M', 64, '9000000004'],
+    ] as const) {
+      await db.patient.create({
+        data: { id, name: id, gender, age, phone, branchId: 'A' },
+      });
+    }
     await db.service.create({ data: { id: 'consult', name: 'Consultation', type: 'Consult', priceMrp: 1000, priceNet: 1000, branchId: 'A' } });
     await db.service.create({ data: { id: 'laser', name: 'Laser', type: 'Procedure', priceMrp: 1000, priceNet: 1000, branchId: 'A' } });
     await db.visit.create({ data: { id: 'v1', patientId: 'p', doctorId: 'd1', complaints: '[]' } });
@@ -91,6 +99,16 @@ databaseTests('Reports over live billing tables on PostgreSQL', () => {
     expect(report.refundSummary.refundReasons).toEqual([expect.objectContaining({ reason: 'overcharge', count: 1, amount: 109 })]);
   });
 
+  it('gives each payment mode its own success rate', async () => {
+    const report = await reports.generatePaymentReport(range as any, 'A');
+
+    expect(
+      Object.fromEntries(
+        report.paymentModeBreakdown.map((m) => [m.mode, m.successRate]),
+      ),
+    ).toEqual({ CASH: 100, UPI: 100, CARD: 0 });
+  });
+
   it('attributes collected revenue to each doctor in the doctor report', async () => {
     const report = await reports.generateDoctorReport({ ...range, includePerformanceMetrics: true } as any, 'A');
     expect(Object.fromEntries(report.doctorMetrics.map((m) => [m.doctorId, m.totalRevenue]))).toEqual({ d1: 981, d2: 500 });
@@ -99,5 +117,20 @@ databaseTests('Reports over live billing tables on PostgreSQL', () => {
   it('totals each top patient’s collected revenue in the patient report', async () => {
     const report = await reports.generatePatientReport(range as any, 'A');
     expect(report.topVisitingPatients).toEqual([expect.objectContaining({ patientId: 'p', totalRevenue: 1481 })]);
+  });
+
+  it('averages the recorded ages of the branch patients, skipping patients with no age', async () => {
+    const report = await reports.generatePatientReport(range as any, 'A');
+
+    expect(report.averageAge).toBe(44.5);
+  });
+
+  it('has no average age when no patient has one', async () => {
+    const report = await reports.generatePatientReport(
+      { ...range, gender: 'X' } as any,
+      'A',
+    );
+
+    expect(report.averageAge).toBeNull();
   });
 });

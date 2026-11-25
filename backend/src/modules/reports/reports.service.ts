@@ -267,9 +267,13 @@ export class ReportsService {
     ];
 
     const ageGroupMap = new Map<string, number>();
+    let agedPatients = 0;
+    let ageTotal = 0;
     for (const p of filtered) {
       const age = resolveAge(p);
       if (age === null) continue;
+      agedPatients += 1;
+      ageTotal += age;
       const bucket = ageBuckets.find((b) => b[1](age))?.[0] ?? 'Unknown';
       ageGroupMap.set(bucket, (ageGroupMap.get(bucket) || 0) + 1);
     }
@@ -315,6 +319,7 @@ export class ReportsService {
       totalPatients: totalPatientsCount,
       newPatients: newPatientsCount,
       returningPatients,
+      averageAge: agedPatients ? ageTotal / agedPatients : null,
       ageGroupBreakdown,
       genderBreakdown,
       cityBreakdown,
@@ -771,22 +776,57 @@ export class ReportsService {
     if (paymentMode) where.mode = paymentMode as any; // Fixed: use 'mode' instead of 'method'
     if (gateway) where.gateway = gateway;
 
-    const [totalAmountAgg, totalPayments, successfulPayments, failedPayments, pendingPayments, modeGroups, gatewayGroups, dailyGroups, dailySuccess, dailyFailed] = await Promise.all([
+    const [totalAmountAgg, totalPayments, successfulPayments, failedPayments, pendingPayments, modeGroups, modeSuccess, gatewayGroups, gatewaySuccess, dailyGroups, dailySuccess, dailyFailed] = await Promise.all([
       this.prisma.newPayment.aggregate({ where, _sum: { amount: true } }),
       this.prisma.newPayment.count({ where }),
       this.prisma.newPayment.count({ where: { ...where, reconStatus: 'COMPLETED' } }),
       this.prisma.newPayment.count({ where: { ...where, reconStatus: 'FAILED' } }),
       this.prisma.newPayment.count({ where: { ...where, reconStatus: 'PENDING' } }),
       this.prisma.newPayment.groupBy({ by: ['mode'], where, _sum: { amount: true }, _count: { _all: true } }),
+      this.prisma.newPayment.groupBy({
+        by: ['mode'],
+        where: { ...where, reconStatus: 'COMPLETED' },
+        _count: { _all: true },
+      }),
       this.prisma.newPayment.groupBy({ by: ['gateway'], where, _sum: { amount: true }, _count: { _all: true } }),
+      this.prisma.newPayment.groupBy({
+        by: ['gateway'],
+        where: { ...where, reconStatus: 'COMPLETED' },
+        _count: { _all: true },
+      }),
       this.prisma.newPayment.groupBy({ by: ['createdAt'], where, _sum: { amount: true }, _count: { _all: true } }),
       this.prisma.newPayment.groupBy({ by: ['createdAt'], where: { ...where, reconStatus: 'COMPLETED' }, _count: { _all: true } }),
       this.prisma.newPayment.groupBy({ by: ['createdAt'], where: { ...where, reconStatus: 'FAILED' }, _count: { _all: true } }),
     ]);
 
     const totalAmount = totalAmountAgg._sum.amount || 0;
-    const paymentModeBreakdown: PaymentModeBreakdownDto[] = modeGroups.map((g) => ({ mode: g.mode as any, transactionCount: g._count._all, totalAmount: g._sum.amount || 0, percentage: totalAmount ? (100 * (g._sum.amount || 0)) / totalAmount : 0, successRate: totalPayments ? (100 * successfulPayments) / totalPayments : 0 }));
-    const gatewayBreakdown: GatewayBreakdownDto[] = gatewayGroups.map((g) => ({ gateway: g.gateway || 'N/A', transactionCount: g._count._all, totalAmount: g._sum.amount || 0, successRate: successfulPayments ? (100 * successfulPayments) / totalPayments : 0, averageTransactionAmount: g._count._all ? (g._sum.amount || 0) / g._count._all : 0 }));
+    const successByMode = new Map(
+      modeSuccess.map((g) => [g.mode, g._count._all]),
+    );
+    const successByGateway = new Map(
+      gatewaySuccess.map((g) => [g.gateway, g._count._all]),
+    );
+    const paymentModeBreakdown: PaymentModeBreakdownDto[] = modeGroups.map(
+      (g) => ({
+        mode: g.mode as any,
+        transactionCount: g._count._all,
+        totalAmount: g._sum.amount || 0,
+        percentage: totalAmount
+          ? (100 * (g._sum.amount || 0)) / totalAmount
+          : 0,
+        successRate: (100 * (successByMode.get(g.mode) ?? 0)) / g._count._all,
+      }),
+    );
+    const gatewayBreakdown: GatewayBreakdownDto[] = gatewayGroups.map((g) => ({
+      gateway: g.gateway || 'N/A',
+      transactionCount: g._count._all,
+      totalAmount: g._sum.amount || 0,
+      successRate:
+        (100 * (successByGateway.get(g.gateway) ?? 0)) / g._count._all,
+      averageTransactionAmount: g._count._all
+        ? (g._sum.amount || 0) / g._count._all
+        : 0,
+    }));
 
     const countsByDay = (groups: typeof dailySuccess) => new Map(byClinicDay(groups, () => 0, (g) => g._count._all).map((d) => [d.date, d.count]));
     const successMap = countsByDay(dailySuccess);

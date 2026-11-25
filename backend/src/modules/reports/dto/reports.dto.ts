@@ -287,6 +287,14 @@ export class PatientReportResponseDto {
   @ApiProperty({ description: 'Returning patients in period' })
   returningPatients: number;
 
+  @ApiProperty({
+    description:
+      'Mean age of the patients whose age or date of birth is recorded',
+    nullable: true,
+    type: Number,
+  })
+  averageAge: number | null;
+
   @ApiProperty({ description: 'Age group breakdown' })
   ageGroupBreakdown: AgeGroupDto[];
 
