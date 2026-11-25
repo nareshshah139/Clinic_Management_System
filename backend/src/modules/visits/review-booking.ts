@@ -41,6 +41,18 @@ const dayOf = (date: Date) => date.toISOString().slice(0, 10);
 const dayRange = (date: string) => ({ gte: new Date(`${date}T00:00:00.000Z`), lte: new Date(`${date}T23:59:59.999Z`) });
 const requestedDay = (review: Review) => dayOf(review.reviewRequestedFor ?? review.date);
 
+export function reviewKind(plan: string | null, visitDay: string): { visitType: VisitType; notes: string } {
+  let parsed: any = null;
+  try {
+    parsed = plan ? JSON.parse(plan) : null;
+  } catch {
+    parsed = null;
+  }
+  const planned = typeof parsed?.procedurePlanned === 'string' ? parsed.procedurePlanned : parsed?.dermatology?.procedurePlanned;
+  const procedure = typeof planned === 'string' ? planned.trim() : '';
+  return procedure ? { visitType: VisitType.PROCEDURE, notes: procedure } : { visitType: VisitType.OPD, notes: `Review after visit on ${visitDay}` };
+}
+
 function summarize(appointment: { id: string; date: Date; slot: string; doctor: { firstName: string | null; lastName: string | null } }): ReviewAppointment {
   return {
     id: appointment.id,
@@ -95,7 +107,8 @@ export class ReviewBookingService {
    * other than the visit's own appointment, is reported as already-scheduled and nothing is booked; appointments with
    * other doctors do not count. Otherwise every free SCHEDULED-calendar slot of the doctor that IST day that does not
    * overlap the patient's other appointments is tried in order until one books, and full means no such slot was left.
-   * The booked appointment's note names the visit's IST date.
+   * The booked appointment is a PROCEDURE appointment whose note is the trimmed "Procedure planned" text when the visit
+   * has any, and otherwise an OPD one whose note names the visit's IST date.
    */
   async book(visitId: string, branchId: string, callerUserId?: string): Promise<ReviewBooking> {
     try {
@@ -116,7 +129,7 @@ export class ReviewBookingService {
     await tx.$queryRaw`SELECT id FROM visits WHERE id = ${visitId} FOR UPDATE`;
     const visit = await tx.visit.findFirstOrThrow({
       where: { id: visitId, deletedAt: null },
-      select: { id: true, patientId: true, doctorId: true, appointmentId: true, followUp: true, createdAt: true },
+      select: { id: true, patientId: true, doctorId: true, appointmentId: true, followUp: true, createdAt: true, plan: true },
     });
     if (!visit.followUp) return { outcome: { status: 'skipped', reason: 'no-review-date' } };
     const date = istClock(visit.followUp).date;
@@ -161,7 +174,7 @@ export class ReviewBookingService {
 
   private async bookDay(
     tx: Prisma.TransactionClient,
-    visit: { id: string; patientId: string; doctorId: string; appointmentId: string | null; createdAt: Date },
+    visit: { id: string; patientId: string; doctorId: string; appointmentId: string | null; createdAt: Date; plan: string | null },
     date: string,
     branchId: string,
   ): Promise<{ outcome: DayOutcome; booked?: Booked }> {
@@ -188,9 +201,8 @@ export class ReviewBookingService {
           doctorId: visit.doctorId,
           date,
           slot,
-          visitType: VisitType.OPD,
+          ...reviewKind(visit.plan, istClock(visit.createdAt).date),
           source: 'review',
-          notes: `Review after visit on ${istClock(visit.createdAt).date}`,
           calendar: 'SCHEDULED',
           reviewOfVisitId: visit.id,
           reviewRequestedFor: date,

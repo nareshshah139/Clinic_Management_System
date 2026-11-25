@@ -14,13 +14,13 @@ const DOCTORS: Record<string, { firstName: string; lastName: string }> = {
 };
 const day = (date: string) => new Date(`${date}T00:00:00.000Z`);
 
-function setup({ followUp = '2099-11-17', slots = ['09:00-09:30', '09:30-10:00'], taken = [] as string[], rows = [] as Seed[] } = {}) {
+function setup({ followUp = '2099-11-17', plan = null as string | null, slots = ['09:00-09:30', '09:30-10:00'], taken = [] as string[], rows = [] as Seed[] } = {}) {
   let clock = 0;
   let store: Row[] = rows.map(({ requested, ...row }, i) => ({
     id: `old-${i}`, patientId: 'p1', doctorId: 'd1', slot: '09:00-09:30', status: 'SCHEDULED', reviewOfVisitId: null, createdAt: clock++,
     ...row, date: day(row.date ?? '2099-11-17'), reviewRequestedFor: requested ? day(requested) : null,
   }));
-  const visit = { id: 'v1', patientId: 'p1', doctorId: 'd1', appointmentId: 'own', followUp: followUp ? day(followUp) : null, createdAt: new Date('2099-11-09T20:00:00.000Z'), deletedAt: null };
+  const visit = { id: 'v1', patientId: 'p1', doctorId: 'd1', appointmentId: 'own', followUp: followUp ? day(followUp) : null, createdAt: new Date('2099-11-09T20:00:00.000Z'), deletedAt: null, plan };
   const withDoctor = (row: Row) => ({ ...row, doctor: DOCTORS[row.doctorId] });
   const inDay = (row: Row, range: { gte: Date; lte: Date }) => row.date >= range.gte && row.date <= range.lte;
   const tx = {
@@ -79,6 +79,24 @@ describe('a first review booking', () => {
       patientId: 'p1', doctorId: 'd1', source: 'review', calendar: 'SCHEDULED', reviewOfVisitId: 'v1', notes: 'Review after visit on 2099-11-10',
     });
     expect(t.appointments.notifyBooked.mock.calls[0][0].id).toBe('new-09:00-09:30');
+  });
+
+  it.each([
+    ['a top-level procedure', { procedurePlanned: '  Chemical peel ' }, 'PROCEDURE', 'Chemical peel'],
+    ['a legacy dermatology procedure', { dermatology: { procedurePlanned: 'PRP session' } }, 'PROCEDURE', 'PRP session'],
+    ['a blank procedure', { procedurePlanned: '   ' }, 'OPD', 'Review after visit on 2099-11-10'],
+    ['no procedure', { notes: 'x' }, 'OPD', 'Review after visit on 2099-11-10'],
+    ['a cleared procedure over a legacy one', { procedurePlanned: '', dermatology: { procedurePlanned: 'PRP session' } }, 'OPD', 'Review after visit on 2099-11-10'],
+  ])('books the review for %s', async (_name, plan, visitType, notes) => {
+    const t = setup({ plan: JSON.stringify(plan) });
+    expect(await t.book()).toMatchObject({ status: 'booked' });
+    expect(t.appointments.bookInTransaction.mock.calls[0][1]).toMatchObject({ visitType, notes, source: 'review', reviewOfVisitId: 'v1' });
+  });
+
+  it.each([[null], ['not json']])('books a plain OPD review for plan %p', async (plan) => {
+    const t = setup({ plan });
+    expect(await t.book()).toMatchObject({ status: 'booked' });
+    expect(t.appointments.bookInTransaction.mock.calls[0][1]).toMatchObject({ visitType: 'OPD', notes: 'Review after visit on 2099-11-10' });
   });
 
   it('takes the second slot when the first is taken by a race', async () => {
