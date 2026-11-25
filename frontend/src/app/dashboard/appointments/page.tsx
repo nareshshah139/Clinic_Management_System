@@ -4,10 +4,8 @@ import { LoadingSkeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/ui/page-header';
 import { Suspense, useEffect, useState, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
-import AppointmentScheduler from '@/components/appointments/AppointmentScheduler';
 import { CalendarLegend } from '@/components/appointments/CalendarLegend';
 import AppointmentsCalendar from '@/components/appointments/AppointmentsCalendar';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { apiClient } from '@/lib/api';
@@ -105,15 +103,11 @@ function AppointmentsPageInner() {
   );
 
   return (
-    <Tabs defaultValue="calendar" className="space-y-3">
+    <div className="space-y-3">
       <PageHeader
         title="Appointments"
         actions={
           <>
-            <TabsList data-tour="view-tabs">
-              <TabsTrigger value="calendar">Calendar</TabsTrigger>
-              <TabsTrigger value="slots">Slots</TabsTrigger>
-            </TabsList>
             <CalendarLegend />
             <Button variant="outline" size="icon" aria-label="Quick guide" title="Quick guide" onClick={() => setGuideDialogOpen(true)}>
               <CircleHelp className="h-4 w-4" />
@@ -147,28 +141,16 @@ function AppointmentsPageInner() {
         </DialogContent>
       </Dialog>
 
-      <TabsContent value="calendar">
-        <AppointmentsCalendar 
-          prefillPatientId={prefillPatientId}
-          controlledDoctorId={doctorId}
-          controlledDate={date}
-          hideHeaderControls
-          toolbarLead={doctorAndDate}
-          readsRooms={ROOM_READ_ROLES.includes(user?.role ?? '')}
-          foldedCalendars={foldedCalendars}
-        />
-      </TabsContent>
-      <TabsContent value="slots" className="space-y-3">
-        <div className="flex flex-wrap items-center gap-2">{doctorAndDate}</div>
-        <AppointmentScheduler 
-          prefillPatientId={prefillPatientId}
-          controlledDoctorId={doctorId}
-          controlledDate={date}
-          hideHeaderControls
-          foldedCalendars={foldedCalendars}
-        />
-      </TabsContent>
-    </Tabs>
+      <AppointmentsCalendar
+        prefillPatientId={prefillPatientId}
+        controlledDoctorId={doctorId}
+        controlledDate={date}
+        hideHeaderControls
+        toolbarLead={doctorAndDate}
+        readsRooms={ROOM_READ_ROLES.includes(user?.role ?? '')}
+        foldedCalendars={foldedCalendars}
+      />
+    </div>
   );
 }
 

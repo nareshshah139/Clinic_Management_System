@@ -176,7 +176,7 @@ databaseTests('Queue coverage in selling units with PostgreSQL', () => {
     expect(page.data.map(entry => entry.prescriptionId).sort()).toEqual(
       cases.filter(([, , , status]) => status === PrescriptionQueueStatus.DISPENSED).map(([id]) => id).sort(),
     );
-    expect(page.counts).toEqual(Object.fromEntries(statuses.map(status => [status, [...list.values()].filter(listed => listed === status).length])));
+    expect(page.counts).toEqual({ ...Object.fromEntries(statuses.map(status => [status, [...list.values()].filter(listed => listed === status).length])), paused: 0 });
   });
 
   it('marks a prescription dispensed after billing exactly what the stock check suggests', async () => {
@@ -205,6 +205,25 @@ databaseTests('Queue coverage in selling units with PostgreSQL', () => {
     const detail = await queue.findOne('billed-as-suggested', at.branchId);
     expect(detail.status).toBe(PrescriptionQueueStatus.DISPENSED);
     expect(detail.medications.map(m => m.coverageStatus)).toEqual(['covered', 'covered', 'covered', 'covered', 'covered']);
+  });
+
+  it('reports what each line still needs in the unit its stock is counted in', async () => {
+    const at = await clinic('Remaining stock-unit need');
+    const tablet = { dosage: 1, dosageUnit: 'TABLET', ...thirtyDays };
+    await rx(at, 'remaining-need', [
+      line('tricogroStrips', tablet),
+      line('tricogroStrips', tablet),
+      line('folvite', { ...tablet, quantity: 5 }),
+      line('foitrax', tablet),
+      line('serum', { dosage: 2, dosageUnit: 'ML', ...thirtyDays }),
+      line('azithral', { dosage: 1, dosageUnit: 'TABLET', frequency: 'TWICE_DAILY', duration: 5, durationUnit: 'DAYS' }),
+      line('tricogroPieces', tablet),
+    ], confirmed(bill('tricogroStrips', 4), bill('folvite', 4), bill('tricogroPieces', 30)));
+
+    const items = (await queue.stockCheck('remaining-need', at.branchId)).items;
+    expect(items.map(item => [item.remainingBillingQuantity, item.unit])).toEqual([
+      [0, 'STRIPS'], [2, 'STRIPS'], [1, 'STRIPS'], [30, 'PIECES'], [1, 'BOTTLES'], [4, 'BOXES'], [0, 'PIECES'],
+    ]);
   });
 
   it('agrees with detail coverage on every prescription in a seeded random branch', async () => {
@@ -271,6 +290,19 @@ databaseTests('Queue coverage in selling units with PostgreSQL', () => {
     await db.pharmacyDispenseTask.create({ data: { branchId: at.branchId, patientId: at.patientId, patientName: 'Test patient', prescriptionId: 'manual-task-without-sale', status: 'DISPENSED' } });
     expect((await listed(at.branchId)).get('manual-task-without-sale')).toBe(PrescriptionQueueStatus.PENDING);
     expect((await queue.findOne('manual-task-without-sale', at.branchId)).status).toBe(PrescriptionQueueStatus.PENDING);
+  });
+
+  it('lists an expired prescription that never got a dispense task under Expired, matching the chip count', async () => {
+    const at = await clinic('Legacy expired without task');
+    await rx(at, 'legacy-no-task', [line('tricogroStrips')]);
+    await db.prescription.update({ where: { id: 'legacy-no-task' }, data: { createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) } });
+    await rx(at, 'paused-task', [line('tricogroStrips')]);
+    await db.pharmacyDispenseTask.create({ data: { branchId: at.branchId, patientId: at.patientId, patientName: 'Test patient', prescriptionId: 'paused-task', status: 'PAUSED' } });
+    const ids = (page: { data: { prescriptionId: string }[] }) => page.data.map(entry => entry.prescriptionId).sort();
+    const notPaused = await queue.findAll({ status: PrescriptionQueueStatus.EXPIRED, paused: false, limit: 100 }, at.branchId);
+    const paused = await queue.findAll({ status: PrescriptionQueueStatus.EXPIRED, paused: true, limit: 100 }, at.branchId);
+    expect([ids(notPaused), ids(paused)]).toEqual([['legacy-no-task'], ['paused-task']]);
+    expect([notPaused.counts.expired, notPaused.counts.paused]).toEqual([2, 1]);
   });
 
   it('rejects a medicine edit racing an invoice held under the prescription lock', async () => {

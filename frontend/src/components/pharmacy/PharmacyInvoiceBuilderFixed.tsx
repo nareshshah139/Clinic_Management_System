@@ -1,8 +1,7 @@
 'use client';
 
 import { downloadInvoicePdf } from '@/lib/download-invoice-pdf';
-
-import { displayClinicDate } from '@/lib/date-display';
+import { billPrintFromInvoice, renderPharmacyBillHtml } from '@/lib/pharmacy-invoice-print';
 import { isIssuedBillNumber } from '@/lib/bill-number';
 import { Spinner } from '@/components/ui/spinner';
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -54,7 +53,6 @@ import { billLineName, prescribedNameShown } from '@/lib/bill-line-name';
 import { enumLabel, plural } from '@/lib/labels';
 import { FREQUENCY_CODES, prescriptionAmount, prescriptionLabel } from '@/lib/prescription-labels';
 import { NativeSelect } from '@/components/ui/native-select';
-import { getGlobalPrintStyleTag } from '@/lib/printStyles';
 import { BillPricingError, priceBill, type BillDiscount } from '@/lib/bill-pricing';
 import { BillDiscountInput } from './sales/BillDiscountInput';
 import {
@@ -1617,288 +1615,8 @@ export function PharmacyInvoiceBuilderFixed({
     );
   };
 
-  const renderPrintHtml = (
-    invoice: any,
-    itemsData: InvoiceItem[],
-    options?: {
-      includePrintButton?: boolean;
-      copyType?: 'ORIGINAL' | 'DUPLICATE';
-      billingFallback?: PharmacyInvoicePrintPreview['billingFallback'];
-    }
-  ) => {
-    const includePrintButton = options?.includePrintButton ?? false;
-    const escapeHtml = (value: unknown) =>
-      String(value ?? '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-    const formatMoney = (value: unknown) =>
-      Number(value || 0).toLocaleString('en-IN', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      });
-    const isStandardPrintData = Array.isArray(invoice?.lines);
-    const invoiceCore = getInvoiceCoreFromPrintData(invoice);
-    const branch = isStandardPrintData ? invoice.branch : undefined;
-    const patient = isStandardPrintData ? invoice.patient : undefined;
-    const copyType = options?.copyType || invoice?.copyType || 'ORIGINAL';
-    const fallback = options?.billingFallback;
-    const dateStr = invoiceCore?.invoiceDate ? displayClinicDate(invoiceCore.invoiceDate) : displayClinicDate(invoiceCore?.createdAt);
-
-    const itemsRows = isStandardPrintData
-      ? invoice.lines
-          .map((line: any) => {
-            const batches = Array.isArray(line.batchAllocations)
-              ? line.batchAllocations
-                  .map((batch: any) => batch.batchNumber)
-                  .filter(Boolean)
-                  .join(', ')
-              : '';
-            return `
-        <tr>
-          <td style="padding:6px;border:1px solid var(--print-rule);">
-            ${escapeHtml(line.name)}
-            ${line.hsnCode ? `<div class="muted">HSN: ${escapeHtml(line.hsnCode)}</div>` : ''}
-            ${batches ? `<div class="muted">Batch: ${escapeHtml(batches)}</div>` : ''}
-          </td>
-          <td style="padding:6px;border:1px solid var(--print-rule);text-align:center;">${line.quantity}</td>
-          <td style="padding:6px;border:1px solid var(--print-rule);text-align:right;">₹${formatMoney(line.unitPrice)}</td>
-          <td style="padding:6px;border:1px solid var(--print-rule);text-align:right;">${formatMoney(line.discountPercent)}%</td>
-          <td style="padding:6px;border:1px solid var(--print-rule);text-align:right;">${formatMoney(line.taxPercent)}%</td>
-          <td style="padding:6px;border:1px solid var(--print-rule);text-align:right;">₹${formatMoney(line.totalAmount)}</td>
-        </tr>
-      `;
-          })
-          .join('')
-      : itemsData
-          .map((item) => {
-            const itemName = billLineName(item);
-
-            return `
-        <tr>
-          <td style="padding:6px;border:1px solid var(--print-rule);">
-            ${escapeHtml(itemName)}
-          </td>
-          <td style="padding:6px;border:1px solid var(--print-rule);text-align:center;">${item.quantity}</td>
-          <td style="padding:6px;border:1px solid var(--print-rule);text-align:right;">₹${formatMoney(item.unitPrice)}</td>
-          <td style="padding:6px;border:1px solid var(--print-rule);text-align:right;">${formatMoney(item.discountPercent || 0)}%</td>
-          <td style="padding:6px;border:1px solid var(--print-rule);text-align:right;">${formatMoney(item.taxPercent || 0)}%</td>
-          <td style="padding:6px;border:1px solid var(--print-rule);text-align:right;">₹${formatMoney(item.totalAmount)}</td>
-        </tr>
-      `;
-          })
-          .join('');
-
-    const totals = {
-      subtotal: invoiceCore?.subtotal || 0,
-      lineDiscount: invoiceCore?.lineDiscountAmount ?? (invoiceCore?.discountAmount || 0) - (invoiceCore?.billDiscountAmount || 0),
-      billDiscount: invoiceCore?.billDiscountAmount || 0,
-      totalTax: invoiceCore?.taxAmount || 0,
-      grandTotal: invoiceCore?.totalAmount || 0,
-    };
-    const billDiscountLabel =
-      invoiceCore?.billDiscountKind === 'PERCENT' ? `Bill discount (${Number(invoiceCore.billDiscountValue)}%)` : 'Bill discount';
-    const invoiceNumberText = hasSavedInvoiceIdentity(invoice) ? invoiceCore?.invoiceNumber : 'Given when the bill is printed';
-    const gstRows =
-      isStandardPrintData && Array.isArray(invoice.gstSummary)
-        ? invoice.gstSummary
-            .map(
-              (slab: any) => `
-        <tr>
-          <td style="padding:6px;border:1px solid var(--print-rule);text-align:right;">${formatMoney(slab.taxPercent)}%</td>
-          <td style="padding:6px;border:1px solid var(--print-rule);text-align:right;">₹${formatMoney(slab.taxableAmount)}</td>
-          <td style="padding:6px;border:1px solid var(--print-rule);text-align:right;">₹${formatMoney(slab.cgst)}</td>
-          <td style="padding:6px;border:1px solid var(--print-rule);text-align:right;">₹${formatMoney(slab.sgst)}</td>
-          <td style="padding:6px;border:1px solid var(--print-rule);text-align:right;">₹${formatMoney(slab.igst)}</td>
-          <td style="padding:6px;border:1px solid var(--print-rule);text-align:right;">₹${formatMoney(slab.totalTax)}</td>
-        </tr>
-      `
-            )
-            .join('')
-        : '';
-
-    return `
-      <html>
-        <head>
-          <meta charset="utf-8" />
-          <title>Invoice ${escapeHtml(invoiceCore?.invoiceNumber || '')}</title>
-          ${getGlobalPrintStyleTag()}
-          <style>
-            @page {
-              size: A4 portrait;
-              margin: 0;
-            }
-            @media print {
-              body { margin: 12mm; }
-              .no-print { display: none; }
-            }
-            body { 
-              font-family: var(--print-font); 
-              padding: 20px;
-              max-width: 800px;
-              margin: 0 auto;
-              background: white;
-            }
-            h1 { 
-              margin-bottom: 8px;
-              color: var(--print-ink);
-            }
-            .invoice-header {
-              border-bottom: 2px solid var(--print-ink);
-              padding-bottom: 12px;
-              margin-bottom: 20px;
-            }
-            .muted { 
-              color: var(--print-muted);
-              font-size: 14px;
-            }
-            .billing-section {
-              margin: 20px 0;
-              padding: 15px;
-              background: var(--print-surface);
-              border-radius: 4px;
-            }
-            table { 
-              width: 100%; 
-              border-collapse: collapse; 
-              margin-top: 20px;
-            }
-            th { 
-              background: var(--print-surface);
-              font-weight: bold;
-              padding: 10px 6px !important;
-            }
-            th, td {
-              border: 1px solid var(--print-rule);
-            }
-            .totals-section {
-              margin-top: 20px;
-              text-align: right;
-              padding: 15px;
-              background: var(--print-surface);
-              border-radius: 4px;
-            }
-            .totals-section div {
-              margin: 8px 0;
-            }
-            .grand-total {
-              font-size: 20px;
-              font-weight: bold;
-              color: var(--print-ink);
-              border-top: 2px solid var(--print-ink);
-              padding-top: 12px;
-              margin-top: 12px;
-            }
-            .print-button {
-              margin: 20px 0;
-              padding: 12px 24px;
-              background: var(--print-accent);
-              color: white;
-              border: none;
-              border-radius: 6px;
-              cursor: pointer;
-              font-size: 16px;
-            }
-            .print-button:hover {
-              background: var(--print-ink);
-            }
-          </style>
-        </head>
-        <body style="--print-header-height: 28mm;">
-          <div class="print-fixed-header">
-            <div class="invoice-header">
-              <h1>Pharmacy Invoice</h1>
-              <div class="muted">
-                ${branch?.name ? `<strong>${escapeHtml(branch.name)}</strong><br/>` : ''}
-                ${branch?.address ? `${escapeHtml(branch.address)}<br/>` : ''}
-                ${branch?.phone ? `Phone: ${escapeHtml(branch.phone)}<br/>` : ''}
-                ${branch?.gstNumber ? `GSTIN: ${escapeHtml(branch.gstNumber)}<br/>` : ''}
-                ${branch?.drugLicenseNumber ? `DL No: ${escapeHtml(branch.drugLicenseNumber)}<br/>` : ''}
-                <strong>Invoice #:</strong> ${escapeHtml(invoiceNumberText || '')}<br/>
-                <strong>Copy:</strong> ${escapeHtml(copyType)}<br/>
-                <strong>Date:</strong> ${escapeHtml(dateStr)}
-                ${invoiceCore?.revisedAt ? `<br/><strong>Revised ${escapeHtml(displayClinicDate(invoiceCore.revisedAt))}</strong>` : ''}
-              </div>
-            </div>
-          </div>
-          <div class="print-content">
-          
-          <div class="billing-section">
-            <strong>Bill To:</strong><br />
-            <div style="margin-top: 8px;">
-              ${escapeHtml(patient?.name || invoiceCore?.billingName || fallback?.billingName || invoiceData.billingName)}<br/>
-              ${escapeHtml(patient?.phone || invoiceCore?.billingPhone || fallback?.billingPhone || invoiceData.billingPhone)}${patient?.address || invoiceCore?.billingAddress || fallback?.billingAddress || invoiceData.billingAddress ? '<br/>' + escapeHtml(patient?.address || invoiceCore?.billingAddress || fallback?.billingAddress || invoiceData.billingAddress) : ''}
-            </div>
-          </div>
-
-          ${
-            includePrintButton
-              ? '<button class="print-button no-print" onclick="window.print()">Print Invoice</button>'
-              : ''
-          }
-
-          <table>
-            <thead>
-              <tr>
-                <th style="text-align:left;">Item</th>
-                <th style="width: 80px;">Qty</th>
-                <th style="text-align:right;width: 100px;">Unit Price</th>
-                <th style="text-align:right;width: 80px;">Disc%</th>
-                <th style="text-align:right;width: 80px;">Tax%</th>
-                <th style="text-align:right;width: 120px;">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${itemsRows}
-            </tbody>
-          </table>
-
-          <div class="totals-section">
-            <div><strong>Subtotal:</strong> ₹${formatMoney(totals.subtotal)}</div>
-            <div><strong>Item discount:</strong> -₹${formatMoney(totals.lineDiscount)}</div>
-            ${totals.billDiscount > 0 ? `<div><strong>${escapeHtml(billDiscountLabel)}:</strong> -₹${formatMoney(totals.billDiscount)}</div>` : ''}
-            <div><strong>Tax:</strong> ₹${formatMoney(totals.totalTax)}</div>
-            <div class="grand-total"><strong>Grand Total:</strong> ₹${formatMoney(totals.grandTotal)}</div>
-            ${invoiceCore?.amountInWords ? `<div class="muted">${escapeHtml(invoiceCore.amountInWords)}</div>` : ''}
-          </div>
-
-          ${
-            gstRows
-              ? `
-          <table>
-            <thead>
-              <tr>
-                <th style="text-align:right;">GST%</th>
-                <th style="text-align:right;">Taxable</th>
-                <th style="text-align:right;">CGST</th>
-                <th style="text-align:right;">SGST</th>
-                <th style="text-align:right;">IGST</th>
-                <th style="text-align:right;">Total Tax</th>
-              </tr>
-            </thead>
-            <tbody>${gstRows}</tbody>
-          </table>
-          `
-              : ''
-          }
-
-          ${
-            invoiceCore?.notes || fallback?.notes || invoiceData.notes
-              ? `
-            <div style="margin-top: 20px; padding: 15px; background: var(--print-surface); border-radius: 4px;">
-              <strong>Notes:</strong><br/>
-              ${escapeHtml(invoiceCore?.notes || fallback?.notes || invoiceData.notes)}
-            </div>
-          `
-              : ''
-          }
-          </div>
-        </body>
-      </html>
-    `;
-  };
+  const renderPrintHtml = (invoice: any, itemsData: InvoiceItem[], copyType: PharmacyInvoiceCopyType) =>
+    renderPharmacyBillHtml({ ...(Array.isArray(invoice?.lines) ? invoice : billPrintFromInvoice(invoice, itemsData)), copyType });
 
   const openPrintPreview = (
     invoice: any,
@@ -1915,11 +1633,7 @@ export function PharmacyInvoiceBuilderFixed({
   };
 
   const printPreviewHtml = printPreviewData
-    ? renderPrintHtml(printPreviewData.invoice, printPreviewData.items, {
-        includePrintButton: false,
-        copyType: printPreviewCopyType,
-        billingFallback: printPreviewData.billingFallback,
-      })
+    ? renderPrintHtml(printPreviewData.invoice, printPreviewData.items, printPreviewCopyType)
     : '';
 
   const getPrintPreviewInvoiceCore = () => {
@@ -1987,7 +1701,6 @@ export function PharmacyInvoiceBuilderFixed({
   const printPreviewInFrame = async () => {
     let invoiceForPrint = printPreviewData?.invoice;
     let itemsForPrint = printPreviewData?.items || [];
-    let billingFallback = printPreviewData?.billingFallback;
     const copyType = printPreviewCopyType;
 
     if (!hasSavedInvoiceIdentity(invoiceForPrint)) {
@@ -2003,12 +1716,6 @@ export function PharmacyInvoiceBuilderFixed({
         if (!printableInvoice) return;
         invoiceForPrint = printableInvoice;
         itemsForPrint = validItems;
-        billingFallback = {
-          billingName: invoiceData.billingName,
-          billingPhone: invoiceData.billingPhone,
-          billingAddress: invoiceData.billingAddress,
-          notes: invoiceData.notes,
-        };
       } finally {
         setSavingInvoiceFromPreview(false);
       }
@@ -2024,11 +1731,7 @@ export function PharmacyInvoiceBuilderFixed({
     }
 
     try {
-      const html = renderPrintHtml(invoiceForPrint, itemsForPrint, {
-        includePrintButton: false,
-        copyType,
-        billingFallback,
-      });
+      const html = renderPrintHtml(invoiceForPrint, itemsForPrint, copyType);
       await printHtmlInHiddenFrame(html);
     } catch (error) {
       console.error('Invoice print failed', error);

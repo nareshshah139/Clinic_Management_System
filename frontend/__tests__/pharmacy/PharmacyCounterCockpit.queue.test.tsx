@@ -26,7 +26,7 @@ beforeEach(() => {
     return {
       data: Array.from({ length: count }, (_, index) => entry(`${key}-${start + index}`, key === 'all' ? 'pending' : key)),
       pagination: { page: params.page, limit: params.limit, total: totals[key] },
-      counts: { pending: totals.pending, partial: totals.partial, expired: totals.expired, dispensed: totals.dispensed },
+      counts: { pending: totals.pending, partial: totals.partial, expired: totals.expired, dispensed: totals.dispensed, paused: 1 },
     };
   });
 });
@@ -35,7 +35,7 @@ const props = { onOpenBilling: jest.fn() };
 
 it('counts every chip on the server, across all prescriptions rather than the loaded rows', async () => {
   render(<PharmacyCounterCockpit {...props} />);
-  await waitFor(() => expect(chips()).toEqual(['All 130', 'Done 40', 'Partial 4', 'Paused 2', 'Waiting 84']));
+  await waitFor(() => expect(chips()).toEqual(['All 130', 'Done 40', 'Expired 1', 'Partial 4', 'Paused 1', 'Waiting 84']));
   expect(rows()).toHaveLength(25);
   expect(queueCalls()).toEqual([{ page: 1, limit: 25, status: undefined }]);
   expect(screen.getByText('Showing 25 of 130')).toBeInTheDocument();
@@ -81,5 +81,45 @@ it('shows bare chip labels rather than guessing counts when the server sends non
     : { data: [entry('rx-1', 'pending')], pagination: { page: 1, limit: 25, total: 1 } });
   render(<PharmacyCounterCockpit {...props} />);
   await screen.findByRole('list', { name: 'Prescription queue' });
-  expect(chips()).toEqual(['All', 'Done', 'Partial', 'Paused', 'Waiting']);
+  expect(chips()).toEqual(['All', 'Done', 'Expired', 'Partial', 'Paused', 'Waiting']);
+});
+
+it('gives Paused and Expired their own chips that ask the server for different slices', async () => {
+  render(<PharmacyCounterCockpit {...props} />);
+  await screen.findByText('Showing 25 of 130');
+
+  fireEvent.click(screen.getByRole('button', { name: /^Paused/ }));
+  await waitFor(() => expect(queueCalls().at(-1)).toEqual({ page: 1, limit: 25, status: 'expired', paused: true }));
+  expect(screen.getByRole('button', { name: /^Paused/ })).toHaveAttribute('aria-pressed', 'true');
+
+  fireEvent.click(screen.getByRole('button', { name: /^Expired/ }));
+  await waitFor(() => expect(queueCalls().at(-1)).toEqual({ page: 1, limit: 25, status: 'expired', paused: false }));
+  expect(screen.getByRole('button', { name: /^Expired/ })).toHaveAttribute('aria-pressed', 'true');
+  expect(screen.getByRole('button', { name: /^Paused/ })).toHaveAttribute('aria-pressed', 'false');
+});
+
+it('narrows the loaded queue by patient name, phone or prescription number', async () => {
+  get.mockImplementation(async (url: string) => url.endsWith('/stock-check')
+    ? { items: [] }
+    : {
+        data: [
+          { ...entry('rx-aaa', 'pending'), patient: { id: 'p1', name: 'Asha Rao', patientCode: 'P-1', phone: '+91 98765 43210' } },
+          { ...entry('rx-bbb', 'pending'), patient: { id: 'p2', name: 'Vikram Shah', patientCode: 'P-2', phone: '9000000001' } },
+        ],
+        pagination: { page: 1, limit: 25, total: 2 },
+      });
+  render(<PharmacyCounterCockpit {...props} />);
+  await screen.findByRole('list', { name: 'Prescription queue' });
+  const names = () => rows().map((row) => within(row).getByText(/Asha Rao|Vikram Shah/).textContent);
+  expect(names()).toEqual(['Asha Rao', 'Vikram Shah']);
+
+  const box = screen.getByRole('searchbox', { name: 'Search queue' });
+  fireEvent.change(box, { target: { value: 'vikram' } });
+  expect(names()).toEqual(['Vikram Shah']);
+  fireEvent.change(box, { target: { value: '98765 4321' } });
+  expect(names()).toEqual(['Asha Rao']);
+  fireEvent.change(box, { target: { value: 'rx-bbb' } });
+  expect(names()).toEqual(['Vikram Shah']);
+  fireEvent.change(box, { target: { value: 'zzz' } });
+  expect(screen.getByText('No loaded prescriptions match "zzz".')).toBeInTheDocument();
 });

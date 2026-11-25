@@ -176,7 +176,7 @@ export default function PatientsManagement() {
   const [linkPortalEmail, setLinkPortalEmail] = useState<string>('');
   const [linkPortalTarget, setLinkPortalTarget] = useState<Patient | null>(null);
   const fetchIdRef = useRef(0);
-  const [sortBy, setSortBy] = useState<'NAME' | 'AGE' | 'LAST_VISIT'>('NAME');
+  const [sortBy, setSortBy] = useState<'name' | 'age' | 'lastVisit'>('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [form, setForm] = useState<PatientFormState>({
     abhaId: '',
@@ -227,16 +227,14 @@ export default function PatientsManagement() {
     return Array.from(candidates).slice(0, 8);
   }, [search, patients]);
 
-  // Seed search from URL param once on mount
   const searchParams = useSearchParams();
+  const urlSearch = (searchParams?.get('search') || '').trim();
   useEffect(() => {
-    const q = (searchParams?.get('search') || '').trim();
-    if (q) {
-      setSearch(q);
-      setDebouncedSearch(q);
+    if (urlSearch) {
+      setSearch(urlSearch);
+      setDebouncedSearch(urlSearch);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [urlSearch]);
 
   // Debounce search input and reset to page 1 on search/gender change
   useEffect(() => {
@@ -248,7 +246,7 @@ export default function PatientsManagement() {
   // Trigger fetch when pagination, page size, gender, date range, or debounced search changes
   useEffect(() => {
     void fetchPatients(currentPage);
-  }, [currentPage, pageSize, debouncedSearch, genderFilter, consultationTypeFilter, dateRangeFilter]);
+  }, [currentPage, pageSize, debouncedSearch, genderFilter, consultationTypeFilter, dateRangeFilter, sortBy, sortOrder]);
 
   // Save page size preference
   useEffect(() => {
@@ -276,8 +274,8 @@ export default function PatientsManagement() {
         consultationType: normConsultationType,
         dateRange: normDateRange,
         abhaPresent: undefined,
-        sortBy: sortBy,
-        sortOrder: sortOrder,
+        sortBy,
+        sortOrder,
       });
 
       const mapped = patientsFrom(response);
@@ -305,29 +303,8 @@ export default function PatientsManagement() {
     }
   };
 
-  // Derived rows with client-side filters + sorting (in case backend ignores params)
-  const displayPatients = useMemo(() => {
-    let rows = [...patients];
-    const cmp = <T,>(a: T, b: T) => (a === b ? 0 : (a as any) < (b as any) ? -1 : 1);
-    rows.sort((a, b) => {
-      let r = 0;
-      if (sortBy === 'NAME') {
-        r = cmp((a.name || '').toLowerCase(), (b.name || '').toLowerCase());
-      } else if (sortBy === 'AGE') {
-        const ageA = calculateAge(a) ?? -Infinity;
-        const ageB = calculateAge(b) ?? -Infinity;
-        r = cmp(ageA, ageB);
-      } else {
-        const da = a.lastVisitDate ? new Date(a.lastVisitDate).getTime() : -Infinity;
-        const db = b.lastVisitDate ? new Date(b.lastVisitDate).getTime() : -Infinity;
-        r = cmp(da, db);
-      }
-      return sortOrder === 'asc' ? r : -r;
-    });
-    return rows;
-  }, [patients, sortBy, sortOrder]);
-
   const toggleSort = (key: typeof sortBy) => {
+    setCurrentPage(1);
     if (sortBy === key) {
       setSortOrder(prev => (prev === 'asc' ? 'desc' : 'asc'));
     } else {
@@ -1066,21 +1043,21 @@ export default function PatientsManagement() {
               <Table data-own-cell-spacing className="[&_td]:py-1.5">
                 <TableHeader>
                   <TableRow>
-                    <TableHead aria-sort={sortBy === 'NAME' ? (sortOrder === 'asc' ? 'ascending' : 'descending') : 'none'}>
-                      <button type="button" onClick={() => toggleSort('NAME')}>Patient {sortBy === 'NAME' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}</button>
+                    <TableHead aria-sort={sortBy === 'name' ? (sortOrder === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                      <button type="button" onClick={() => toggleSort('name')}>Patient {sortBy === 'name' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}</button>
                     </TableHead>
                     <TableHead>Phone</TableHead>
-                    <TableHead aria-sort={sortBy === 'AGE' ? (sortOrder === 'asc' ? 'ascending' : 'descending') : 'none'}>
-                      <button type="button" onClick={() => toggleSort('AGE')}>Age · Sex {sortBy === 'AGE' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}</button>
+                    <TableHead aria-sort={sortBy === 'age' ? (sortOrder === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                      <button type="button" onClick={() => toggleSort('age')}>Age · Sex {sortBy === 'age' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}</button>
                     </TableHead>
-                    <TableHead aria-sort={sortBy === 'LAST_VISIT' ? (sortOrder === 'asc' ? 'ascending' : 'descending') : 'none'}>
-                      <button type="button" onClick={() => toggleSort('LAST_VISIT')}>Last visit {sortBy === 'LAST_VISIT' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}</button>
+                    <TableHead aria-sort={sortBy === 'lastVisit' ? (sortOrder === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                      <button type="button" onClick={() => toggleSort('lastVisit')}>Last visit {sortBy === 'lastVisit' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}</button>
                     </TableHead>
                     <TableHead className="w-0"><span className="sr-only">Actions</span></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {displayPatients.map((p) => {
+                  {patients.map((p) => {
                     const name = formatPatientName(p);
                     const href = `/dashboard/patients/${p.id}`;
                     return (

@@ -2,8 +2,9 @@
 import { displayUtcDate, displayClinicDate } from '@/lib/date-display';
 import { Spinner } from "@/components/ui/spinner";
 import { TELE_VIDEO_DISCLAIMER, TELE_VIDEO_CONSENT_REQUIRED, type ConsultationType } from '@/lib/tele-consultation';
-import React, { useCallback, useDeferredValue, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useDeferredValue, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal, flushSync } from 'react-dom';
+import { placeDrugDropdown, samePlacement, type DropdownPlacement } from './drug-dropdown-position';
 import type { VisitDetails } from '@/lib/types';
 import { encounterTime } from '@/lib/patient-history';
 import { PRESCRIPTION_LETTERHEAD_URL, prescriptionLetterheadUrl, prescriptionPageMargin } from '@/lib/prescription-letterhead';
@@ -29,7 +30,7 @@ import { handleUnauthorizedRedirect } from '@/lib/authRedirect';
 import { getErrorMessage } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { ensureGlobalPrintStyles } from '@/lib/printStyles';
-import { inferTimingFromDosePattern, getAllFrequencyOptions, addCustomFrequency, getTimingOptionsForFrequency, TIMING_OPTIONS, getAllTimingOptions, addCustomTiming, getAllDosePatternOptions, addCustomDosePattern, getAllDurationUnitOptions, addCustomDurationUnit } from '@/lib/frequency';
+import { inferTimingFromDosePattern, PERIODIC_FREQUENCY_OPTIONS, getAllFrequencyOptions, addCustomFrequency, getTimingOptionsForFrequency, TIMING_OPTIONS, getAllTimingOptions, addCustomTiming, getAllDosePatternOptions, addCustomDosePattern, getAllDurationUnitOptions, addCustomDurationUnit } from '@/lib/frequency';
 import { printedMedicineName } from '@/lib/medicine-names';
 import { buildLearnedPrescriptionPlan, type LearnedPlanSuggestion } from '@/lib/prescription-learning';
 import { editRegimenRow, beginRegimenSelection, applyRegimenSuggestion, acceptRegimenField, regimenLabels, type RegimenField, type RegimenRow } from '@/lib/medicine-regimen-defaults';
@@ -680,10 +681,10 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const [vitalsPulse, setVitalsPulse, hydrateVitalsPulse] = useClinicalState<number | ''>('', 'vitalsPulse', dirtyClinicalFields);
   // Restore drug search states (now per-row)
   const [rowDrugQueries, setRowDrugQueries] = useState<Record<number, string>>({});
-  const [rowDrugResults, setRowDrugResults] = useState<Record<number, any[]>>({});
-  const [rowLoadingDrugs, setRowLoadingDrugs] = useState<Record<number, boolean>>({});
+  const [rowDrugResults, setRowDrugResults] = useState<Record<number, { query: string; items: any[] }>>({});
   const [activeSearchRow, setActiveSearchRow] = useState<number | null>(null);
-  const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [dropdownPosition, setDropdownPosition] = useState<DropdownPlacement | null>(null);
+  const [activeDrugOption, setActiveDrugOption] = useState(-1);
   const inputRefs = useRef<Record<number, HTMLInputElement | null>>({});
   const [drugStockByKey, setDrugStockByKey] = useState<Record<string, number | null>>({});
   const drugStockRequests = useRef(new Map<string, Promise<number | null>>());
@@ -1598,41 +1599,49 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     if (activeSearchRow === null) return;
     const row = activeSearchRow;
     const q = (rowDrugQueries[row] || '').trim();
+    if (q.length < 2) return;
     let current = true;
-    setRowLoadingDrugs(prev => ({ ...prev, [row]: q.length >= 2 }));
-    if (q.length < 2) {
-      setRowDrugResults(prev => ({ ...prev, [row]: [] }));
-      return;
-    }
-
     const t = setTimeout(async () => {
-      try {
-        const results = await apiClient.get<any[]>('/prescriptions/drugs/autocomplete', { q, limit: 10 });
-        if (current) setRowDrugResults(prev => ({ ...prev, [row]: results.slice(0, 10) }));
-      } catch {
-        if (current) setRowDrugResults(prev => ({ ...prev, [row]: [] }));
-      } finally {
-        if (current) setRowLoadingDrugs(prev => ({ ...prev, [row]: false }));
+      const items = await apiClient.get<any[]>('/prescriptions/drugs/autocomplete', { q, limit: 10 })
+        .then((results) => results.slice(0, 10), () => []);
+      if (current) {
+        setRowDrugResults(prev => ({ ...prev, [row]: { query: q, items } }));
+        setActiveDrugOption(-1);
       }
     }, 300);
     return () => { current = false; clearTimeout(t); };
   }, [rowDrugQueries, activeSearchRow]);
 
+  const drugMatchesForRow = (rowIdx: number) => {
+    const entry = rowDrugResults[rowIdx];
+    return entry && entry.query === (rowDrugQueries[rowIdx] || '').trim() ? entry.items : undefined;
+  };
+
   const searchDrugsForRow = (rowIdx: number, q: string) => {
     setRowDrugQueries(prev => ({ ...prev, [rowIdx]: q }));
     setActiveSearchRow(rowIdx);
-    
-    // Calculate dropdown position based on input element
-    const inputEl = inputRefs.current[rowIdx];
-    if (inputEl) {
-      const rect = inputEl.getBoundingClientRect();
-      setDropdownPosition({
-        top: rect.bottom + window.scrollY + 4,
-        left: rect.left + window.scrollX,
-        width: Math.max(500, rect.width)
-      });
-    }
+    setActiveDrugOption(-1);
   };
+
+  useLayoutEffect(() => {
+    if (activeSearchRow === null) {
+      setDropdownPosition(null);
+      return;
+    }
+    const place = () => {
+      const input = inputRefs.current[activeSearchRow];
+      if (!input) return;
+      const next = placeDrugDropdown(input.getBoundingClientRect(), { width: window.innerWidth, height: window.innerHeight });
+      setDropdownPosition(prev => samePlacement(prev, next) ? prev : next);
+    };
+    place();
+    window.addEventListener('scroll', place, true);
+    window.addEventListener('resize', place);
+    return () => {
+      window.removeEventListener('scroll', place, true);
+      window.removeEventListener('resize', place);
+    };
+  }, [activeSearchRow]);
 
   // Highlight matching text in search results
   const highlightMatch = (text: string, query: string) => {
@@ -2316,7 +2325,49 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     applyDrugSelectionToRow(rowIdx, drug, { clearSearch: true, showToast: true });
   };
 
+  const drugListOpen = activeSearchRow !== null && dropdownPosition !== null && (rowDrugQueries[activeSearchRow] || '').trim().length >= 2;
+  const activeDrugMatches = activeSearchRow === null ? undefined : drugMatchesForRow(activeSearchRow);
+  const drugOptionId = (index: number) => `rx-drug-option-${index}`;
+  const handleDrugInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, idx: number) => {
+    const open = drugListOpen && activeSearchRow === idx;
+    const matches = drugMatchesForRow(idx);
+    const results = open ? matches ?? [] : [];
+    const active = results[activeDrugOption];
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      if (results.length === 0) return;
+      e.preventDefault();
+      const step = e.key === 'ArrowDown' ? 1 : -1;
+      setActiveDrugOption(current => current < 0 ? (step > 0 ? 0 : results.length - 1) : (current + step + results.length) % results.length);
+      return;
+    }
+    if (e.key === 'Escape') {
+      if (!open) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setActiveSearchRow(null);
+      return;
+    }
+    if (e.key === 'Tab') {
+      if (active) addItemFromDrugToRow(idx, active);
+      else if (open) setActiveSearchRow(null);
+      return;
+    }
+    if (e.key !== 'Enter' || e.shiftKey) return;
+    e.preventDefault();
+    const loading = !matches;
+    if (open && (active || loading || results.length > 0)) {
+      const choice = active ?? (loading ? undefined : results[0]);
+      if (choice) addItemFromDrugToRow(idx, choice);
+      return;
+    }
+    insertRowBelow(idx);
+  };
+  useEffect(() => {
+    if (activeDrugOption >= 0) document.getElementById(drugOptionId(activeDrugOption))?.scrollIntoView?.({ block: 'nearest' });
+  }, [activeDrugOption]);
+
   const updateItem = (index: number, patch: Partial<PrescriptionItemForm>) => {
+    recordHistory(`${index}:${Object.keys(patch).sort().join(',')}`);
     setItems(prev => {
       const next = prev.map((it, i) => (i === index ? editRegimenRow(it, patch) : it));
       // If user types a drug name into the last row, append a new blank row
@@ -2348,14 +2399,16 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     showToast?: boolean;
   }) => {
     const selection = nextRegimenSelection();
+    recordHistory();
     setItems(prev => {
-      const next = prev.map((item, index) => index === rowIdx ? selectDrugOnRow(item, drug, selection) : item);
+      const next = rowIdx < prev.length
+        ? prev.map((item, index) => index === rowIdx ? selectDrugOnRow(item, drug, selection) : item)
+        : [...prev, selectDrugOnRow(createBlankItem(), drug, selection)];
       if (!hasTrailingBlank(next)) next.push(createBlankItem());
       return next;
     });
     followDrugSelection(drug, selection);
     if (options?.clearSearch) {
-      setRowDrugResults(prev => ({ ...prev, [rowIdx]: [] }));
       setRowDrugQueries(prev => ({ ...prev, [rowIdx]: '' }));
       setActiveSearchRow(null);
     }
@@ -2428,9 +2481,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     setItems(rows);
     setRowDrugQueries({});
     setRowDrugResults({});
-    setRowLoadingDrugs({});
     setActiveSearchRow(null);
-    setDropdownPosition(null);
     setActiveRowIdx(focusIndex);
     setTimeout(() => inputRefs.current[focusIndex]?.focus(), 10);
   };
@@ -2487,6 +2538,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   };
 
   const removeItem = (index: number) => {
+    recordHistory();
     setItems(prev => prev.filter((_, i) => i !== index));
   };
 
@@ -2573,11 +2625,11 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
 
   const recentDrugsForPatient = useMemo(() => patientId ? getLocalSuggestions(`drugNames:${patientId}`, '', 5) : [], [patientId]);
   const recentDrugsGlobal = useMemo(() => getLocalSuggestions('drugNames', '', 5), []);
-  const frequencyPresets: Array<{ label: string; pattern?: string; frequency?: Frequency }> = [
+  const frequencyPresets: Array<{ label: string; pattern?: string; frequency?: Frequency; timing?: string }> = [
     { label: '1-0-1', pattern: '1-0-1' },
     { label: '0-1-0', pattern: '0-1-0' },
     { label: '1-1-1', pattern: '1-1-1' },
-    { label: 'HS', frequency: 'ONCE_DAILY' },
+    { label: 'HS', frequency: 'ONCE_DAILY', timing: 'HS' },
   ];
   const durationPresets: Array<{ label: string; duration: number; unit: DurationUnit }> = [
     { label: '5d', duration: 5, unit: 'DAYS' },
@@ -2880,12 +2932,12 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
         foodInstructions: x.foodInstructions,
         pulseRegimen: x.pulseRegimen,
       }));
+      recordHistory();
       setItems(() => {
         const next = [...mapped];
         if (!hasTrailingBlank(next)) next.push(createBlankItem());
         return next;
       });
-      pushHistory();
       const md = typeof tpl.metadata === 'object' ? tpl.metadata : (tpl.metadata ? JSON.parse(tpl.metadata) : null);
 
       // Always clear+set every field so switching templates never leaves stale values behind
@@ -3309,8 +3361,12 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const [assets, setAssets] = useState<any[]>([]);
   const [printerProfiles, setPrinterProfiles] = useState<any[]>([]);
   const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
-  const undoStackRef = useRef<any[]>([]);
-  const redoStackRef = useRef<any[]>([]);
+  type HistorySnapshot = { items: PrescriptionItemForm[]; followUpInstructions: string; reviewDate?: string };
+  const undoStackRef = useRef<HistorySnapshot[]>([]);
+  const redoStackRef = useRef<HistorySnapshot[]>([]);
+  const historyStateRef = useRef<Required<HistorySnapshot>>({ items, followUpInstructions, reviewDate: reviewDate || '' });
+  historyStateRef.current = { items, followUpInstructions, reviewDate: reviewDate || '' };
+  const historyBurstRef = useRef<{ key: string; at: number } | null>(null);
   // Computed effective margins (depend on printer profile and overrides)
   const effectiveTopMarginPx = useMemo(() => {
     const prof = activeProfileId ? (printerProfiles.find((p: any) => p.id === activeProfileId) || {}) : {};
@@ -4257,12 +4313,21 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
 
   // Autosave & history
   const draftKey = useMemo(() => `rxDraft:${patientId}:${visitId || 'standalone'}`, [patientId, visitId]);
-  const pushHistory = useCallback(() => {
-    const snapshot = { items: JSON.parse(JSON.stringify(items)), followUpInstructions };
-    undoStackRef.current.push(snapshot);
+  /** The review date is only part of steps that change it, so undo never reverts a date edit made outside the history. */
+  const historySnapshot = useCallback((withReviewDate: boolean): HistorySnapshot => {
+    const { reviewDate: date, ...rest } = historyStateRef.current;
+    return JSON.parse(JSON.stringify(withReviewDate ? { ...rest, reviewDate: date } : rest));
+  }, []);
+  /** Call before a user change. Repeated calls with the same burst key less than 1.5s apart share one undo step. */
+  const recordHistory = useCallback((burstKey?: string, withReviewDate = false) => {
+    const now = Date.now();
+    const burst = historyBurstRef.current;
+    historyBurstRef.current = burstKey ? { key: burstKey, at: now } : null;
+    if (burstKey && burst?.key === burstKey && now - burst.at < 1500) return;
+    undoStackRef.current.push(historySnapshot(withReviewDate));
     if (undoStackRef.current.length > 50) undoStackRef.current.shift();
     redoStackRef.current = [];
-  }, [items, followUpInstructions]);
+  }, [historySnapshot]);
   /**
    * @cc [owner:nareshshah139,label:product] discarded-prescription-draft
    * When the parent has discarded this editor, persistence MUST NOT recreate
@@ -4409,7 +4474,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
         if (typeof data?.avoidBreakInsideTables === 'boolean') setAvoidBreakInsideTables(data.avoidBreakInsideTables);
       }
     } catch {}
-    pushHistory();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftKey]);
   const latestDraftWriter = useRef(saveDraftNow);
@@ -4437,24 +4501,18 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       document.removeEventListener('visibilitychange', visHandler);
     };
   }, [saveDraftNow]);
-  const undo = useCallback(() => {
-    if (undoStackRef.current.length <= 1) return;
-    const cur = undoStackRef.current.pop();
-    if (!cur) return;
-    const prev = undoStackRef.current[undoStackRef.current.length - 1];
-    redoStackRef.current.push(cur);
-    setItems(JSON.parse(JSON.stringify(prev.items)));
-    setFollowUpInstructions(prev.followUpInstructions || '');
-  }, []);
-  const redo = useCallback(() => {
-    const next = redoStackRef.current.pop();
-    if (!next) return;
-    undoStackRef.current.push(next);
-    setItems(JSON.parse(JSON.stringify(next.items)));
-    setFollowUpInstructions(next.followUpInstructions || '');
-  }, []);
+  const stepHistory = useCallback((from: React.MutableRefObject<HistorySnapshot[]>, to: React.MutableRefObject<HistorySnapshot[]>) => {
+    const target = from.current.pop();
+    if (!target) return;
+    to.current.push(historySnapshot(target.reviewDate !== undefined));
+    historyBurstRef.current = null;
+    setItems(target.items);
+    setFollowUpInstructions(target.followUpInstructions);
+    if (target.reviewDate !== undefined) onChangeReviewDate?.(target.reviewDate);
+  }, [setFollowUpInstructions, onChangeReviewDate, historySnapshot]);
+  const undo = useCallback(() => stepHistory(undoStackRef, redoStackRef), [stepHistory]);
+  const redo = useCallback(() => stepHistory(redoStackRef, undoStackRef), [stepHistory]);
 
-  const shouldShowLearnedPlanPanel = true;
   const learnedPlanConfidenceLabel = useMemo(() => {
     if (!learnedPlan) return '';
     if (learnedPlan.confidence >= 0.84) return 'High confidence';
@@ -4556,14 +4614,16 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     return Array.from(new Set(candidates)).slice(0, 6);
   }, [followUpInstructions, learnedPlan, parseFollowUpDays]);
   const applyFollowUpShortcut = useCallback((value: string) => {
-    setFollowUpInstructions(value);
     const days = parseFollowUpDays(value);
+    recordHistory(undefined, Boolean(days && onChangeReviewDate));
+    setFollowUpInstructions(value);
     if (days && onChangeReviewDate) {
       onChangeReviewDate(formatSuggestedReviewDate(days));
     }
-  }, [parseFollowUpDays, onChangeReviewDate, formatSuggestedReviewDate]);
+  }, [parseFollowUpDays, onChangeReviewDate, formatSuggestedReviewDate, recordHistory]);
   const applyReviewDateShortcut = useCallback((days: number) => {
     if (!onChangeReviewDate || days <= 0) return;
+    recordHistory(undefined, true);
     onChangeReviewDate(formatSuggestedReviewDate(days));
     if (!followUpInstructions.trim()) {
       const label = days % 7 === 0 && days >= 14
@@ -4571,7 +4631,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
         : `Follow up in ${days} days`;
       setFollowUpInstructions(label);
     }
-  }, [onChangeReviewDate, formatSuggestedReviewDate, followUpInstructions]);
+  }, [onChangeReviewDate, formatSuggestedReviewDate, followUpInstructions, recordHistory]);
   /**
    * @cc [owner:nareshshah139,label:product] visit-voice-preview-is-pure
    * Building the registry and previewing a draft MUST NOT change the form, and the preview MUST list only the registry
@@ -4755,9 +4815,9 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                         });
                         if (!ok) return;
                         try { localStorage.removeItem(`rxDraft:${patientId}:${visitId || 'standalone'}`); } catch {}
+                        recordHistory();
                         setItems([]);
                         setFollowUpInstructions('');
-                        pushHistory();
                       }}
                     >
                       Clear prescription…
@@ -5189,7 +5249,19 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
             {/* Treatment */}
             <CollapsibleSection title="Treatment" section="treatment">
               <div className="space-y-3 overflow-visible">
-                {shouldShowLearnedPlanPanel && (
+                {!learnedPlan ? (
+                  <section aria-label="Treatment suggestions" title={learnedPlanDescription} className="flex min-w-0 items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm text-muted-foreground shadow-sm">
+                    <Sparkles className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                    <span className="shrink-0 font-semibold">Treatment suggestions</span>
+                    <span className={`min-w-0 truncate ${learningSourcesStatus === 'loading' ? 'animate-pulse' : ''}`}>{learnedPlanTitle}</span>
+                    {learningSourcesError && (
+                      <span className="ml-auto inline-flex min-w-0 items-center gap-1 text-xs text-warning-text">
+                        <AlertCircle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                        <span className="truncate">{learningSourcesError}</span>
+                      </span>
+                    )}
+                  </section>
+                ) : (
                   <div className="rounded-lg border bg-card px-5 py-5 text-foreground shadow-sm">
                     <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                       <div className="space-y-3">
@@ -5204,45 +5276,41 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                           </div>
                         </div>
 
-                        {learnedPlan && (
-                          <>
-                            <div className="flex flex-wrap gap-2 text-xs">
-                              <span className="inline-flex items-center rounded-full border bg-muted px-3 py-1 font-medium text-muted-foreground">
-                                {learnedPlan.sourceLabel}
-                              </span>
-                              <span className="inline-flex items-center rounded-full border border-success-border bg-success-soft px-3 py-1 font-medium text-success-text">
-                                {learnedPlanConfidenceLabel}
-                              </span>
-                              {learnedPlan.diagnosisText && (
-                                <span className="inline-flex items-center rounded-full border bg-muted px-3 py-1 font-medium text-muted-foreground">
-                                  Matched on {learnedPlan.diagnosisText}
-                                </span>
-                              )}
-                            </div>
+                        <div className="flex flex-wrap gap-2 text-xs">
+                          <span className="inline-flex items-center rounded-full border bg-muted px-3 py-1 font-medium text-muted-foreground">
+                            {learnedPlan.sourceLabel}
+                          </span>
+                          <span className="inline-flex items-center rounded-full border border-success-border bg-success-soft px-3 py-1 font-medium text-success-text">
+                            {learnedPlanConfidenceLabel}
+                          </span>
+                          {learnedPlan.diagnosisText && (
+                            <span className="inline-flex items-center rounded-full border bg-muted px-3 py-1 font-medium text-muted-foreground">
+                              Matched on {learnedPlan.diagnosisText}
+                            </span>
+                          )}
+                        </div>
 
-                            {learnedPlanVisibleComboNames.length > 0 && (
-                              <div className="flex flex-wrap gap-2">
-                                {learnedPlanVisibleComboNames.map((drugName) => (
-                                  <div
-                                    key={drugName}
-                                    className="inline-flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm font-medium text-foreground"
-                                  >
-                                    <Pill className="h-3.5 w-3.5 text-muted-foreground" />
-                                    <span>{drugName}</span>
-                                  </div>
-                                ))}
-                                {learnedPlanHiddenComboCount > 0 && (
-                                  <div className="inline-flex items-center rounded-lg border bg-muted px-3 py-2 text-sm font-medium text-muted-foreground">
-                                    +{learnedPlanHiddenComboCount} more
-                                  </div>
-                                )}
+                        {learnedPlanVisibleComboNames.length > 0 && (
+                          <div className="flex flex-wrap gap-2">
+                            {learnedPlanVisibleComboNames.map((drugName) => (
+                              <div
+                                key={drugName}
+                                className="inline-flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm font-medium text-foreground"
+                              >
+                                <Pill className="h-3.5 w-3.5 text-muted-foreground" />
+                                <span>{drugName}</span>
+                              </div>
+                            ))}
+                            {learnedPlanHiddenComboCount > 0 && (
+                              <div className="inline-flex items-center rounded-lg border bg-muted px-3 py-2 text-sm font-medium text-muted-foreground">
+                                +{learnedPlanHiddenComboCount} more
                               </div>
                             )}
+                          </div>
+                        )}
 
-                            {learnedPlan.supportingLabel && (
-                              <div className="text-xs text-muted-foreground">{learnedPlan.supportingLabel}</div>
-                            )}
-                          </>
+                        {learnedPlan.supportingLabel && (
+                          <div className="text-xs text-muted-foreground">{learnedPlan.supportingLabel}</div>
                         )}
                       </div>
 
@@ -5253,7 +5321,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                               <Pill className="h-3.5 w-3.5" />
                               Combo
                             </div>
-                            <div className="mt-2 text-lg font-semibold">{learnedPlan ? learnedPlan.comboDrugNames.length : '—'}</div>
+                            <div className="mt-2 text-lg font-semibold">{learnedPlan.comboDrugNames.length}</div>
                             <div className="text-xs text-muted-foreground">meds prefilled</div>
                           </div>
                           <div className="rounded-lg border bg-muted/60 p-3">
@@ -5261,7 +5329,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                               <CalendarDays className="h-3.5 w-3.5" />
                               Review
                             </div>
-                            <div className="mt-2 text-lg font-semibold">{learnedPlan?.reviewDays ? `${learnedPlan.reviewDays}d` : '—'}</div>
+                            <div className="mt-2 text-lg font-semibold">{learnedPlan.reviewDays ? `${learnedPlan.reviewDays}d` : '—'}</div>
                             <div className="text-xs text-muted-foreground">suggested window</div>
                           </div>
                           <div className="rounded-lg border bg-muted/60 p-3">
@@ -5269,7 +5337,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                               <FlaskConical className="h-3.5 w-3.5" />
                               Labs
                             </div>
-                            <div className="mt-2 text-lg font-semibold">{learnedPlan ? learnedPlan.investigations.length : '—'}</div>
+                            <div className="mt-2 text-lg font-semibold">{learnedPlan.investigations.length}</div>
                             <div className="text-xs text-muted-foreground">auto-suggested</div>
                           </div>
                           <div className="rounded-lg border bg-muted/60 p-3">
@@ -5277,23 +5345,21 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                               <Wand2 className="h-3.5 w-3.5" />
                               Evidence
                             </div>
-                            <div className="mt-2 text-lg font-semibold">{learnedPlan ? learnedPlan.evidenceCount : '—'}</div>
+                            <div className="mt-2 text-lg font-semibold">{learnedPlan.evidenceCount}</div>
                             <div className="text-xs text-muted-foreground">matching plans</div>
                           </div>
                         </div>
 
                         <div className="mt-3 flex flex-wrap gap-2">
-                          {learnedPlan && (
-                            <Button
-                              type="button"
-                              size="sm"
-                              onClick={() => { void applyLearnedPlan(learnedPlan, { force: true }); }}
-                            >
-                              <Wand2 className="mr-2 h-4 w-4" />
-                              Reapply learned plan
-                            </Button>
-                          )}
-                          {learnedPlan && treatmentHasMeaningfulData && !learnedPlanCurrent && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => { void applyLearnedPlan(learnedPlan, { force: true }); }}
+                          >
+                            <Wand2 className="mr-2 h-4 w-4" />
+                            Reapply learned plan
+                          </Button>
+                          {treatmentHasMeaningfulData && !learnedPlanCurrent && (
                             <Button
                               type="button"
                               size="sm"
@@ -5375,7 +5441,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                       <span className="text-muted-foreground">Recent meds:</span>
                       {(recentDrugsForPatient.length ? recentDrugsForPatient : recentDrugsGlobal).map((d) => (
                         <Button key={d} size="sm" variant="outline" onClick={() => {
-                          const target = activeRowIdx ?? (items.length > 0 ? items.length - 1 : 0);
+                          const activeIsBlank = activeRowIdx !== null && items[activeRowIdx] && !items[activeRowIdx].drugName.trim();
+                          const target = activeIsBlank ? activeRowIdx : hasTrailingBlank(items) ? items.length - 1 : items.length;
                           applyDrugSelectionToRow(target, { name: d }, { showToast: false });
                         }}>
                           {d}
@@ -5395,7 +5462,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                           const presetFreq = p.frequency ?? (p.pattern ? inferFrequencyFromDosePattern(p.pattern) ?? 'ONCE_DAILY' : undefined);
                           const rawTiming = p.pattern ? inferTimingFromDosePattern(p.pattern) || undefined : undefined;
                           const allowed = presetFreq ? getTimingOptionsForFrequency(presetFreq) : TIMING_OPTIONS;
-                          const timing = rawTiming && allowed.includes(rawTiming) ? rawTiming : undefined;
+                          const timing = p.timing ?? (rawTiming && allowed.includes(rawTiming) ? rawTiming : undefined);
                           applyPresetToRow(target, {
                             dosePattern: p.pattern,
                             frequency: presetFreq,
@@ -5461,14 +5528,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                                   updateItem(idx, { drugName: val });
                                   searchDrugsForRow(idx, val);
                                 }}
-                                onFocus={(e) => {
+                                onFocus={() => {
                                   setActiveRowIdx(idx);
-                                  const rect = e.currentTarget.getBoundingClientRect();
-                                  setDropdownPosition({
-                                    top: rect.bottom + window.scrollY + 4,
-                                    left: rect.left + window.scrollX,
-                                    width: Math.max(500, rect.width)
-                                  });
                                   if (it.drugName.trim().length >= 2) {
                                     searchDrugsForRow(idx, it.drugName);
                                   }
@@ -5479,18 +5540,15 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                                     if (patientId) pushRecent(`drugNames:${patientId}`, it.drugName);
                                   }
                                   setTimeout(() => {
-                                    if (activeSearchRow === idx) {
-                                      setActiveSearchRow(null);
-                                      setDropdownPosition(null);
-                                    }
+                                    if (activeSearchRow === idx) setActiveSearchRow(null);
                                   }, 200);
                                 }}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter' && !e.shiftKey) {
-                                    e.preventDefault();
-                                    insertRowBelow(idx);
-                                  }
-                                }}
+                                role="combobox"
+                                aria-autocomplete="list"
+                                aria-expanded={drugListOpen && activeSearchRow === idx}
+                                aria-controls="rx-drug-listbox"
+                                aria-activedescendant={drugListOpen && activeSearchRow === idx && drugMatchesForRow(idx)?.[activeDrugOption] ? drugOptionId(activeDrugOption) : undefined}
+                                onKeyDown={(e) => handleDrugInputKeyDown(e, idx)}
                                 placeholder="Search medicine name..." 
                                 className="min-w-0 flex-1"
                               />
@@ -5524,6 +5582,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                             <div>
                               <Select value={it.dosePattern || it.frequency || ''} onOpenChange={() => setActiveRowIdx(idx)} onValueChange={(v: string) => {
                                 if (v === '__CUSTOM__') { openCustomDialog('dosePattern', idx); return; }
+                                if ((PERIODIC_FREQUENCY_OPTIONS as readonly string[]).includes(v)) { updateItem(idx, { frequency: v, dosePattern: '' }); return; }
                                 const inferred = inferFrequencyFromDosePattern(v);
                                 const inferredTiming = inferTimingFromDosePattern(v);
                                 const patch: any = { dosePattern: v };
@@ -5537,7 +5596,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                               }}>
                                 <SelectTrigger className={rxSelect} aria-label={`Frequency for ${rowDescription(it.drugName, idx)}`}><SelectValue placeholder="Frequency" /></SelectTrigger>
                                 <SelectContent>
-                                  {Array.from(new Set([...dosePatternOptions, it.dosePattern || it.frequency].filter(Boolean))).map(p => (
+                                  {Array.from(new Set([...dosePatternOptions, ...PERIODIC_FREQUENCY_OPTIONS, it.dosePattern || it.frequency].filter(Boolean))).map(p => (
                                     <SelectItem key={p} value={p}>{prescriptionLabel('frequency', p)}</SelectItem>
                                   ))}
                                   <SelectItem value="__CUSTOM__" className="text-info-text border-t mt-1 pt-1">+ Custom...</SelectItem>
@@ -5761,7 +5820,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
                     <label className="text-sm text-foreground flex items-center gap-1">Follow-up Instructions{language !== 'EN' && (<Languages className="h-3.5 w-3.5 text-info-text" aria-label="Translated on print" />)}</label>
-                    <Input key="followup-instructions" id="visit-followup-instructions" aria-label="Follow-up instructions" placeholder="e.g., Review in 4 weeks" value={followUpInstructions} onChange={(e) => setFollowUpInstructions(e.target.value)} onBlur={(e) => pushRecent('followUp', e.target.value)} />
+                    <Input key="followup-instructions" id="visit-followup-instructions" aria-label="Follow-up instructions" placeholder="e.g., Review in 4 weeks" value={followUpInstructions} onChange={(e) => { recordHistory('followUp'); setFollowUpInstructions(e.target.value); }} onBlur={(e) => pushRecent('followUp', e.target.value)} />
                     {followUpSuggestions.length > 0 && (
                       <div className="mt-2 flex flex-wrap gap-2">
                         {followUpSuggestions.map((suggestion) => (
@@ -7173,73 +7232,72 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       </div>
 
       {/* Fixed position drug search dropdown - rendered outside table structure */}
-      {activeSearchRow !== null && dropdownPosition && (rowDrugQueries[activeSearchRow] || '').trim().length >= 2 && (
+      {drugListOpen && activeSearchRow !== null && dropdownPosition && (
         <div 
-          className="fixed z-[10000] bg-white border-2 border-info rounded-lg shadow-sm max-h-64 overflow-auto"
+          className="fixed z-[10000] bg-popover text-popover-foreground border-2 border-info rounded-lg shadow-sm overflow-auto"
           style={{ 
-            top: `${dropdownPosition.top}px`,
-            left: `${dropdownPosition.left}px`,
-            width: `${dropdownPosition.width}px`,
+            ...dropdownPosition,
             boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)'
           }}
           onMouseDown={(e) => e.preventDefault()}
         >
-          {rowLoadingDrugs[activeSearchRow] && (
+          {!activeDrugMatches && (
             <div className="px-3 py-2 text-xs text-muted-foreground">Searching…</div>
           )}
-          {!rowLoadingDrugs[activeSearchRow] && (!rowDrugResults[activeSearchRow] || rowDrugResults[activeSearchRow].length === 0) && (
+          {activeDrugMatches?.length === 0 && (
             <div className="px-3 py-2 text-xs text-muted-foreground">No results found</div>
           )}
-          {rowDrugResults[activeSearchRow] && rowDrugResults[activeSearchRow].length > 0 && (
-            <>
-              {rowDrugResults[activeSearchRow].map((d: any, index: number) => (
-                <div 
-                  key={`${d.id}-${d.name}`} 
-                  className={`px-3 py-2 text-sm flex items-center justify-between hover:bg-accent cursor-pointer border-b last:border-b-0 ${
-                    index === 0 ? 'bg-success-soft' :
-                    index < 3 ? 'bg-info-soft' : ''
-                  }`}
-                  onMouseEnter={() => prefetchDrugStockById(d.id, d.inventoryItemId)}
-                  onClick={() => { addItemFromDrugToRow(activeSearchRow, d); }}
-                  title={((): string => {
-                    const stock = drugStockByKey[d.inventoryItemId ? `inventory:${d.inventoryItemId}` : `id:${d.id}`] ?? d.totalStock;
-                    if (stock === undefined) return 'Checking stock…';
-                    return `Remaining stock: ${stock ?? '—'}`;
-                  })()}
-                >
-                  <div className="flex-1">
-                    <div className="flex items-center">
-                      <div className="font-medium">
-                        {highlightMatch(d.name, rowDrugQueries[activeSearchRow])}
-                      </div>
-                      {getRelevanceBadge(d, rowDrugQueries[activeSearchRow], index)}
+          <div id="rx-drug-listbox" role="listbox" aria-label="Medicine matches">
+            {(activeDrugMatches ?? []).map((d: any, index: number) => (
+              <div 
+                key={`${d.id}-${d.name}`} 
+                id={drugOptionId(index)}
+                role="option"
+                aria-selected={index === activeDrugOption}
+                className={`px-3 py-2 text-sm flex items-center justify-between hover:bg-accent aria-selected:bg-accent aria-selected:ring-2 aria-selected:ring-inset aria-selected:ring-ring cursor-pointer border-b last:border-b-0 ${
+                  index === 0 ? 'bg-success-soft' :
+                  index < 3 ? 'bg-info-soft' : ''
+                }`}
+                onMouseEnter={() => { setActiveDrugOption(index); prefetchDrugStockById(d.id, d.inventoryItemId); }}
+                onClick={() => { addItemFromDrugToRow(activeSearchRow, d); }}
+                title={((): string => {
+                  const stock = drugStockByKey[d.inventoryItemId ? `inventory:${d.inventoryItemId}` : `id:${d.id}`] ?? d.totalStock;
+                  if (stock === undefined) return 'Checking stock…';
+                  return `Remaining stock: ${stock ?? '—'}`;
+                })()}
+              >
+                <div className="flex-1">
+                  <div className="flex items-center">
+                    <div className="font-medium">
+                      {highlightMatch(d.name, rowDrugQueries[activeSearchRow])}
                     </div>
-                    {d.strengthMissing && <div className="text-xs text-warning-text">Strength missing</div>}
-                    <div className="text-xs text-muted-foreground">
-                      {highlightMatch(d.manufacturer || d.manufacturerName || d.genericName || '', rowDrugQueries[activeSearchRow])}
-                      {d.packSizeLabel ? ` • ${d.packSizeLabel}` : ''}
-                    </div>
-                    <div className="text-xs mt-0.5">
-                      <span className="text-muted-foreground">Stock:</span>{' '}
-                      {(() => {
-                        const stock = drugStockByKey[d.inventoryItemId ? `inventory:${d.inventoryItemId}` : `id:${d.id}`] ?? d.totalStock;
-                        return stock != null
-                          ? <span className={stock <= 5 ? 'text-destructive-text' : 'text-foreground'}>{stock}</span>
-                          : <span className="text-muted-foreground">—</span>;
-                      })()}
-                    </div>
+                    {getRelevanceBadge(d, rowDrugQueries[activeSearchRow], index)}
                   </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={(e) => { e.stopPropagation(); addItemFromDrugToRow(activeSearchRow, d); }}
-                  >
-                    Select
-                  </Button>
+                  {d.strengthMissing && <div className="text-xs text-warning-text">Strength missing</div>}
+                  <div className="text-xs text-muted-foreground">
+                    {highlightMatch(d.manufacturer || d.manufacturerName || d.genericName || '', rowDrugQueries[activeSearchRow])}
+                    {d.packSizeLabel ? ` • ${d.packSizeLabel}` : ''}
+                  </div>
+                  <div className="text-xs mt-0.5">
+                    <span className="text-muted-foreground">Stock:</span>{' '}
+                    {(() => {
+                      const stock = drugStockByKey[d.inventoryItemId ? `inventory:${d.inventoryItemId}` : `id:${d.id}`] ?? d.totalStock;
+                      return stock != null
+                        ? <span className={stock <= 5 ? 'text-destructive-text' : 'text-foreground'}>{stock}</span>
+                        : <span className="text-muted-foreground">—</span>;
+                    })()}
+                  </div>
                 </div>
-              ))}
-            </>
-          )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={(e) => { e.stopPropagation(); addItemFromDrugToRow(activeSearchRow, d); }}
+                >
+                  Select
+                </Button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>

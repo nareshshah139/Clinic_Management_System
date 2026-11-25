@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { Suspense, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Plus } from 'lucide-react';
@@ -9,6 +10,7 @@ import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { requestKey } from '@/components/inventory/workspace-model';
 import { SalesHeader } from '@/components/pharmacy/sales/SalesHeader';
 import { SalesRegister } from '@/components/pharmacy/sales/SalesRegister';
+import { SALES_BILL_PATH } from '@/components/pharmacy/sales/sales-bill-model';
 import { REGISTERS, REGISTER_COPY, newReturnHref, salesTabHref, type Register } from '@/components/pharmacy/sales/sales-register-model';
 
 const NO_PARAMS = new URLSearchParams();
@@ -20,7 +22,6 @@ function SalesPageContent() {
   const tabRef = useRef(tab);
   tabRef.current = tab;
   const params = useRef<Record<Register, string>>({ sales: '', returns: '' });
-  const newLabel = REGISTER_COPY[tab].newLabel;
 
   const recordParams = (register: Register) => (next: URLSearchParams) => {
     params.current[register] = next.toString();
@@ -34,12 +35,18 @@ function SalesPageContent() {
       <div className="flex min-w-0 flex-col gap-3">
         <SalesHeader
           action={
-            newLabel && (
+            tab === 'returns' ? (
               <Button
                 className="h-10 text-sm"
                 onClick={() => router.push(newReturnHref(salesTabHref(tab, params.current[tab]), requestKey()))}
               >
-                <Plus aria-hidden="true" /> {newLabel}
+                <Plus aria-hidden="true" /> {REGISTER_COPY.returns.newLabel}
+              </Button>
+            ) : (
+              <Button asChild className="h-10 text-sm">
+                <Link href={SALES_BILL_PATH}>
+                  <Plus aria-hidden="true" /> New bill
+                </Link>
               </Button>
             )
           }

@@ -1715,15 +1715,15 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
     <>
       <div>
         <label htmlFor="visit-vitals-temp" className="text-xs text-muted-foreground">Temp (°F)</label>
-        <Input id="visit-vitals-temp" type="number" inputMode="decimal" value={vitals.temp} onChange={(e) => setVitals({ ...vitals, temp: e.target.value })} />
+        <Input id="visit-vitals-temp" type="number" inputMode="decimal" value={vitals.temp} onChange={(e) => setVitals({ ...vitals, temp: e.target.value })} disabled={!canEdit} />
       </div>
       <div>
         <label htmlFor="visit-vitals-rr" className="text-xs text-muted-foreground">Resp. (/min)</label>
-        <Input id="visit-vitals-rr" type="number" value={vitals.rr} onChange={(e) => setVitals({ ...vitals, rr: e.target.value })} />
+        <Input id="visit-vitals-rr" type="number" value={vitals.rr} onChange={(e) => setVitals({ ...vitals, rr: e.target.value })} disabled={!canEdit} />
       </div>
       <div>
         <label htmlFor="visit-pain-score" className="text-xs text-muted-foreground">Pain (0–10)</label>
-        <Input id="visit-pain-score" type="number" min={0} max={10} value={painScore} onChange={(e) => setPainScore(e.target.value)} />
+        <Input id="visit-pain-score" type="number" min={0} max={10} value={painScore} onChange={(e) => setPainScore(e.target.value)} disabled={!canEdit} />
       </div>
     </>
   );
@@ -1805,6 +1805,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
           <div className="flex items-center gap-2">
             <label htmlFor="visit-consultation-type" className="text-sm font-medium">Consultation type</label>
             <NativeSelect id="visit-consultation-type"
+              disabled={!canEdit}
               value={consultationType || 'IN_PERSON'} onChange={event => {
                 setConsultationType(event.target.value as ConsultationType);
                 setTeleVideoConsent(false);
@@ -1853,6 +1854,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
             <label className="flex items-center gap-2 font-medium">
               <input type="checkbox" className="h-4 w-4" checked={teleVideoConsent}
+                disabled={!canEdit}
                 required aria-describedby="tele-video-consent-help" onChange={event => setTeleVideoConsent(event.target.checked)} />
               Patient consented to tele-video consultation
             </label>
@@ -1924,6 +1926,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
                       placeholder="mmHg" 
                       value={vitals.bpS} 
                       onChange={(e) => setVitals({ ...vitals, bpS: e.target.value })} 
+                      disabled={!canEdit}
                     />
                   </div>
                   <div>
@@ -1932,6 +1935,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
                       placeholder="mmHg" 
                       value={vitals.bpD} 
                       onChange={(e) => setVitals({ ...vitals, bpD: e.target.value })} 
+                      disabled={!canEdit}
                     />
                   </div>
                   <div>
@@ -1940,6 +1944,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
                       placeholder="bpm" 
                       value={vitals.hr} 
                       onChange={(e) => setVitals({ ...vitals, hr: e.target.value })} 
+                      disabled={!canEdit}
                     />
                   </div>
                   <div>
@@ -1948,6 +1953,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
                       placeholder="°F"
                       value={vitals.temp} 
                       onChange={(e) => setVitals({ ...vitals, temp: e.target.value })} 
+                      disabled={!canEdit}
                     />
                   </div>
                   <div>
@@ -1956,6 +1962,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
                       placeholder="kg" 
                       value={vitals.weight} 
                       onChange={(e) => setVitals({ ...vitals, weight: e.target.value })} 
+                      disabled={!canEdit}
                     />
                   </div>
                   <div>
@@ -1964,6 +1971,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
                       placeholder="cm" 
                       value={vitals.height} 
                       onChange={(e) => setVitals({ ...vitals, height: e.target.value })} 
+                      disabled={!canEdit}
                     />
                   </div>
                   <div>
@@ -1989,6 +1997,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
                       placeholder="/min" 
                       value={vitals.rr} 
                       onChange={(e) => setVitals({ ...vitals, rr: e.target.value })} 
+                      disabled={!canEdit}
                     />
                   </div>
                 </div>
@@ -2000,6 +2009,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
                       placeholder="0-10" 
                       value={painScore} 
                       onChange={(e) => setPainScore(e.target.value)} 
+                      disabled={!canEdit}
                     />
                   </div>
                 </div>
@@ -2136,6 +2146,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
                   visitId={visitId || 'temp'} 
                   patientId={patientId}
                   allowDelete={hasPermission('photos') || hasPermission('all')}
+                  readOnly={!canEdit}
                   onChangeCount={setPhotoCount}
                   onClinicalConflict={blockAutomaticSave}
                   onVisitVersion={(version?: number) => {

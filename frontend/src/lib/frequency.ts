@@ -102,17 +102,14 @@ export function getAllTimingOptions(): string[] {
 
 /**
  * Returns appropriate timing/when options for a given frequency.
- * - ONCE_DAILY / TWICE_DAILY / WEEKLY / MONTHLY: no AM/PM (those imply
- *   a full-day schedule, not a specific half of day)
- * - Hourly intervals: all options
- * - AS_NEEDED: all options
+ * TWICE_DAILY, WEEKLY and MONTHLY drop AM/PM; a single half of the day cannot
+ * describe a twice-daily dose. Once-daily keeps them so 1-0-0 can read AM.
  * Custom timings are always included.
  */
 export function getTimingOptionsForFrequency(frequency: string): string[] {
   const f = (frequency || '').toUpperCase();
   const custom = getCustomTimings();
   switch (f) {
-    case 'ONCE_DAILY':
     case 'TWICE_DAILY':
     case 'WEEKLY':
     case 'MONTHLY': {
@@ -168,6 +165,8 @@ export function addCustomDurationUnit(unit: string): string[] {
 export function getAllDurationUnitOptions(): string[] {
   return [...DEFAULT_DURATION_UNITS, ...getCustomDurationUnits()];
 }
+
+export const PERIODIC_FREQUENCY_OPTIONS = ['WEEKLY', 'MONTHLY'] as const;
 
 /**
  * @cc [owner:nareshshah139,label:safety] dose-pattern-presets-infer-daily-count

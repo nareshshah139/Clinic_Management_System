@@ -62,9 +62,9 @@ it('closes the dialog, refreshes and announces when another doctor already revie
 
 it('opens approvals on New items when requests are waiting, else on Price / stock', () => {
   api.getInventoryItemRequests.mockResolvedValue([]);
-  const { unmount } = render(<InventoryApprovals canReadEdits pendingItems={2} />);
+  const { unmount } = render(<InventoryApprovals canReadEdits pending={{ items: 2, edits: 0 }} />);
   expect(screen.getByRole('tab', { name: /New items/ })).toHaveAttribute('aria-selected', 'true');
   unmount();
-  render(<InventoryApprovals canReadEdits pendingItems={0} />);
+  render(<InventoryApprovals canReadEdits pending={{ items: 0, edits: 0 }} />);
   expect(screen.getByRole('tab', { name: 'Price / stock' })).toHaveAttribute('aria-selected', 'true');
 });

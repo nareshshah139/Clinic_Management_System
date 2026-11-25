@@ -96,6 +96,7 @@ export function queueStatusPage(
   page: number,
   limit: number,
   now: Date,
+  paused?: boolean,
 ): Prisma.Sql {
   const explicit = positiveNumber(
     Prisma.sql`coalesce(item->>'quantity', item->>'prescribedQuantity', item->>'totalQuantity', item->>'qty')`,
@@ -230,7 +231,8 @@ export function queueStatusPage(
       SELECT *, CASE WHEN (prescription_status <> 'ACTIVE' OR clinically_expired) AND queue_status <> 'dispensed'
         THEN 'expired' ELSE queue_status END AS visible_status FROM queue_statuses
     ), filtered AS MATERIALIZED (
-      SELECT id, "createdAt" FROM visible_statuses WHERE ${status ?? null}::text IS NULL OR ${status ?? null} = visible_status
+      SELECT id, "createdAt" FROM visible_statuses WHERE (${status ?? null}::text IS NULL OR ${status ?? null} = visible_status)
+        AND (${paused ?? null}::boolean IS NULL OR ${paused ?? null} = coalesce(workflow_status = 'PAUSED', false))
     ), page_ids AS MATERIALIZED (
       SELECT id, "createdAt" FROM filtered ORDER BY "createdAt" DESC, id DESC LIMIT ${limit} OFFSET ${(page - 1) * limit}
     )
@@ -239,5 +241,6 @@ export function queueStatusPage(
       coalesce((SELECT jsonb_object_agg(p.id, jsonb_build_object('id', p.id, 'status', p.prescription_status, 'expired', p.clinically_expired))
         FROM branch_prescriptions p JOIN page_ids page ON page.id = p.id), '{}'::jsonb) AS lifecycle,
       coalesce((SELECT jsonb_object_agg(visible_status, total) FROM (
-        SELECT visible_status, count(*)::int AS total FROM visible_statuses GROUP BY visible_status) counted), '{}'::jsonb) AS counts`;
+        SELECT visible_status, count(*)::int AS total FROM visible_statuses GROUP BY visible_status) counted), '{}'::jsonb) AS counts,
+      (SELECT count(*)::int FROM visible_statuses WHERE visible_status = 'expired' AND workflow_status = 'PAUSED') AS paused`;
 }

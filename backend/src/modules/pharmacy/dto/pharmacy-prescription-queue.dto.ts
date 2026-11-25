@@ -1,5 +1,5 @@
 import { Transform } from 'class-transformer';
-import { IsEnum, IsInt, IsOptional, Max, Min } from 'class-validator';
+import { IsBoolean, IsEnum, IsInt, IsOptional, Max, Min } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export enum PrescriptionQueueStatus {
@@ -17,6 +17,14 @@ export class QueryPrescriptionQueueDto {
   @IsOptional()
   @IsEnum(PrescriptionQueueStatus)
   status?: PrescriptionQueueStatus;
+
+  @ApiPropertyOptional({
+    description: 'With status=expired: true keeps only paused tasks, false keeps only the rest',
+  })
+  @IsOptional()
+  @Transform(({ value }) => (value === 'true' || value === true ? true : value === 'false' || value === false ? false : value))
+  @IsBoolean()
+  paused?: boolean;
 
   @ApiPropertyOptional({ default: 20, minimum: 1, maximum: 100 })
   @IsOptional()

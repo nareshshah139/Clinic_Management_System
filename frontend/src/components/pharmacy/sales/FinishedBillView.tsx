@@ -1,11 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { History, Percent, Printer, RotateCcw, Undo2 } from 'lucide-react';
+import { History, IndianRupee, Percent, Printer, RotateCcw, Undo2 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { getErrorMessage } from '@/lib/utils';
 import { displayClinicDate, displayClinicDateTime } from '@/lib/date-display';
-import { formatRupees, printHtml, renderPharmacyInvoiceHtml } from '@/lib/pharmacy-invoice-print';
+import { formatRupees, printHtml, renderPharmacyBillHtml, type PharmacyBillPrint } from '@/lib/pharmacy-invoice-print';
 import type { BillDiscount } from '@/lib/bill-pricing';
 import { billNumberLabel, isIssuedBillNumber } from '@/lib/bill-number';
 import { toast } from '@/hooks/use-toast';
@@ -22,8 +22,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { billLineName } from '@/lib/bill-line-name';
 import { BillDiscountInput } from './BillDiscountInput';
+import { CollectPaymentDialog } from './CollectPaymentDialog';
 import {
-  clinicOf,
   previewDiscount,
   revisionRequest,
   settlementOf,
@@ -244,6 +244,7 @@ export function FinishedBillView({ id, notice, startEditing }: { id: string; not
   const [editing, setEditing] = useState(false);
   const [editKey, setEditKey] = useState(0);
   const [refunding, setRefunding] = useState(false);
+  const [collecting, setCollecting] = useState(false);
   const autoOpened = useRef(false);
 
   const fetchBill = useCallback(async () => {
@@ -280,6 +281,7 @@ export function FinishedBillView({ id, notice, startEditing }: { id: string; not
   const editable = POSTED.has(bill.status);
   const issued = isIssuedBillNumber(bill.invoiceNumber);
   const { paid, due, refundDue } = settlementOf(bill);
+  const collectable = editable && issued && due > 0;
   const lineDiscount = bill.discountAmount - bill.billDiscountAmount;
   const reload = async () => {
     setEditing(false);
@@ -288,7 +290,7 @@ export function FinishedBillView({ id, notice, startEditing }: { id: string; not
   };
   const print = async () => {
     try {
-      await printHtml(renderPharmacyInvoiceHtml(bill, clinicOf(bill)));
+      await printHtml(renderPharmacyBillHtml(await apiClient.get<PharmacyBillPrint>(`/pharmacy/invoices/${encodeURIComponent(bill.id)}/print-data`)));
     } catch {
       toast({ variant: 'destructive', title: 'Could not print', description: 'Try again.' });
     }
@@ -326,6 +328,11 @@ export function FinishedBillView({ id, notice, startEditing }: { id: string; not
             {editable && (
               <Button type="button" variant="outline" onClick={() => setEditing(true)}>
                 <Percent aria-hidden="true" /> Edit discount
+              </Button>
+            )}
+            {collectable && (
+              <Button type="button" onClick={() => setCollecting(true)}>
+                <IndianRupee aria-hidden="true" /> Collect payment
               </Button>
             )}
             {refundDue > 0 && (
@@ -424,6 +431,18 @@ export function FinishedBillView({ id, notice, startEditing }: { id: string; not
             setLoad({ status: 'ready', bill: saved });
           }}
           onReload={() => void reload()}
+        />
+      )}
+      {collectable && collecting && (
+        <CollectPaymentDialog
+          billId={bill.id}
+          billNo={bill.invoiceNumber}
+          due={due}
+          onClose={() => setCollecting(false)}
+          onSaved={() => {
+            setCollecting(false);
+            void fetchBill();
+          }}
         />
       )}
       {refundDue > 0 && refunding && (

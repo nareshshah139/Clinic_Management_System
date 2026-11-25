@@ -1,6 +1,6 @@
 import { BillPricingError, priceBill, type BillDiscount, type BillPrice } from '@/lib/bill-pricing';
-import type { ClinicIdentity } from '@/lib/pharmacy-invoice-print';
 import { billLineName } from '@/lib/bill-line-name';
+import { formatRupees } from '@/lib/pharmacy-invoice-print';
 
 export type BillPayment = { id: string; amount: number; method: string; status: string; reference?: string | null; paymentDate: string };
 export type BillRevision = {
@@ -47,16 +47,6 @@ export type FinishedBill = {
   items: BillLine[];
   payments: BillPayment[];
   revisions: BillRevision[];
-  branch?: {
-    name: string;
-    address?: string | null;
-    city?: string | null;
-    state?: string | null;
-    pincode?: string | null;
-    phone?: string | null;
-    gstNumber?: string | null;
-    licenseNumber?: string | null;
-  } | null;
 };
 
 const LEDGER = new Set(['COMPLETED', 'REFUNDED']);
@@ -69,7 +59,15 @@ export function settlementOf(bill: { totalAmount: number; payments: { status: st
   return { paid, due: Math.max(0, balance), refundDue: Math.max(0, -balance) };
 }
 
-export const storedDiscount = (bill: Pick<FinishedBill, 'billDiscountKind' | 'billDiscountValue'>): BillDiscount | null =>
+export function paymentAmount(text: string, due: number): { ok: true; amount: number } | { ok: false; problem: string } {
+  const amount = Number(text.trim());
+  if (!text.trim() || !Number.isFinite(amount) || amount <= 0) return { ok: false, problem: 'Enter an amount above ₹0.' };
+  if (money(amount) !== amount) return { ok: false, problem: 'Use at most two decimal places.' };
+  if (amount > due) return { ok: false, problem: `Only ${formatRupees(due)} is due on this bill.` };
+  return { ok: true, amount };
+}
+
+export const storedDiscount =(bill: Pick<FinishedBill, 'billDiscountKind' | 'billDiscountValue'>): BillDiscount | null =>
   bill.billDiscountKind ? { kind: bill.billDiscountKind, value: bill.billDiscountValue } : null;
 
 export type DiscountEdit = { billDiscount: BillDiscount | null; lineDiscounts: Record<string, number> };
@@ -105,18 +103,5 @@ export function revisionRequest(bill: FinishedBill, edit: DiscountEdit, reason: 
     billDiscount: edit.billDiscount?.value ? edit.billDiscount : null,
     lines: bill.items.map((line) => ({ id: line.id, discountPercent: edit.lineDiscounts[line.id] ?? line.discountPercent })),
     reason: reason.trim(),
-  };
-}
-
-export function clinicOf(bill: Pick<FinishedBill, 'branch'>): ClinicIdentity | null {
-  const branch = bill.branch;
-  if (!branch?.name) return null;
-  const address = [branch.address, branch.city, branch.state, branch.pincode].filter((part) => part?.trim()).join(', ');
-  return {
-    name: branch.name,
-    ...(address ? { address } : {}),
-    ...(branch.phone ? { phone: branch.phone } : {}),
-    ...(branch.gstNumber ? { gstin: branch.gstNumber } : {}),
-    ...(branch.licenseNumber ? { drugLicence: branch.licenseNumber } : {}),
   };
 }

@@ -1,4 +1,4 @@
-import { clinicOf, previewDiscount, revisionRequest, settlementOf, type FinishedBill } from '@/components/pharmacy/sales/finished-bill-model';
+import { paymentAmount, previewDiscount, revisionRequest, settlementOf, type FinishedBill } from '@/components/pharmacy/sales/finished-bill-model';
 
 const line = (id: string, quantity: number, unitPrice: number, discountPercent: number, taxPercent: number) => ({
   id, itemType: 'DRUG' as const, quantity, unitPrice, discountPercent, taxPercent,
@@ -54,9 +54,15 @@ it('reads paid, due and refund due from the ledger, refunds included', () => {
     { paid: 282.68, due: 0, refundDue: 0 },
     { paid: 0, due: 327.75, refundDue: 0 },
   ]);
-  expect(clinicOf(bill({ branch: { name: 'Skin Care Clinic', address: 'MG Road', city: 'Pune', gstNumber: '27ABCDE1234F1Z5' } }))).toEqual({
-    name: 'Skin Care Clinic',
-    address: 'MG Road, Pune',
-    gstin: '27ABCDE1234F1Z5',
-  });
+});
+
+it('takes a full or part payment up to the balance due, in paise at most', () => {
+  expect(['490', '150.5', '0', '', '12.345', '490.01'].map((text) => paymentAmount(text, 490))).toEqual([
+    { ok: true, amount: 490 },
+    { ok: true, amount: 150.5 },
+    { ok: false, problem: 'Enter an amount above ₹0.' },
+    { ok: false, problem: 'Enter an amount above ₹0.' },
+    { ok: false, problem: 'Use at most two decimal places.' },
+    { ok: false, problem: 'Only ₹490.00 is due on this bill.' },
+  ]);
 });
