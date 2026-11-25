@@ -502,6 +502,10 @@ export default function CalendarColumn({
                     if (past) return;
                     if (slotAction.kind === 'book' && e.detail > 0) return;
                     if (slotAction.kind === 'move') {
+                      if (!startsLater(moveSpan)) {
+                        toast({ variant: 'destructive', title: 'That time has already started', description: 'Please select a later time.' });
+                        return;
+                      }
                       onMove(moveSpan);
                       return;
                     }
