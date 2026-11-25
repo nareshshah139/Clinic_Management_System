@@ -10,6 +10,29 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { Prisma } from '@prisma/client';
 import { generatePatientCode } from '../../shared/ids/patient-code.util';
 import { readUpcomingAppointments } from '../appointments/upcoming-appointments';
+import type { PatientSortField, PatientSortOrder } from './dto/list-patients-sort.dto';
+
+const PATIENT_LIST_SELECT = {
+  id: true,
+  patientCode: true,
+  abhaId: true,
+  name: true,
+  gender: true,
+  dob: true,
+  age: true,
+  phone: true,
+  email: true,
+  address: true,
+  emergencyContact: true,
+  city: true,
+  state: true,
+  referralSource: true,
+  consultationType: true,
+  createdAt: true,
+  updatedAt: true,
+  primaryDoctor: { select: { id: true, firstName: true, lastName: true } },
+  visits: { where: { deletedAt: null }, orderBy: { createdAt: 'desc' }, take: 1, select: { id: true, createdAt: true } },
+} satisfies Prisma.PatientSelect;
 
 /**
  * @cc [owner:nareshshah139,label:security] portal-user-safe-fields
@@ -148,11 +171,37 @@ export class PatientsService {
    * A deleted visit MUST NOT qualify an older patient for recent-patient results
    * or their total count. Recent registration or an undeleted visit may qualify.
    */
+  private patientOrderBy(field: Exclude<PatientSortField, 'lastVisit'>, direction: PatientSortOrder): Prisma.PatientOrderByWithRelationInput[] {
+    const tiebreaker: Prisma.PatientOrderByWithRelationInput = { id: direction };
+    if (field === 'name') return [{ name: direction }, tiebreaker];
+    if (field === 'age') return [{ dob: { sort: direction === 'asc' ? 'desc' : 'asc', nulls: 'last' } }, tiebreaker];
+    return [{ createdAt: direction }, tiebreaker];
+  }
+
+  private async findPageByLastVisit(where: Prisma.PatientWhereInput, direction: PatientSortOrder, skip: number, take: number) {
+    const candidates = await this.prisma.patient.findMany({
+      where,
+      select: { id: true, visits: { where: { deletedAt: null }, orderBy: { createdAt: 'desc' }, take: 1, select: { createdAt: true } } },
+    });
+    const sign = direction === 'asc' ? 1 : -1;
+    const keyed = candidates.map((c) => ({ id: c.id, at: c.visits[0]?.createdAt.getTime() ?? null }));
+    keyed.sort((a, b) => {
+      if (a.at === null && b.at !== null) return 1;
+      if (b.at === null && a.at !== null) return -1;
+      if (a.at !== b.at) return ((a.at as number) - (b.at as number)) * sign;
+      return a.id < b.id ? -sign : a.id > b.id ? sign : 0;
+    });
+    const pageIds = keyed.slice(skip, skip + take).map((k) => k.id);
+    const rows = await this.prisma.patient.findMany({ where: { id: { in: pageIds } }, select: PATIENT_LIST_SELECT });
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    return pageIds.flatMap((id) => byId.get(id) ?? []);
+  }
+
   async findAll(
-    options: { page: number; limit: number; search?: string; gender?: string; consultationType?: string; dateRange?: string; primaryDoctorId?: string },
+    options: { page: number; limit: number; search?: string; gender?: string; consultationType?: string; dateRange?: string; primaryDoctorId?: string; sortBy?: PatientSortField; sortOrder?: PatientSortOrder },
     branchId: string,
   ) {
-    const { page, limit, search, gender, consultationType, dateRange, primaryDoctorId } = options;
+    const { page, limit, search, gender, consultationType, dateRange, primaryDoctorId, sortBy, sortOrder } = options;
     const skip = (page - 1) * limit;
 
     // Optimize search by requiring minimum 2 characters and using more efficient queries
@@ -223,34 +272,19 @@ export class PatientsService {
       ...(andConditions.length > 0 ? { AND: andConditions } : {}),
     } as any;
 
+    const sortDirection: PatientSortOrder = sortOrder ?? 'desc';
+    const sortField: PatientSortField = sortBy ?? 'createdAt';
+
     const [patients, total] = await Promise.all([
-      this.prisma.patient.findMany({
-        where,
-        skip,
-        take: limit,
-        orderBy: { createdAt: 'desc' },
-        select: {
-          id: true,
-          patientCode: true,
-          abhaId: true,
-          name: true,
-          gender: true,
-          dob: true,
-          age: true,
-          phone: true,
-          email: true,
-          address: true,
-          emergencyContact: true,
-          city: true,
-          state: true,
-          referralSource: true,
-          consultationType: true,
-          createdAt: true,
-          updatedAt: true,
-          primaryDoctor: { select: { id: true, firstName: true, lastName: true } },
-          visits: { where: { deletedAt: null }, orderBy: { createdAt: 'desc' }, take: 1, select: { id: true, createdAt: true } },
-        },
-      }),
+      sortField === 'lastVisit'
+        ? this.findPageByLastVisit(where, sortDirection, skip, limit)
+        : this.prisma.patient.findMany({
+            where,
+            skip,
+            take: limit,
+            orderBy: this.patientOrderBy(sortField, sortDirection),
+            select: PATIENT_LIST_SELECT,
+          }),
       this.prisma.patient.count({ where }),
     ]);
 
