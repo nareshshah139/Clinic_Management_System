@@ -37,7 +37,7 @@ import { paymentModeLabel } from '@/lib/clinic-payment-modes';
 import { rangeError, type DayRange } from '@/lib/date-ranges';
 import { clinicToday } from '@/components/pharmacy/pharmacy-report-model';
 import { PeriodPicker } from '@/components/pharmacy/reports/ReportToolbar';
-import { presetFor, reportHref } from '@/components/pharmacy/reports/report-catalog';
+import { reportHref } from '@/components/pharmacy/reports/report-catalog';
 import { LOW_STOCK_DEFINITION } from '@/lib/clinic-counts';
 import type { ReportTab } from '@/lib/reports-model';
 import { enumLabel } from '@/lib/labels';
@@ -229,9 +229,10 @@ function ReportDates({ applied, today, loading, onApply }: { applied: DayRange; 
       <PeriodPicker
         value={draft}
         today={today}
-        onChange={(range) => {
+        onChange={setDraft}
+        onPreset={(range) => {
           setDraft(range);
-          if (presetFor(range, today) !== 'custom') onApply(range);
+          onApply(range);
         }}
       />
       <Button type="submit" disabled={loading || !complete || Boolean(problem)}>

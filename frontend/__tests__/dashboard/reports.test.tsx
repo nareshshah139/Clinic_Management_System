@@ -180,6 +180,7 @@ describe('dates', () => {
     await user.type(from, '01/1');
     expect(api.getRevenueReport).toHaveBeenCalledTimes(calls);
     await user.type(from, '1/2026');
+    expect(api.getRevenueReport).toHaveBeenCalledTimes(calls);
     await user.click(within(panel()).getByRole('button', { name: 'Show report' }));
 
     await waitFor(() => expect(api.getRevenueReport).toHaveBeenLastCalledWith(expect.objectContaining({ startDate: '2026-11-01', endDate: '2026-11-12' })));
