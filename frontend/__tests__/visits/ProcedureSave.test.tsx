@@ -18,11 +18,11 @@ it('saves a valid visit and retains the selected therapist in the procedure', as
   jest.mocked(apiClient.createVisit).mockResolvedValue({} as any);
 
   render(<ProceduresPage />);
-  fireEvent.click((await screen.findAllByRole('combobox'))[0]);
-  fireEvent.click(await screen.findByRole('option', { name: 'Patient' }));
-  fireEvent.click(screen.getAllByRole('combobox')[1]);
+  fireEvent.change(await screen.findByLabelText('Patient *'), { target: { value: 'Pat' } });
+  fireEvent.click(await screen.findByRole('button', { name: 'Patient' }));
+  fireEvent.click(screen.getByRole('combobox', { name: 'Doctor *' }));
   fireEvent.click(await screen.findByRole('option', { name: /Dr\. Doctor/ }));
-  fireEvent.click(screen.getAllByRole('combobox')[2]);
+  fireEvent.click(screen.getByRole('combobox', { name: 'Nurse/Therapist' }));
   fireEvent.click(await screen.findByRole('option', { name: /Nurse/ }));
   fireEvent.click(screen.getByRole('button', { name: /Endymed Pro Max/i }));
   fireEvent.click(screen.getByRole('button', { name: /Save Procedure/i }));
