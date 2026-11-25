@@ -56,4 +56,28 @@ describe('learned correction chip', () => {
     render(<PurchaseLearnedChips label="x" onUndo={jest.fn()} corrections={[{ field: 'product', from: 'A', to: 'B', support: 1, tier: 'SUGGEST' }]} />);
     expect(screen.queryByRole('list')).not.toBeInTheDocument();
   });
+
+  const productRow = (withRestore: boolean): Row => ({
+    productName: 'Dolo 650mg Tablet',
+    manufacturer: 'Micro Labs',
+    ocrFlags: 'learned_product_needs_confirmation',
+    learnedCorrections: JSON.stringify([{
+      field: 'product', from: 'DOLO-650 TAB', to: 'Dolo 650mg Tablet', support: 4, tier: 'APPLY',
+      ...(withRestore ? { restore: { productName: 'DOLO-650 TAB', manufacturer: '', packSize: '15' }, restoreFlags: ['missing_manufacturer'] } : {}),
+    }]),
+  });
+
+  it('puts back everything the product lesson rewrote and the flag it cleared', () => {
+    const [correction] = readLearnedCorrections(productRow(true).learnedCorrections);
+    const undone = undoLearnedCorrection({ ...productRow(true), packSize: '15' } as Row & Record<string, unknown>, correction, 'ocrFlags');
+    expect(undone).toMatchObject({ productName: 'DOLO-650 TAB', manufacturer: '', packSize: '15', ocrFlags: 'missing_manufacturer' });
+    expect(undone.learnedCorrections).toBeUndefined();
+  });
+
+  it('falls back to the product name for a correction saved before restore existed', () => {
+    const [correction] = readLearnedCorrections(productRow(false).learnedCorrections);
+    expect(correction).toMatchObject({ restore: { productName: 'DOLO-650 TAB' }, restoreFlags: [] });
+    const undone = undoLearnedCorrection(productRow(false) as Row & Record<string, unknown>, correction, 'ocrFlags');
+    expect(undone).toMatchObject({ productName: 'DOLO-650 TAB', manufacturer: 'Micro Labs', ocrFlags: '' });
+  });
 });

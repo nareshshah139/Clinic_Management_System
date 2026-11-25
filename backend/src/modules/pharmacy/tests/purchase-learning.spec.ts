@@ -167,10 +167,20 @@ describe('Purchase OCR learning', () => {
       const result = apply('APPLY');
       expect(result.draft.items[0]).toEqual({ ...line(), productName: 'Dolo 650mg Tablet', manufacturer: 'Micro Labs', packSize: '15',
         ocrFlags: ['learned_product_needs_confirmation'],
-        learnedCorrections: [{ field: 'product', from: 'DOLO-650 TAB', to: 'Dolo 650mg Tablet', support: 5, tier: 'APPLY' }] });
+        learnedCorrections: [{ field: 'product', from: 'DOLO-650 TAB', to: 'Dolo 650mg Tablet', support: 5, tier: 'APPLY',
+          restore: { productName: 'DOLO-650 TAB', manufacturer: 'MICRO LABS', packSize: '15' }, restoreFlags: [] }] });
       expect(result.applied).toEqual([{ slot: 'doc-1:r1:0', field: 'product', from: 'DOLO-650 TAB', to: 'Dolo 650mg Tablet', drugId: 'drug-dolo',
         tier: 'APPLY', lessonKey: `product:${GSTIN}:${KEY}`, support: 5 }]);
       expect(result.suggestions).toEqual([]);
+    });
+
+    it('records what the read had so a product lesson can be undone completely', () => {
+      const read = draft([line({ manufacturer: '', ocrFlags: ['missing_manufacturer'] })]);
+      const corrected = apply('APPLY', read).draft.items[0];
+      expect(corrected).toMatchObject({ manufacturer: 'Micro Labs', ocrFlags: ['learned_product_needs_confirmation'] });
+      expect(corrected.learnedCorrections![0]).toMatchObject({
+        restore: { productName: 'DOLO-650 TAB', manufacturer: '', packSize: '15' }, restoreFlags: ['missing_manufacturer'],
+      });
     });
 
     it('adds no confirmation flag at TRUSTED unless trusted lessons are switched off', () => {
@@ -212,7 +222,8 @@ describe('Purchase OCR learning', () => {
       const input = draft([line()], { distributorName: 'MICRO DISTRIBUTER' });
       const saved = applyLessonsToDraft(input, lesson, new Map(), { branchId: 'branch-1', trustedEnabled: true, supplier: { name: 'Micro Distributors', gstNumber: GSTIN } });
       expect(saved.draft).toMatchObject({ distributorName: 'Micro Distributors', ocrFlags: ['learned_distributor_needs_confirmation'],
-        learnedCorrections: [{ field: 'distributorName', from: 'MICRO DISTRIBUTER', to: 'Micro Distributors', support: 2, tier: 'APPLY' }] });
+        learnedCorrections: [{ field: 'distributorName', from: 'MICRO DISTRIBUTER', to: 'Micro Distributors', support: 2, tier: 'APPLY',
+          restore: { distributorName: 'MICRO DISTRIBUTER' }, restoreFlags: [] }] });
       const renamed = applyLessonsToDraft(input, lesson, new Map(), { branchId: 'branch-1', trustedEnabled: true, supplier: { name: 'Micro Pharma Agencies', gstNumber: GSTIN } });
       expect(renamed.draft.distributorName).toBe('MICRO DISTRIBUTER');
     });
