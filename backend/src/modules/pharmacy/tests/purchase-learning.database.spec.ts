@@ -132,7 +132,8 @@ databaseTests('Purchase OCR learning with real PostgreSQL', () => {
       expect(bill.invoice.items[0]).toMatchObject({ productName: 'Dolo 650mg Tablet', manufacturer: 'Micro Labs', packSize: '15',
         ocrFlags: ['learned_product_needs_confirmation'] });
       expect(bill.draft.items[0].learnedCorrections).toEqual([{ field: 'product', from: 'DOLO-650 TAB', to: 'Dolo 650mg Tablet', support: 2 + index, tier: 'APPLY',
-        restore: { productName: 'DOLO-650 TAB', manufacturer: 'MICRO LABS', packSize: '15' }, restoreFlags: [] }]);
+        restore: { productName: 'DOLO-650 TAB', manufacturer: 'MICRO LABS', packSize: '15' },
+        applied: { productName: 'Dolo 650mg Tablet', manufacturer: 'Micro Labs', packSize: '15' }, restoreFlags: [] }]);
       expect(bill.automation.issues).toContain('Line 1: learned_product_needs_confirmation');
       await reviewAndCommit(bill.invoice.id, dolo);
       expect((await examplesOf(bill.invoice.id)).map(row => [row.field, row.provenance, row.appliedLessonKey])).toEqual([
@@ -173,6 +174,17 @@ databaseTests('Purchase OCR learning with real PostgreSQL', () => {
     expect(metrics.totals).toEqual({ lines: 7, reviewedLines: 6, reviewerTouches: 3, touchesPer100Lines: 42.9, rawCorrectionRate: 43.8,
       invoices: 7, automaticInvoices: 1, autoCommitRate: 14.3, lessonsKept: 4, lessonsOverridden: 1, overrideRate: 20 });
     expect(metrics.activeLessons).toEqual({ SUGGEST: 0, APPLY: 0, TRUSTED: 0 });
+
+    const today = new Date().toISOString().slice(0, 10);
+    const throughToday = await service.learningMetrics(branchId, { to: today });
+    expect(throughToday.totals).toEqual(metrics.totals);
+    expect(throughToday.totals.lines).toBe(7);
+    expect(throughToday.totals.reviewerTouches).toBe(3);
+    const defaulted = await service.learningMetrics(branchId, { to: '2026-11-30' });
+    expect(defaulted.from.toISOString()).toBe('2026-10-06T00:00:00.000Z');
+    expect(defaulted.to.toISOString()).toBe('2026-12-01T00:00:00.000Z');
+    await expect(service.learningMetrics(branchId, { from: '2026-11-30T12:00:00Z', to: '2026-11-30' })).resolves.toBeDefined();
+    await expect(service.learningMetrics(branchId, { from: '2026-12-01', to: '2026-11-30' })).rejects.toThrow('Choose a valid date range for OCR learning metrics.');
   }, 60000);
 
   it('forgets a lesson on request so the next bill is read as printed again', async () => {

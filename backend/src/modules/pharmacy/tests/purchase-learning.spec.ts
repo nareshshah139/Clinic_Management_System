@@ -168,7 +168,8 @@ describe('Purchase OCR learning', () => {
       expect(result.draft.items[0]).toEqual({ ...line(), productName: 'Dolo 650mg Tablet', manufacturer: 'Micro Labs', packSize: '15',
         ocrFlags: ['learned_product_needs_confirmation'],
         learnedCorrections: [{ field: 'product', from: 'DOLO-650 TAB', to: 'Dolo 650mg Tablet', support: 5, tier: 'APPLY',
-          restore: { productName: 'DOLO-650 TAB', manufacturer: 'MICRO LABS', packSize: '15' }, restoreFlags: [] }] });
+          restore: { productName: 'DOLO-650 TAB', manufacturer: 'MICRO LABS', packSize: '15' },
+          applied: { productName: 'Dolo 650mg Tablet', manufacturer: 'Micro Labs', packSize: '15' }, restoreFlags: [] }] });
       expect(result.applied).toEqual([{ slot: 'doc-1:r1:0', field: 'product', from: 'DOLO-650 TAB', to: 'Dolo 650mg Tablet', drugId: 'drug-dolo',
         tier: 'APPLY', lessonKey: `product:${GSTIN}:${KEY}`, support: 5 }]);
       expect(result.suggestions).toEqual([]);
@@ -179,7 +180,8 @@ describe('Purchase OCR learning', () => {
       const corrected = apply('APPLY', read).draft.items[0];
       expect(corrected).toMatchObject({ manufacturer: 'Micro Labs', ocrFlags: ['learned_product_needs_confirmation'] });
       expect(corrected.learnedCorrections![0]).toMatchObject({
-        restore: { productName: 'DOLO-650 TAB', manufacturer: '', packSize: '15' }, restoreFlags: ['missing_manufacturer'],
+        restore: { productName: 'DOLO-650 TAB', manufacturer: '', packSize: '15' },
+        applied: { productName: 'Dolo 650mg Tablet', manufacturer: 'Micro Labs', packSize: '15' }, restoreFlags: ['missing_manufacturer'],
       });
     });
 
@@ -214,6 +216,17 @@ describe('Purchase OCR learning', () => {
       expect(result.suggestions).toEqual([]);
     });
 
+    it('records the manufacturer the lesson wrote so Undo can spot a later hand edit', () => {
+      const lesson = deriveLessons([1, 2].map(n => example({
+        invoiceId: `inv-${n}`, field: 'manufacturer', rawKey: `micro labz|${KEY}`, rawValue: 'MICRO LABZ', finalValue: 'Micro Labs',
+        drugId: null, identitySnapshot: null, committedAt: at(n),
+      })));
+      const result = applyLessonsToDraft(draft([line({ manufacturer: 'MICRO LABZ' })]), lesson, new Map(), { branchId: 'branch-1', trustedEnabled: true });
+      expect(result.draft.items[0]).toMatchObject({ manufacturer: 'Micro Labs' });
+      expect(result.draft.items[0].learnedCorrections).toEqual([{ field: 'manufacturer', from: 'MICRO LABZ', to: 'Micro Labs', support: 2, tier: 'APPLY',
+        restore: { manufacturer: 'MICRO LABZ' }, applied: { manufacturer: 'Micro Labs' }, restoreFlags: [] }]);
+    });
+
     it('rewrites the supplier name only to the saved supplier for the GSTIN read', () => {
       const lesson = deriveLessons([
         example({ field: 'distributorName', rawKey: 'MICRODISTRIBUTER', drugId: null, finalValue: 'Micro Distributors', identitySnapshot: null }),
@@ -223,7 +236,7 @@ describe('Purchase OCR learning', () => {
       const saved = applyLessonsToDraft(input, lesson, new Map(), { branchId: 'branch-1', trustedEnabled: true, supplier: { name: 'Micro Distributors', gstNumber: GSTIN } });
       expect(saved.draft).toMatchObject({ distributorName: 'Micro Distributors', ocrFlags: ['learned_distributor_needs_confirmation'],
         learnedCorrections: [{ field: 'distributorName', from: 'MICRO DISTRIBUTER', to: 'Micro Distributors', support: 2, tier: 'APPLY',
-          restore: { distributorName: 'MICRO DISTRIBUTER' }, restoreFlags: [] }] });
+          restore: { distributorName: 'MICRO DISTRIBUTER' }, applied: { distributorName: 'Micro Distributors' }, restoreFlags: [] }] });
       const renamed = applyLessonsToDraft(input, lesson, new Map(), { branchId: 'branch-1', trustedEnabled: true, supplier: { name: 'Micro Pharma Agencies', gstNumber: GSTIN } });
       expect(renamed.draft.distributorName).toBe('MICRO DISTRIBUTER');
     });

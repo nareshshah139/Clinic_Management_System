@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PurchaseLearnedChips } from '@/components/pharmacy/PurchaseLearnedChip';
 import { PurchaseOcrChecklist } from '@/components/pharmacy/PurchaseOcrChecklist';
-import { readLearnedCorrections, serializeLearnedCorrections, undoLearnedCorrection } from '@/lib/purchase-learning';
+import { readLearnedCorrections, serializeLearnedCorrections, undoConflicts, undoLearnedCorrection, type LearnedCorrection } from '@/lib/purchase-learning';
 
 type Row = { productName: string; manufacturer: string; ocrFlags: string; learnedCorrections?: string };
 
@@ -12,8 +12,8 @@ const learnedRow: Row = {
   manufacturer: 'Micro Labs',
   ocrFlags: 'learned_product_needs_confirmation, uncertain_batchNumber',
   learnedCorrections: serializeLearnedCorrections([
-    { field: 'product', from: 'DOLO-650 TAB', to: 'Dolo 650mg Tablet', support: 4, tier: 'APPLY', restore: { productName: 'DOLO-650 TAB' }, restoreFlags: [] },
-    { field: 'manufacturer', from: 'MICRO LAB', to: 'Micro Labs', support: 2, tier: 'TRUSTED', restore: { manufacturer: 'MICRO LAB' }, restoreFlags: [] },
+    { field: 'product', from: 'DOLO-650 TAB', to: 'Dolo 650mg Tablet', support: 4, tier: 'APPLY', restore: { productName: 'DOLO-650 TAB' }, applied: { productName: 'Dolo 650mg Tablet' }, restoreFlags: [] },
+    { field: 'manufacturer', from: 'MICRO LAB', to: 'Micro Labs', support: 2, tier: 'TRUSTED', restore: { manufacturer: 'MICRO LAB' }, applied: { manufacturer: 'Micro Labs' }, restoreFlags: [] },
   ]),
 };
 
@@ -53,7 +53,7 @@ describe('learned correction chip', () => {
   });
 
   it('renders nothing for suggestions that were not applied', () => {
-    render(<PurchaseLearnedChips label="x" onUndo={jest.fn()} corrections={[{ field: 'product', from: 'A', to: 'B', support: 1, tier: 'SUGGEST', restore: { productName: 'A' }, restoreFlags: [] }]} />);
+    render(<PurchaseLearnedChips label="x" onUndo={jest.fn()} corrections={[{ field: 'product', from: 'A', to: 'B', support: 1, tier: 'SUGGEST', restore: { productName: 'A' }, applied: { productName: 'B' }, restoreFlags: [] }]} />);
     expect(screen.queryByRole('list')).not.toBeInTheDocument();
   });
 
@@ -87,5 +87,54 @@ describe('learned correction chip', () => {
     expect(correction.restore).toEqual({ productName: 'DOLO-650 TAB' });
     const undone = undoLearnedCorrection({ ...productRow(true), localId: 'line-1' } as Row & Record<string, unknown>, correction, 'ocrFlags');
     expect(undone).toMatchObject({ localId: 'line-1', productName: 'DOLO-650 TAB' });
+  });
+
+  describe('undoConflicts', () => {
+    const product: LearnedCorrection = {
+      field: 'product', from: 'DOLO-650 TAB', to: 'Dolo 650mg Tablet', support: 4, tier: 'APPLY',
+      restore: { productName: 'DOLO-650 TAB', manufacturer: '', packSize: '15' },
+      applied: { productName: 'Dolo 650mg Tablet', manufacturer: 'Micro Labs', packSize: '15' }, restoreFlags: [],
+    };
+    const untouched = { productName: 'Dolo 650mg Tablet', manufacturer: 'Micro Labs', packSize: '15' };
+
+    it('reports a field the reviewer edited after the lesson filled it in', () => {
+      expect(undoConflicts({ ...untouched, manufacturer: 'Cipla' }, product)).toEqual([
+        { field: 'manufacturer', label: 'Manufacturer', current: 'Cipla', restored: '' },
+      ]);
+    });
+
+    it('reports nothing while every field still holds what the lesson wrote or what the read had', () => {
+      expect(undoConflicts(untouched, product)).toEqual([]);
+      expect(undoConflicts({ productName: 'DOLO-650 TAB', manufacturer: '', packSize: '15' }, product)).toEqual([]);
+      expect(undoConflicts({ productName: 'DOLO-650 TAB', manufacturer: 'Micro Labs', packSize: '15' }, product)).toEqual([]);
+    });
+
+    it('labels each edited field', () => {
+      const edited = { productName: 'Dolo X', manufacturer: 'Cipla', packSize: '10' };
+      expect(undoConflicts(edited, product).map(conflict => [conflict.field, conflict.label])).toEqual([
+        ['productName', 'Product name'], ['manufacturer', 'Manufacturer'], ['packSize', 'Pack size'],
+      ]);
+      const supplier = readLearnedCorrections(JSON.stringify([{ field: 'distributorName', from: 'MICRO DISTRIBUTER', to: 'Micro Distributors', support: 2, tier: 'APPLY',
+        restore: { distributorName: 'MICRO DISTRIBUTER' }, applied: { distributorName: 'Micro Distributors' }, restoreFlags: [] }]))[0];
+      expect(undoConflicts({ distributorName: 'Micro Pharma' }, supplier)).toEqual([
+        { field: 'distributorName', label: 'Supplier name', current: 'Micro Pharma', restored: 'MICRO DISTRIBUTER' },
+      ]);
+    });
+
+    it('judges a correction autosaved before applied existed by the value the lesson set', () => {
+      const [legacy] = readLearnedCorrections(JSON.stringify([{ field: 'product', from: 'DOLO-650 TAB', to: 'Dolo 650mg Tablet', support: 4, tier: 'APPLY',
+        restore: { productName: 'DOLO-650 TAB', manufacturer: '', packSize: '15' }, restoreFlags: [] }]));
+      expect(legacy.applied).toEqual({ productName: 'Dolo 650mg Tablet' });
+      expect(undoConflicts(untouched, legacy)).toEqual([]);
+      expect(undoConflicts({ ...untouched, productName: 'Dolo 650 Strip' }, legacy)).toEqual([
+        { field: 'productName', label: 'Product name', current: 'Dolo 650 Strip', restored: 'DOLO-650 TAB' },
+      ]);
+    });
+
+    it('keeps applied to the same learnable keys as restore', () => {
+      const [parsed] = readLearnedCorrections(JSON.stringify([{ field: 'product', from: 'A', to: 'B', support: 1, tier: 'APPLY',
+        restore: { productName: 'A' }, applied: { productName: 'B', localId: 'forged' }, restoreFlags: [] }]));
+      expect(parsed.applied).toEqual({ productName: 'B' });
+    });
   });
 });
