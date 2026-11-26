@@ -493,6 +493,88 @@ it('sets the credit off from Mark paid in one step when the credit held covers t
   await waitFor(() => expect(post.mock.calls[1]?.slice(0, 2)).toEqual(['/inventory/workspace/credits/set-off/so-9/reverse', { reason: 'Undone from purchase list' }]));
 });
 
+it('undoes the ₹200 set-off its toast names, not the ₹800 payment recorded on the same bill after it', async () => {
+  let stage: 'due' | 'credited' | 'paid' = 'due';
+  const payment = { due: bill().payment, credited: { ...bill().payment, state: 'PARTIAL' as const, credit: 200, outstanding: 800, payable: 800, partlyPaid: true }, paid: { ...bill().payment, state: 'PAID' as const, paid: 800, credit: 200, outstanding: 0, payable: 0, partlyPaid: false } };
+  get.mockImplementation(async (url: string) => {
+    if (url === '/pharmacy/purchase-register/position') return { gstin: linae.gstin, name: linae.name, outstanding: 1000, creditHeld: 200, net: 800 };
+    if (url === '/inventory/workspace/credits/set-off')
+      return { ...setOffOptions, available: 200, credits: [{ ...setOffOptions.credits[0], available: 200 }], bills: [{ ...setOffOptions.bills[0], payable: 1000 }] };
+    return purchasesResponse({ creditHeld: { [linae.gstin]: stage === 'due' ? 200 : 0 }, rows: [bill({ payment: payment[stage] })] });
+  });
+  post.mockImplementation(async (url: string) => {
+    if (url === '/inventory/workspace/credits/set-off') {
+      stage = 'credited';
+      return { setOffId: 'so-200', allocations: [], bills: [{ id: 'bill-2', billNo: 'LIN-2', payableAfter: 800 }], credits: [] };
+    }
+    if (url === '/pharmacy/purchase-ledger/payments') {
+      stage = 'paid';
+      return { id: 'pay-800', updatedAt: '2026-11-06T06:00:01.000Z', allocations: [{ purchaseInvoiceId: 'bill-2', outstandingAfter: 0 }] };
+    }
+    return { id: 'reversed' };
+  });
+  renderBills('');
+  fireEvent.click(await screen.findByRole('button', { name: 'Mark bill LIN-2 paid' }));
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Set off ₹200.00 instead' }));
+  const setOff = await screen.findByRole('dialog', { name: 'Set off credit from Linae Distributors' });
+  expect(await within(setOff).findByLabelText(/bill LIN-2,/)).toHaveValue('200');
+  await armed();
+  fireEvent.click(within(setOff).getByRole('button', { name: 'Set off ₹200.00' }));
+  expect(await screen.findByText('Set off ₹200.00 of credit against bill LIN-2.', { selector: 'div' })).toBeInTheDocument();
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Mark bill LIN-2 paid' }));
+  fireEvent.click(within(screen.getByRole('dialog', { name: 'Pay ₹800.00 to Linae Distributors' })).getByRole('button', { name: 'Record payment ₹800.00' }));
+  expect(await screen.findByRole('button', { name: 'Undo payment for bill LIN-2' })).toBeInTheDocument();
+
+  const setOffToast = (await screen.findByText('Set off ₹200.00 of credit against bill LIN-2.', { selector: 'div' })).closest('li')!;
+  fireEvent.click(within(setOffToast).getByRole('button', { name: 'Undo' }));
+  await waitFor(() => expect(post).toHaveBeenCalledTimes(3));
+  expect(post.mock.calls.map(([url]) => url)).toEqual([
+    '/inventory/workspace/credits/set-off',
+    '/pharmacy/purchase-ledger/payments',
+    '/inventory/workspace/credits/set-off/so-200/reverse',
+  ]);
+  expect(await screen.findByText('Set-off undone', { selector: 'div' })).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Undo payment for bill LIN-2' }));
+  await waitFor(() => expect(post).toHaveBeenCalledTimes(4));
+  expect(post.mock.calls[3][0]).toBe('/pharmacy/purchase-ledger/payments/pay-800/reverse');
+});
+
+it('says a set-off can no longer be undone once its 30 seconds pass, and reverses nothing, even with its toast still open', async () => {
+  jest.useFakeTimers({ now: new Date('2026-11-06T06:00:00.000Z'), doNotFake: ['setImmediate', 'nextTick', 'queueMicrotask'] });
+  try {
+    let settled = false;
+    get.mockImplementation(async (url: string) => {
+      if (url === '/pharmacy/purchase-register/position') return { gstin: linae.gstin, name: linae.name, outstanding: settled ? 0 : 1000, creditHeld: 1200, net: -200 };
+      return purchasesResponse({
+        creditHeld: { [linae.gstin]: settled ? 200 : 1200 },
+        rows: [settled ? bill({ payment: { ...bill().payment, state: 'PAID', credit: 1000, outstanding: 0, payable: 0 } }) : bill()],
+      });
+    });
+    post.mockImplementation(async () => {
+      settled = true;
+      return { setOffId: 'so-9', allocations: [], bills: [{ id: 'bill-2', billNo: 'LIN-2', payableAfter: 0 }], credits: [] };
+    });
+    renderBills('');
+    fireEvent.click(await screen.findByRole('button', { name: 'Mark bill LIN-2 paid' }));
+    act(() => jest.advanceTimersByTime(320));
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Set off ₹1,000.00 credit' }));
+    expect(await screen.findByRole('button', { name: 'Undo credit set-off for bill LIN-2' })).toBeInTheDocument();
+    const toast = (await screen.findByText('Set off ₹1,000.00 of credit against bill LIN-2.', { selector: 'div' })).closest('li')!;
+    act(() => within(toast).getByRole('button', { name: 'Undo' }).focus());
+
+    act(() => jest.advanceTimersByTime(30_001));
+    expect(screen.queryByRole('button', { name: 'Undo credit set-off for bill LIN-2' })).not.toBeInTheDocument();
+    fireEvent.click(within(toast).getByRole('button', { name: 'Undo' }));
+    expect(await screen.findByText('Too late to undo this set-off', { selector: 'div' })).toBeInTheDocument();
+    expect(screen.getByText('Undo lasts 30 seconds. You can still reverse it from Payments & dues.', { selector: 'div' })).toBeInTheDocument();
+    expect(post.mock.calls.map(([url]) => url)).toEqual(['/inventory/workspace/credits/set-off']);
+  } finally {
+    jest.useFakeTimers({ now: new Date('2026-11-06T06:00:00.000Z'), doNotFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'setImmediate', 'nextTick', 'queueMicrotask'] });
+  }
+});
+
 it('lists returns as cards on a phone: distributor and amount, then the credit note and return, then the status and its action', async () => {
   const matchMedia = jest.mocked(window.matchMedia);
   const desktop = matchMedia.getMockImplementation();
