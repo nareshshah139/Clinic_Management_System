@@ -1,6 +1,6 @@
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import html2canvas from 'html2canvas';
+import { domToCanvas } from 'modern-screenshot';
 import { apiClient } from '@/lib/api';
 import { DashboardUserProvider } from '@/components/layout/dashboard-user-context';
 import { ReportIssueProvider } from '@/components/issue-report/ReportIssueProvider';
@@ -8,10 +8,10 @@ import { ReportIssueButton } from '@/components/issue-report/ReportIssueButton';
 import type { User } from '@/lib/types';
 
 jest.mock('@/lib/api', () => ({ apiClient: { getIssueReportStatus: jest.fn(), submitIssueReport: jest.fn() } }));
-jest.mock('html2canvas', () => ({ __esModule: true, default: jest.fn() }));
+jest.mock('modern-screenshot', () => ({ domToCanvas: jest.fn() }));
 
 const api = apiClient as jest.Mocked<typeof apiClient>;
-const capture = html2canvas as unknown as jest.Mock;
+const capture = jest.mocked(domToCanvas);
 const shot = new Blob(['png-bytes'], { type: 'image/png' });
 
 beforeAll(() => {
@@ -24,7 +24,10 @@ beforeEach(() => {
   sessionStorage.clear();
   window.history.pushState({}, '', '/dashboard/patients/3f2b1c9e-4d5a-4b6c-8d7e-9f0a1b2c3d4e?tab=visits');
   api.getIssueReportStatus.mockResolvedValue({ enabled: true });
-  capture.mockResolvedValue({ width: 10, height: 10, toBlob: (done: (blob: Blob) => void) => done(shot) });
+  capture.mockImplementation(async (_page, options) => {
+    options?.onCloneNode?.(document.createElement('body'));
+    return { width: 10, height: 10, toBlob: (done: (blob: Blob) => void) => done(shot) } as unknown as HTMLCanvasElement;
+  });
 });
 
 function renderApp() {

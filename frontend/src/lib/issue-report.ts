@@ -1,5 +1,4 @@
 import { API_DIAGNOSTICS_KEY, type ApiDiagnostic } from './api-diagnostics';
-import { normalizePdfColors } from './pdf-export';
 
 export type IssueKind = 'bug' | 'idea' | 'question';
 export type ScreenshotSource = 'capture' | 'upload' | 'paste';
@@ -311,38 +310,45 @@ export async function encodeCanvas(canvas: HTMLCanvasElement, type: string): Pro
 
 const IGNORED_IN_CAPTURE = '[data-radix-popper-content-wrapper], [role="region"][aria-label^="Notifications"]';
 
-let html2canvasModule: Promise<typeof import('html2canvas')> | null = null;
+let screenCaptureModule: Promise<typeof import('modern-screenshot')> | null = null;
 export const preloadScreenCapture = () =>
-  (html2canvasModule ??= import('html2canvas').catch((error) => {
-    html2canvasModule = null;
+  (screenCaptureModule ??= import('modern-screenshot').catch((error) => {
+    screenCaptureModule = null;
     throw error;
   }));
 
 /**
- * html2canvas clones the DOM synchronously inside its first call, so the caller can open the dialog as
- * soon as this resolves and the dialog will not appear in the shot.
+ * @cc [owner:nareshshah139] capture-before-dialog
+ * Resolves only after the page has been copied, so a dialog the caller opens afterwards MUST NOT
+ * appear in the image. Rejects if the page cannot be copied.
+ */
+/**
+ * @cc [owner:nareshshah139] capture-matches-screen
+ * The image is what the browser itself renders for the visible viewport at up to 2x pixel density,
+ * including scrolled panels and closed disclosures, without popovers or notification toasts.
  */
 export async function startViewportCapture(): Promise<{ image: Promise<Blob> }> {
-  const { default: html2canvas } = await preloadScreenCapture();
-  const rendering = html2canvas(document.body, {
-    x: window.scrollX,
-    y: window.scrollY,
+  const { domToCanvas } = await preloadScreenCapture();
+  let markCopied!: () => void;
+  const copied = new Promise<void>((resolve) => {
+    markCopied = resolve;
+  });
+  const rendering = domToCanvas(document.body, {
     width: window.innerWidth,
     height: window.innerHeight,
-    windowWidth: window.innerWidth,
-    windowHeight: window.innerHeight,
     scale: Math.min(window.devicePixelRatio || 1, 2),
-    useCORS: true,
-    logging: false,
-    ignoreElements: (element) => element.matches(IGNORED_IN_CAPTURE),
-    onclone: (clone) => {
-      normalizePdfColors(clone);
-      // html2canvas paints Tailwind's color-mixed shadows as thick grey bars.
-      const flatten = clone.createElement('style');
-      flatten.textContent = '*, *::before, *::after { box-shadow: none !important; }';
-      clone.head.appendChild(flatten);
+    style: { margin: '0' },
+    filter: (node) => !(node instanceof Element && node.matches(IGNORED_IN_CAPTURE)),
+    features: { restoreScrollPosition: true },
+    onCloneNode: (copy) => {
+      // Hinted glyph widths in the rendered SVG overflow the pixel widths copied from the page and wrap text mid-word.
+      const unhinted = document.createElement('style');
+      unhinted.textContent = '* { text-rendering: geometricPrecision !important; }';
+      copy.appendChild(unhinted);
+      markCopied();
     },
   });
+  await Promise.race([copied, rendering]);
   const image = rendering.then((canvas) =>
     encodeCanvas(canvas, 'image/png').finally(() => {
       canvas.width = canvas.height = 0;
