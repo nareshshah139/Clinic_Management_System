@@ -1408,7 +1408,7 @@ export class PrescriptionsService {
     try {
       const items = JSON.parse(prescription.items as any) as any[];
       items.forEach((it, idx) => {
-        const line = `${idx + 1}. ${printedMedicineName(it.drugName)} ${it.dosage || ''} ${it.dosageUnit || ''} — ${it.frequency || ''} x ${it.duration || ''} ${it.durationUnit || ''}`;
+        const line = `${idx + 1}. ${printedMedicineName(it.drugName)} ${it.dosage || ''} ${it.dosageUnit || ''} — ${it.frequency || ''}${it.duration ? ` x ${it.duration} ${it.durationUnit || ''}` : ''}`;
         doc.fontSize(11).text(line);
         if (it.instructions) doc.fontSize(9).fillColor('#444').text(`Notes: ${it.instructions}`).fillColor('#000');
       });
