@@ -698,6 +698,7 @@ for (const signal of ["SIGINT", "SIGTERM"])
       await cleanup();
     } catch (e) {
       result.cleanupError = e.message;
+      console.error(`cleanup: ${e.message}`);
       process.exitCode = 1;
     }
     result.status = process.exitCode
@@ -707,6 +708,8 @@ for (const signal of ["SIGINT", "SIGTERM"])
         : "passed";
     writeResult();
     gallery();
+    for (const row of result.scenarios)
+      console.log(`${row.status.toUpperCase()} ${row.id}${row.error ? `: ${row.error}` : ""}`);
     console.log(`Evidence: ${output}`);
   }
 })();
