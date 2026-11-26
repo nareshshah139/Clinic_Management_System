@@ -311,6 +311,18 @@ export async function encodeCanvas(canvas: HTMLCanvasElement, type: string): Pro
 
 const IGNORED_IN_CAPTURE = '[data-radix-popper-content-wrapper], [role="region"][aria-label^="Notifications"]';
 
+const CAPTURE_CLONE_CSS = [
+  '*, *::before, *::after { box-shadow: none !important; }',
+  'details:not([open]) > :not(summary) { display: none !important; }',
+  'summary { list-style: none !important; }',
+].join('\n');
+
+export function prepareCaptureClone(clone: Document): void {
+  const style = clone.createElement('style');
+  style.textContent = CAPTURE_CLONE_CSS;
+  clone.head.appendChild(style);
+}
+
 let html2canvasModule: Promise<typeof import('html2canvas')> | null = null;
 export const preloadScreenCapture = () =>
   (html2canvasModule ??= import('html2canvas').catch((error) => {
@@ -337,10 +349,7 @@ export async function startViewportCapture(): Promise<{ image: Promise<Blob> }> 
     ignoreElements: (element) => element.matches(IGNORED_IN_CAPTURE),
     onclone: (clone) => {
       normalizePdfColors(clone);
-      // html2canvas paints Tailwind's color-mixed shadows as thick grey bars.
-      const flatten = clone.createElement('style');
-      flatten.textContent = '*, *::before, *::after { box-shadow: none !important; }';
-      clone.head.appendChild(flatten);
+      prepareCaptureClone(clone);
     },
   });
   const image = rendering.then((canvas) =>
