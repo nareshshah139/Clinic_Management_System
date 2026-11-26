@@ -32,12 +32,19 @@ databaseTests('System alert counts over more rows than the list cap on PostgreSQ
     await db.patient.create({ data: { id: 'p', name: 'Synthetic P', gender: 'F', phone: '9000000001', branchId: 'A' } });
     await db.patient.create({ data: { id: 'q', name: 'Synthetic Q', gender: 'M', phone: '9000000002', branchId: 'B' } });
 
-    // Branch A: 12 overdue (plus one paid and one other-branch overdue that must not count).
-    const invoice = (id: string, branchId: string, patientId: string, status: string) =>
-      db.newInvoice.create({ data: { id, invoiceNo: id, patientId, branchId, status, total: 100, balance: 100, dueDate: new Date(Date.now() - DAY) } });
-    for (let i = 0; i < 12; i++) await invoice(`od-${i}`, 'A', 'p', 'OVERDUE');
-    await invoice('paid', 'A', 'p', 'PAID');
-    await invoice('od-b', 'B', 'q', 'OVERDUE');
+    // Bills as the app stores them: only CANCELLED is a stored status, the rest follows from the balance.
+    // Branch A: 12 unpaid past their due date; settled, void, not yet due, undated and other-branch bills must not count.
+    const invoice = (id: string, branchId: string, patientId: string, bill: { balance?: number; status?: string; dueInDays?: number | null } = {}) =>
+      db.newInvoice.create({ data: {
+        id, invoiceNo: id, patientId, branchId, total: 100, balance: bill.balance ?? 100, ...(bill.status ? { status: bill.status } : {}),
+        dueDate: bill.dueInDays === null ? null : new Date(Date.now() + (bill.dueInDays ?? -1) * DAY),
+      } });
+    for (let i = 0; i < 12; i++) await invoice(`od-${i}`, 'A', 'p');
+    await invoice('paid', 'A', 'p', { balance: 0 });
+    await invoice('void', 'A', 'p', { status: 'CANCELLED' });
+    await invoice('not-due', 'A', 'p', { dueInDays: 3 });
+    await invoice('undated', 'A', 'p', { dueInDays: null });
+    await invoice('od-b', 'B', 'q');
     // 12 pending payments on branch A invoices, one on branch B, one already completed.
     for (let i = 0; i < 12; i++) await db.newPayment.create({ data: { invoiceId: `od-${i}`, amount: 10, mode: 'CASH', reconStatus: 'PENDING' } });
     await db.newPayment.create({ data: { invoiceId: 'od-b', amount: 10, mode: 'CASH', reconStatus: 'PENDING' } });
@@ -63,6 +70,7 @@ databaseTests('System alert counts over more rows than the list cap on PostgreSQ
 
     expect(alerts.counts).toMatchObject({ overdueInvoices: 12, expiryAlerts: 12, pendingPayments: 12 });
     expect(alerts.overdueInvoices).toHaveLength(10);
+    expect(alerts.overdueInvoices.map((i: { id: string }) => i.id).filter((id: string) => !/^od-\d+$/.test(id))).toEqual([]);
     expect(alerts.expiryAlerts).toHaveLength(10);
     expect(alerts.pendingPayments).toHaveLength(10);
   });
