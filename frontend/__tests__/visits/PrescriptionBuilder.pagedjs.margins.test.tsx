@@ -965,6 +965,21 @@ it('closes the print preview with Close and offers no toggle that reopens it', a
   }
 });
 
+it('prints a medicine with no duration without a dangling unit in either format', async () => {
+  paginateSourceContent = true;
+  localStorage.setItem('rxDraft:no-duration-patient:standalone', JSON.stringify({ items: [rxDrug('Moisturiser', { duration: '' })] }));
+  render(<PrescriptionBuilder patientId="no-duration-patient" visitId={null} doctorId="doctor" standalone />);
+  await screen.findByDisplayValue('Moisturiser');
+  await openPreview();
+  await settlePreviewPagination();
+  expect(printedRows()).toEqual([['Moisturiser', '1-0-0', '—', '—', '—']]);
+
+  fireEvent.click(screen.getAllByRole('combobox', { name: 'Print format' }).at(-1)!);
+  fireEvent.click(await screen.findByRole('option', { name: 'Text' }));
+  await settlePreviewPagination();
+  await waitFor(() => expect(document.getElementById('pagedjs-container')!.querySelector('.rx-row')).toHaveTextContent(/^1\. Moisturiser 1 tablet — once daily$/));
+});
+
 it('re-paginates the open preview when the print format or a page break changes', async () => {
   paginateSourceContent = true;
   localStorage.setItem('rxDraft:format-patient:standalone', JSON.stringify({ items: [rxDrug('Amoxicillin', { instructions: 'After food' })] }));

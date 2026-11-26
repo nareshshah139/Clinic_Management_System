@@ -33,7 +33,7 @@ Each calendar has its own capacity. A booking or move counts only the appointmen
 | Start visit | `SCHEDULED` or `CONFIRMED` | `IN_PROGRESS` | none, the patient is present | visits |
 | Cancel | not `COMPLETED`, `IN_PROGRESS` or `CANCELLED` | `CANCELLED` | none | `DELETE /appointments/:id` |
 
-A reschedule without `calendar` lands in Scheduled, so a patient moved to another day needs a fresh confirmation call. Bulk updates may not set `SCHEDULED` or `CONFIRMED`, because those moves need the capacity check.
+A reschedule without `calendar` lands in Scheduled, so a patient moved to another day needs a fresh confirmation call. A bulk update checks no capacity, so it refuses any status change that moves an appointment into a calendar it is not in, a cancelled appointment brought back included. Use `PATCH /appointments/:id` for those moves. A change inside one calendar, or to `CANCELLED`, still applies to every selected appointment at once.
 
 ## What the model checks
 

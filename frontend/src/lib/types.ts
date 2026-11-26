@@ -181,6 +181,18 @@ export interface User {
   metadata?: Record<string, any> | null;
 }
 
+/** The clinic details printed on receipts, invoices and reports; one row per branch. */
+export interface ClinicDetails {
+  id: string;
+  name: string;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  pincode?: string | null;
+  phone?: string | null;
+  gstNumber?: string | null;
+}
+
 /** What a user holds now, and what their role grants whatever is unticked. */
 export interface UserPermissions {
   permissions: string[];

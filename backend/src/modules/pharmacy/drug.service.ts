@@ -2,7 +2,7 @@ import { autocompleteDrugCatalog } from '../../shared/search/drug-search';
 import { loadInventoryGstRates } from './pharmacy-inventory-gst';
 import { purchaseCatalogIssues } from './purchase-product-catalog';
 import { writeStockMovement } from '../inventory/inventory-stock';
-import { availableStock, drugStockNames, stockIdentityKey } from './pharmacy-stock-identity';
+import { availableStock, drugStockNames, drugStockPrices, stockIdentityKey } from './pharmacy-stock-identity';
 import { isDeepStrictEqual } from 'node:util';
 import {
   Injectable,
@@ -319,7 +319,8 @@ export class DrugService {
 
       const rates = await loadInventoryGstRates(this.prisma, [drug.id], branchId);
       const stockNames = await drugStockNames(this.prisma, branchId, [drug.id]);
-      return { ...drug, gstRate: rates.get(drug.id) ?? null, stockName: stockNames.get(drug.id) ?? null };
+      const stockPrices = await drugStockPrices(this.prisma, branchId, [drug.id]);
+      return { ...drug, gstRate: rates.get(drug.id) ?? null, stockName: stockNames.get(drug.id) ?? null, stockPrice: stockPrices.get(drug.id) ?? null };
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
@@ -751,9 +752,10 @@ export class DrugService {
   async autocomplete(query: DrugAutocompleteDto, branchId: string) {
     const drugs = await autocompleteDrugCatalog(this.prisma, query, branchId);
     const ids = drugs.map(drug => drug.id);
-    const [gstRates, stockNames, batches] = await Promise.all([
+    const [gstRates, stockNames, stockPrices, batches] = await Promise.all([
       loadInventoryGstRates(this.prisma, ids, branchId),
       drugStockNames(this.prisma, branchId, ids),
+      drugStockPrices(this.prisma, branchId, ids),
       this.prisma.inventoryItem.findMany({
         where: { branchId, status: InventoryStatus.ACTIVE, drugs: { some: { id: { in: ids } } } },
         select: { status: true, currentStock: true, heldStock: true, expiryDate: true, drugs: { select: { id: true } } },
@@ -766,6 +768,7 @@ export class DrugService {
       ...drug,
       gstRate: gstRates.get(drug.id) ?? null,
       stockName: stockNames.get(drug.id) ?? null,
+      stockPrice: stockPrices.get(drug.id) ?? null,
       totalStock: available.get(drug.id) ?? 0,
     }));
   }

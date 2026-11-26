@@ -231,7 +231,7 @@ it('keeps a finished checkout with its own bill and still offers a pending one a
   expect(await screen.findByText('A checkout for Meera Shah needs confirmation. Retry it before starting another sale.')).toBeInTheDocument();
 });
 
-it('keeps a bill discount with the draft, shows it before tax and refuses one larger than the bill', async () => {
+it('keeps a bill discount with the draft, takes it off the MRP total and refuses one larger than the bill', async () => {
   invoice = { ...invoice, billDiscountKind: 'PERCENT', billDiscountValue: 10 };
   open('draft=d-1');
   await lineFor(cream.name);
@@ -239,7 +239,7 @@ it('keeps a bill discount with the draft, shows it before tax and refuses one la
   expect(screen.getByLabelText('Bill discount')).toHaveValue(10);
   expect(screen.getByRole('button', { name: 'Percent' })).toHaveAttribute('aria-pressed', 'true');
   expect(within(summary).getByText('Bill discount (10%):').nextSibling).toHaveTextContent('-₹12.00');
-  expect(within(summary).getByText('Total:').nextSibling).toHaveTextContent('₹119.07');
+  expect(within(summary).getByText('Total:').nextSibling).toHaveTextContent('₹108.00');
   expect(screen.getByText('All changes saved to the draft')).toBeInTheDocument();
 
   fireEvent.click(screen.getByRole('button', { name: 'Rupees' }));
@@ -250,7 +250,7 @@ it('keeps a bill discount with the draft, shows it before tax and refuses one la
   expect(api.updatePharmacyInvoice).not.toHaveBeenCalled();
 
   fireEvent.change(screen.getByLabelText('Bill discount'), { target: { value: '20' } });
-  expect(within(summary).getByText('Total:').nextSibling).toHaveTextContent('₹110.25');
+  expect(within(summary).getByText('Total:').nextSibling).toHaveTextContent('₹100.00');
   api.updatePharmacyInvoice.mockResolvedValueOnce({ id: 'd-1', invoiceNumber: 'DRAFT-1f2e', mutationVersion: 4 } as any);
   fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
   await waitFor(() => expect(api.updatePharmacyInvoice).toHaveBeenCalledWith('d-1', expect.objectContaining({ expectedVersion: 3, billDiscount: { kind: 'AMOUNT', value: 20 } })));

@@ -28,8 +28,12 @@ ASSUME MaxEdits \in Nat \ {0}
 Statuses == {"SCHEDULED", "CONFIRMED", "CHECKED_IN", "IN_PROGRESS", "COMPLETED",
              "CANCELLED", "NO_SHOW"}
 Waiting == {"SCHEDULED", "CONFIRMED"}
-\* bulkUpdate refuses targets that need a capacity check.
-BulkTargets == Statuses \ Waiting
+\* The calendar a status belongs to. CANCELLED belongs to none.
+CalendarOf(s) ==
+  IF s = "SCHEDULED" THEN "Scheduled" ELSE IF s = "CANCELLED" THEN "None" ELSE "Confirmed"
+\* bulkUpdate checks no capacity, so it refuses a row whose new status belongs to a
+\* calendar the row is not in.
+BulkTargets(f) == {t \in Statuses : CalendarOf(t) = "None" \/ CalendarOf(t) = CalendarOf(f)}
 \* The appointment statuses a check-in may start from in the fixed protocol.
 CheckInFrom == {"SCHEDULED", "CONFIRMED", "NO_SHOW"}
 \* The statuses only the visit writes: starting it and completing it.
@@ -167,7 +171,7 @@ DeskSetsStatus ==
 \* appointments.service.ts bulkUpdate. ADMIN only, no screen sends it. In
 \* "code" it compare-and-sets each row on the status it read.
 AdminBulkSets ==
-  \E t \in BulkTargets :
+  \E t \in BulkTargets(appt) :
     /\ ApiReachable
     /\ t # appt
     /\ BulkAllows(appt, t)

@@ -8,6 +8,7 @@ it('reprints an old prescription without catalogue codes or pack sizes and keeps
       { drugName: '13 74 | Flutas 150Mg(Pc)', dosage: 1, dosageUnit: 'TABLET', frequency: 'ONCE_WEEKLY', duration: 4, durationUnit: 'WEEKS' },
       { drugName: '1 Antoxid-Hc Capsules 30S (loose capsules)', dosage: 1, dosageUnit: 'CAPSULE', frequency: 'ONCE_DAILY', duration: 30, durationUnit: 'DAYS' },
       { drugName: 'Syp. Teczine 2.5mg/5ml', dosage: 5, dosageUnit: 'ML', frequency: 'ONCE_DAILY', duration: 5, durationUnit: 'DAYS' },
+      { drugName: 'Moisturiser', dosage: 1, dosageUnit: 'TABLET', frequency: 'ONCE_DAILY', durationUnit: 'DAYS' },
     ]),
     visit: { consultationType: 'IN_PERSON', createdAt: new Date('2026-09-27'), patient: { name: 'Synthetic Patient' }, doctor: { firstName: 'Test', lastName: 'Doctor' } },
   };
@@ -19,6 +20,7 @@ it('reprints an old prescription without catalogue codes or pack sizes and keeps
     '1. Flutas 150Mg 1 TABLET — ONCE_WEEKLY x 4 WEEKS',
     '2. Antoxid-Hc Capsules 1 CAPSULE — ONCE_DAILY x 30 DAYS',
     '3. Syp. Teczine 2.5mg/5ml 5 ML — ONCE_DAILY x 5 DAYS',
+    '4. Moisturiser 1 TABLET — ONCE_DAILY',
   ]);
   expect(text).not.toContain('13 74');
   expect(text).not.toContain('30S');
