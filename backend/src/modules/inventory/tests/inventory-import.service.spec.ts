@@ -73,6 +73,23 @@ describe('Pharmacy stock export compatibility', () => {
     },
   );
 
+  it.each([
+    ['10 tablets', 10],
+    ['Strip of 10', 10],
+    ['1x10 tablets', 10],
+    ['1 x 10 Tablets', 10],
+    ['1×15 capsules', 15],
+  ])('reads the pack size %s as %i tablets on a strip', async (packSize, tablets) => {
+    const service = new InventoryImportService({} as any);
+    const result = await service.previewStarterExcel(
+      file([
+        ['Drug name', 'Pack Size', 'Current Stock(Loose)'],
+        ['Tab. Example', packSize, 20],
+      ]),
+    );
+    expect(result.rows[0]).toMatchObject({ unit: 'STRIPS', packSize: tablets });
+  });
+
   it('does not guess that an arbitrary unnamed column contains medicine names', async () => {
     const service = new InventoryImportService({} as any);
     const result = await service.previewStarterExcel(
