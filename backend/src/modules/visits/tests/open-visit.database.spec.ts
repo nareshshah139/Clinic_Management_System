@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { ConflictException, Logger } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import { localDatabase } from '../../../shared/testing/local-database';
 import { PrismaService } from '../../../shared/database/prisma.service';
@@ -42,7 +42,6 @@ databaseTests('A consultation the doctor started is never lost or doubled', () =
     visits.create({ patientId, doctorId: who, complaints: [], ...extra } as any, branchId);
   const openVisit = (who = doctorId) => visits.findOpenVisit(patientId, who, branchId);
   const visitCount = () => prisma.visit.count({ where: { patientId } });
-  const refusal = async (call: Promise<unknown>) => call.then(() => undefined, (error) => error);
 
   it('finds the visit the doctor already started for this patient', async () => {
     const started = await start({ complaints: [{ complaint: 'Itchy rash' }] });
@@ -53,30 +52,9 @@ databaseTests('A consultation the doctor started is never lost or doubled', () =
     expect(await openVisit()).toBeNull();
   });
 
-  it('refuses a second visit for the same patient and doctor and names the open one', async () => {
-    const started = await start();
-    const error = await refusal(start());
-    expect(error).toBeInstanceOf(ConflictException);
-    expect((error as ConflictException).getResponse()).toMatchObject({ visitId: started.id });
-    expect(await visitCount()).toBe(1);
-  });
-
-  it('creates one visit when two first saves arrive together', async () => {
-    const outcomes = await Promise.allSettled([start(), start(), start()]);
-    expect(outcomes.filter((outcome) => outcome.status === 'fulfilled')).toHaveLength(1);
-    expect(await visitCount()).toBe(1);
-  });
-
-  it('starts a second visit when the clinic asks for a separate one', async () => {
-    const first = await start();
-    const second = await start({ startSeparate: true });
-    expect(second.id).not.toBe(first.id);
-    expect(await visitCount()).toBe(2);
-  });
-
   it('resumes the visit that was worked on last when two are open', async () => {
     const first = await start();
-    const second = await start({ startSeparate: true });
+    const second = await start();
     expect((await openVisit())?.id).toBe(second.id);
     await prisma.visit.update({ where: { id: first.id }, data: { complaints: JSON.stringify([{ complaint: 'Added later' }]) } });
     expect((await openVisit())?.id).toBe(first.id);

@@ -22,11 +22,11 @@ jest.mock('@/lib/api', () => ({
 
 // Mock the MedicalVisitForm component to avoid complex rendering
 jest.mock('@/components/visits/MedicalVisitForm', () => {
-  return function MockMedicalVisitForm({ patientId, doctorId, identity, doctorControl, initialVisitId, startSeparate, appointmentId }: { patientId: string; doctorId: string; identity?: React.ReactNode; doctorControl?: React.ReactNode; initialVisitId?: string; startSeparate?: boolean; appointmentId?: string }) {
+  return function MockMedicalVisitForm({ patientId, doctorId, identity, doctorControl, initialVisitId, appointmentId }: { patientId: string; doctorId: string; identity?: React.ReactNode; doctorControl?: React.ReactNode; initialVisitId?: string; appointmentId?: string }) {
     return (
       <div>
         <div data-testid="medical-visit-form">
-          Medical Visit Form - Patient: {patientId}, Doctor: {doctorId}, Visit: {initialVisitId ?? 'new'}{startSeparate ? ', separate' : ''}, Appointment: {appointmentId ?? 'none'}
+          Medical Visit Form - Patient: {patientId}, Doctor: {doctorId}, Visit: {initialVisitId ?? 'new'}, Appointment: {appointmentId ?? 'none'}
         </div>
         {identity}
         {doctorControl}
@@ -229,7 +229,7 @@ describe('VisitsPage', () => {
       spy.mockRestore();
     });
 
-    it('starts a separate visit only when the doctor asks for one', async () => {
+    it('opens a blank form only when the doctor asks for a separate visit', async () => {
       const spy = signInAs({ id: DOCTOR, role: 'DOCTOR' });
       jest.mocked(apiClient.getOpenVisit).mockResolvedValue({ visit: openVisit });
       render(<VisitsPage />, { wrapper: LayoutSession });
@@ -237,7 +237,7 @@ describe('VisitsPage', () => {
       fireEvent.click(await screen.findByRole('button', { name: 'Start Visit Documentation' }));
       await form();
       fireEvent.click(screen.getByRole('button', { name: 'Start a separate visit' }));
-      await waitFor(() => expect(screen.getByTestId('medical-visit-form')).toHaveTextContent('Visit: new, separate'));
+      await waitFor(() => expect(screen.getByTestId('medical-visit-form')).toHaveTextContent('Visit: new, Appointment: none'));
       expect(screen.queryByText(/Resumed the visit/)).not.toBeInTheDocument();
       spy.mockRestore();
     });

@@ -50,24 +50,3 @@ it('creates the visit again on the next save when the first attempt failed', asy
   await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save Draft' })); });
   expect(apiClient.createVisit).toHaveBeenCalledTimes(2);
 });
-
-it('asks the server for a separate visit only when the clinic chose one', async () => {
-  (apiClient.createVisit as jest.Mock).mockResolvedValue(created);
-  await openBlankForm({ startSeparate: true });
-  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save Draft' })); });
-  expect(apiClient.createVisit).toHaveBeenCalledWith(expect.objectContaining({ startSeparate: true }), expect.anything());
-  await act(async () => { await prescriptionNeedsVisit(); });
-  expect(apiClient.createVisit).toHaveBeenCalledTimes(1);
-});
-
-it.each([
-  ['Save Draft', async () => { await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save Draft' })); }); }],
-  ['a prescription', async () => { await act(async () => { await prescriptionNeedsVisit(); }); }],
-  ['a photo', async () => { await act(async () => { await photosNeedVisit(); }); }],
-])('does not ask for a separate visit through %s by default', async (_name, act_) => {
-  (apiClient.createVisit as jest.Mock).mockResolvedValue(created);
-  await openBlankForm();
-  await act_();
-  expect(apiClient.createVisit).toHaveBeenCalledTimes(1);
-  expect((apiClient.createVisit as jest.Mock).mock.calls[0][0]).not.toHaveProperty('startSeparate');
-});

@@ -224,10 +224,6 @@ export class CreateVisitDto {
   appointmentId?: string;
 
   @IsOptional()
-  @IsBoolean()
-  startSeparate?: boolean;
-
-  @IsOptional()
   @ValidateNested()
   @Type(() => VitalsDto)
   vitals?: VitalsDto;
