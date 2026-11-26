@@ -669,23 +669,17 @@ export class AppointmentsService {
       if (updateData.status) {
         for (const appointment of appointments) assertStatusEdit(appointment.status, updateData.status);
       }
-      const entering = target ? appointments.filter(({ status }) => calendarOf(status) !== target) : [];
-      await this.lockSchedules(tx, branchId, entering.map(({ doctorId, roomId, date }) => ({ doctorId, roomId, date: date.toISOString().slice(0, 10) })));
-      for (const appointment of appointments) {
-        const { id, status, doctorId, roomId, date, slot } = appointment;
-        if (target && entering.includes(appointment)) {
-          await this.assertSlotBookable(tx, 'Scheduling conflict detected', doctorId, roomId, date.toISOString().slice(0, 10), slot, branchId, {
-            excludeAppointmentId: id,
-            calendar: target,
-          });
-        }
-        const changed = await tx.appointment.updateMany({
-          where: { id, branchId, status, doctorId, date, slot, roomId },
-          data: updateData,
-        });
-        if (changed.count !== 1) throw new ConflictException('Appointments changed; refresh and try again');
+      if (target && appointments.some(({ status }) => calendarOf(status) !== target)) {
+        throw new BadRequestException('Moving appointments into a calendar needs a capacity check; change them one at a time');
       }
-      return { updated: appointments.length, appointmentIds };
+      const result = await tx.appointment.updateMany({
+        where: { branchId, OR: appointments.map(({ id, status }) => ({ id, status })) },
+        data: updateData,
+      });
+      if (result.count !== appointments.length) {
+        throw new ConflictException('Appointments changed; refresh and try again');
+      }
+      return { updated: result.count, appointmentIds };
     });
   }
 
@@ -1370,22 +1364,14 @@ export class AppointmentsService {
    */
   /**
    * @cc [owner:nareshshah139,label:product] no-concurrent-double-booking
-   * Booking, rescheduling, and scheduling edits, bulk status changes included, MUST check doctor and room conflicts
-   * in the target calendar inside the write transaction while holding the doctor-day lock (and the room-day lock when
-   * a room is set), so two concurrent requests can never both take overlapping slots. Locks are taken doctor first,
-   * then room, so lock order is fixed. A request that locks several appointments takes every doctor lock, then every
-   * room lock, each in sorted order.
+   * Booking, rescheduling, and scheduling edits MUST check doctor and room conflicts in the target calendar
+   * inside the write transaction while holding the doctor-day lock (and the room-day lock when a room is set), so two
+   * concurrent requests can never both take overlapping slots. Locks are taken doctor first,
+   * then room, so lock order is fixed.
    */
-  private lockSchedule(tx: Prisma.TransactionClient, branchId: string, doctorId: string, roomId: string | null, date: string) {
-    return this.lockSchedules(tx, branchId, [{ doctorId, roomId, date }]);
-  }
-
-  private async lockSchedules(tx: Prisma.TransactionClient, branchId: string, days: { doctorId: string; roomId: string | null; date: string }[]) {
-    const doctorKeys = new Set(days.map(({ doctorId, date }) => `appointment-token:${branchId}:${doctorId}:${date}`));
-    const roomKeys = new Set(days.flatMap(({ roomId, date }) => (roomId ? [`appointment-room:${branchId}:${roomId}:${date}`] : [])));
-    for (const key of [...[...doctorKeys].sort(), ...[...roomKeys].sort()]) {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${key}))`;
-    }
+  private async lockSchedule(tx: Prisma.TransactionClient, branchId: string, doctorId: string, roomId: string | null, date: string) {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`appointment-token:${branchId}:${doctorId}:${date}`}))`;
+    if (roomId) await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`appointment-room:${branchId}:${roomId}:${date}`}))`;
   }
 
   /**
