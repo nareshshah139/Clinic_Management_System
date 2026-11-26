@@ -207,6 +207,32 @@ describe('resolveVoiceCommand', () => {
       notes: undefined,
     });
   });
+
+  it('asks for the phone match, doctors and free slots while the name search is still out', async () => {
+    let answerNameSearch!: (patients: PatientOption[]) => void;
+    const asked: string[] = [];
+    const source: VoiceCommandSource = {
+      searchPatients: (term) => {
+        asked.push(`patients:${term}`);
+        return term === 'ramesh kumar' ? new Promise((resolve) => { answerNameSearch = resolve; }) : Promise.resolve([]);
+      },
+      doctors: async () => { asked.push('doctors'); return [shravya, anil]; },
+      availableSlots: async (doctorId, day) => { asked.push(`slots:${doctorId}:${day}`); return ['16:00-16:30']; },
+      appointments: async () => [],
+    };
+    const planned = resolveVoiceCommand(
+      { action: 'schedule_appointment', patientName: 'Ramesh Kumar', patientPhone: '+919848022338', doctorName: 'Shravya', date: '2026-11-16', time: '16:00' },
+      {}, { role: 'RECEPTION', now }, source,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(asked).toEqual(['patients:ramesh kumar', 'patients:9848022338', 'doctors', 'slots:d1:2026-11-16']);
+    answerNameSearch([ramesh]);
+    expect(await planned).toMatchObject({
+      patient: { kind: 'resolved', value: ramesh },
+      doctor: { kind: 'resolved', value: shravya },
+      slot: { kind: 'resolved', value: '16:00-16:30' },
+    });
+  });
 });
 
 describe('dayWithDate', () => {
