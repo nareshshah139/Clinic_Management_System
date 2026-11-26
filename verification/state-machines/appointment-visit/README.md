@@ -55,7 +55,7 @@ The `uiOnly` mode is `before` restricted to writes a screen sends. It drops the 
 | Guard | Code it would change | Negative control | Breaks |
 | --- | --- | --- | --- |
 | While a live visit exists, a status edit may not change the appointment. The visit owns the status. | `update`, before `updateMany` at `appointments.service.ts:509` | `patchIgnoresVisit` | `StatusesAgree`, `NoResurrection`, `DisagreementHeals` |
-| The same for the bulk update. | `bulkUpdate` at `appointments.service.ts:658` | `bulkIgnoresVisit` | `StatusesAgree`, `NoResurrection`, `DisagreementHeals` |
+| The same for the bulk update. | `bulkUpdate` at `appointments.service.ts:618` | `bulkIgnoresVisit` | `StatusesAgree`, `NoResurrection`, `DisagreementHeals` |
 | A patient is checked in only from `SCHEDULED`, `CONFIRMED` or `NO_SHOW`. | `update` | `checkInFromAnyStatus` | `NoResurrection` |
 | An edit to a completed visit writes clinical columns only, never the visit status or the appointment. | `visits.service.ts` `update` at line 475 | `editReopens`, an edit to a completed visit that reopens the visit and its appointment | `EditKeepsCompletion` |
 
@@ -77,7 +77,7 @@ Paths are under `backend/src/modules/` unless they start with `frontend/`.
 | `DeskPlansCheckIn` | `frontend/src/lib/voice-command.ts:292`, the `WAITING` filter in `matchAppointment` |
 | `DeskConfirmsCheckIn` | `frontend/src/components/voice/VoiceCommandDialog.tsx:209` sends `PATCH /appointments/:id` with `status: CHECKED_IN`, served by `appointments/appointments.service.ts:478` `update` |
 | `DeskSetsStatus` | `appointments/appointments.service.ts:478` `update`. Re-read and compare at line 515, `assertStatusEdit` at line 518, capacity check only when the calendar changes at line 519, compare-and-set on the status read at line 532. Roles ADMIN, DOCTOR, NURSE, RECEPTION. |
-| `AdminBulkSets` | `appointments/appointments.service.ts:658` `bulkUpdate`. `assertStatusEdit` on every row at line 670, then for each row the capacity check when it enters a calendar and an `updateMany` that compare-and-sets it on the status it read at line 686, in a transaction that rolls back unless every row matched. ADMIN only. |
+| `AdminBulkSets` | `appointments/appointments.service.ts:658` `bulkUpdate`. `assertStatusEdit` on every row at line 670, refuse a row whose new status belongs to a calendar it is not in at line 672, then one `updateMany` that compare-and-sets each row on the status it read at line 675, in a transaction that rolls back unless every row matched. ADMIN only. |
 | `CodeAllows` | `appointments/appointments.service.ts:81` `assertStatusEdit` |
 | `PatchAllows`, `BulkAllows` | `before` accepts every jump. `code` is `CodeAllows`. `fixed` and its controls use the visit guard. |
 | `Reopens` | Only the `editReopens` control. No code reopens a visit. |
@@ -92,7 +92,7 @@ Paths are under `backend/src/modules/` unless they start with `frontend/`.
 | A status edit never changes an appointment that is `IN_PROGRESS` or `COMPLETED`. | `backend/src/modules/appointments/appointments.service.ts:83` | `StatusesAgree`, `NoResurrection`, `DisagreementHeals` |
 | A check-in starts only from `SCHEDULED`, `CONFIRMED` or `NO_SHOW`. | `backend/src/modules/appointments/appointments.service.ts:89` | `NoResurrection` |
 | `update` runs these on the status it re-read in the transaction. | `backend/src/modules/appointments/appointments.service.ts:518` | all three above |
-| `bulkUpdate` runs them on every row and compare-and-sets each row on the status it read. | `backend/src/modules/appointments/appointments.service.ts:670` and `:686` | all three above |
+| `bulkUpdate` runs them on every row and compare-and-sets each row on the status it read. | `backend/src/modules/appointments/appointments.service.ts:636` and `:639` | all three above |
 | An edit to a completed visit writes clinical columns and `version` only, so the visit stays `COMPLETED` with its `completedAt` and the appointment is not written. Prescription saves that carry clinical fields go through the same `update`. | `backend/src/modules/visits/visits.service.ts:532` | `EditKeepsCompletion` |
 
 The status guard also refuses a status edit on an `IN_PROGRESS` or `COMPLETED` appointment that has no visit, which only rows from before the fix can be. It is a product choice: a paper visit is no longer recorded by marking the appointment completed.
