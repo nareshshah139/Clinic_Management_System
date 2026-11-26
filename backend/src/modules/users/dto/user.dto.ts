@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsEmail, IsEnum, IsBoolean, IsUUID, IsArray, IsDateString, MinLength, MaxLength, IsByteLength } from 'class-validator';
+import { IsString, IsOptional, IsEmail, IsEnum, IsBoolean, IsArray, IsDateString, MinLength, MaxLength, IsByteLength } from 'class-validator';
 import { BCRYPT_MAX_BYTES, PASSWORD_BYTES } from '../../auth/dto/password-reset.dto';
 import { UserRole, UserStatus } from '@prisma/client';
 
@@ -54,9 +54,6 @@ export class CreateUserDto {
   @IsOptional()
   status?: UserStatus;
 
-  @IsUUID()
-  @IsOptional()
-  branchId?: string;
 
   @IsString()
   @IsOptional()

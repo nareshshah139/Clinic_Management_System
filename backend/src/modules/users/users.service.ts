@@ -103,7 +103,7 @@ export class UsersService {
       const existingEmployee = await this.prisma.user.findFirst({
         where: { 
           employeeId: createUserDto.employeeId,
-          branchId: createUserDto.branchId || branchId,
+          branchId,
         },
       });
 
@@ -120,7 +120,7 @@ export class UsersService {
       data: {
         ...createUserDto,
         password: hashedPassword,
-        branchId: createUserDto.branchId || branchId,
+        branchId,
         ...statusColumns(createUserDto.status ?? UserStatus.ACTIVE),
         ...(createUserDto.permissions
           ? await this.permissionColumns(createUserDto.role, createUserDto.permissions)
