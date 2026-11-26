@@ -22,11 +22,11 @@ jest.mock('@/lib/api', () => ({
 
 // Mock the MedicalVisitForm component to avoid complex rendering
 jest.mock('@/components/visits/MedicalVisitForm', () => {
-  return function MockMedicalVisitForm({ patientId, doctorId, identity, doctorControl, initialVisitId, startSeparate }: { patientId: string; doctorId: string; identity?: React.ReactNode; doctorControl?: React.ReactNode; initialVisitId?: string; startSeparate?: boolean }) {
+  return function MockMedicalVisitForm({ patientId, doctorId, identity, doctorControl, initialVisitId, startSeparate, appointmentId }: { patientId: string; doctorId: string; identity?: React.ReactNode; doctorControl?: React.ReactNode; initialVisitId?: string; startSeparate?: boolean; appointmentId?: string }) {
     return (
       <div>
         <div data-testid="medical-visit-form">
-          Medical Visit Form - Patient: {patientId}, Doctor: {doctorId}, Visit: {initialVisitId ?? 'new'}{startSeparate ? ', separate' : ''}
+          Medical Visit Form - Patient: {patientId}, Doctor: {doctorId}, Visit: {initialVisitId ?? 'new'}{startSeparate ? ', separate' : ''}, Appointment: {appointmentId ?? 'none'}
         </div>
         {identity}
         {doctorControl}
@@ -292,6 +292,27 @@ describe('VisitsPage', () => {
       expect(await screen.findByText(/Could not check for an open visit/)).toBeInTheDocument();
       expect(screen.queryByTestId('medical-visit-form')).not.toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Start Visit Documentation' })).toBeEnabled();
+      spy.mockRestore();
+    });
+
+    it.each([
+      ['an appointment link', 'patientId=patient-123&appointmentId=appt-1&autoStart=true', 'Visit: new, Appointment: appt-1'],
+      ['a visit link', 'patientId=patient-123&visitId=visit-other', 'Visit: visit-other, Appointment: none'],
+    ])('opens what %s names, not the resumed walk-in, when followed for the same patient and doctor', async (_name, query, expected) => {
+      const spy = signInAs({ id: DOCTOR, role: 'DOCTOR' }, 'patientId=patient-123&autoStart=true');
+      jest.mocked(apiClient.getOpenVisit).mockResolvedValue({ visit: openVisit });
+      jest.mocked(apiClient.getAppointment).mockResolvedValue({ id: 'appt-1', patientId: 'patient-123', doctorId: DOCTOR } as any);
+      const inner = jest.mocked(apiClient.get).getMockImplementation()!;
+      jest.mocked(apiClient.get).mockImplementation(async (path: string, params?: any) => {
+        if (path === '/visits/visit-other') return { id: 'visit-other', patient: { id: 'patient-123' }, doctor: { id: DOCTOR } } as any;
+        return inner(path, params);
+      });
+      const view = render(<VisitsPage />, { wrapper: LayoutSession });
+      expect(await form()).toHaveTextContent('Visit: visit-open');
+      spy.mockReturnValue(new URLSearchParams(query) as any);
+      view.rerender(<VisitsPage />);
+      await waitFor(() => expect(screen.getByTestId('medical-visit-form')).toHaveTextContent(expected));
+      expect(screen.queryByText(/Resumed the visit/)).not.toBeInTheDocument();
       spy.mockRestore();
     });
 

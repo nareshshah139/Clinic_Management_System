@@ -143,6 +143,63 @@ databaseTests('A consultation the doctor started is never lost or doubled', () =
     expect(fromAppointment.id).not.toBe(walkIn.id);
   });
 
+  const procedureRecord = (extra: Record<string, unknown> = {}) =>
+    start({
+      complaints: [],
+      treatmentPlan: { dermatology: { procedures: [{ machine: 'Diode laser', type: 'Hair removal', sessionNo: 1 }] }, notes: 'Session 1' },
+      ...extra,
+    });
+  const prescriptionPadVisit = () =>
+    prisma.visit.create({
+      data: {
+        patientId,
+        doctorId,
+        complaints: JSON.stringify([{ complaint: 'Prescription issued without full visit', source: 'PRESCRIPTION_PAD' }]),
+        plan: JSON.stringify({ prescriptionOnly: true, metadata: { createdVia: 'PRESCRIPTION_PAD' } }),
+        scribeJson: JSON.stringify({ createdVia: 'PRESCRIPTION_PAD' }),
+      },
+    });
+
+  it('does not offer a procedure record as the open consultation', async () => {
+    await procedureRecord();
+    expect(await openVisit()).toBeNull();
+  });
+
+  it('starts a consultation of its own after a procedure was recorded', async () => {
+    const procedure = await procedureRecord();
+    const consultation = await start({ complaints: [{ complaint: 'Itchy rash' }] });
+    expect(consultation.id).not.toBe(procedure.id);
+    expect((await openVisit())?.id).toBe(consultation.id);
+  });
+
+  it('offers the consultation, not the procedure record recorded after it', async () => {
+    const consultation = await start({ complaints: [{ complaint: 'Itchy rash' }] });
+    await procedureRecord();
+    expect((await openVisit())?.id).toBe(consultation.id);
+  });
+
+  it('does not offer a prescription-pad visit as the open consultation', async () => {
+    await prescriptionPadVisit();
+    expect(await openVisit()).toBeNull();
+    const consultation = await start();
+    expect((await openVisit())?.id).toBe(consultation.id);
+  });
+
+  it('records a procedure and then its next session while a consultation is open', async () => {
+    await start({ complaints: [{ complaint: 'Itchy rash' }] });
+    const first = await procedureRecord();
+    const next = await procedureRecord({ treatmentPlan: { dermatology: { procedures: [{ machine: 'Diode laser', type: 'Hair removal', sessionNo: 2 }] } } });
+    expect(next.id).not.toBe(first.id);
+    expect(await visitCount()).toBe(3);
+  });
+
+  it('creates a visit even though another is open, exactly as before', async () => {
+    const first = await start();
+    const second = await start();
+    expect(second.id).not.toBe(first.id);
+    expect(await visitCount()).toBe(2);
+  });
+
   it("keeps another patient's visits out of the answer", async () => {
     await start();
     const other = (await prisma.patient.create({ data: { branchId, name: 'Other Patient', phone: '1111111111', gender: 'MALE' } })).id;
