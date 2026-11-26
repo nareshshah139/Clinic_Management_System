@@ -992,20 +992,41 @@ describe('PharmacyPurchaseInvoiceService', () => {
     }));
   });
 
-  it.each([
-    ['10', 10],
-    ["10'S", 10],
-    ['30S', 30],
-    ['10 tablets', 10],
-    ['Strip of 10', 10],
-    ['1x10', 10],
-    ['1×10', 10],
-    ['1 X 10', 10],
-    ['1*15', 15],
-    ['2x10', 20],
-  ])('stores the tablets on one strip of pack %s as %i', async (packSize, tablets) => {
+  const U = undefined;
+  type PackRow = [label: string, strip: number | undefined, box: number | undefined, tablet: number | undefined, tube: number | undefined, bottle: number | undefined];
+  const packSizeMatrix: PackRow[] = [
+    ['10', 10, 10, 10, 10, 10],
+    ['30S', 30, 30, 30, 30, 30],
+    ['1x10', 10, 10, 1, 1, 1],
+    ['1*10', 10, 10, 1, 1, 1],
+    ['1 x 10', 10, 10, 1, 1, 1],
+    ['1×10', 10, 10, 1, 1, 1],
+    ['1x10 tablets', 10, 10, 1, 1, 1],
+    ['1X15', 15, 15, 1, 1, 1],
+    ['2x10', 10, 20, 2, 2, 2],
+    ['3x10x1', U, U, 3, 3, 3],
+    ['10x1', U, 10, 10, 10, 10],
+    ['10x10', 10, 100, 10, 10, 10],
+    ['1x1', 1, 1, 1, 1, 1],
+    ["10's", 10, 10, 10, 10, 10],
+    ['Strip of 10', 10, 10, 10, 10, 10],
+    ['10 tablets', 10, 10, 10, 10, 10],
+    ['100ml', 100, 100, 100, 100, 100],
+    ['15gm', 15, 15, 15, 15, 15],
+    ['60 caps', 60, 60, 60, 60, 60],
+    ['1x15gm', U, U, 1, 1, 1],
+    ['1x100ml', U, U, 1, 1, 1],
+    ['5x2ml', U, U, 5, 5, 5],
+  ];
+  const stockUnits = [['Strip', 'STRIPS'], ['Box', 'BOXES'], ['Tablet', 'PIECES'], ['Tube', 'TUBES'], ['Bottle', 'BOTTLES']] as const;
+
+  it.each(
+    packSizeMatrix.flatMap(([label, ...counts]) =>
+      stockUnits.map(([declared, unit], index) => [label, declared, unit, counts[index]] as const),
+    ),
+  )('stores pack %s received as a %s (%s) with %s units per stock unit', async (packSize, packUnitType, unit, units) => {
     const invoice = reviewedInvoice();
-    Object.assign(invoice.items[0], { packUnitType: 'Strip', packSize });
+    Object.assign(invoice.items[0], { packUnitType, packSize });
     prisma.pharmacyPurchaseInvoice.findFirst
       .mockResolvedValueOnce(invoice)
       .mockResolvedValueOnce({ ...invoice, status: 'STOCK_COMMITTED' });
@@ -1016,9 +1037,8 @@ describe('PharmacyPurchaseInvoiceService', () => {
 
     await service.commitStock('purchase-1', branchId, userId);
 
-    expect(prisma.inventoryItem.create).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ unit: 'STRIPS', packSize: tablets }),
-    }));
+    const { data } = prisma.inventoryItem.create.mock.calls[0][0];
+    expect({ unit: data.unit, packSize: data.packSize }).toEqual({ unit, packSize: units });
   });
 
   it('rejects a historical batch with a different declared unit instead of relabelling or adding stock', async () => {
