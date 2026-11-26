@@ -2064,7 +2064,7 @@ export function PharmacyInvoiceBuilderFixed({
                   {substitutingItemId && (
                     <div role="status" className="flex items-center justify-between gap-2 rounded-md border border-info-border bg-info-soft px-3 py-2 text-sm text-info-text">
                       <span>Choose a replacement for {billLineName(items.find(item => item.id === substitutingItemId) ?? {})}. The prescribed quantity will be kept.</span>
-                      <Button variant="ghost" size="sm" onClick={() => setSubstitutingItemId(null)}>Cancel substitution</Button>
+                      <Button variant="ghost" size="sm" className="shrink-0" onClick={() => setSubstitutingItemId(null)}>Cancel substitution</Button>
                     </div>
                   )}
                   <Label htmlFor="drugSearch" className="sr-only">Search Drugs</Label>
