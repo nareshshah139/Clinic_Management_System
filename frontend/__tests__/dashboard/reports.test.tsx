@@ -3,6 +3,15 @@ import userEvent from '@testing-library/user-event';
 import ReportsPage from '@/app/dashboard/reports/page';
 import { apiClient } from '@/lib/api';
 import { REPORT_EXPORT_TYPE } from '@/lib/reports-model';
+import { DashboardUserProvider } from '@/components/layout/dashboard-user-context';
+import type { User } from '@/lib/types';
+
+const renderReports = (role = 'OWNER') =>
+  render(
+    <DashboardUserProvider value={{ user: { id: 'me', role } as unknown as User, loading: false, refresh: jest.fn(), logout: jest.fn() }}>
+      <ReportsPage />
+    </DashboardUserProvider>,
+  );
 
 const toast = jest.fn();
 jest.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast }) }));
@@ -80,7 +89,7 @@ describe('report export', () => {
   it('exports the Patients tab as PATIENT for the applied dates and can pick CSV repeatedly', async () => {
     mockSearch = 'tab=patients&from=2026-04-01&to=2026-04-30';
     const user = userEvent.setup();
-    render(<ReportsPage />);
+    renderReports();
     await screen.findByText('Total Patients');
     for (let i = 0; i < 2; i++) {
       await user.click(within(panel()).getByRole('button', { name: 'Export report' }));
@@ -95,7 +104,7 @@ describe('report export', () => {
   it('shows a message when the export fails', async () => {
     api.post.mockRejectedValue(new Error('Boom'));
     const user = userEvent.setup();
-    render(<ReportsPage />);
+    renderReports();
     await user.click(within(panel()).getByRole('button', { name: 'Export report' }));
     await user.click(await screen.findByRole('menuitem', { name: 'PDF' }));
     await waitFor(() => expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Could not export the report', description: 'Boom' })));
@@ -106,14 +115,14 @@ describe('patient average age', () => {
   it('shows the average the server measured from each patient, rounded to a year', async () => {
     mockSearch = 'tab=patients';
     api.getPatientReport.mockResolvedValue({ totalPatients: 20, newPatients: 2, returningPatients: 3, averageAge: 41.9, ageGroupBreakdown: [] });
-    render(<ReportsPage />);
+    renderReports();
     const tile = (await screen.findByText('Avg Age')).parentElement!.parentElement!;
     expect(tile).toHaveTextContent('Avg Age42');
   });
 
   it('shows a dash, never NaN, when no patient has an age', async () => {
     mockSearch = 'tab=patients';
-    render(<ReportsPage />);
+    renderReports();
     const tile = (await screen.findByText('Avg Age')).parentElement!.parentElement!;
     expect(tile).toHaveTextContent('Avg Age—');
     expect(screen.queryByText(/NaN/)).not.toBeInTheDocument();
@@ -124,7 +133,7 @@ describe('dates', () => {
   it('opens the report and dates named in the address bar', async () => {
     mockSearch = 'tab=payments&from=2026-04-01&to=2026-04-30';
     getMock({ '/reports/alerts': noAlerts, '/reports/payments': { totalPayments: 3, totalAmount: 900, successfulPayments: 3, failedPayments: 0, successRate: 100 } });
-    render(<ReportsPage />);
+    renderReports();
 
     expect(await screen.findByText('Total Payments')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Payments' })).toHaveAttribute('aria-selected', 'true');
@@ -134,7 +143,7 @@ describe('dates', () => {
 
   it('falls back to the last 30 days when the address bar dates are impossible', async () => {
     mockSearch = 'from=2026-11-30&to=2026-11-01';
-    render(<ReportsPage />);
+    renderReports();
 
     await screen.findByText('Total Revenue');
     expect(api.getRevenueReport).toHaveBeenCalledWith(expect.objectContaining({ startDate: '2026-10-13', endDate: '2026-11-12' }));
@@ -142,7 +151,7 @@ describe('dates', () => {
 
   it('applies a period at once and keeps it in the address bar', async () => {
     const user = userEvent.setup();
-    render(<ReportsPage />);
+    renderReports();
     await screen.findByText('Total Revenue');
 
     await user.selectOptions(within(panel()).getByLabelText('Period'), 'This financial year');
@@ -155,7 +164,7 @@ describe('dates', () => {
 
   it('refuses a From date after the To date instead of fetching it', async () => {
     const user = userEvent.setup();
-    render(<ReportsPage />);
+    renderReports();
     await screen.findByText('Total Revenue');
     const calls = api.getRevenueReport.mock.calls.length;
 
@@ -171,7 +180,7 @@ describe('dates', () => {
 
   it('fetches typed dates only when Show report is pressed', async () => {
     const user = userEvent.setup();
-    render(<ReportsPage />);
+    renderReports();
     await screen.findByText('Total Revenue');
     const calls = api.getRevenueReport.mock.calls.length;
 
@@ -190,7 +199,7 @@ describe('dates', () => {
 describe('load failures', () => {
   it('shows an error with Retry, not the previous range\'s numbers, when a new range fails', async () => {
     const user = userEvent.setup();
-    render(<ReportsPage />);
+    renderReports();
     expect((await screen.findAllByText(/1,000/)).length).toBeGreaterThan(0);
     api.getRevenueReport.mockRejectedValue(Object.assign(new Error('down'), { status: 500 }));
 
@@ -205,14 +214,14 @@ describe('load failures', () => {
 
   it('explains a 403', async () => {
     api.getRevenueReport.mockRejectedValue(Object.assign(new Error('Forbidden'), { status: 403 }));
-    render(<ReportsPage />);
+    renderReports();
     expect(await screen.findByText('Access denied')).toBeInTheDocument();
   });
 
   it('says when system alerts cannot load and offers a retry', async () => {
     getMock({ '/reports/alerts': new Error('alerts down') });
     const user = userEvent.setup();
-    render(<ReportsPage />);
+    renderReports();
 
     expect(await screen.findByText(/System alerts could not be loaded: alerts down/)).toBeInTheDocument();
     getMock({ '/reports/alerts': noAlerts });
@@ -222,7 +231,7 @@ describe('load failures', () => {
 
   it('does not reload system alerts when the report tab changes', async () => {
     const user = userEvent.setup();
-    render(<ReportsPage />);
+    renderReports();
     await screen.findByText('Total Revenue');
 
     await user.click(screen.getByRole('tab', { name: 'Patients' }));
@@ -239,7 +248,7 @@ describe('scope', () => {
   ])('says Revenue and Payments count clinic bills, not pharmacy sales (%s)', async (search, heading) => {
     mockSearch = search;
     getMock({ '/reports/alerts': noAlerts, '/reports/payments': { totalPayments: 0, totalAmount: 0, successfulPayments: 0, failedPayments: 0, successRate: 0 } });
-    render(<ReportsPage />);
+    renderReports();
     await screen.findByText(heading);
 
     expect(panel()).toHaveTextContent('Clinic bills only: consultations and procedures. Pharmacy sales are in Pharmacy Reports, and Daily Collection shows both together.');
@@ -254,7 +263,7 @@ describe('charts', () => {
       { date: '2026-11-02', revenue: 800, invoiceCount: 1 },
       { date: '2026-11-04', revenue: 4300, invoiceCount: 2 },
     ] });
-    render(<ReportsPage />);
+    renderReports();
 
     expect(await screen.findByRole('img', { name: /Highest was ₹4,300\.00 on 04 Nov 2026/ })).toBeInTheDocument();
     const rows = within(screen.getByRole('table', { name: 'Takings per day' })).getAllByRole('row').slice(1);
@@ -268,7 +277,7 @@ describe('charts', () => {
       { ageGroup: '0-17', count: 2, percentage: 33.3 },
       { ageGroup: '31-45', count: 3, percentage: 50 },
     ] });
-    render(<ReportsPage />);
+    renderReports();
 
     const table = await screen.findByRole('table', { name: 'Patients by age group' });
     expect(within(table).getAllByRole('row').slice(1).map((row) => row.textContent)).toEqual(['0-172', '31-453', '61+1']);
@@ -282,7 +291,7 @@ describe('system alerts drill-down', () => {
       lowStockAlerts: [{ itemId: 'c', itemName: 'Cetirizine 10mg', currentStock: 4, reorderLevel: 10 }],
     } });
     const user = userEvent.setup();
-    render(<ReportsPage />);
+    renderReports();
 
     const count = await screen.findByRole('button', { name: /Low Stock\s*12/ });
     expect(count).toHaveAttribute('aria-expanded', 'false');
@@ -300,7 +309,7 @@ describe('system alerts drill-down', () => {
       overdueInvoices: [{ id: 'i1', invoiceNo: 'INV-7', total: 800, dueDate: '2026-11-02T12:30:00.000Z', patient: { id: 'p1', name: 'Meera Joshi' } }],
     } });
     const user = userEvent.setup();
-    render(<ReportsPage />);
+    renderReports();
 
     await user.click(await screen.findByRole('button', { name: /Overdue Invoices\s*1/ }));
 
@@ -308,8 +317,22 @@ describe('system alerts drill-down', () => {
     expect(screen.getByRole('link', { name: 'Open overdue clinic bills' })).toHaveAttribute('href', '/dashboard/billing?status=overdue');
   });
 
+  it('shows a manager the overdue bills without links to pages a manager cannot open', async () => {
+    getMock({ '/reports/alerts': {
+      counts: { ...noAlerts.counts, overdueInvoices: 1 },
+      overdueInvoices: [{ id: 'i1', invoiceNo: 'INV-7', total: 800, dueDate: '2026-11-02T12:30:00.000Z', patient: { id: 'p1', name: 'Meera Joshi' } }],
+    } });
+    const user = userEvent.setup();
+    renderReports('MANAGER');
+
+    await user.click(await screen.findByRole('button', { name: /Overdue Invoices\s*1/ }));
+
+    expect(screen.getByText('INV-7 · Meera Joshi · ₹800.00 · due 02 Nov 2026')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Open overdue clinic bills' })).not.toBeInTheDocument();
+  });
+
   it('keeps a zero count as plain text', async () => {
-    render(<ReportsPage />);
+    renderReports();
     await screen.findByText('System Alerts');
     expect(screen.queryByRole('button', { name: /Low Stock/ })).not.toBeInTheDocument();
   });
@@ -325,7 +348,7 @@ describe('inventory severity', () => {
         { itemName: 'Doxycycline', currentStock: 0, reorderLevel: 5 },
       ],
     } });
-    render(<ReportsPage />);
+    renderReports();
 
     const low = (await screen.findByText('Low Stock', { selector: 'p' })).parentElement!.nextElementSibling!;
     const out = screen.getByText('Out of Stock', { selector: 'p' }).parentElement!.nextElementSibling!;
