@@ -1,6 +1,6 @@
 'use client';
 
-import { displayClinicDateTime, displayUtcDate } from '@/lib/date-display';
+import { displayClinicDateTime, displayClinicTime, displayUtcDate } from '@/lib/date-display';
 
 type PrescriptionSummaryProps = {
   prescription: unknown;
@@ -230,7 +230,7 @@ function PrescriptionSummary({ prescription, onPrint }: PrescriptionSummaryProps
 import { LoadingSkeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/ui/page-header';
 
-import { useCallback, useEffect, useState, Suspense } from 'react';
+import { useCallback, useEffect, useRef, useState, Suspense } from 'react';
 import { isValidId } from '@/lib/id';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -260,6 +260,7 @@ import type {
   Appointment,
   GetPatientsResponse,
   GetUsersResponse,
+  OpenVisitSummary,
   Patient,
   PatientVisitHistoryResponse,
   User as UserSummary,
@@ -464,6 +465,12 @@ function VisitsPageInner() {
   const [appointmentData, setAppointmentData] = useState<AppointmentWithVisit | null>(null);
   const [appointmentFailed, setAppointmentFailed] = useState(false);
   const [startedVisitId, setStartedVisitId] = useState<string | null>(null);
+  const [openVisit, setOpenVisit] = useState<OpenVisitSummary | null>(null);
+  const [blankVisitFor, setBlankVisitFor] = useState<string | null>(null);
+  const [checkingOpenVisit, setCheckingOpenVisit] = useState(false);
+  const [openVisitError, setOpenVisitError] = useState<string | null>(null);
+  const checkingOpenVisitRef = useRef(false);
+  const startNewVisitRef = useRef<() => Promise<void>>(async () => undefined);
   const [resumedVisitPatientId, setResumedVisitPatientId] = useState<string | null>(null);
   const [visitUnsaved, setVisitUnsaved] = useState(false);
   const [confirm, confirmDialog] = useConfirm();
@@ -496,6 +503,13 @@ function VisitsPageInner() {
     appointmentDoctorId,
     appointmentPending,
   });
+
+  const visitKey = `${selectedPatientId}:${selectedDoctorId}`;
+  const anchoredLink = Boolean(urlVisitId || appointmentIdParam);
+  const resumedOpenVisit =
+    openVisit && !anchoredLink && blankVisitFor !== visitKey && openVisit.patientId === selectedPatientId && openVisit.doctorId === selectedDoctorId
+      ? openVisit
+      : null;
 
   const extractPatients = useCallback((payload: unknown): PatientMatch[] => {
     if (!payload) return [];
@@ -590,7 +604,7 @@ function VisitsPageInner() {
   // Deep links open documentation; selecting a patient in setup keeps history accessible.
   useEffect(() => {
     if (appointmentPatientId && selectedPatientId === appointmentPatientId && selectedDoctorId) {
-      setShowForm(true);
+      void startNewVisitRef.current();
     }
   }, [selectedPatientId, selectedDoctorId, appointmentPatientId]);
 
@@ -683,7 +697,7 @@ function VisitsPageInner() {
       : undefined;
 
   const visitAlreadyStarted = Boolean(
-    resumedVisitId || startedVisitId || (activeAppointment?.visit && 'id' in activeAppointment.visit),
+    resumedVisitId || resumedOpenVisit || startedVisitId || (activeAppointment?.visit && 'id' in activeAppointment.visit),
   );
   const doctorLocked = Boolean(appointmentDoctorId) || visitAlreadyStarted;
 
@@ -702,11 +716,28 @@ function VisitsPageInner() {
     leave();
   };
 
-  const startNewVisit = () => {
-    if (selectedPatientId && selectedDoctorId) {
+  const startNewVisit = async () => {
+    if (!selectedPatientId || !selectedDoctorId || showForm || checkingOpenVisitRef.current) return;
+    if (anchoredLink) {
       setShowForm(true);
+      return;
+    }
+    checkingOpenVisitRef.current = true;
+    setCheckingOpenVisit(true);
+    setOpenVisitError(null);
+    try {
+      const { visit } = await apiClient.getOpenVisit(selectedPatientId, selectedDoctorId);
+      setOpenVisit(visit);
+      setBlankVisitFor(null);
+      setShowForm(true);
+    } catch (error) {
+      setOpenVisitError(error instanceof Error ? error.message : 'Please try again.');
+    } finally {
+      checkingOpenVisitRef.current = false;
+      setCheckingOpenVisit(false);
     }
   };
+  startNewVisitRef.current = startNewVisit;
  
   if (loading || userLoading) {
     return (
@@ -944,10 +975,15 @@ function VisitsPageInner() {
                               doctor={selectedDoctor}
                             />
                           </div>
-                          <Button onClick={startNewVisit}>
+                          <Button onClick={() => void startNewVisit()} disabled={checkingOpenVisit}>
                             Start Visit Documentation
                           </Button>
                         </div>
+                        {openVisitError && (
+                          <p role="alert" className="mt-2 text-sm text-destructive-text">
+                            Could not check for an open visit. {openVisitError} Press Start Visit Documentation to try again.
+                          </p>
+                        )}
                       </div>
                     )}
                     {!selectedDoctorId && (
@@ -971,7 +1007,7 @@ function VisitsPageInner() {
 
   return (
     <MedicalVisitForm
-      key={`${selectedPatientId}:${resumedVisitId || activeAppointment?.id || "new"}`}
+      key={`${selectedPatientId}:${resumedVisitId || activeAppointment?.id || resumedOpenVisit?.id || (blankVisitFor === visitKey ? "separate" : "new")}`}
       patientId={selectedPatientId}
       doctorId={selectedDoctorId}
       doctorName={selectedDoctorName}
@@ -983,7 +1019,7 @@ function VisitsPageInner() {
       appointmentData={activeAppointment}
       onVisitIdChange={setStartedVisitId}
       onUnsavedChange={setVisitUnsaved}
-      initialVisitId={resumedVisitId || (activeAppointment?.visit && 'id' in activeAppointment.visit ? activeAppointment.visit.id : undefined)}
+      initialVisitId={resumedVisitId || (activeAppointment?.visit && 'id' in activeAppointment.visit ? activeAppointment.visit.id : undefined) || resumedOpenVisit?.id}
       identity={
         <>
           <h1 className="sr-only">Visit Documentation</h1>
@@ -1014,6 +1050,14 @@ function VisitsPageInner() {
           {bookedWithName && (
             <span className="text-sm text-muted-foreground">
               Booked with {bookedWithName}. Change the appointment&apos;s doctor to see this patient yourself.
+            </span>
+          )}
+          {resumedOpenVisit && (
+            <span role="status" className="text-sm text-muted-foreground">
+              Resumed the visit started at {displayClinicTime(resumedOpenVisit.createdAt)}.{' '}
+              <Button type="button" variant="link" className="h-auto p-0 text-sm underline underline-offset-2" onClick={() => void leaveVisit(() => setBlankVisitFor(visitKey))}>
+                Start a separate visit
+              </Button>
             </span>
           )}
         </div>

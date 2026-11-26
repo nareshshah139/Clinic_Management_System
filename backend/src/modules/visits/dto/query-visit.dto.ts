@@ -76,6 +76,14 @@ export class QueryVisitsDto {
   sortOrder?: 'asc' | 'desc' = 'desc';
 }
 
+export class OpenVisitQueryDto {
+  @IsString()
+  patientId: string;
+
+  @IsString()
+  doctorId: string;
+}
+
 export class PatientVisitHistoryQueryDto {
   @IsOptional()
   @Type(() => Number)

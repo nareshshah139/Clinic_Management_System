@@ -547,6 +547,10 @@ export class ApiClient {
     return this.get('/visits', params);
   }
 
+  async getOpenVisit(patientId: string, doctorId: string) {
+    return this.get<{ visit: import('./types').OpenVisitSummary | null }>('/visits/open', { patientId, doctorId });
+  }
+
   async createVisit(data: Record<string, unknown>, opts?: { idempotencyKey?: string }) {
     return this.post('/visits', data, opts);
   }
