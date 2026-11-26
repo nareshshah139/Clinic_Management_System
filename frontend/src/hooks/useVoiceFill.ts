@@ -15,6 +15,7 @@ import {
 
 export type VoiceFillPhase =
   | { kind: 'idle' }
+  | { kind: 'connecting' }
   | { kind: 'listening'; startedAt: number }
   | { kind: 'filling' }
   | { kind: 'filled'; labels: string[] };
@@ -22,6 +23,7 @@ export type VoiceFillPhase =
 type VoiceFillState = Exclude<VoiceFillPhase, { kind: 'filled' }> | { kind: 'filled'; labels: string[]; undo: () => void };
 
 const IDLE: VoiceFillState = { kind: 'idle' };
+const CONNECTING: VoiceFillState = { kind: 'connecting' };
 const FILLING: VoiceFillState = { kind: 'filling' };
 const HEARD_PREVIEW_CHARS = 120;
 
@@ -78,14 +80,16 @@ export function useVoiceFill({ form, apply }: UseVoiceFillOptions) {
     const dictation: Dictation = { session: null, stopRequested: false };
     dictationRef.current = dictation;
     const isCurrent = () => dictationRef.current === dictation;
-    setState({ kind: 'listening', startedAt: Date.now() });
+    setState(CONNECTING);
     let session: DictationSession;
     try {
       session = await startDictationSession({
         preference: 'full-transcript',
         limits: { maxMs: VOICE_FILL_MAX_SPEECH_MS },
         onView: (view) => {
-          if (isCurrent() && view.phase === 'finishing') setState((current) => (current.kind === 'listening' ? FILLING : current));
+          if (!isCurrent()) return;
+          if (view.phase === 'listening') setState((current) => (current.kind === 'connecting' ? { kind: 'listening', startedAt: Date.now() } : current));
+          if (view.phase === 'finishing') setState((current) => (current.kind === 'connecting' || current.kind === 'listening' ? FILLING : current));
         },
         onNotice: () => {},
       });
@@ -130,7 +134,7 @@ export function useVoiceFill({ form, apply }: UseVoiceFillOptions) {
   const toggle = useCallback(() => {
     if (state.kind === 'filling') return;
     const dictation = dictationRef.current;
-    if (state.kind === 'listening' && dictation) {
+    if ((state.kind === 'connecting' || state.kind === 'listening') && dictation) {
       if (dictation.session) dictation.session.stop();
       else dictation.stopRequested = true;
       setState(FILLING);

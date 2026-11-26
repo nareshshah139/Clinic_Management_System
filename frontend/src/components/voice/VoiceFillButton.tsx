@@ -44,6 +44,8 @@ function statusText(phase: VoiceFillPhase): string {
   switch (phase.kind) {
     case 'idle':
       return '';
+    case 'connecting':
+      return 'Connecting the microphone. Start speaking when the timer appears.';
     case 'listening':
       return 'Listening. Click to stop and fill, or press Escape to cancel.';
     case 'filling':
@@ -60,6 +62,7 @@ function voicePillClass(phase: VoiceFillPhase): string {
     'transition-[max-width,background-color,color] duration-200 ease-out motion-reduce:transition-none',
     'outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50',
     phase.kind === 'idle' && 'max-w-8 text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+    phase.kind === 'connecting' && 'max-w-40 bg-muted px-3 text-muted-foreground',
     phase.kind === 'listening' && 'max-w-40 bg-destructive-soft px-3 text-destructive-text',
     phase.kind === 'filling' && 'max-w-40 cursor-default bg-muted px-3 text-muted-foreground',
     phase.kind === 'filled' && 'max-w-40 pl-2.5 pr-1.5 hover:bg-success-border/40',
@@ -71,6 +74,13 @@ function VoicePillFace({ phase, busyText }: { phase: VoiceFillPhase; busyText: s
   switch (phase.kind) {
     case 'idle':
       return <Mic className="size-4 shrink-0" aria-hidden="true" />;
+    case 'connecting':
+      return (
+        <>
+          <Spinner className="size-3.5" aria-hidden="true" />
+          <span>Connecting…</span>
+        </>
+      );
     case 'listening':
       return (
         <>
@@ -122,7 +132,7 @@ export function VoiceFillButton({ form, apply, hint, disabled, onBusyChange, cla
 
   const idle = phase.kind === 'idle';
   const filled = phase.kind === 'filled';
-  const working = phase.kind === 'listening' || phase.kind === 'filling';
+  const working = phase.kind === 'connecting' || phase.kind === 'listening' || phase.kind === 'filling';
   useEffect(() => {
     onBusyChange?.(working);
   }, [working, onBusyChange]);
@@ -159,13 +169,14 @@ export function VoiceFillButton({ form, apply, hint, disabled, onBusyChange, cla
     };
   }, []);
 
-  useCancelOnEscape(phase.kind === 'listening', cancel);
+  useCancelOnEscape(phase.kind === 'connecting' || phase.kind === 'listening', cancel);
 
   if (!available) return null;
 
   const busy = phase.kind === 'filling';
   const ariaLabel = {
     idle: 'Fill form by voice',
+    connecting: 'Connecting microphone. Click to stop',
     listening: 'Stop recording and fill form',
     filling: 'Filling…',
     filled: filled ? `${phase.labels.length} filled. Fill by voice again` : '',

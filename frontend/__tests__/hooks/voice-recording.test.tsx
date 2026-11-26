@@ -131,6 +131,37 @@ describe('useVoiceFill', () => {
     expect(fetchMock.mock.calls).toEqual([]);
   });
 
+  it('shows Connecting until the live channel opens, so no word is spoken before audio reaches the transcriber', async () => {
+    let channel!: { readyState: string; onopen: (() => void) | null; onmessage: unknown; onclose: unknown; close(): void; send(): void };
+    class FakePeer {
+      connectionState = 'new';
+      onconnectionstatechange = null;
+      addTrack() {}
+      createDataChannel() {
+        channel = { readyState: 'connecting', onopen: null, onmessage: null, onclose: null, close() {}, send() {} };
+        return channel;
+      }
+      async createOffer() { return { type: 'offer', sdp: 'v=0 offer' }; }
+      async setLocalDescription() {}
+      async setRemoteDescription() {}
+      close() {}
+    }
+    Object.defineProperty(globalThis, 'RTCPeerConnection', { value: FakePeer, configurable: true, writable: true });
+    fetchMock.mockResolvedValue(json(201, { sdp: 'v=0 answer' }));
+    const { result } = renderHook(() => useVoiceFill({ form: 'patient-intake', apply: jest.fn() }));
+
+    try {
+      await act(async () => { result.current.toggle(); });
+      expect(result.current.phase).toEqual({ kind: 'connecting' });
+
+      await act(async () => { channel.readyState = 'open'; channel.onopen?.(); });
+      expect(result.current.phase.kind).toBe('listening');
+    } finally {
+      act(() => { result.current.cancel(); });
+      delete (globalThis as { RTCPeerConnection?: unknown }).RTCPeerConnection;
+    }
+  });
+
   it('cancel releases the microphone without sending anything', async () => {
     const { result } = renderHook(() => useVoiceFill({ form: 'patient-intake', apply: jest.fn() }));
 
