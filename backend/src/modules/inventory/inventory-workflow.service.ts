@@ -169,17 +169,18 @@ export class InventoryWorkflowService {
     };
   }
   async transaction<T>(run: (tx: any) => Promise<T>): Promise<T> {
-    for (let attempt = 0; ; attempt++) {
+    for (let attempt = 0; attempt < 10; attempt++) {
       try {
         return await this.prisma.$transaction(run, {
           isolationLevel: 'Serializable',
           timeout: 30000,
         });
       } catch (e) {
-        if ((e as any)?.code === 'P2034' && attempt < 2) continue;
-        throw e;
+        if ((e as any)?.code !== 'P2034') throw e;
+        await new Promise((resolve) => setTimeout(resolve, Math.random() * Math.min(500, 20 * 2 ** attempt)));
       }
     }
+    throw new ConflictException('Another change to this stock or document was saving at the same moment. Reload it and try again.');
   }
   private plain(doc: any) {
     return {

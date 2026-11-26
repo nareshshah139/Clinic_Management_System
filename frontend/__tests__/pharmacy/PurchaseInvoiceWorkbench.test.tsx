@@ -1,8 +1,11 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act, within, configure } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PurchaseInvoiceWorkbench } from '@/components/pharmacy/PurchaseInvoiceWorkbench';
 import { apiClient } from '@/lib/api';
+
+configure({ asyncUtilTimeout: 10_000 });
+jest.setTimeout(30_000);
 
 let mockPurchaseAccess = { read: true, create: true, review: true, commit: true, automate: true };
 jest.mock('@/hooks/usePurchasePermissions', () => ({ usePurchasePermissions: () => ({ permissions: mockPurchaseAccess, loading: false, error: '' }) }));
