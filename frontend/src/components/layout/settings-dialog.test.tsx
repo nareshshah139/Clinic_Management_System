@@ -21,16 +21,19 @@ jest.mock('@/lib/api', () => ({
     deleteTimeOff: jest.fn(),
     getWhatsAppTemplates: jest.fn(),
     updateUserProfile: jest.fn(),
+    getClinicDetails: jest.fn(),
+    updateClinicDetails: jest.fn(),
     post: jest.fn(),
   },
 }));
 
 const api = apiClient as jest.Mocked<typeof apiClient>;
 const hours = [1, 2, 3, 4, 5].map((weekday) => ({ weekday, start: '09:00', end: '13:00' }));
+const clinic = { id: 'branch-1', name: 'Main Dermatology Clinic', address: '1 Road', city: 'Hyderabad', state: 'Telangana', pincode: '500001', phone: '9000000000', gstNumber: null };
 const availability = { doctorId: 'u1', source: 'configured' as const, hours, timeOff: [] };
 
 function signInAs(role: string, metadata: Record<string, unknown> = {}) {
-  signedIn = { user: { id: 'u1', role, firstName: 'Priya', lastName: 'Menon', metadata }, loading: false, refresh: jest.fn().mockResolvedValue(undefined) };
+  signedIn = { user: { id: 'u1', branchId: 'branch-1', role, firstName: 'Priya', lastName: 'Menon', metadata }, loading: false, refresh: jest.fn().mockResolvedValue(undefined) };
 }
 
 beforeEach(() => {
@@ -39,6 +42,8 @@ beforeEach(() => {
   api.replaceDoctorHours.mockImplementation((async (_id: string, saved: typeof hours) => ({ ...availability, hours: saved })) as never);
   api.getWhatsAppTemplates.mockResolvedValue([] as never);
   api.updateUserProfile.mockResolvedValue({} as never);
+  api.getClinicDetails.mockResolvedValue(clinic as never);
+  api.updateClinicDetails.mockImplementation((async (_id: string, changes: object) => ({ ...clinic, ...changes })) as never);
   api.post.mockResolvedValue({ message: 'Password changed successfully' } as never);
 });
 
@@ -75,6 +80,19 @@ describe('My Settings sections', () => {
     await openSettings();
     expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Appearance', 'Password']);
     expect(api.getDoctorAvailability).not.toHaveBeenCalled();
+  });
+
+  it.each(['OWNER', 'ADMIN'])('gives %s a Clinic section after Appearance', async (role) => {
+    signInAs(role);
+    await openSettings();
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Appearance', 'Clinic', 'Password']);
+  });
+
+  it('never asks a receptionist for the clinic details', async () => {
+    signInAs('RECEPTION');
+    await openSettings();
+    expect(screen.queryByRole('tab', { name: /Clinic/ })).toBeNull();
+    expect(api.getClinicDetails).not.toHaveBeenCalled();
   });
 
   it('has no footer Save that saves one section and closes the rest', async () => {
@@ -271,5 +289,64 @@ describe('Password section', () => {
     await user.type(screen.getByLabelText('Current password'), 'abc');
     await user.click(footerClose(dialog));
     expect(await screen.findByRole('alertdialog')).toHaveTextContent('Password has changes you have not saved.');
+  });
+});
+
+describe('Clinic section', () => {
+  async function openClinic() {
+    signInAs('ADMIN');
+    const opened = await openSettings();
+    await opened.user.click(tab(/^Clinic/));
+    const name = await screen.findByLabelText('Clinic name');
+    return { ...opened, name };
+  }
+
+  it('shows the clinic the admin belongs to', async () => {
+    const { name } = await openClinic();
+    expect(api.getClinicDetails).toHaveBeenCalledWith('branch-1');
+    expect(name).toHaveValue('Main Dermatology Clinic');
+    expect(screen.getByLabelText('GSTIN')).toHaveValue('');
+    expect(screen.getByRole('button', { name: 'Save clinic details' })).toBeDisabled();
+  });
+
+  it('saves only the changed field, trimmed, to the admin’s own branch', async () => {
+    const { user, name } = await openClinic();
+    await user.clear(name);
+    await user.type(name, '  Linaé Skin, Hair and Aesthetic Clinic  ');
+    await user.click(screen.getByRole('button', { name: 'Save clinic details' }));
+
+    await waitFor(() => expect(api.updateClinicDetails).toHaveBeenCalledWith('branch-1', { name: 'Linaé Skin, Hair and Aesthetic Clinic' }));
+    expect(toast).toHaveBeenCalledWith(expect.objectContaining({ variant: 'success', title: 'Clinic details saved' }));
+    expect(name).toHaveValue('Linaé Skin, Hair and Aesthetic Clinic');
+    expect(screen.getByRole('button', { name: 'Save clinic details' })).toBeDisabled();
+  });
+
+  it('refuses a blank clinic name without calling the server', async () => {
+    const { user, name } = await openClinic();
+    await user.clear(name);
+    await user.type(name, '   ');
+    await user.click(screen.getByRole('button', { name: 'Save clinic details' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Enter the clinic name');
+    expect(api.updateClinicDetails).not.toHaveBeenCalled();
+  });
+
+  it('says why a save failed and keeps what was typed', async () => {
+    api.updateClinicDetails.mockRejectedValueOnce(new Error('Branch with this name already exists'));
+    const { user, name } = await openClinic();
+    await user.clear(name);
+    await user.type(name, 'Taken name');
+    await user.click(screen.getByRole('button', { name: 'Save clinic details' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Branch with this name already exists');
+    expect(name).toHaveValue('Taken name');
+  });
+
+  it('warns before closing with an unsaved clinic name', async () => {
+    const { user, dialog, name } = await openClinic();
+    await user.type(name, ' Two');
+    expect(screen.getByRole('tab', { name: /Clinic.*unsaved/ })).toBeInTheDocument();
+    await user.click(footerClose(dialog));
+    expect(await screen.findByText('Discard unsaved changes?')).toBeInTheDocument();
   });
 });

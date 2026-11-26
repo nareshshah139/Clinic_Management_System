@@ -11,16 +11,18 @@ import { useConfirm } from '@/components/ui/confirm-dialog';
 import { useDashboardUser } from './dashboard-user-context';
 import { ColourThemeSetting } from './colour-theme-setting';
 import { WhatsAppSettingsForm } from './whatsapp-settings-form';
+import { ClinicDetailsForm } from './clinic-details-form';
 import { ChangePasswordForm } from './change-password-form';
 
 const DoctorSignatureSettings = dynamic(() => import('@/components/users/DoctorSignatureSettings').then((m) => m.DoctorSignatureSettings), { ssr: false });
 const DoctorLetterheadSettings = dynamic(() => import('@/components/users/DoctorLetterheadSettings').then((m) => m.DoctorLetterheadSettings), { ssr: false });
 const DoctorAvailabilitySettings = dynamic(() => import('@/components/users/DoctorAvailabilitySettings').then((m) => m.DoctorAvailabilitySettings), { ssr: false });
 
-type SectionId = 'appearance' | 'signature' | 'availability' | 'whatsapp' | 'password';
+type SectionId = 'appearance' | 'clinic' | 'signature' | 'availability' | 'whatsapp' | 'password';
 
 const SECTION_LABELS: Record<SectionId, string> = {
   appearance: 'Appearance',
+  clinic: 'Clinic',
   signature: 'Signature & letterhead',
   availability: 'Availability',
   whatsapp: 'WhatsApp',
@@ -29,6 +31,7 @@ const SECTION_LABELS: Record<SectionId, string> = {
 
 const DOCTOR_SECTIONS: SectionId[] = ['appearance', 'signature', 'availability', 'whatsapp', 'password'];
 const STAFF_SECTIONS: SectionId[] = ['appearance', 'password'];
+const CLINIC_ADMIN_SECTIONS: SectionId[] = ['appearance', 'clinic', 'password'];
 
 function listOf(names: string[]) {
   return names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0];
@@ -41,13 +44,15 @@ export function SettingsDialog() {
   const [unsaved, setUnsaved] = useState<Partial<Record<SectionId, boolean>>>({});
   const [confirm, confirmDialog] = useConfirm();
 
-  const isDoctor = String(user?.role || '').toUpperCase() === UserRole.DOCTOR;
-  const sections = isDoctor ? DOCTOR_SECTIONS : STAFF_SECTIONS;
+  const role = String(user?.role || '').toUpperCase();
+  const isDoctor = role === UserRole.DOCTOR;
+  const isClinicAdmin = role === UserRole.OWNER || role === UserRole.ADMIN;
+  const sections = isDoctor ? DOCTOR_SECTIONS : isClinicAdmin ? CLINIC_ADMIN_SECTIONS : STAFF_SECTIONS;
 
   const track = useMemo(() => {
     const setter = (id: SectionId) => (dirty: boolean) =>
       setUnsaved((current) => (Boolean(current[id]) === dirty ? current : { ...current, [id]: dirty }));
-    return { availability: setter('availability'), whatsapp: setter('whatsapp'), password: setter('password') };
+    return { clinic: setter('clinic'), availability: setter('availability'), whatsapp: setter('whatsapp'), password: setter('password') };
   }, []);
 
   const requestClose = useCallback(async () => {
@@ -76,7 +81,7 @@ export function SettingsDialog() {
           <DialogHeader>
             <DialogTitle>My Settings</DialogTitle>
             <DialogDescription id="my-settings-description" className="sr-only">
-              Change how Linaé looks for you, your doctor profile, WhatsApp messages and your password.
+              Change how Linaé looks for you, your clinic's printed details, your doctor profile, WhatsApp messages and your password.
             </DialogDescription>
           </DialogHeader>
           <Tabs value={section} onValueChange={(next: string) => setSection(next as SectionId)} className="min-w-0">
@@ -96,6 +101,11 @@ export function SettingsDialog() {
             <TabsContent value="appearance" forceMount>
               <ColourThemeSetting />
             </TabsContent>
+            {isClinicAdmin && (
+              <TabsContent value="clinic" forceMount>
+                <ClinicDetailsForm onDirtyChange={track.clinic} />
+              </TabsContent>
+            )}
             {isDoctor && user?.id && (
               <>
                 <TabsContent value="signature" forceMount className="space-y-4">
