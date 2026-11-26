@@ -123,7 +123,41 @@ describe('line normalisation', () => {
     });
   });
 
-  it('taxes a bill line on its value after the bill discount, so taxable + tax is the stored line total', () => {
+  it('reports a bill line at MRP with its GST inside the price: taxable + GST is what was charged', () => {
+    const mrp = billLine({
+      name: 'Tacroz Forte 0.1% Oint',
+      hsn: '30049099',
+      unit: 'TUBE',
+      quantity: 1,
+      unitPrice: 853.13,
+      discountAmount: 0,
+      billDiscountAmount: 0,
+      taxPercent: 5,
+      taxAmount: 40.63,
+      totalAmount: 853.13,
+    });
+    expect([mrp.gross, mrp.discount, mrp.taxable, mrp.total]).toEqual([812.5, 0, 812.5, 853.13]);
+    expect(mrp.cgst + mrp.sgst).toBeCloseTo(40.63, 2);
+
+    const discounted = billLine({
+      name: 'Isotroin 10 Capsule',
+      hsn: '30049099',
+      unit: 'STRIP',
+      quantity: 1,
+      unitPrice: 1000,
+      discountAmount: 0,
+      billDiscountAmount: 100,
+      taxPercent: 5,
+      taxAmount: 42.86,
+      totalAmount: 900,
+    });
+    expect([discounted.gross, discounted.discount, discounted.taxable, discounted.cgst, discounted.sgst, discounted.total]).toEqual([
+      952.38, 95.24, 857.14, 21.43, 21.43, 900,
+    ]);
+  });
+
+  it('keeps a bill line saved with its GST added on top at what it was charged', () => {
+
     // 1000 at 12% with a 10% bill discount: the line's share of the bill discount is 100.
     const line = billLine({
       name: 'Isotroin 10 Capsule',

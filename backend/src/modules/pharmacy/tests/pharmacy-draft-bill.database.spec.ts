@@ -236,7 +236,7 @@ databaseTests('Draft pharmacy bills on PostgreSQL', () => {
       { ...edited, expectedVersion: 0 },
       'branch',
     );
-    expect([saved.mutationVersion, saved.totalAmount]).toEqual([1, 406.9]);
+    expect([saved.mutationVersion, saved.totalAmount]).toEqual([1, 355]);
     expect(
       await failure(
         invoices.update(
@@ -299,7 +299,7 @@ databaseTests('Draft pharmacy bills on PostgreSQL', () => {
     ]).toEqual([
       'COMPLETED',
       0,
-      [{ amount: 457.3, method: 'UPI', status: 'COMPLETED' }],
+      [{ amount: 400, method: 'UPI', status: 'COMPLETED' }],
     ]);
     expect(await stock()).toEqual({
       'cream-batch': 6,

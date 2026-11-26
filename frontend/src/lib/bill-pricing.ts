@@ -32,6 +32,8 @@ export class BillPricingError extends Error {}
 
 const paise = (rupees: number) => Math.round(Number((rupees * 100).toFixed(6)));
 const share = (paiseAmount: number, percent: number) => paise((paiseAmount * percent) / 10000);
+const taxWithin = (paiseAmount: number, percent: number) =>
+  paiseAmount - Math.round(Number(((paiseAmount * 100) / (100 + percent)).toFixed(6)));
 const rupees = (amount: number) => amount / 100;
 const sum = (values: number[]) => values.reduce((total, value) => total + value, 0);
 
@@ -72,15 +74,15 @@ export function priceBill(lines: PricingLine[], discount?: BillDiscount | null):
   const lineDiscount = lines.map((line, index) => share(gross[index], line.discountPercent || 0));
   const net = gross.map((value, index) => value - lineDiscount[index]);
   const billDiscount = apportion(billDiscountPaise(discount, sum(net)), net);
-  const taxable = net.map((value, index) => value - billDiscount[index]);
-  const tax = lines.map((line, index) => share(taxable[index], line.taxPercent || 0));
+  const total = net.map((value, index) => value - billDiscount[index]);
+  const tax = lines.map((line, index) => taxWithin(total[index], line.taxPercent || 0));
   const priced = lines.map((_, index) => ({
     gross: rupees(gross[index]),
     lineDiscount: rupees(lineDiscount[index]),
     billDiscount: rupees(billDiscount[index]),
-    taxable: rupees(taxable[index]),
+    taxable: rupees(total[index] - tax[index]),
     tax: rupees(tax[index]),
-    total: rupees(taxable[index] + tax[index]),
+    total: rupees(total[index]),
   }));
   return {
     lines: priced,
@@ -88,8 +90,14 @@ export function priceBill(lines: PricingLine[], discount?: BillDiscount | null):
     lineDiscount: rupees(sum(lineDiscount)),
     billDiscount: rupees(sum(billDiscount)),
     discount: rupees(sum(lineDiscount) + sum(billDiscount)),
-    taxable: rupees(sum(taxable)),
+    taxable: rupees(sum(total) - sum(tax)),
     tax: rupees(sum(tax)),
-    total: rupees(sum(taxable) + sum(tax)),
+    total: rupees(sum(total)),
   };
+}
+
+export function billTaxOnTop(bill: { subtotal: number; discountAmount: number; taxAmount: number; totalAmount: number }) {
+  const net = paise(bill.subtotal) - paise(bill.discountAmount);
+  const stored = paise(bill.totalAmount);
+  return Math.abs(stored - (net + paise(bill.taxAmount))) < Math.abs(stored - net);
 }

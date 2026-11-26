@@ -2,6 +2,7 @@ import { billLineName } from '@/lib/bill-line-name';
 import { displayCalendarDate, displayClinicDate, displayUtcDate } from '@/lib/date-display';
 import { getGlobalPrintStyleTag } from '@/lib/printStyles';
 import { billNumberLabel } from '@/lib/bill-number';
+import { billTaxOnTop } from '@/lib/bill-pricing';
 
 export type ClinicIdentity = {
   name: string;
@@ -20,6 +21,7 @@ type PrintDocument = {
   table: Table;
   totals: [string, string][];
   grandTotal: [string, string];
+  grandNote?: string;
   amountInWords?: string | null;
   taxTable?: Table | null;
   notes?: string;
@@ -103,6 +105,7 @@ function renderPrintDocument(doc: PrintDocument): string {
     <div class="totals">
       ${doc.totals.map(([label, value]) => `<div><strong>${escapeHtml(label)}:</strong> ${escapeHtml(value)}</div>`).join('')}
       <div class="grand"><strong>${escapeHtml(doc.grandTotal[0])}:</strong> ${escapeHtml(doc.grandTotal[1])}</div>
+      ${doc.grandNote ? `<div class="words">${escapeHtml(doc.grandNote)}</div>` : ''}
       ${doc.amountInWords ? `<div class="words">${escapeHtml(doc.amountInWords)}</div>` : ''}
     </div>
     ${doc.taxTable ? renderTable(doc.taxTable) : ''}
@@ -187,6 +190,7 @@ export function renderPharmacyBillHtml(bill: PharmacyBillPrint, options: { print
   const number = billNumberLabel(invoice);
   const billDiscount = Number(invoice.billDiscountAmount) || 0;
   const discount = Number(invoice.discountAmount) || 0;
+  const taxOnTop = billTaxOnTop({ subtotal: Number(invoice.subtotal) || 0, discountAmount: discount, taxAmount: Number(invoice.taxAmount) || 0, totalAmount: Number(invoice.totalAmount) || 0 });
   const hasHsn = lines.some((line) => line.hsnCode);
   const hasBatch = lines.some((line) => batchText(line.batchAllocations));
   const meta: [string, string][] = [
@@ -229,9 +233,10 @@ export function renderPharmacyBillHtml(bill: PharmacyBillPrint, options: { print
       ...(billDiscount > 0
         ? [[invoice.billDiscountKind === 'PERCENT' ? `Bill discount (${invoice.billDiscountValue}%)` : 'Bill discount', formatRupees(-billDiscount)] as [string, string]]
         : []),
-      ['GST', formatRupees(invoice.taxAmount)],
+      ...(taxOnTop ? [['GST', formatRupees(invoice.taxAmount)] as [string, string]] : []),
     ],
     grandTotal: ['Grand Total', formatRupees(invoice.totalAmount)],
+    grandNote: taxOnTop ? undefined : `Includes GST ${formatRupees(invoice.taxAmount)}`,
     amountInWords: invoice.amountInWords,
     taxTable: taxTable(bill.gstSummary),
     notes: invoice.notes || undefined,

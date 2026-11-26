@@ -16,21 +16,21 @@ const line = (id: string, name: string, quantity: number, unitPrice: number, dis
   id, itemType: 'DRUG', quantity, unitPrice, discountPercent, taxPercent, discountAmount: 0, billDiscountAmount: 0, taxAmount: 0, totalAmount,
   drug: { name }, package: null,
 });
-const paid = { id: 'p1', amount: 327.75, method: 'CASH', status: 'COMPLETED', paymentDate: '2026-11-09T05:00:00.000Z', reference: null };
+const paid = { id: 'p1', amount: 285, method: 'CASH', status: 'COMPLETED', paymentDate: '2026-11-09T05:00:00.000Z', reference: null };
 const sold = {
   id: 'inv-1', invoiceNumber: 'PHI-2026-001', status: 'CONFIRMED', mutationVersion: 4, invoiceDate: '2026-11-09T05:00:00.000Z', revisedAt: null,
   billingName: 'Meera Shah', billingPhone: '9876543210', patient: null, doctor: null,
-  subtotal: 330, discountAmount: 45, billDiscountKind: 'AMOUNT', billDiscountValue: 25, billDiscountAmount: 25, taxAmount: 42.75, totalAmount: 327.75,
-  items: [line('l1', 'Cream', 2, 50, 10, 12, 92.67), line('l2', 'Tablet', 1, 30, 0, 5, 28.96), line('l3', 'Shampoo', 1, 200, 5, 18, 206.12)],
+  subtotal: 330, discountAmount: 45, billDiscountKind: 'AMOUNT', billDiscountValue: 25, billDiscountAmount: 25, taxAmount: 36.82, totalAmount: 285,
+  items: [line('l1', 'Cream', 2, 50, 10, 12, 82.74), line('l2', 'Tablet', 1, 30, 0, 5, 27.58), line('l3', 'Shampoo', 1, 200, 5, 18, 174.68)],
   payments: [paid],
   revisions: [],
 };
 const revised = {
   ...sold, mutationVersion: 5, revisedAt: '2026-11-09T06:00:00.000Z', billDiscountKind: 'PERCENT', billDiscountValue: 20, billDiscountAmount: 61.4,
-  discountAmount: 84.4, taxAmount: 37.08, totalAmount: 282.68,
-  revisions: [{ id: 'r1', reason: 'Senior citizen discount', previousTotal: 327.75, revisedTotal: 282.68, createdAt: '2026-11-09T06:00:00.000Z', revisedBy: { firstName: 'Asha', lastName: 'Synthetic' } }],
+  discountAmount: 84.4, taxAmount: 31.93, totalAmount: 245.6,
+  revisions: [{ id: 'r1', reason: 'Senior citizen discount', previousTotal: 285, revisedTotal: 245.6, createdAt: '2026-11-09T06:00:00.000Z', revisedBy: { firstName: 'Asha', lastName: 'Synthetic' } }],
 };
-const refunded = { ...revised, mutationVersion: 6, payments: [paid, { id: 'p2', amount: -45.07, method: 'UPI', status: 'REFUNDED', paymentDate: '2026-11-09T06:05:00.000Z', reference: null }] };
+const refunded = { ...revised, mutationVersion: 6, payments: [paid, { id: 'p2', amount: -39.4, method: 'UPI', status: 'REFUNDED', paymentDate: '2026-11-09T06:05:00.000Z', reference: null }] };
 const conflict = (status: number, message: string) => Object.assign(new Error(message), { status, body: { message } });
 
 let current: Record<string, unknown>;
@@ -51,8 +51,8 @@ it('edits only the discount of a paid bill, shows the refund due and records the
   fireEvent.change(within(dialog).getByLabelText('Discount % for Tablet'), { target: { value: '10' } });
   fireEvent.click(within(dialog).getByRole('button', { name: 'Percent' }));
   fireEvent.change(within(dialog).getByLabelText('Bill discount'), { target: { value: '20' } });
-  expect(within(dialog).getByText('Total after change').nextSibling).toHaveTextContent('₹282.68');
-  expect(within(dialog).getByText('Refund due after saving').nextSibling).toHaveTextContent('₹45.07');
+  expect(within(dialog).getByText('Total after change').nextSibling).toHaveTextContent('₹245.60');
+  expect(within(dialog).getByText('Refund due after saving').nextSibling).toHaveTextContent('₹39.40');
   expect(within(dialog).getByRole('button', { name: 'Save discount' })).toBeDisabled();
   expect(within(dialog).getByText('Enter a reason to save.')).toBeInTheDocument();
 
@@ -70,18 +70,18 @@ it('edits only the discount of a paid bill, shows the refund due and records the
     ],
     reason: 'Senior citizen discount',
   });
-  expect(screen.getByText('Refund due ₹45.07', { selector: '[data-slot="badge"], span' })).toBeInTheDocument();
+  expect(screen.getByText('Refund due ₹39.40', { selector: '[data-slot="badge"], span' })).toBeInTheDocument();
   expect(screen.getByText('Revised 09 Nov 2026', { exact: false })).toBeInTheDocument();
   expect(screen.getByText('Senior citizen discount')).toBeInTheDocument();
-  expect(screen.getByText('₹327.75 → ₹282.68')).toBeInTheDocument();
+  expect(screen.getByText('₹285.00 → ₹245.60')).toBeInTheDocument();
 
-  fireEvent.click(screen.getByRole('button', { name: 'Record refund ₹45.07' }));
-  const refund = await screen.findByRole('dialog', { name: 'Record refund of ₹45.07' });
+  fireEvent.click(screen.getByRole('button', { name: 'Record refund ₹39.40' }));
+  const refund = await screen.findByRole('dialog', { name: 'Record refund of ₹39.40' });
   current = refunded;
   api.post.mockResolvedValueOnce({ id: 'p2' } as any);
-  fireEvent.click(within(refund).getByRole('button', { name: 'Record refund ₹45.07' }));
+  fireEvent.click(within(refund).getByRole('button', { name: 'Record refund ₹39.40' }));
   await waitFor(() => expect(screen.getByText('Paid', { selector: '[data-slot="badge"]' })).toBeInTheDocument());
-  expect(api.post).toHaveBeenCalledWith('/pharmacy/invoices/inv-1/refunds', { requestKey: expect.stringMatching(/^[0-9a-f]{32}$/), amount: 45.07, method: 'CASH' });
+  expect(api.post).toHaveBeenCalledWith('/pharmacy/invoices/inv-1/refunds', { requestKey: expect.stringMatching(/^[0-9a-f]{32}$/), amount: 39.4, method: 'CASH' });
   expect(screen.getByText(/^Refund · UPI/)).toBeInTheDocument();
 });
 
@@ -117,4 +117,27 @@ it('names each sold line by the stock it sold, not the catalogue name', async ()
   open('bill=inv-1');
   expect(await screen.findAllByText('Tab. Flutas 150 mg')).not.toHaveLength(0);
   expect(screen.queryByText('Flutas 150')).not.toBeInTheDocument();
+});
+
+it('shows a bill priced at MRP with its total first and the GST it includes after it', async () => {
+  open('bill=inv-1&edit=discount');
+  const dialog = await screen.findByRole('dialog');
+  expect(within(dialog).queryByText(/GST on top/)).not.toBeInTheDocument();
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+  expect(screen.getByText('Includes GST', { selector: 'dt' }).nextSibling).toHaveTextContent('₹36.82');
+  expect(screen.getByText('Total', { selector: 'dt' }).nextSibling).toHaveTextContent('₹285.00');
+  expect(screen.queryByText('Tax', { selector: 'dt' })).not.toBeInTheDocument();
+});
+
+it('keeps a bill saved with GST added on top adding up, and says in the discount editor what a refund then includes', async () => {
+  current = { ...sold, taxAmount: 42.75, totalAmount: 327.75, payments: [{ ...paid, amount: 327.75 }] };
+  open('bill=inv-1');
+  expect(await screen.findByText('Tax', { selector: 'dt' })).toBeInTheDocument();
+  expect(screen.getByText('Tax', { selector: 'dt' }).nextSibling).toHaveTextContent('₹42.75');
+  expect(screen.getByText('Total', { selector: 'dt' }).nextSibling).toHaveTextContent('₹327.75');
+  expect(screen.queryByText('Includes GST', { selector: 'dt' })).not.toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Edit discount' }));
+  const dialog = await screen.findByRole('dialog');
+  expect(within(dialog).getByText('This bill added GST on top of the MRP. Saving prices it at MRP, so any refund includes the GST that was added on top.')).toBeInTheDocument();
 });
