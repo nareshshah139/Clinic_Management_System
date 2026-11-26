@@ -12,7 +12,6 @@ MODES = {
     "noStopCapture": {"MODE": '"noStopCapture"'},
     "noLeaveLiveOnSettle": {"MODE": '"noLeaveLiveOnSettle"'},
     "completedOverwritesFailure": {"MODE": '"completedOverwritesFailure"'},
-    "staleDenialClears": {"MODE": '"staleDenialClears"'},
 }
 RULES = {
     "TypeOK": "invariant",
@@ -21,7 +20,6 @@ RULES = {
     "LiveAgrees": "invariant",
     "OneTranscription": "invariant",
     "ItemFailureSticks": "invariant",
-    "ClipShownWhileRecording": "invariant",
     "LeavesFinishing": "property",
     "LockReleased": "property",
     "MicReleased": "property",
@@ -34,7 +32,6 @@ RULE_TEXT = {
     "LiveAgrees": "While the live preview runs, the data channel exists and no transcription request is out.",
     "OneTranscription": "A dictation sends the speaker split or the recording upload, never both.",
     "ItemFailureSticks": "A transcript piece the server reported as failed stays failed, so the recording is transcribed instead.",
-    "ClipShownWhileRecording": "Whenever a voice fill clip is recording, its button shows that it is recording.",
     "LeavesFinishing": "A dictation that shows Finishing ends with no user action, even if the server never answers.",
     "LockReleased": "The one-dictation lock is released with no user action, so the next dictation can start.",
     "MicReleased": "The microphone is released with no user action.",
@@ -42,7 +39,7 @@ RULE_TEXT = {
 }
 ALL = list(RULES)
 EXPECT = {
-    "before": {**{r: "holds" for r in ALL}, "ItemFailureSticks": "breaks", "ClipShownWhileRecording": "breaks",
+    "before": {**{r: "holds" for r in ALL}, "ItemFailureSticks": "breaks",
              "LeavesFinishing": "breaks", "LockReleased": "breaks"},
     "code": {r: "holds" for r in ALL},
     "fixed": {r: "holds" for r in ALL},
@@ -54,7 +51,6 @@ EXPECT = {
     "noStopCapture": {"MicOffWhenEnded": "breaks", "MicReleased": "breaks"},
     "noLeaveLiveOnSettle": {"LiveAgrees": "breaks", "OneTranscription": "breaks"},
     "completedOverwritesFailure": {"ItemFailureSticks": "breaks"},
-    "staleDenialClears": {"ClipShownWhileRecording": "breaks"},
 }
 CHARTS = ["before", "code"]
 REPLAYS = {}

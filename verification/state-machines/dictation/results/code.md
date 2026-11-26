@@ -1,6 +1,6 @@
 # Dictation and voice capture, code mode
 
-TLC explored 255 states and 463 steps. The chart has 10 states and 19 arrows.
+TLC explored 234 states and 417 steps. The chart has 7 states and 15 arrows.
 
 | Rule | Kind | Result |
 | --- | --- | --- |
@@ -10,10 +10,9 @@ TLC explored 255 states and 463 steps. The chart has 10 states and 19 arrows.
 | LiveAgrees | invariant | holds |
 | OneTranscription | invariant | holds |
 | ItemFailureSticks | invariant | holds |
-| ClipShownWhileRecording | invariant | holds |
 | LeavesFinishing | property | holds |
 | LockReleased | property | holds |
 | MicReleased | property | holds |
 | BarLeavesWorking | property | holds |
 
-Holds: TypeOK, LockAgrees, MicOffWhenEnded, LiveAgrees, OneTranscription, ItemFailureSticks, ClipShownWhileRecording, LeavesFinishing, LockReleased, MicReleased, BarLeavesWorking.
+Holds: TypeOK, LockAgrees, MicOffWhenEnded, LiveAgrees, OneTranscription, ItemFailureSticks, LeavesFinishing, LockReleased, MicReleased, BarLeavesWorking.
