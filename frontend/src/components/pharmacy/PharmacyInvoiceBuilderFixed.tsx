@@ -153,6 +153,7 @@ interface InvoiceItem {
   availableStock?: number;
   substituted?: boolean;
   quantityReview?: string;
+  quantityReviewReason?: string;
   quantityConfirmed?: boolean;
 }
 
@@ -656,6 +657,7 @@ export function PharmacyInvoiceBuilderFixed({
                   },
                 quantity: keepQuantity ? existingItem!.quantity : filledQuantity,
                 quantityReview: keepQuantity ? existingItem!.quantityReview : stock?.billingQuantity?.review?.message,
+                quantityReviewReason: keepQuantity ? existingItem!.quantityReviewReason : stock?.billingQuantity?.review?.reason,
                 quantityConfirmed: existingItem?.quantityConfirmed,
                 unitPrice: sameProduct ? existingItem!.unitPrice : getDrugUnitPrice(reviewedDrug),
                 discountPercent: existingItem?.discountPercent ?? 0,
@@ -1110,6 +1112,7 @@ export function PharmacyInvoiceBuilderFixed({
         ...item,
         quantity: Math.max(1, recount?.quantity ?? item.quantity),
         quantityReview: recount ? recount.review?.message : 'Could not recount for the replacement. Confirm how many to bill.',
+        quantityReviewReason: recount?.review?.reason,
       };
       calculateItemTotal(recounted);
       return recounted;
@@ -2090,7 +2093,7 @@ export function PharmacyInvoiceBuilderFixed({
                 <div ref={drugSearchRef} className="space-y-2">
                   {substitutingItemId && (
                     <div role="status" className="flex items-center justify-between gap-2 rounded-md border border-info-border bg-info-soft px-3 py-2 text-sm text-info-text">
-                      <span>Choose a replacement for {billLineName(items.find(item => item.id === substitutingItemId) ?? {})}. The prescribed quantity will be kept.</span>
+                      <span>Choose a replacement for {billLineName(items.find(item => item.id === substitutingItemId) ?? {})}. The quantity is recounted for the replacement unless you already confirmed it.</span>
                       <Button variant="ghost" size="sm" className="shrink-0" onClick={() => setSubstitutingItemId(null)}>Cancel substitution</Button>
                     </div>
                   )}
@@ -2439,15 +2442,17 @@ export function PharmacyInvoiceBuilderFixed({
                             className="col-span-full flex items-center gap-2 rounded-md border border-warning-border bg-warning-soft px-2 py-1 text-xs text-warning-text"
                           >
                             <span className="flex-1">{item.quantityReview}</span>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              className="h-6 min-h-6 border-warning-border px-2 text-xs"
-                              onClick={() => clearQuantityReview(item.id)}
-                            >
-                              Confirm
-                            </Button>
+                            {item.quantityReviewReason !== 'product_unknown' && (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="h-6 min-h-6 border-warning-border px-2 text-xs"
+                                onClick={() => clearQuantityReview(item.id)}
+                              >
+                                Confirm
+                              </Button>
+                            )}
                           </div>
                         )}
 

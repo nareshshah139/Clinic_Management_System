@@ -249,7 +249,7 @@ export function billingQuantity(
       unit: null,
       review: {
         reason: 'product_unknown',
-        message: `No stock item matched, so ${need.amount} is the dose count, not a selling unit. Confirm how many to bill once the product is chosen.`,
+        message: `No stock item matched, so ${need.amount} is the dose count, not a selling unit. Choose an alternative or link an item to count it.`,
       },
     };
   }
