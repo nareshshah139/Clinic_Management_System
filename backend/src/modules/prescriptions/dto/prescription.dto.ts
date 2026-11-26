@@ -96,9 +96,10 @@ export class PrescriptionItemDto {
   @IsString()
   frequency: string;
 
+  @IsOptional()
   @IsNumber()
   @Min(1)
-  duration: number;
+  duration?: number;
 
   @IsString()
   durationUnit: string;

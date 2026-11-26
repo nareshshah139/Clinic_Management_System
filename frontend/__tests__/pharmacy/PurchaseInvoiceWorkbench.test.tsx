@@ -472,6 +472,19 @@ describe('PurchaseInvoiceWorkbench', () => {
     expect(screen.getByLabelText('Product')).toHaveValue('Cosglo corrected name');
   });
 
+  it('keeps every typed field enabled while the automatic product check runs, so typing is not cut off after one letter', async () => {
+    api.suggestPharmacyPurchaseMasterMatches.mockImplementation(() => new Promise(() => {}));
+    renderSavedInvoice(draftInvoice);
+    await waitFor(() => expect(api.suggestPharmacyPurchaseMasterMatches).toHaveBeenCalledTimes(1));
+    const typed = ['Product', 'Pack Size', 'Stock unit', 'Batch', 'Paid Qty', 'Rate', 'MRP', 'Distributor', 'GSTIN', 'Invoice No.'];
+    for (const label of typed) expect(screen.getByLabelText(label)).toBeEnabled();
+    fireEvent.change(screen.getByLabelText('Stock unit'), { target: { value: 'Tube' } });
+    await waitFor(() => expect(api.suggestPharmacyPurchaseMasterMatches).toHaveBeenCalledTimes(2));
+    for (const label of typed) expect(screen.getByLabelText(label)).toBeEnabled();
+    expect(screen.getByLabelText('Stock unit')).toHaveValue('Tube');
+    expect(screen.getByRole('button', { name: 'Confirm reviewed values & add stock' })).toBeDisabled();
+  });
+
   it('ignores a stale product save after switching invoices without changing notice or focus', async () => {
     mockPurchaseAccess = { ...mockPurchaseAccess, catalogDetails: true, editProduct: true } as typeof mockPurchaseAccess;
     let finishSave!: (product: unknown) => void;

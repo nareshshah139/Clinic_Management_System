@@ -77,7 +77,7 @@ Paths are under `backend/src/modules/` unless they start with `frontend/`.
 | `DeskPlansCheckIn` | `frontend/src/lib/voice-command.ts:292`, the `WAITING` filter in `matchAppointment` |
 | `DeskConfirmsCheckIn` | `frontend/src/components/voice/VoiceCommandDialog.tsx:209` sends `PATCH /appointments/:id` with `status: CHECKED_IN`, served by `appointments/appointments.service.ts:478` `update` |
 | `DeskSetsStatus` | `appointments/appointments.service.ts:478` `update`. Re-read and compare at line 515, `assertStatusEdit` at line 518, capacity check only when the calendar changes at line 519, compare-and-set on the status read at line 532. Roles ADMIN, DOCTOR, NURSE, RECEPTION. |
-| `AdminBulkSets` | `appointments/appointments.service.ts:622` `bulkUpdate`. Refuses `SCHEDULED` and `CONFIRMED` targets at line 624, `assertStatusEdit` on every row at line 636, then one `updateMany` that compare-and-sets each row on the status it read at line 638, in a transaction that rolls back unless every row matched. ADMIN only. |
+| `AdminBulkSets` | `appointments/appointments.service.ts:658` `bulkUpdate`. `assertStatusEdit` on every row at line 670, refuse a row whose new status belongs to a calendar it is not in at line 672, then one `updateMany` that compare-and-sets each row on the status it read at line 675, in a transaction that rolls back unless every row matched. ADMIN only. |
 | `CodeAllows` | `appointments/appointments.service.ts:81` `assertStatusEdit` |
 | `PatchAllows`, `BulkAllows` | `before` accepts every jump. `code` is `CodeAllows`. `fixed` and its controls use the visit guard. |
 | `Reopens` | Only the `editReopens` control. No code reopens a visit. |
