@@ -9,7 +9,7 @@ import { createHash } from 'node:crypto';
 import * as XLSX from 'xlsx';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../shared/database/prisma.service';
-import { expandPackMultiplier } from '../../shared/pack-size';
+import { readPackMultiplier } from '../../shared/pack-size';
 import {
   InventoryItemType,
   InventoryStatus,
@@ -1178,24 +1178,28 @@ export class InventoryImportService {
     packUnit?: string;
     unit: UnitType;
   } {
-    const normalized = expandPackMultiplier(packSizeLabel).toLowerCase();
+    const normalized = packSizeLabel.toLowerCase();
     const stripMatch = normalized.match(/strip\s+of\s+(\d+)/);
     const genericMatch = normalized.match(/(\d+(?:\.\d+)?)\s*([a-z]+)/);
-    const packSize = stripMatch
-      ? Number(stripMatch[1])
-      : genericMatch
-        ? Number(genericMatch[1])
-        : undefined;
     const packUnit = stripMatch
       ? 'pieces'
       : genericMatch
         ? genericMatch[2]
         : undefined;
+    const unit = this.mapImportUnitType(`${packSizeLabel} ${packUnit || ''}`);
+    const multiplier = readPackMultiplier(packSizeLabel, unit);
+    const packSize = multiplier
+      ? multiplier.unitsPerStockUnit
+      : stripMatch
+        ? Number(stripMatch[1])
+        : genericMatch
+          ? Number(genericMatch[1])
+          : undefined;
 
     return {
       packSize: packSize ? Math.max(1, Math.round(packSize)) : undefined,
       packUnit,
-      unit: this.mapImportUnitType(`${packSizeLabel} ${packUnit || ''}`),
+      unit,
     };
   }
 
