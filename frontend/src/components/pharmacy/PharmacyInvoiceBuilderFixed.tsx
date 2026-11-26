@@ -153,6 +153,7 @@ interface InvoiceItem {
   availableStock?: number;
   substituted?: boolean;
   quantityReview?: string;
+  quantityReviewReason?: string;
   quantityConfirmed?: boolean;
 }
 
@@ -656,6 +657,7 @@ export function PharmacyInvoiceBuilderFixed({
                   },
                 quantity: keepQuantity ? existingItem!.quantity : filledQuantity,
                 quantityReview: keepQuantity ? existingItem!.quantityReview : stock?.billingQuantity?.review?.message,
+                quantityReviewReason: keepQuantity ? existingItem!.quantityReviewReason : stock?.billingQuantity?.review?.reason,
                 quantityConfirmed: existingItem?.quantityConfirmed,
                 unitPrice: sameProduct ? existingItem!.unitPrice : getDrugUnitPrice(reviewedDrug),
                 discountPercent: existingItem?.discountPercent ?? 0,
@@ -1094,13 +1096,41 @@ export function PharmacyInvoiceBuilderFixed({
     });
   };
 
+  const recountForReplacement = async (itemId: string, prescriptionId: string, lineIndex: number, drugId: string) => {
+    let recount: PrescriptionStockItem['billingQuantity'] | undefined;
+    try {
+      recount = await apiClient.get<NonNullable<PrescriptionStockItem['billingQuantity']>>(
+        `/pharmacy/prescription-queue/${prescriptionId}/replacement-quantity`,
+        { lineIndex, drugId },
+      );
+    } catch (error) {
+      console.error('Replacement quantity check failed:', getErrorMessage(error));
+    }
+    setItems(current => current.map(item => {
+      if (item.id !== itemId || item.quantityConfirmed || item.drug?.id !== drugId) return item;
+      const recounted: InvoiceItem = {
+        ...item,
+        quantity: Math.max(1, recount?.quantity ?? item.quantity),
+        quantityReview: recount ? recount.review?.message : 'Could not recount for the replacement. Confirm how many to bill.',
+        quantityReviewReason: recount?.review?.reason,
+      };
+      calculateItemTotal(recounted);
+      return recounted;
+    }));
+  };
+
   /**
    * @cc [owner:nareshshah139,label:product] prescription-explicit-substitution
-   * A pharmacist-selected replacement MUST retain the original prescribed name, quantity,
-   * and instructions while replacing the billed product identity, price, GST and stock warning.
+   * A pharmacist-selected replacement MUST retain the original prescribed name and instructions, and a
+   * quantity the pharmacist confirmed, while replacing the billed product identity, price, GST and stock warning.
+   * A quantity not yet confirmed MUST be recounted from the prescription in the replacement's selling
+   * unit; if the recount fails the line MUST be flagged, never billed at the old count unflagged.
    */
   const addDrugToInvoice = (drug: Drug) => {
     if (substitutingItemId) {
+      const replaced = items.find(item => item.id === substitutingItemId);
+      if (replaced && !replaced.quantityConfirmed && replaced.prescriptionLineIndex !== undefined && prescriptionData?.id)
+        void recountForReplacement(replaced.id, prescriptionData.id, replaced.prescriptionLineIndex, drug.id);
       setItems(current => current.map(item => {
         if (item.id !== substitutingItemId) return item;
         const replacement: InvoiceItem = {
@@ -2063,7 +2093,7 @@ export function PharmacyInvoiceBuilderFixed({
                 <div ref={drugSearchRef} className="space-y-2">
                   {substitutingItemId && (
                     <div role="status" className="flex items-center justify-between gap-2 rounded-md border border-info-border bg-info-soft px-3 py-2 text-sm text-info-text">
-                      <span>Choose a replacement for {billLineName(items.find(item => item.id === substitutingItemId) ?? {})}. The prescribed quantity will be kept.</span>
+                      <span>Choose a replacement for {billLineName(items.find(item => item.id === substitutingItemId) ?? {})}. The quantity is recounted for the replacement unless you already confirmed it.</span>
                       <Button variant="ghost" size="sm" className="shrink-0" onClick={() => setSubstitutingItemId(null)}>Cancel substitution</Button>
                     </div>
                   )}
@@ -2412,15 +2442,17 @@ export function PharmacyInvoiceBuilderFixed({
                             className="col-span-full flex items-center gap-2 rounded-md border border-warning-border bg-warning-soft px-2 py-1 text-xs text-warning-text"
                           >
                             <span className="flex-1">{item.quantityReview}</span>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              className="h-6 min-h-6 border-warning-border px-2 text-xs"
-                              onClick={() => clearQuantityReview(item.id)}
-                            >
-                              Confirm
-                            </Button>
+                            {item.quantityReviewReason !== 'product_unknown' && (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="h-6 min-h-6 border-warning-border px-2 text-xs"
+                                onClick={() => clearQuantityReview(item.id)}
+                              >
+                                Confirm
+                              </Button>
+                            )}
                           </div>
                         )}
 

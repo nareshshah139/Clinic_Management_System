@@ -254,6 +254,81 @@ it('substitutes an unmatched line with the chosen product and keeps its edited q
   })));
 });
 
+describe('replacing an unmatched tablet course', () => {
+  const recountUrl = '/pharmacy/prescription-queue/rx-1/replacement-quantity';
+  const doseCount = { quantity: 30, unit: null, review: { reason: 'product_unknown', message: 'No stock item matched. Filled 30 as the dose count.' } };
+  const prescribeUnmatchedCourse = (recount: (query: unknown) => unknown) => {
+    const get = api.get.getMockImplementation()!;
+    api.getPrescription.mockImplementation(async (id) => ({
+      id, updatedAt: prescriptionVersion, visit: { patient: secondPatient, doctor },
+      items: [{ drugName: 'Unmatched cream', dosage: 1, dosageUnit: 'TABLET', frequency: 'ONCE_DAILY', duration: 30, durationUnit: 'DAYS' }],
+    }) as any);
+    api.get.mockImplementation(async (url, query: any) => {
+      if (url === '/pharmacy/prescription-queue/rx-1/stock-check')
+        return { items: [{ drugName: 'Unmatched cream', prescriptionVersion, matchedDrug: null, stockStatus: 'UNMATCHED', totalNonExpiredStock: 0, lowStock: true, alternatives: [], billingQuantity: doseCount }] };
+      if (url === recountUrl) return recount(query);
+      return get(url, query);
+    });
+  };
+  const substituteWith = async (name: string) => {
+    render(<SalesBillPage />);
+    await loadPatient(secondPatient.name);
+    const item = (await screen.findByRole('heading', { name: 'Unmatched cream', level: 4 })).closest('[data-invoice-item]') as HTMLElement;
+    fireEvent.click(within(item).getByRole('button', { name: 'Choose alternative for Unmatched cream' }));
+    fireEvent.change(screen.getByLabelText('Search Drugs'), { target: { value: name.slice(0, 7) } });
+    const result = (await screen.findByRole('heading', { name, level: 4 })).closest('[role="button"]') as HTMLElement;
+    fireEvent.click(within(result).getByRole('button', { name: 'Add' }));
+    return item;
+  };
+
+  it('bills the course in the replacement’s selling unit, not the dose count', async () => {
+    prescribeUnmatchedCourse(() => ({ quantity: 3, unit: 'STRIPS', review: null }));
+    const item = await substituteWith(names[1]);
+    await waitFor(() => expect(within(item).getByLabelText('Quantity')).toHaveValue(3));
+    expect(api.get).toHaveBeenCalledWith(recountUrl, { lineIndex: 0, drugId: 'drug-1' });
+    expect(within(item).queryByText(/dose count/)).not.toBeInTheDocument();
+  });
+
+  it('does not offer to confirm a dose count before a product is chosen', async () => {
+    prescribeUnmatchedCourse(() => ({ quantity: 3, unit: 'STRIPS', review: null }));
+    render(<SalesBillPage />);
+    await loadPatient(secondPatient.name);
+    const item = (await screen.findByRole('heading', { name: 'Unmatched cream', level: 4 })).closest('[data-invoice-item]') as HTMLElement;
+    expect(within(item).getByText(/dose count/)).toBeInTheDocument();
+    expect(within(item).queryByRole('button', { name: 'Confirm' })).not.toBeInTheDocument();
+  });
+
+  it('says an unconfirmed quantity is recounted when choosing a replacement', async () => {
+    prescribeUnmatchedCourse(() => ({ quantity: 3, unit: 'STRIPS', review: null }));
+    render(<SalesBillPage />);
+    await loadPatient(secondPatient.name);
+    const item = (await screen.findByRole('heading', { name: 'Unmatched cream', level: 4 })).closest('[data-invoice-item]') as HTMLElement;
+    fireEvent.click(within(item).getByRole('button', { name: 'Choose alternative for Unmatched cream' }));
+    expect(await screen.findByText(/recounted for the replacement/)).toBeInTheDocument();
+    expect(screen.queryByText(/prescribed quantity will be kept/)).not.toBeInTheDocument();
+  });
+
+  it('flags the line instead of billing the dose count when the recount fails', async () => {
+    prescribeUnmatchedCourse(() => { throw new Error('offline'); });
+    const item = await substituteWith(names[1]);
+    expect(await within(item).findByText(/Could not recount/)).toBeInTheDocument();
+  });
+
+  it('keeps a quantity the pharmacist already confirmed', async () => {
+    prescribeUnmatchedCourse(() => ({ quantity: 3, unit: 'STRIPS', review: null }));
+    render(<SalesBillPage />);
+    await loadPatient(secondPatient.name);
+    const item = (await screen.findByRole('heading', { name: 'Unmatched cream', level: 4 })).closest('[data-invoice-item]') as HTMLElement;
+    fireEvent.change(within(item).getByLabelText('Quantity'), { target: { value: '12' } });
+    fireEvent.click(within(item).getByRole('button', { name: 'Choose alternative for Unmatched cream' }));
+    fireEvent.change(screen.getByLabelText('Search Drugs'), { target: { value: 'Nixiper' } });
+    const result = (await screen.findByRole('heading', { name: names[1], level: 4 })).closest('[role="button"]') as HTMLElement;
+    fireEvent.click(within(result).getByRole('button', { name: 'Add' }));
+    expect(within(item).getByLabelText('Quantity')).toHaveValue(12);
+    expect(api.get).not.toHaveBeenCalledWith(recountUrl, expect.anything());
+  });
+});
+
 it('ignores a late prescription response after switching patients', async () => {
   let resolveFirst!: (value: any) => void;
   const original = api.getPrescription.getMockImplementation()!;

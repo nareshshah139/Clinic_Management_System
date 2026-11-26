@@ -177,6 +177,7 @@ GET /pharmacy/partner-sales/missing | roles: OWNER,ADMIN,MANAGER,DOCTOR,PHARMACI
 GET /pharmacy/partner-sales/today-summary | roles: OWNER,ADMIN,MANAGER,DOCTOR,PHARMACIST,RECEPTION | permissions: -
 GET /pharmacy/prescription-queue | roles: OWNER,ADMIN,MANAGER,DOCTOR,PHARMACIST,RECEPTION | permissions: -
 GET /pharmacy/prescription-queue/:prescriptionId | roles: OWNER,ADMIN,MANAGER,DOCTOR,PHARMACIST,RECEPTION | permissions: -
+GET /pharmacy/prescription-queue/:prescriptionId/replacement-quantity | roles: OWNER,ADMIN,MANAGER,DOCTOR,PHARMACIST,RECEPTION | permissions: -
 GET /pharmacy/prescription-queue/:prescriptionId/stock-check | roles: OWNER,ADMIN,MANAGER,DOCTOR,PHARMACIST,RECEPTION | permissions: -
 GET /pharmacy/prescription-queue/inventory-stock/:id | roles: OWNER,ADMIN,MANAGER,DOCTOR,PHARMACIST,RECEPTION | permissions: pharmacy:invoice:read|inventory:item:read|pharmacy:drug:autocomplete
 GET /pharmacy/prescription-queue/inventory-suggestions | roles: OWNER,ADMIN,MANAGER,DOCTOR,PHARMACIST,RECEPTION | permissions: pharmacy:invoice:read|inventory:item:read|pharmacy:drug:autocomplete

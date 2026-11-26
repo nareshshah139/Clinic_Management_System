@@ -77,9 +77,70 @@ describe('billing quantity from stockCheck', () => {
     expect(item.billingQuantity).toMatchObject({ quantity: 15, unit: 'PIECES', review: { reason: 'schedule_conflict' } });
   });
 
+  it('flags the dose count of a line matched to no stock item, since it has no selling unit', async () => {
+    const [item] = await stockCheck([{ drugName: 'Acnosis tablet', ...tablet }]);
+    expect(item.billingQuantity).toMatchObject({ quantity: 30, unit: null, review: { reason: 'product_unknown' } });
+  });
+
   it('fills 1 pack with no unit for an unmatched serum', async () => {
     const [item] = await stockCheck([{ drugName: 'Mystery Hair Serum', ...tablet }]);
     expect(item.billingQuantity).toMatchObject({ quantity: 1, unit: null, review: { reason: 'pack_item' } });
+  });
+});
+
+describe('replacement product quantity', () => {
+  const stocked = (drugId: string, row: Record<string, unknown>) => ({
+    id: `inv-${drugId}`, branchId: 'branch-1', status: 'ACTIVE', currentStock: 20, heldStock: 0, expiryDate: new Date('2099-01-01'),
+    stockStatus: 'IN_STOCK', name: drugId, packUnit: null, ...row,
+    drugs: [{ id: drugId, branchId: 'branch-1', isActive: true, isDiscontinued: false }],
+  });
+  const shelf = [
+    stocked('drug-strip', { unit: 'STRIPS', packSize: 10, packUnit: 'Strip' }),
+    stocked('drug-pieces', { unit: 'PIECES', packSize: 10, packUnit: 'Tablet' }),
+    stocked('drug-bottle', { unit: 'BOTTLES', packSize: 60, packUnit: 'ml' }),
+  ];
+  const replacement = async (line: Line, drugId: string, lineIndex = 0) => {
+    const prisma: any = {
+      $queryRaw: jest.fn(async (sql: any) => (Array.isArray(sql) && sql.join('').includes('inventory_items') ? [] : [{ id: 'rx-1' }])),
+      prescription: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'rx-1', createdAt: new Date(), updatedAt: new Date(), items: JSON.stringify([line]),
+          visit: { patient: { id: 'patient-1' }, doctor: { id: 'doctor-1', firstName: 'Test', lastName: 'Doctor' } },
+          pharmacyInvoices: [],
+        }),
+      },
+      prescriptionInventoryLink: { findUnique: jest.fn().mockResolvedValue(null) },
+      inventoryItem: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        findMany: jest.fn(async ({ where }: any) => shelf.filter((row) => row.drugs.some((drug) => drug.id === where.drugs?.some?.id))),
+      },
+    };
+    return new PharmacyPrescriptionQueueService(prisma, {} as any).replacementQuantity('rx-1', 'branch-1', lineIndex, drugId);
+  };
+  const course = { drugName: 'Acnotab tablet', ...tablet };
+
+  it('counts a 30 tablet course as 3 strips when the replacement sells strips of 10', async () => {
+    expect(await replacement(course, 'drug-strip')).toEqual({ quantity: 3, unit: 'STRIPS', review: null });
+  });
+
+  it('counts the same course as 30 pieces when the replacement sells pieces', async () => {
+    expect(await replacement(course, 'drug-pieces')).toEqual({ quantity: 30, unit: 'PIECES', review: null });
+  });
+
+  it('fills 1 and flags a bottle replacement', async () => {
+    expect(await replacement(course, 'drug-bottle')).toMatchObject({ quantity: 1, unit: 'BOTTLES', review: { reason: 'pack_item' } });
+  });
+
+  it('lets an explicit prescribed quantity win over the replacement unit', async () => {
+    expect(await replacement({ ...course, quantity: 5 }, 'drug-strip')).toEqual({ quantity: 5, unit: 'STRIPS', review: null });
+  });
+
+  it('flags the dose count when the replacement has no stock to count units from', async () => {
+    expect(await replacement(course, 'drug-unstocked')).toMatchObject({ quantity: 30, unit: null, review: { reason: 'product_unknown' } });
+  });
+
+  it('rejects a line the prescription does not have', async () => {
+    await expect(replacement(course, 'drug-strip', 4)).rejects.toThrow('Prescription line no longer exists');
   });
 });
 

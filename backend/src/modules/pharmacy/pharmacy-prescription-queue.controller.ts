@@ -26,7 +26,7 @@ import {
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
 import { PharmacyPrescriptionQueueService } from './pharmacy-prescription-queue.service';
-import { QueryPrescriptionQueueDto } from './dto/pharmacy-prescription-queue.dto';
+import { QueryPrescriptionQueueDto, ReplacementQuantityDto } from './dto/pharmacy-prescription-queue.dto';
 
 @ApiTags('Pharmacy Prescription Queue')
 @ApiBearerAuth()
@@ -106,6 +106,22 @@ export class PharmacyPrescriptionQueueController {
     @Request() req: any,
   ) {
     return this.queueService.pull(prescriptionId, req.user.branchId);
+  }
+
+  @Get(':prescriptionId/replacement-quantity')
+  @ApiOperation({ summary: 'Count a prescription line in the unit of a replacement product' })
+  @ApiResponse({ status: 200, description: 'Billing quantity for the replacement' })
+  async replacementQuantity(
+    @Param('prescriptionId') prescriptionId: string,
+    @Query() query: ReplacementQuantityDto,
+    @Request() req: any,
+  ) {
+    return this.queueService.replacementQuantity(
+      prescriptionId,
+      req.user.branchId,
+      query.lineIndex,
+      query.drugId,
+    );
   }
 
   @Get(':prescriptionId/stock-check')

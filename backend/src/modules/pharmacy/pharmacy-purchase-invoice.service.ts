@@ -27,6 +27,7 @@ import sharp from 'sharp';
 import type { Express } from 'express';
 import { permissionGrants, userGrants } from '../../shared/access/permission-grants';
 import { PrismaService } from '../../shared/database/prisma.service';
+import { readPackMultiplier } from '../../shared/pack-size';
 import { clinicDayOf, clinicDayRange, clinicDayStart } from './register-utils';
 import {
   ConfirmPharmacyPurchaseMasterDto,
@@ -2076,6 +2077,7 @@ export class PharmacyPurchaseInvoiceService {
 
     const minStockLevel = this.toPositiveInt(drug.minStockLevel, 10);
     const currentStock = quantities.totalQuantity;
+    const unit = this.mapUnitType(item.packUnitType, item.packSize);
     return tx.inventoryItem.create({
       data: {
         branchId,
@@ -2090,8 +2092,8 @@ export class PharmacyPurchaseInvoiceService {
         costPrice: this.money(item.purchaseRate),
         sellingPrice: this.money(item.mrp),
         mrp: this.money(item.mrp),
-        unit: this.mapUnitType(item.packUnitType, item.packSize),
-        packSize: this.extractPackSize(item.packSize),
+        unit,
+        packSize: this.extractPackSize(item.packSize, unit),
         packUnit: item.packUnitType.trim(),
         currentStock,
         minStockLevel,
@@ -2280,8 +2282,11 @@ export class PharmacyPurchaseInvoiceService {
     return 'PIECES';
   }
 
-  private extractPackSize(packSize?: string): number | undefined {
-    const match = String(packSize ?? '').match(/\d+/);
+  private extractPackSize(packSize: string | undefined, stockUnit: string): number | undefined {
+    const label = String(packSize ?? '');
+    const multiplier = readPackMultiplier(label, stockUnit);
+    if (multiplier) return multiplier.unitsPerStockUnit;
+    const match = label.match(/\d+/);
     if (!match) return undefined;
     const parsed = Number(match[0]);
     return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;

@@ -1,5 +1,5 @@
 import { Transform } from 'class-transformer';
-import { IsBoolean, IsEnum, IsInt, IsOptional, Max, Min } from 'class-validator';
+import { IsBoolean, IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export enum PrescriptionQueueStatus {
@@ -46,4 +46,20 @@ export class QueryPrescriptionQueueDto {
   @IsInt()
   @Min(1)
   page?: number = 1;
+}
+
+export class ReplacementQuantityDto {
+  @ApiPropertyOptional({ description: 'Index of the prescription line being replaced' })
+  @Transform(({ value }) => {
+    const parsed = Number.parseInt(String(value), 10);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  })
+  @IsInt()
+  @Min(0)
+  lineIndex: number;
+
+  @ApiPropertyOptional({ description: 'Catalogue product chosen in place of the prescribed one' })
+  @IsString()
+  @MaxLength(100)
+  drugId: string;
 }

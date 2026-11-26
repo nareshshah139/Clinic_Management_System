@@ -73,6 +73,52 @@ describe('Pharmacy stock export compatibility', () => {
     },
   );
 
+  const U = undefined;
+  it.each([
+    ['1x10', 'PIECES', 1],
+    ['1*10', 'PIECES', U],
+    ['1 x 10', 'PIECES', 1],
+    ['1×10', 'PIECES', U],
+    ['1X15', 'PIECES', 1],
+    ['2x10', 'PIECES', 2],
+    ['3x10x1', 'PIECES', 3],
+    ['10x1', 'PIECES', 10],
+    ['10x10', 'PIECES', 10],
+    ['1x1', 'PIECES', 1],
+    ["10's", 'PIECES', U],
+    ['Strip of 10', 'STRIPS', 10],
+    ['10 tablets', 'STRIPS', 10],
+    ['60 caps', 'PIECES', 60],
+    ['100ml', 'BOTTLES', 100],
+    ['15gm', 'TUBES', 15],
+    ['1x15gm', 'PIECES', 1],
+    ['1x100ml', 'PIECES', 1],
+    ['5x2ml', 'PIECES', 5],
+    ['1x10 tablets', 'STRIPS', 10],
+    ['1 x 10 Tablets', 'STRIPS', 10],
+    ['1×15 capsules', 'STRIPS', 15],
+    ['1x10 strip', 'STRIPS', 10],
+    ['2x10 strip', 'STRIPS', 10],
+    ['10x10 tablets', 'STRIPS', 10],
+    ['10x1 tablets', 'STRIPS', U],
+    ['3x10x1 tablets', 'STRIPS', U],
+    ['1x100ml strip', 'STRIPS', U],
+    ['2x10 box', 'BOXES', 20],
+    ['10x10 box', 'BOXES', 100],
+    ['3x10x1 box', 'BOXES', U],
+    ['5x2ml bottle', 'BOTTLES', 5],
+    ['1x15gm tube', 'TUBES', 1],
+  ])('imports pack size %s as %s with %s units per stock unit', async (packSize, unit, units) => {
+    const service = new InventoryImportService({} as any);
+    const result = await service.previewStarterExcel(
+      file([
+        ['Drug name', 'Pack Size', 'Current Stock(Loose)'],
+        ['Tab. Example', packSize, 20],
+      ]),
+    );
+    expect({ unit: result.rows[0].unit, packSize: result.rows[0].packSize }).toEqual({ unit, packSize: units });
+  });
+
   it('does not guess that an arbitrary unnamed column contains medicine names', async () => {
     const service = new InventoryImportService({} as any);
     const result = await service.previewStarterExcel(
