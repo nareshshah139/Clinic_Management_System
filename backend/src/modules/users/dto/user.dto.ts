@@ -1,6 +1,9 @@
 import { IsString, IsOptional, IsEmail, IsEnum, IsBoolean, IsArray, IsDateString, MinLength, MaxLength, IsByteLength } from 'class-validator';
 import { BCRYPT_MAX_BYTES, PASSWORD_BYTES } from '../../auth/dto/password-reset.dto';
 import { UserRole, UserStatus } from '@prisma/client';
+import { Transform } from 'class-transformer';
+
+const trimmed = () => Transform(({ value }) => (typeof value === 'string' ? value.trim() : value));
 
 // Runtime enums for class-validator to avoid undefined during decorator evaluation in some build environments
 export enum UserRoleEnum {
@@ -325,48 +328,59 @@ export class CreateBranchDto {
 }
 
 export class UpdateBranchDto {
+  @trimmed()
   @IsString()
   @IsOptional()
   @MinLength(2)
   @MaxLength(100)
   name?: string;
 
+  @trimmed()
   @IsString()
   @IsOptional()
   description?: string;
 
+  @trimmed()
   @IsString()
   @IsOptional()
   address?: string;
 
+  @trimmed()
   @IsString()
   @IsOptional()
   city?: string;
 
+  @trimmed()
   @IsString()
   @IsOptional()
   state?: string;
 
+  @trimmed()
   @IsString()
   @IsOptional()
   pincode?: string;
 
+  @trimmed()
   @IsString()
   @IsOptional()
   phone?: string;
 
+  @trimmed()
   @IsEmail()
   @IsOptional()
   email?: string;
 
+  @trimmed()
   @IsString()
   @IsOptional()
   website?: string;
 
+  @trimmed()
   @IsString()
   @IsOptional()
   gstNumber?: string;
 
+  @trimmed()
   @IsString()
   @IsOptional()
   licenseNumber?: string;

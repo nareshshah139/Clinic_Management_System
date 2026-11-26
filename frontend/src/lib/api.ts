@@ -15,6 +15,7 @@ export interface ApiError extends Error {
 }
 
 import type {
+  ClinicDetails,
   DrugInventoryCatalogRow,
   DrugInventoryChangeRequest,
   DrugInventoryChangeRequestResponse,
@@ -948,6 +949,14 @@ export class ApiClient {
 
   async getUser(id: string) {
     return this.get(`/users/${id}`);
+  }
+
+  async getClinicDetails(branchId: string) {
+    return this.get<ClinicDetails>(`/users/branches/${encodeURIComponent(branchId)}`);
+  }
+
+  async updateClinicDetails(branchId: string, data: Partial<ClinicDetails>) {
+    return this.patch<ClinicDetails>(`/users/branches/${encodeURIComponent(branchId)}`, data);
   }
 
   async updateUserProfile(id: string, data: Record<string, unknown>) {
