@@ -122,12 +122,12 @@ it.each([undefined, '', 'LAB_TECH', 'PATIENT', 'constructor'])('offers no page t
   expect(within(screen.getByRole('navigation', { name: 'Main navigation' })).queryAllByRole('link')).toEqual([]);
 });
 
-it('carries the clinic name instead of a generic product name, and no developer page', () => {
+it('carries the Linaé name instead of a generic product name, and no developer page', () => {
   mockRole = 'OWNER';
   mockPath = '/dashboard';
   mockQuery = '';
   render(<Sidebar />);
-  expect(screen.getByRole('img', { name: 'Linaé Skin, Hair and Aesthetic Clinic' })).toHaveAttribute('src', expect.stringContaining('linae-name.png'));
+  expect(screen.getByRole('img', { name: 'Linaé' })).toHaveAttribute('src', expect.stringContaining('linae-name.png'));
   expect(screen.queryByText(/ClinicMS|Test Transcribe/)).not.toBeInTheDocument();
 });
 

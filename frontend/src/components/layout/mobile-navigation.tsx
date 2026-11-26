@@ -2,7 +2,6 @@
 
 import { Suspense, useState } from 'react';
 import Image from 'next/image';
-import { CLINIC_NAME } from '@/lib/clinic-brand';
 import { Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -34,7 +33,7 @@ export function MobileNavigation() {
           </Suspense>
         </SheetContent>
       </Sheet>
-      <Image src="/linae-name.png" alt={CLINIC_NAME} width={304} height={112} className="h-6 w-auto" />
+      <Image src="/linae-name.png" alt="Linaé" width={304} height={112} className="h-6 w-auto" />
     </div>
   );
 }
