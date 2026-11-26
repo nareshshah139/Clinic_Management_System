@@ -4,7 +4,9 @@ import { Injectable, BadRequestException, NotFoundException, ConflictException }
 import { PrismaService } from '../../shared/database/prisma.service';
 import { CreateVisitDto, UpdateVisitDto, CompleteVisitDto } from './dto/create-visit.dto';
 import { QueryVisitsDto, PatientVisitHistoryDto, DoctorVisitsDto } from './dto/query-visit.dto';
-import { Language, Prisma } from '@prisma/client';
+import { Language, Prisma, VisitStatus } from '@prisma/client';
+import { clinicDay, clinicDayStart } from '../pharmacy/register-utils';
+import { isRecordedProcedure } from './procedure-access';
 import { join, posix as pathPosix } from 'path';
 import { randomBytes } from 'crypto';
 import * as fs from 'fs';
@@ -47,6 +49,28 @@ export class VisitsService {
     const patient = await this.prisma.patient.findFirst({ where: { id: patientId, branchId } });
     if (!patient) throw new NotFoundException('Patient not found in this branch');
     return { personalHistory: (await this.latestPersonalHistory(patientId, branchId)) ?? null };
+  }
+
+  async findOpenVisit(patientId: string, doctorId: string, branchId: string, now = new Date()) {
+    const candidates = await this.prisma.visit.findMany({
+      where: {
+        patientId,
+        doctorId,
+        status: VisitStatus.IN_PROGRESS,
+        deletedAt: null,
+        patient: { branchId },
+        createdAt: { gte: clinicDayStart(clinicDay(now)) },
+      },
+      orderBy: { updatedAt: 'desc' },
+      select: { id: true, patientId: true, doctorId: true, appointmentId: true, createdAt: true, updatedAt: true, plan: true },
+    });
+    const consultation = candidates.find(({ plan }) => {
+      const record = this.safeParse<any>(plan, null);
+      return !isRecordedProcedure(record?.dermatology?.procedures?.[0]) && record?.prescriptionOnly !== true;
+    });
+    if (!consultation) return null;
+    const { id, appointmentId, createdAt, updatedAt } = consultation;
+    return { id, patientId, doctorId, appointmentId, createdAt, updatedAt };
   }
 
   /**

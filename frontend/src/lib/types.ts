@@ -614,6 +614,15 @@ export interface VisitPatientSummary {
   medicalHistory?: string | null;
 }
 
+export interface OpenVisitSummary {
+  id: string;
+  patientId: string;
+  doctorId: string;
+  appointmentId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface VisitDetails {
   version?: number;
   consultationType?: 'IN_PERSON' | 'TELE_VIDEO';

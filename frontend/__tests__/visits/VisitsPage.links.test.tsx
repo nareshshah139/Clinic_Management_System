@@ -16,6 +16,7 @@ jest.mock('@/lib/api', () => ({
     get: jest.fn(),
     getAppointment: jest.fn(),
     getAllPatientVisitHistory: jest.fn().mockResolvedValue([]),
+    getOpenVisit: jest.fn().mockResolvedValue({ visit: null }),
   },
 }));
 jest.mock('@/components/visits/MedicalVisitForm', () => function Form({ patientId, doctorId, initialVisitId, appointmentId, visitDate, identity, onUnsavedChange }: { patientId: string; doctorId: string; initialVisitId?: string; appointmentId?: string; visitDate?: string; identity?: ReactNode; onUnsavedChange?: (unsaved: boolean) => void }) {

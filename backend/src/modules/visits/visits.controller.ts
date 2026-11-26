@@ -31,6 +31,7 @@ import {
   PatientVisitHistoryDto,
   PatientVisitHistoryQueryDto,
   DoctorVisitsQueryDto,
+  OpenVisitQueryDto,
 } from './dto/query-visit.dto';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
@@ -393,6 +394,12 @@ export class VisitsController {
       startDate,
       endDate,
     );
+  }
+
+  @Get('open')
+  async findOpen(@Query() query: OpenVisitQueryDto, @Request() req: AuthenticatedRequest) {
+    const visit = await this.visitsService.findOpenVisit(query.patientId, query.doctorId, (req.branchId ?? req.user.branchId));
+    return { visit };
   }
 
   @Get('patient/:patientId/personal-history')
