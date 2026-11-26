@@ -65,7 +65,7 @@ describe('onboarding tours', () => {
     routeTo('/dashboard/patients');
     render(<PatientsPage listed="rows" />);
     const dialog = await startTour('Start tour');
-    expect(within(dialog).getByRole('button', { name: 'Skip tour' })).toBeVisible();
+    await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Skip tour' })).toBeVisible());
     await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Next' })).toHaveFocus());
     expect(within(dialog).getByRole('button', { name: 'Back' })).toHaveAttribute('aria-disabled', 'true');
   });

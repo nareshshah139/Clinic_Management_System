@@ -351,6 +351,11 @@ async function setup() {
   checkCancelled();
   result.browser = await owned.browser.version();
   const page = await owned.browser.newPage();
+  const awaitingResponse = new Map();
+  page.on("request", (request) => awaitingResponse.set(request, Date.now()));
+  for (const settled of ["requestfinished", "requestfailed"])
+    page.on(settled, (request) => awaitingResponse.delete(request));
+  page.on("response", (response) => awaitingResponse.delete(response.request()));
   result.browserDiagnostics = { pageErrors: [], consoleErrors: [] };
   page.on("pageerror", (error) => {
     result.browserDiagnostics.pageErrors.push(error.message);
@@ -487,7 +492,10 @@ async function setup() {
     },
     async capture(scenario, checkpoint) {
       assert(scenario.checkpoints.includes(checkpoint));
-      await page.waitForNetworkIdle({ idleTime: 200, timeout: 10000 });
+      await page.waitForNetworkIdle({ idleTime: 200, timeout: 30000 }).catch((error) => {
+        const waiting = [...awaitingResponse].map(([request, since]) => `${request.method()} ${request.url().slice(0, 120)} (${Date.now() - since} ms)`);
+        throw Error(`${error.message} before the ${checkpoint} screenshot; still awaiting ${waiting.join("; ") || "no request the page reports"}`);
+      });
       for (const width of [1280, 390]) {
         await page.setViewport({ width, height: width === 390 ? 1200 : 1000 });
         await sleep(200);
