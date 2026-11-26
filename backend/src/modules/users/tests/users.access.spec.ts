@@ -215,6 +215,16 @@ describe('/users access control', () => {
       expect(db.user.findFirst).not.toHaveBeenCalled();
     });
 
+    it('GET /users/me returns the caller\'s own profile, for a role that cannot list users', async () => {
+      const res = await request(app.getHttpServer()).get('/users/me').set(as('reception')).expect(200);
+      expect(res.body).toMatchObject({ id: 'reception', role: 'RECEPTION', firstName: 'reception' });
+      expect(res.body.password).toBeUndefined();
+    });
+
+    it('GET /users/me is refused to a role outside clinic staff, as /users/:id is', async () => {
+      await request(app.getHttpServer()).get('/users/me').set(as('lab')).expect(403);
+    });
+
     it('still serves one user by id', async () => {
       const res = await request(app.getHttpServer()).get('/users/target').set(as('admin')).expect(200);
       expect(res.body).toMatchObject({ id: 'target', role: 'NURSE' });
