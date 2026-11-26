@@ -8,8 +8,9 @@ jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn() }),
   useSearchParams: () => ({ get: (key: string) => (key === 'section' ? section : null) }),
 }));
+let loading = false;
 jest.mock('@/components/layout/dashboard-user-context', () => ({
-  useDashboardUser: () => ({ user: { id: 'u1', role }, loading: false }),
+  useDashboardUser: () => ({ user: { id: 'u1', role }, loading }),
 }));
 jest.mock('@/lib/api', () => ({ apiClient: { get: jest.fn() } }));
 jest.mock('@/components/common/QuickGuide', () => ({ QuickGuide: () => null }));
@@ -75,6 +76,22 @@ it("never asks for the pharmacy's figures for reception, and offers no sale it w
   expect(asked()).toEqual([]);
   expect(screen.queryByText('Sales')).toBeNull();
   expect(offered()).toEqual(['Pharmacy Counter', 'Inventory Control']);
+});
+
+it('keeps the same counter mounted, so its drafts survive, while the layout refreshes the same user', async () => {
+  section = 'counter';
+  role = 'PHARMACIST';
+  loading = false;
+  const { rerender } = render(<PharmacyWorkspace />);
+  const cockpit = await screen.findByRole('region', { name: 'Counter cockpit' });
+
+  loading = true;
+  rerender(<PharmacyWorkspace />);
+  expect(screen.getByRole('region', { name: 'Counter cockpit' })).toBe(cockpit);
+
+  loading = false;
+  rerender(<PharmacyWorkspace />);
+  expect(screen.getByRole('region', { name: 'Counter cockpit' })).toBe(cockpit);
 });
 
 it('loads no desk figures on the counter, for any role', async () => {

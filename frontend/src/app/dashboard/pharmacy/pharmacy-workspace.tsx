@@ -71,8 +71,9 @@ function PharmacyPageContent() {
   const [isAgentDockOpen, setIsAgentDockOpen] = useState(false);
   const requestedTab = searchParams.get('section') || searchParams.get('tab');
   const pharmacyTab: PharmacySideTab = requestedTab === 'counter' ? 'counter' : 'desk';
-  const { user, loading: isLoading } = useDashboardUser();
+  const { user, loading } = useDashboardUser();
   const isAuthenticated = !!user;
+  const isLoading = loading && !isAuthenticated;
   const sells = canSellPharmacy(user?.role);
 
   useEffect(() => {
