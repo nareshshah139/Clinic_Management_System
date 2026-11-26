@@ -116,6 +116,7 @@ function OwedBadge({ row }: { row: PurchaseRegisterRow }) {
 
 type Settling = { row: PurchaseRegisterRow; anchor: HTMLButtonElement };
 type Undoable = { kind: 'payment'; payment: RecordedPayment } | { kind: 'setOff'; setOffId: string; billNos: string[] };
+const undoId = (undoable: Undoable) => (undoable.kind === 'payment' ? undoable.payment.id : undoable.setOffId);
 
 export function useSettleBill({
   rows,
@@ -135,13 +136,16 @@ export function useSettleBill({
   const undoWindow = useUndoWindow<Undoable>(UNDO_WINDOW_MS);
   const { remember, forget } = undoWindow;
 
-  const undo = async (row: Pick<PurchaseRegisterRow, 'id' | 'billNo'>, key = requestKey()) => {
-    const entry = undoWindow.entry(row.id);
-    if (!entry || entry.undoing) return;
-    const undoable = entry.value;
-    const rowIds = undoWindow.sharing(undoable);
-    undoWindow.mark(rowIds, undoable, true);
+  const undo = async (undoable: Undoable, row: Pick<PurchaseRegisterRow, 'id' | 'billNo'>, key = requestKey()) => {
+    const id = undoId(undoable);
     const noun = undoable.kind === 'payment' ? 'payment' : 'set-off';
+    const entry = undoWindow.entry(id);
+    if (!entry) {
+      toast({ variant: 'warning', title: `Too late to undo this ${noun}`, description: 'Undo lasts 30 seconds. You can still reverse it from Payments & dues.' });
+      return;
+    }
+    if (entry.undoing) return;
+    undoWindow.mark(id, true);
     try {
       if (undoable.kind === 'payment')
         await apiClient.post(
@@ -155,7 +159,7 @@ export function useSettleBill({
           { reason: UNDO_REASON },
           { idempotencyKey: key },
         );
-      forget(rowIds);
+      forget(id);
       const fresh = (await reload())?.rows ?? [];
       const now = fresh.find((candidate) => candidate.id === row.id);
       toast({
@@ -168,23 +172,23 @@ export function useSettleBill({
       if (now) action.focus(settleId(row.id), openId(row.id));
     } catch (failure) {
       if ((failure as { status?: number } | null)?.status === 409) {
-        forget(rowIds);
+        forget(id);
         toast({
           variant: 'warning',
-          title: `This ${noun} was already undone`,
-          description: `The list now shows bill ${row.billNo}’s latest balance.`,
+          title: `This ${noun} can no longer be undone`,
+          description: `It was already undone or changed elsewhere. The list now shows bill ${row.billNo}’s latest balance.`,
         });
         await reload();
         action.focus(settleId(row.id), openId(row.id));
         return;
       }
-      remember(rowIds, undoable);
+      remember(id, entry.rowIds, undoable);
       toast({
         variant: 'destructive',
         title: `Could not undo the ${noun}`,
         description: `${errorMessage(failure)} You can reverse it from Payments & dues.`,
         action: (
-          <ToastAction altText="Try undo again" onClick={() => void undo(row, key)}>
+          <ToastAction altText="Try undo again" onClick={() => void undo(undoable, row, key)}>
             Try again
           </ToastAction>
         ),
@@ -197,7 +201,8 @@ export function useSettleBill({
     const { row } = settling;
     const oldIndex = rows.findIndex((candidate) => candidate.id === row.id);
     setSettling(null);
-    remember([row.id], { kind: 'payment', payment });
+    const undoable: Undoable = { kind: 'payment', payment };
+    remember(payment.id, [row.id], undoable);
     const remaining = payment.allocations?.find((allocation) => allocation.purchaseInvoiceId === row.id)?.outstandingAfter ?? 0;
     const fresh = await action.refresh(row.id, oldIndex);
     const visible = fresh.some((candidate) => candidate.id === row.id);
@@ -212,7 +217,7 @@ export function useSettleBill({
         title: 'Payment recorded',
         description: `${formatRupees(amount)} to ${row.distributor.name} for bill ${row.billNo}.`,
         action: (
-          <ToastAction altText={`Undo payment for bill ${row.billNo}`} onClick={() => void undo(row)}>
+          <ToastAction altText={`Undo payment for bill ${row.billNo}`} onClick={() => void undo(undoable, row)}>
             Undo
           </ToastAction>
         ),
@@ -223,10 +228,8 @@ export function useSettleBill({
 
   const setOff = async (result: SetOffResult, total: number, from: { rowId: string } | null) => {
     const billNos = result.bills.map((bill) => bill.billNo);
-    remember(
-      result.bills.map((bill) => bill.id),
-      { kind: 'setOff', setOffId: result.setOffId, billNos },
-    );
+    const undoable: Undoable = { kind: 'setOff', setOffId: result.setOffId, billNos };
+    remember(result.setOffId, result.bills.map((bill) => bill.id), undoable);
     const message = `Set off ${formatRupees(total)} of credit against bill${billNos.length === 1 ? '' : 's'} ${billNos.join(', ')}.`;
     setAnnouncement(message);
     const [first] = result.bills;
@@ -236,7 +239,7 @@ export function useSettleBill({
       ...(first
         ? {
             action: (
-              <ToastAction altText={`Undo the set-off against bill${billNos.length === 1 ? '' : 's'} ${billNos.join(', ')}`} onClick={() => void undo(first)}>
+              <ToastAction altText={`Undo the set-off against bill${billNos.length === 1 ? '' : 's'} ${billNos.join(', ')}`} onClick={() => void undo(undoable, first)}>
                 Undo
               </ToastAction>
             ),
@@ -266,7 +269,7 @@ export function useSettleBill({
     paid,
     setOff,
     stale,
-    recent: undoWindow.pending,
+    recent: undoWindow.latest,
     undo,
     today,
     settleId,
@@ -284,7 +287,7 @@ export function PaymentCell({
   settle: ReturnType<typeof useSettleBill>;
   canSettle: boolean;
 }) {
-  const recent = settle.recent[row.id];
+  const recent = settle.recent(row.id);
   return (
     <div className="flex items-center gap-2">
       <PaymentBadge row={row} today={settle.today} />
@@ -296,7 +299,7 @@ export function PaymentCell({
           className="h-8 whitespace-nowrap! px-2 text-sm font-semibold underline underline-offset-4 lg:min-h-8!"
           aria-label={`Undo ${recent.value.kind === 'payment' ? 'payment' : 'credit set-off'} for bill ${row.billNo}`}
           disabled={recent.undoing}
-          onClick={() => void settle.undo(row)}
+          onClick={() => void settle.undo(recent.value, row)}
         >
           {recent.undoing ? 'Undoing…' : 'Undo'}
         </Button>

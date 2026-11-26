@@ -38,7 +38,7 @@ export function useRowAction<Row extends Identified>({
   return { actionId, openId, focus: (...targets: string[]) => setFocusIds(targets), focusAfter, refresh };
 }
 
-type Pending<T> = { value: T; undoing: boolean };
+type Pending<T> = { value: T; rowIds: string[]; undoing: boolean };
 
 export function useUndoWindow<T>(windowMs: number) {
   const [pending, setPending] = useState<Record<string, Pending<T>>>({});
@@ -51,26 +51,22 @@ export function useUndoWindow<T>(windowMs: number) {
     return () => live.forEach(clearTimeout);
   }, []);
 
-  const forget = useCallback((rowIds: string[]) => {
-    for (const rowId of rowIds) {
-      clearTimeout(timers.current.get(rowId));
-      timers.current.delete(rowId);
-    }
-    setPending((current) => Object.fromEntries(Object.entries(current).filter(([id]) => !rowIds.includes(id))));
+  const forget = useCallback((id: string) => {
+    clearTimeout(timers.current.get(id));
+    timers.current.delete(id);
+    setPending((current) => Object.fromEntries(Object.entries(current).filter(([key]) => key !== id)));
   }, []);
-  const remember = (rowIds: string[], value: T) => {
-    for (const rowId of rowIds) {
-      clearTimeout(timers.current.get(rowId));
-      timers.current.set(rowId, setTimeout(() => forget([rowId]), windowMs));
-    }
-    setPending((current) => ({ ...current, ...Object.fromEntries(rowIds.map((rowId) => [rowId, { value, undoing: false }])) }));
+  const remember = (id: string, rowIds: string[], value: T) => {
+    clearTimeout(timers.current.get(id));
+    timers.current.set(id, setTimeout(() => forget(id), windowMs));
+    setPending((current) => ({ ...current, [id]: { value, rowIds, undoing: false } }));
   };
-  const sharing = (value: T) =>
-    Object.entries(pendingRef.current)
-      .filter(([, entry]) => entry.value === value)
-      .map(([rowId]) => rowId);
-  const mark = (rowIds: string[], value: T, undoing: boolean) =>
-    setPending((current) => ({ ...current, ...Object.fromEntries(rowIds.map((rowId) => [rowId, { value, undoing }])) }));
+  const mark = (id: string, undoing: boolean) =>
+    setPending((current) => (current[id] ? { ...current, [id]: { ...current[id], undoing } } : current));
+  const latest = (rowId: string) =>
+    Object.values(pending)
+      .filter((entry) => entry.rowIds.includes(rowId))
+      .at(-1);
 
-  return { pending, entry: (rowId: string) => pendingRef.current[rowId], remember, forget, sharing, mark };
+  return { latest, entry: (id: string) => pendingRef.current[id], remember, forget, mark };
 }
