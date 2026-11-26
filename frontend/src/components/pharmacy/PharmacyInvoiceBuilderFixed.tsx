@@ -1084,6 +1084,16 @@ export function PharmacyInvoiceBuilderFixed({
     return null;
   };
 
+  const chooseAlternative = (itemId: string) => {
+    setSubstitutingItemId(itemId);
+    setSelectedTab('drugs');
+    setDrugSearchQuery('');
+    requestAnimationFrame(() => {
+      searchInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      searchInputRef.current?.focus({ preventScroll: true });
+    });
+  };
+
   /**
    * @cc [owner:nareshshah139,label:product] prescription-explicit-substitution
    * A pharmacist-selected replacement MUST retain the original prescribed name, quantity,
@@ -2054,7 +2064,7 @@ export function PharmacyInvoiceBuilderFixed({
                   {substitutingItemId && (
                     <div role="status" className="flex items-center justify-between gap-2 rounded-md border border-info-border bg-info-soft px-3 py-2 text-sm text-info-text">
                       <span>Choose a replacement for {billLineName(items.find(item => item.id === substitutingItemId) ?? {})}. The prescribed quantity will be kept.</span>
-                      <Button variant="ghost" size="sm" onClick={() => setSubstitutingItemId(null)}>Cancel substitution</Button>
+                      <Button variant="ghost" size="sm" className="shrink-0" onClick={() => setSubstitutingItemId(null)}>Cancel substitution</Button>
                     </div>
                   )}
                   <Label htmlFor="drugSearch" className="sr-only">Search Drugs</Label>
@@ -2229,22 +2239,34 @@ export function PharmacyInvoiceBuilderFixed({
                       : item.package
                         ? [item.package.description, plural(item.package.items.length, 'item')].filter(Boolean).join(' · ')
                         : '';
+                    const stockProblem = item.stockStatus === 'CHECK_FAILED' ? 'Inventory check failed'
+                      : item.itemType === 'DRUG' && !item.drugId ? 'No match'
+                      : item.stockStatus === 'OUT_OF_STOCK' ? 'Out of stock'
+                      : item.availableStock !== undefined && item.quantity > item.availableStock ? `Insufficient stock: ${item.availableStock} available`
+                      : null;
                     return (
                       <div key={item.id} data-invoice-item={item.id} className={cn('grid gap-x-2 gap-y-1.5 py-2.5 @2xl:items-center', LINE_GRID)}>
                         <div className="col-span-2 min-w-0 @md:col-span-4 @2xl:col-span-1">
                           <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                             <h4 className="min-w-0 break-words text-sm font-medium text-foreground">{billLineName(item)}</h4>
-                            {item.stockStatus === 'CHECK_FAILED' ? (
-                              <Badge variant="danger">Inventory check failed</Badge>
-                            ) : item.itemType === 'DRUG' && !item.drugId ? (
-                              <Badge variant="danger">No match</Badge>
-                            ) : item.stockStatus === 'OUT_OF_STOCK' ? (
-                              <Badge variant="danger">Out of stock</Badge>
-                            ) : item.availableStock !== undefined && item.quantity > item.availableStock ? (
-                              <Badge variant="danger">Insufficient stock: {item.availableStock} available</Badge>
+                            {stockProblem ? (
+                              <Badge variant="danger">{stockProblem}</Badge>
                             ) : item.stockStatus === 'LOW_STOCK' ? (
                               <Badge variant="warning">Low stock: {item.availableStock} available</Badge>
                             ) : null}
+                            {stockProblem && item.itemType === 'DRUG' && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-6 min-h-6 gap-1 px-2 text-xs"
+                                aria-label={`Choose alternative for ${billLineName(item)}`}
+                                onClick={() => chooseAlternative(item.id)}
+                              >
+                                <ArrowLeftRight aria-hidden />
+                                Choose alternative
+                              </Button>
+                            )}
                             {isPrescriptionItem(item.id) && (
                               <Badge variant="neutral">From prescription</Badge>
                             )}
@@ -2367,17 +2389,9 @@ export function PharmacyInvoiceBuilderFixed({
                         </div>
 
                         <div className="col-span-2 col-start-3 row-start-1 flex items-start justify-end gap-1 @md:col-start-5 @2xl:col-span-1 @2xl:col-start-auto @2xl:row-start-auto @2xl:items-center">
-                          {item.itemType === 'DRUG' && (
-                            <Button variant="ghost" size="icon" className="size-8 text-muted-foreground" title="Substitute" aria-label={`Substitute ${billLineName(item)}`}
-                              onClick={() => {
-                                setSubstitutingItemId(item.id);
-                                setSelectedTab('drugs');
-                                setDrugSearchQuery('');
-                                requestAnimationFrame(() => {
-                                  searchInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                  searchInputRef.current?.focus({ preventScroll: true });
-                                });
-                              }}>
+                          {item.itemType === 'DRUG' && !stockProblem && (
+                            <Button variant="ghost" size="icon" className="size-8 text-muted-foreground" title="Choose an alternative" aria-label={`Substitute ${billLineName(item)}`}
+                              onClick={() => chooseAlternative(item.id)}>
                               <ArrowLeftRight />
                             </Button>
                           )}
