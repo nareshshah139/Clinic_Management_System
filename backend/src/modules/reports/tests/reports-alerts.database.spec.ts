@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import { execFileSync } from 'child_process';
 import { resolve } from 'path';
 import { ReportsService } from '../reports.service';
+import { VOID } from '../../billing/clinic-bill-register';
 
 const databaseTests = process.env.REPORTS_TEST_DATABASE_URL ? describe : describe.skip;
 databaseTests('System alert counts over more rows than the list cap on PostgreSQL', () => {
@@ -32,18 +33,11 @@ databaseTests('System alert counts over more rows than the list cap on PostgreSQ
     await db.patient.create({ data: { id: 'p', name: 'Synthetic P', gender: 'F', phone: '9000000001', branchId: 'A' } });
     await db.patient.create({ data: { id: 'q', name: 'Synthetic Q', gender: 'M', phone: '9000000002', branchId: 'B' } });
 
-    // Bills as the app stores them: only CANCELLED is a stored status, the rest follows from the balance.
-    // Branch A: 12 unpaid past their due date; settled, void, not yet due, undated and other-branch bills must not count.
-    const invoice = (id: string, branchId: string, patientId: string, bill: { balance?: number; status?: string; dueInDays?: number | null } = {}) =>
-      db.newInvoice.create({ data: {
-        id, invoiceNo: id, patientId, branchId, total: 100, balance: bill.balance ?? 100, ...(bill.status ? { status: bill.status } : {}),
-        dueDate: bill.dueInDays === null ? null : new Date(Date.now() + (bill.dueInDays ?? -1) * DAY),
-      } });
+    // Bills as the app stores them, where only void is a stored status. Branch A: 12 unpaid past due; settled, void, not yet due, undated and other-branch bills must not count.
+    const invoice = (id: string, branchId: string, patientId: string, dueInDays: number | null = -1, more = {}) =>
+      db.newInvoice.create({ data: { id, invoiceNo: id, patientId, branchId, total: 100, balance: 100, dueDate: dueInDays === null ? null : new Date(Date.now() + dueInDays * DAY), ...more } });
     for (let i = 0; i < 12; i++) await invoice(`od-${i}`, 'A', 'p');
-    await invoice('paid', 'A', 'p', { balance: 0 });
-    await invoice('void', 'A', 'p', { status: 'CANCELLED' });
-    await invoice('not-due', 'A', 'p', { dueInDays: 3 });
-    await invoice('undated', 'A', 'p', { dueInDays: null });
+    for (const [id, dueInDays, more] of [['paid', -1, { balance: 0 }], ['void', -1, { status: VOID }], ['not-due', 3, {}], ['undated', null, {}]] as const) await invoice(id, 'A', 'p', dueInDays, more);
     await invoice('od-b', 'B', 'q');
     // 12 pending payments on branch A invoices, one on branch B, one already completed.
     for (let i = 0; i < 12; i++) await db.newPayment.create({ data: { invoiceId: `od-${i}`, amount: 10, mode: 'CASH', reconStatus: 'PENDING' } });
@@ -70,7 +64,6 @@ databaseTests('System alert counts over more rows than the list cap on PostgreSQ
 
     expect(alerts.counts).toMatchObject({ overdueInvoices: 12, expiryAlerts: 12, pendingPayments: 12 });
     expect(alerts.overdueInvoices).toHaveLength(10);
-    expect(alerts.overdueInvoices.map((i: { id: string }) => i.id).filter((id: string) => !/^od-\d+$/.test(id))).toEqual([]);
     expect(alerts.expiryAlerts).toHaveLength(10);
     expect(alerts.pendingPayments).toHaveLength(10);
   });

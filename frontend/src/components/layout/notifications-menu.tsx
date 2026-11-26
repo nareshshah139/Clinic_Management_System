@@ -89,7 +89,7 @@ export function NotificationsMenu() {
           <div className="px-3 py-6 text-sm text-muted-foreground">No notifications</div>
         )}
         {items.map((n) => (
-          <DropdownMenuItem key={n.id} onClick={() => router.push(n.href)} className={n.variant ? VARIANT_TEXT[n.variant] : undefined}>
+          <DropdownMenuItem key={n.id} onClick={n.href ? () => router.push(n.href!) : undefined} className={n.variant ? VARIANT_TEXT[n.variant] : undefined}>
             <div className="flex flex-col">
               <span className="text-sm font-medium">{n.title}</span>
               {n.description && <span className="text-xs text-muted-foreground">{n.description}</span>}

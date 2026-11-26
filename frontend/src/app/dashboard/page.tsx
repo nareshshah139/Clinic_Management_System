@@ -19,7 +19,7 @@ import { getErrorMessage, getISTDateString } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { can, type Capability } from '@/lib/role-capabilities';
 import { appointmentsHref } from '@/lib/appointments-link';
-import { LOW_STOCK_DEFINITION, LOW_STOCK_HREF, UPCOMING_DEFINITION } from '@/lib/clinic-counts';
+import { LOW_STOCK_DEFINITION, LOW_STOCK_HREF, OVERDUE_BILLS_DEFINITION, OVERDUE_BILLS_HREF, UPCOMING_DEFINITION } from '@/lib/clinic-counts';
 
 type DashboardView = 'doctor' | 'pharmacist' | 'admin' | 'front-desk' | 'nurse' | 'billing';
 
@@ -41,7 +41,6 @@ const GUIDE: Record<DashboardView, string[]> = {
 };
 
 const COLLECTION_HREF = '/dashboard/pharmacy/reports?report=daily-collection';
-const BILLING_HREF = '/dashboard/billing';
 const tomorrow = () => getISTDateString(new Date(Date.now() + 86_400_000));
 
 const linkIf = (role: string, capability: Capability, href: string) => (can(role, capability) ? href : undefined);
@@ -226,11 +225,10 @@ function PharmacistDashboard({ role }: { role: string }) {
 function BillingDashboard({ role }: { role: string }) {
   const [alerts, retryAlerts] = useLoad(loadAlerts);
   const [collected, retryCollected] = useLoad(collectedToday);
-  const dues = linkIf(role, 'billing', BILLING_HREF);
   const rows = [
     rowFrom(collected, retryCollected, { label: 'Collected today', note: COLLECTED_NOTE, href: linkIf(role, 'pharmacy-reports', COLLECTION_HREF) }, (amount) => amount),
-    rowFrom(alerts, retryAlerts, { label: 'Overdue invoices', href: dues }, (a) => a.counts.overdueInvoices),
-    rowFrom(alerts, retryAlerts, { label: 'Payments awaiting reconciliation', href: dues }, (a) => a.counts.pendingPayments),
+    rowFrom(alerts, retryAlerts, { label: 'Overdue clinic bills', note: OVERDUE_BILLS_DEFINITION, href: linkIf(role, 'billing', OVERDUE_BILLS_HREF) }, (a) => a.counts.overdueInvoices),
+    rowFrom(alerts, retryAlerts, { label: 'Payments awaiting reconciliation' }, (a) => a.counts.pendingPayments),
   ];
   return (
     <DashboardSection title="Billing to follow up">

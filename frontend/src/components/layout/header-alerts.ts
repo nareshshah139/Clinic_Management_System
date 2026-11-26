@@ -3,18 +3,18 @@ import { UserRole } from '@cms/shared-types';
 import { enumLabel, plural } from '@/lib/labels';
 import { statusLabel } from '@/lib/status-variants';
 import { appointmentsHref } from '@/lib/appointments-link';
-import { LOW_STOCK_HREF, UPCOMING_DEFINITION } from '@/lib/clinic-counts';
+import { LOW_STOCK_HREF, OVERDUE_BILLS_DEFINITION, OVERDUE_BILLS_HREF, UPCOMING_DEFINITION } from '@/lib/clinic-counts';
+import { can } from '@/lib/role-capabilities';
 import { doctorLabel } from './doctor-label';
 
 export type NotificationItem = {
   id: string;
   title: string;
   description?: string;
-  href: string;
+  href?: string;
   variant?: 'default' | 'warning' | 'destructive' | 'success';
 };
 
-export const CLINIC_DUES_HREF = '/dashboard/billing';
 export const EXPIRING_STOCK_HREF = '/dashboard/inventory?area=stock&view=list&expiryMonths=1';
 
 const REPORTS_ROLES: string[] = [UserRole.OWNER, UserRole.ADMIN, UserRole.MANAGER];
@@ -55,12 +55,13 @@ export function buildRoleNotifications(alerts: any, role?: string): Notification
   const pushMany = (arr: NotificationItem[], max: number = 5) =>
     arr.slice(0, max).forEach((it) => items.push(it));
 
+  const overdueHref = can(role?.toUpperCase(), 'billing') ? OVERDUE_BILLS_HREF : undefined;
   const overdueItems = (variant: NotificationItem['variant']): NotificationItem[] =>
     overdue.map((inv: any) => ({
       id: `inv-${inv.id}`,
-      title: `Overdue Invoice ${inv.invoiceNo}`,
+      title: `Overdue bill ${inv.invoiceNo}`,
       description: `${inv.patient?.name || 'Patient'} • Due ${displayUtcDate(inv.dueDate)}`,
-      href: CLINIC_DUES_HREF,
+      href: overdueHref,
       variant,
     }));
 
@@ -113,7 +114,6 @@ export function buildRoleNotifications(alerts: any, role?: string): Notification
         id: `pay-${p.id}`,
         title: `Pending ${formatCurrency(p.amount)} (${p.mode})`,
         description: `Invoice ${p.invoice?.invoiceNo || ''} • ${formatRelative(p.createdAt)}`,
-        href: CLINIC_DUES_HREF,
         variant: 'warning',
       }));
       pushMany(payItems, 5);
@@ -127,18 +127,17 @@ export function buildRoleNotifications(alerts: any, role?: string): Notification
       if (counts.overdueInvoices > 0) {
         summary.push({
           id: 'summary-overdue',
-          title: `${counts.overdueInvoices} overdue invoice${counts.overdueInvoices === 1 ? '' : 's'}`,
-          description: 'Billing attention needed',
-          href: CLINIC_DUES_HREF,
+          title: `${counts.overdueInvoices} overdue clinic bill${counts.overdueInvoices === 1 ? '' : 's'}`,
+          description: OVERDUE_BILLS_DEFINITION,
+          href: overdueHref,
           variant: 'destructive',
         });
       }
       if (counts.pendingPayments > 0) {
         summary.push({
           id: 'summary-pending',
-          title: `${counts.pendingPayments} pending payment${counts.pendingPayments === 1 ? '' : 's'}`,
-          description: 'Reconciliation required',
-          href: CLINIC_DUES_HREF,
+          title: `${counts.pendingPayments} payment${counts.pendingPayments === 1 ? '' : 's'} awaiting reconciliation`,
+          description: 'No page lists these payments yet',
           variant: 'warning',
         });
       }
