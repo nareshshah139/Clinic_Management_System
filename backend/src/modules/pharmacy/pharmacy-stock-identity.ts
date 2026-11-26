@@ -303,6 +303,24 @@ export async function drugStockNames(db: any, branchId: string, drugIds: (string
   return new Map([...names].filter(([, found]) => found.size === 1).map(([id, found]) => [id, [...found][0]]));
 }
 
+export async function drugStockPrices(db: any, branchId: string, drugIds: (string | null | undefined)[], now = new Date()) {
+  const ids = [...new Set(drugIds.filter((id): id is string => !!id))];
+  const prices = new Map<string, number>();
+  if (!ids.length) return prices;
+  const expiry = (row: any) => (row.expiryDate ? new Date(row.expiryDate).getTime() : Number.MAX_SAFE_INTEGER);
+  const rows = await db.inventoryItem.findMany({
+    where: { branchId, status: 'ACTIVE', drugs: { some: { id: { in: ids } } } },
+    select: { id: true, status: true, currentStock: true, heldStock: true, expiryDate: true, sellingPrice: true, mrp: true, drugs: { select: { id: true } } },
+  });
+  for (const row of rows
+    .filter((row: any) => row.drugs.length === 1 && availableStock(row, now) > 0)
+    .sort((a: any, b: any) => expiry(a) - expiry(b) || a.id.localeCompare(b.id))) {
+    const price = [row.sellingPrice, row.mrp].find((value) => value > 0);
+    if (price !== undefined && !prices.has(row.drugs[0].id)) prices.set(row.drugs[0].id, price);
+  }
+  return prices;
+}
+
 type NamedLine = {
   itemType?: string | null;
   drugId?: string | null;
