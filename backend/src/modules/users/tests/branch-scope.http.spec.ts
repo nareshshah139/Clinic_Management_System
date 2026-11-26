@@ -99,6 +99,19 @@ describe('branch edits stay inside the caller’s own clinic branch, over HTTP',
     expect(JSON.parse(audit[0].newValues)).toEqual({ name: 'Linae Central', city: 'Pune' });
   });
 
+  it('saves the clinic name trimmed, so a receipt heading never carries stray spaces', async () => {
+    await as('ADMIN').patch('/users/branches/branch-1', { name: '  Linaé Skin, Hair and Aesthetic Clinic  ', gstNumber: ' 36AAAAA0000A1Z5 ' }).expect(200);
+
+    expect(branches['branch-1']).toMatchObject({ name: 'Linaé Skin, Hair and Aesthetic Clinic', gstNumber: '36AAAAA0000A1Z5' });
+  });
+
+  it.each(['', '   ', ' a '])('refuses the blank or one-letter clinic name %j and changes nothing', async (name) => {
+    await as('OWNER').patch('/users/branches/branch-1', { name }).expect(400);
+
+    expect(branches['branch-1']).toEqual(clinic('branch-1', 'Linae Main'));
+    expect(written()).toEqual([]);
+  });
+
   it('still refuses a name another branch already uses', async () => {
     await as('OWNER').patch('/users/branches/branch-1', { name: 'Linae Other' }).expect(409);
 
