@@ -40,85 +40,99 @@ describe('splitSpeakers against a local chat completions endpoint', () => {
   const completion = (content: string) =>
     JSON.stringify({ choices: [{ message: { content } }] });
 
-  it('returns doctor and patient turns parsed from the model output', async () => {
+  const turns = (...starts: Array<[number, string]>) =>
+    completion(
+      JSON.stringify({
+        turns: starts.map(([from, speaker]) => ({ from, speaker })),
+      }),
+    );
+
+  it("sends numbered lines, asks only where each turn starts, and joins each speaker's lines", async () => {
     reply = {
       status: 200,
-      body: completion(
-        JSON.stringify({
-          segments: [
-            {
-              speaker: 'DOCTOR',
-              text: 'Any fever?',
-              confidence: 0.9,
-              start_s: null,
-              end_s: null,
-            },
-            { speaker: 'PATIENT', text: 'Yes, since Monday.' },
-          ],
-          speakers: {
-            doctorText: 'Any fever?',
-            patientText: 'Yes, since Monday.',
-          },
-        }),
-      ),
+      body: turns([0, 'DOCTOR'], [1, 'PATIENT'], [3, 'DOCTOR']),
     };
 
     await expect(
-      splitSpeakers({ text: 'Any fever? Yes, since Monday.' }),
+      splitSpeakers({
+        text: 'Any fever? Yes, since Monday. It gets worse at night! Take paracetamol 500 mg.',
+      }),
     ).resolves.toEqual({
       segments: [
+        { speaker: 'DOCTOR', text: 'Any fever?', start_s: null, end_s: null },
         {
-          speaker: 'DOCTOR',
-          text: 'Any fever?',
-          confidence: 0.9,
+          speaker: 'PATIENT',
+          text: 'Yes, since Monday. It gets worse at night!',
           start_s: null,
           end_s: null,
         },
         {
-          speaker: 'PATIENT',
-          text: 'Yes, since Monday.',
-          confidence: undefined,
-          start_s: undefined,
-          end_s: undefined,
+          speaker: 'DOCTOR',
+          text: 'Take paracetamol 500 mg.',
+          start_s: null,
+          end_s: null,
         },
       ],
-      doctorText: 'Any fever?',
-      patientText: 'Yes, since Monday.',
+      doctorText: 'Any fever? Take paracetamol 500 mg.',
+      patientText: 'Yes, since Monday. It gets worse at night!',
     });
-    expect(JSON.parse(requests[0].messages[1].content)).toEqual({
-      transcript: 'Any fever? Yes, since Monday.',
-    });
+    expect(requests[0].messages[1].content).toBe(
+      '0: Any fever?\n1: Yes, since Monday.\n2: It gets worse at night!\n3: Take paracetamol 500 mg.',
+    );
+    expect(
+      Object.keys(requests[0].response_format.json_schema.schema.properties),
+    ).toEqual(['turns']);
   });
 
-  it('builds the speaker texts from segments when the model omits them', async () => {
+  it('splits Hindi sentences at the danda', async () => {
+    reply = { status: 200, body: turns([0, 'DOCTOR'], [1, 'PATIENT']) };
+
+    const split = await splitSpeakers({ text: 'बुखार है? हाँ, दो दिन से।' });
+
+    expect(requests[0].messages[1].content).toBe(
+      '0: बुखार है?\n1: हाँ, दो दिन से।',
+    );
+    expect(split.patientText).toBe('हाँ, दो दिन से।');
+  });
+
+  it('labels timed segments and keeps their times on the turns', async () => {
+    reply = { status: 200, body: turns([0, 'DOCTOR'], [2, 'PATIENT']) };
+
+    const split = await splitSpeakers({
+      text: 'ignored',
+      segments: [
+        { text: 'Hello.', start: 0.5, end: 1.5 },
+        { text: 'Any pain?', start: 1.5, end: 2.5 },
+        { text: 'In my knee.', start: 3, end: 4 },
+      ],
+    });
+
+    expect(requests[0].messages[1].content).toBe(
+      '0: Hello.\n1: Any pain?\n2: In my knee.',
+    );
+    expect(split.segments).toEqual([
+      { speaker: 'DOCTOR', text: 'Hello. Any pain?', start_s: 0.5, end_s: 2.5 },
+      { speaker: 'PATIENT', text: 'In my knee.', start_s: 3, end_s: 4 },
+    ]);
+  });
+
+  it('reads turns in line order, and returns an empty split when the model marked none', async () => {
     reply = {
       status: 200,
-      body: completion(
-        JSON.stringify({
-          segments: [
-            { speaker: 'doctor', text: 'Open wide.' },
-            { speaker: 'PATIENT', text: 'Ahh.' },
-          ],
-        }),
-      ),
+      body: turns([2, 'DOCTOR'], [1, 'PATIENT'], [0, 'DOCTOR']),
     };
-
-    const split = await splitSpeakers({ text: 'Open wide. Ahh.' });
-
-    expect(split.doctorText).toBe('Open wide.');
-    expect(split.patientText).toBe('Ahh.');
-  });
-
-  it('forwards timed segments instead of the plain transcript', async () => {
-    reply = { status: 200, body: completion('{}') };
-
-    await splitSpeakers({
-      text: 'x',
-      segments: [{ text: 'Hello', start: 0.5, end: 1.5 }],
+    expect(
+      await splitSpeakers({ text: 'Any fever? Yes. Rest well.' }),
+    ).toMatchObject({
+      doctorText: 'Any fever? Rest well.',
+      patientText: 'Yes.',
     });
 
-    expect(JSON.parse(requests[0].messages[1].content)).toEqual({
-      segments: [{ text: 'Hello', start_s: 0.5, end_s: 1.5 }],
+    reply = { status: 200, body: completion('{}') };
+    await expect(splitSpeakers({ text: 'Any fever? Yes.' })).resolves.toEqual({
+      segments: [],
+      doctorText: '',
+      patientText: '',
     });
   });
 
