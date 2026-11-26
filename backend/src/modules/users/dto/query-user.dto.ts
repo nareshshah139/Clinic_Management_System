@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsEnum, IsBoolean, IsDateString } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsBoolean, IsUUID, IsDateString } from 'class-validator';
 import { UserRole, UserStatus } from '@prisma/client';
 
 // Runtime enums for class-validator evaluation
@@ -22,7 +22,6 @@ export enum UserStatusEnum {
   PENDING = 'PENDING',
 }
 import { PaginationDto } from '../../../shared/dto/pagination.dto';
-import { IsEntityId } from '../../../shared/decorators/is-entity-id.decorator';
 
 // User Query DTOs
 export class QueryUsersDto extends PaginationDto {
@@ -38,7 +37,7 @@ export class QueryUsersDto extends PaginationDto {
   @IsOptional()
   status?: UserStatus;
 
-  @IsEntityId()
+  @IsUUID()
   @IsOptional()
   branchId?: string;
 
@@ -122,14 +121,14 @@ export class UserStatisticsDto {
   @IsOptional()
   endDate?: Date;
 
-  @IsEntityId()
+  @IsUUID()
   @IsOptional()
   branchId?: string;
 }
 
 // User Activity DTOs
 export class UserActivityDto extends PaginationDto {
-  @IsEntityId()
+  @IsUUID()
   @IsOptional()
   userId?: string;
 
@@ -148,7 +147,7 @@ export class UserActivityDto extends PaginationDto {
 
 // User Dashboard DTOs
 export class UserDashboardDto {
-  @IsEntityId()
+  @IsUUID()
   @IsOptional()
   branchId?: string;
 
