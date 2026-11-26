@@ -2755,4 +2755,51 @@ describe('PurchaseInvoiceWorkbench', () => {
       expect(await screen.findByRole('alertdialog', { name: 'Replace your edits?' })).toHaveTextContent('Supplier name: “Apex Pharma” → “APEX DISTRIBUTER”');
     });
   });
+
+  describe('OCR checks the reviewer settles with the final action', () => {
+    const scanned = (headerFlags: string[], lineFlags: string[] = []) => ({
+      draft: { ...draftInvoice, invoiceDate: '2026-05-01', goodsReceivedDate: '2026-05-02', ocrFlags: headerFlags,
+        items: [{ ...draftInvoice.items[0], ocrFlags: lineFlags }] },
+    });
+
+    it.each([
+      ['an unconfirmed second read of completeness', ['document_completeness_unconfirmed'], []],
+      ['an unprinted or disputed net payable', ['missing_netPayable', 'independent_read_disagrees_netPayable', 'uncertain_netPayable'], []],
+      ['unprinted taxable amounts', ['missing_taxableAmount'], ['missing_taxableAmount']],
+      ['amount discrepancies the model reports in its own words', ['totals_mismatch', 'uncertain_grossAmount'], ['gst_rounding_difference', 'lineTotal_mismatch']],
+      ['an unexplained row count', ['unexplained_row_count_mismatch'], []],
+      ['uncertain product identity and pack', [], ['uncertain_product', 'uncertain_product_identity', 'uncertain_pack']],
+    ])('enables Confirm for %s once the values reconcile', async (_name, headerFlags, lineFlags) => {
+      api.reviewPharmacyPurchaseInvoice.mockResolvedValue({ ...draftInvoice, status: 'REVIEWED' });
+      api.commitPharmacyPurchaseInvoiceStock.mockResolvedValue({ ...draftInvoice, status: 'STOCK_COMMITTED', stockCommittedAt: '2026-11-26T00:00:00Z' });
+      render(<PurchaseInvoiceWorkbench importedDraft={scanned(headerFlags, lineFlags)} />);
+      await screen.findByDisplayValue('APX-001');
+      fireEvent.click(await reviewConfirmation());
+      await waitFor(() => expect(api.createPharmacyPurchaseInvoiceDraft).toHaveBeenCalledTimes(1));
+      const saved = api.createPharmacyPurchaseInvoiceDraft.mock.calls[0][0] as { ocrFlags: string[]; items: { ocrFlags?: string }[] };
+      expect(saved.ocrFlags).toEqual([]);
+      expect(saved.items[0].ocrFlags || '').toBe('');
+      await waitFor(() => expect(api.reviewPharmacyPurchaseInvoice).toHaveBeenCalledTimes(1));
+    });
+
+    it.each([
+      ['missing pages', 'missing_pages', 'Upload pages'],
+      ['a wrong document', 'not_a_purchase_invoice', 'Upload correct invoice'],
+      ['several invoices in one upload', 'multiple_invoices', 'Upload one invoice'],
+    ])('keeps Confirm disabled and offers an upload for %s', async (_name, flag, upload) => {
+      render(<PurchaseInvoiceWorkbench importedDraft={scanned([flag])} />);
+      await screen.findByDisplayValue('APX-001');
+      expect(screen.getByRole('button', { name: 'Confirm reviewed values & add stock' })).toBeDisabled();
+      expect(screen.getByRole('list', { name: 'Invoice checks' })).toHaveTextContent(upload);
+      expect(api.createPharmacyPurchaseInvoiceDraft).not.toHaveBeenCalled();
+    });
+
+    it('refuses the final action when a reported amount discrepancy is real', async () => {
+      render(<PurchaseInvoiceWorkbench importedDraft={{ draft: { ...scanned(['totals_mismatch']).draft, netPayable: 500 } }} />);
+      await screen.findByDisplayValue('APX-001');
+      fireEvent.click(await reviewConfirmation());
+      expect(await screen.findAllByText(/Printed .* differs from the calculated amount/)).not.toHaveLength(0);
+      expect(api.createPharmacyPurchaseInvoiceDraft).not.toHaveBeenCalled();
+    });
+  });
 });
