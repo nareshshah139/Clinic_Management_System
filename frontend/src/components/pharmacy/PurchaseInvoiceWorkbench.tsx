@@ -3095,7 +3095,7 @@ function PurchaseInvoiceEditor({
   const editingSelectedInvoice =
     !!activeInvoice && editingId === activeInvoice.id;
   const hasDraftContent = !!sourceDocument || !!activeInvoice || !!header.invoiceNumber || !!header.distributorName || lines.some(line => !!line.productName);
-  const busy =
+  const editsLocked =
     saving ||
     extracting ||
     processing ||
@@ -3104,8 +3104,8 @@ function PurchaseInvoiceEditor({
     refreshingStockStatus ||
     reopeningReview ||
     savingSupplier ||
-    masterConfirming !== null ||
-    masterRefreshing;
+    masterConfirming !== null;
+  const busy = editsLocked || masterRefreshing;
   const stockStatusUnknown = !!unknownStockInvoiceId;
   const stockAdded = !stockStatusUnknown &&
     (activeInvoice?.status === "STOCK_COMMITTED" || !!activeInvoice?.stockCommittedAt);
@@ -3432,7 +3432,7 @@ function PurchaseInvoiceEditor({
         canSave={!!access.saveSupplier}
         canEdit={!!access.editSupplier}
         readOnly={!editingChecks}
-        disabled={busy}
+        disabled={editsLocked}
         nextAction={postingLabel}
         onChange={(distributorName, distributorGstin) => {
           invalidatePending();
@@ -4522,7 +4522,7 @@ function PurchaseInvoiceEditor({
                 >
                   {!activeInvoice && (hasDraftContent || manualEntry) && reviewChecklist}
                   <fieldset
-                    disabled={savedFormLocked || busy}
+                    disabled={savedFormLocked || editsLocked}
                     className="mt-4 space-y-5 min-w-0"
                   >
                     <Card>
@@ -5285,7 +5285,7 @@ function PurchaseInvoiceEditor({
                                     <ReadOnlyAmount label="GST" value={amounts.gst} />
                                     <ReadOnlyAmount label="Effective Cost" value={numeric(line.quantityPurchased) + numeric(line.freeQuantity) > 0 ? money(amounts.taxable / (numeric(line.quantityPurchased) + numeric(line.freeQuantity))) : 0} />
                                   </div>
-                                  <ReportedAmountsEditor id={`${line.localId}-reported`} values={Array.isArray(originalAmounts?.items) ? originalAmounts.items[index] : null} labels={reportedLineAmounts} disabled={savedFormLocked || busy} onChange={(key, value) => updateReportedAmount(key, value, index)} />
+                                  <ReportedAmountsEditor id={`${line.localId}-reported`} values={Array.isArray(originalAmounts?.items) ? originalAmounts.items[index] : null} labels={reportedLineAmounts} disabled={savedFormLocked || editsLocked} onChange={(key, value) => updateReportedAmount(key, value, index)} />
                                   {currentLineFlags[index].length > 0 && <details className="mt-2"><summary className="cursor-pointer text-sm">Advanced line OCR flags</summary><Label htmlFor={`${line.localId}-ocr-flags`}>OCR Flags</Label><Input id={`${line.localId}-ocr-flags`} value={currentLineFlags[index].join(', ')} onChange={event => updateLine(line.localId, 'ocrFlags', event.target.value)} /></details>}
                                   <Button type="button" variant="outline" size="sm" className="mt-3" onClick={() => removeLine(line.localId)} disabled={lines.length === 1} aria-label={`Remove line ${index + 1}`}><Trash2 className="h-4 w-4" />Remove line</Button>
                                 </details>
