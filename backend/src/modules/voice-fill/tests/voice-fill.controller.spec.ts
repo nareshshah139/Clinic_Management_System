@@ -137,10 +137,10 @@ describe('POST /voice-fill/:form with the real service', () => {
     expect((await upload('patient-intake', 'DOCTOR').expect(503)).body.message).toBe(`${UNAVAILABLE} (code: codex-timeout)`);
     codex.mockResolvedValueOnce('Patient Asha Rao, I could not format this');
     expect((await upload('patient-intake', 'DOCTOR').expect(503)).body.message).toBe(`${UNAVAILABLE} (code: model-output)`);
-    const warnings = jest.mocked(Logger.prototype.warn).mock.calls.map((call) => String(call[0]).replace(/ms=\d+/, 'ms=N'));
+    const warnings = jest.mocked(Logger.prototype.warn).mock.calls.map((call) => String(call[0]).replace(/([mM]s)=\d+/g, '$1=N'));
     expect(warnings).toEqual([
-      'voice-fill form=patient-intake ms=N audioBytes=15 failed step=codex-timeout exit=none signal=none reason="Codex timed out. Try again." detail=""',
-      'voice-fill form=patient-intake ms=N audioBytes=15 failed step=model-output exit=none signal=none reason="invalid model output" detail=""',
+      'voice-fill form=patient-intake ms=N transcribeMs=N extractMs=N audioBytes=15 failed step=codex-timeout exit=none signal=none reason="Codex timed out. Try again." detail=""',
+      'voice-fill form=patient-intake ms=N transcribeMs=N extractMs=N audioBytes=15 failed step=model-output exit=none signal=none reason="invalid model output" detail=""',
     ]);
   });
 
@@ -240,18 +240,18 @@ describe('POST /voice-fill/:form with the real service', () => {
       codex.mockResolvedValueOnce('Patient Asha Rao, I could not format this');
       expect((await typed('patient-intake', 'DOCTOR', { text: 'Asha Rao secret' }).expect(503)).body.message)
         .toBe(`${UNAVAILABLE} (code: model-output)`);
-      const warnings = jest.mocked(Logger.prototype.warn).mock.calls.map((call) => String(call[0]).replace(/ms=\d+/, 'ms=N'));
+      const warnings = jest.mocked(Logger.prototype.warn).mock.calls.map((call) => String(call[0]).replace(/([mM]s)=\d+/g, '$1=N'));
       expect(warnings).toEqual([
-        'voice-fill form=patient-intake ms=N textChars=15 failed step=codex-timeout exit=none signal=none reason="Codex timed out. Try again." detail=""',
-        'voice-fill form=patient-intake ms=N textChars=15 failed step=model-output exit=none signal=none reason="invalid model output" detail=""',
+        'voice-fill form=patient-intake ms=N transcribeMs=N extractMs=N textChars=15 failed step=codex-timeout exit=none signal=none reason="Codex timed out. Try again." detail=""',
+        'voice-fill form=patient-intake ms=N transcribeMs=N extractMs=N textChars=15 failed step=model-output exit=none signal=none reason="invalid model output" detail=""',
       ]);
     });
 
     it('logs the outcome of a success without the text', async () => {
       codex.mockResolvedValue('{"firstName":"Asha"}');
       await typed('patient-intake', 'DOCTOR', { text: 'Asha Rao secret' }).expect(200);
-      const logs = jest.mocked(Logger.prototype.log).mock.calls.map((call) => String(call[0]).replace(/ms=\d+/, 'ms=N'));
-      expect(logs).toEqual(['voice-fill form=patient-intake ms=N textChars=15 fields=1']);
+      const logs = jest.mocked(Logger.prototype.log).mock.calls.map((call) => String(call[0]).replace(/([mM]s)=\d+/g, '$1=N'));
+      expect(logs).toEqual(['voice-fill form=patient-intake ms=N transcribeMs=N extractMs=N textChars=15 fields=1']);
     });
   });
 
@@ -322,8 +322,9 @@ describe('POST /voice-fill/:form with the real service', () => {
       arrange();
       const res = await upload('patient-intake', 'DOCTOR').expect(503);
       expect(res.body).toEqual({ statusCode: 503, error: 'Service Unavailable', message: `${UNAVAILABLE} (code: ${code})` });
-      const warnings = jest.mocked(Logger.prototype.warn).mock.calls.map((call) => String(call[0]).replace(/ms=\d+/, 'ms=N'));
-      expect(warnings).toEqual([`voice-fill form=patient-intake ms=N audioBytes=15 failed ${log}`]);
+      const warnings = jest.mocked(Logger.prototype.warn).mock.calls.map((call) => String(call[0]).replace(/([mM]s)=\d+/g, '$1=N'));
+      const stages = code === 'transcription' ? '' : ' transcribeMs=N extractMs=N';
+      expect(warnings).toEqual([`voice-fill form=patient-intake ms=N${stages} audioBytes=15 failed ${log}`]);
     });
 
     it('never logs or returns the patient text, whatever fails', async () => {

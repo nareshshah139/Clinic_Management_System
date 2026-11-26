@@ -198,6 +198,7 @@ async function requestTranscription(apiKey: string, audio: Upload): Promise<Open
       `model=${transcribeModel} language=${transcribeLanguage || 'auto'}`,
   );
 
+  const started = Date.now();
   const resp = await fetch(process.env.OPENAI_TRANSCRIBE_URL || 'https://api.openai.com/v1/audio/transcriptions', {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}` },
@@ -217,7 +218,7 @@ async function requestTranscription(apiKey: string, audio: Upload): Promise<Open
   const data: any = await resp.json();
   const text = typeof data?.text === 'string' ? data.text : '';
   const segments: unknown[] = Array.isArray(data?.segments) ? data.segments : [];
-  logger.log(`transcription transcriptLength=${text.length} segmentCount=${segments.length}`);
+  logger.log(`transcription ms=${Date.now() - started} transcriptLength=${text.length} segmentCount=${segments.length}`);
   return { text, segments };
 }
 
@@ -231,6 +232,7 @@ async function settleAll<T>(promises: Array<Promise<T>>): Promise<T[]> {
 
 /** Sends the file twice in parallel and a third time only when the two lengths disagree; see chooseConsensusTranscript. */
 async function transcribeByConsensus(apiKey: string, audio: TranscriptionAudio, limit: RequestLimiter): Promise<OpenAiTranscription> {
+  const started = Date.now();
   const upload: Upload = { bytes: await fs.readFile(audio.path), mimetype: audio.mimetype, filename: audio.filename };
   const send = () => limit(() => requestTranscription(apiKey, upload));
   const samples = await settleAll([send(), send()]);
@@ -240,7 +242,7 @@ async function transcribeByConsensus(apiKey: string, audio: TranscriptionAudio, 
     choice = chooseConsensusTranscript([samples[0].text, samples[1].text, samples[2].text]);
   }
   logger.log(
-    `transcription consensus file=${audio.filename} lengths=${samples.map((sample) => sample.text.trim().length).join(',')} ` +
+    `transcription consensus ms=${Date.now() - started} file=${audio.filename} lengths=${samples.map((sample) => sample.text.trim().length).join(',')} ` +
       `decision=${choice.decision}`,
   );
   return samples[choice.index];
@@ -284,9 +286,10 @@ async function transcribeInParts(
   concurrency: number,
   limit: RequestLimiter,
 ) {
+  const started = Date.now();
   const silences = await detectSilences(audio.path);
   const spans = planTranscriptionSegments(durationS, silences, plan);
-  logger.log(`transcription split durationS=${durationS.toFixed(1)} parts=${spans.length} concurrency=${concurrency}`);
+  logger.log(`transcription split silenceMs=${Date.now() - started} durationS=${durationS.toFixed(1)} parts=${spans.length} concurrency=${concurrency}`);
   const baseName = audio.filename.replace(/\.[^.]*$/, '');
   // Parts are bounded too, so a long recording does not decode every part at once while waiting for request slots.
   const parts = await mapWithConcurrency(spans, concurrency, async (span, index) => {
@@ -322,8 +325,10 @@ export async function transcribeWithOpenAI(audio: TranscriptionAudio): Promise<O
     let source: TranscriptionAudio = { ...audio, mimetype: audio.mimetype || 'audio/webm', filename: audio.filename || 'audio.webm' };
     if (audio.mimetype === 'audio/webm' || source.filename.endsWith('.webm')) {
       convertedWavPath = `${audio.path}.wav`;
+      const started = Date.now();
       try {
         await writeSpeechWav(audio.path, convertedWavPath);
+        logger.log(`transcription convert ms=${Date.now() - started}`);
       } catch (convErr: any) {
         logger.error(`WebM conversion failed: ${convErr.message}`);
         throw new BadRequestException(`Audio format conversion failed: ${convErr.message}`);

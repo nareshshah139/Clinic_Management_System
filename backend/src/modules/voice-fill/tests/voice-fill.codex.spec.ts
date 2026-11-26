@@ -97,8 +97,8 @@ exit 1
       const error = await new VoiceFillService().fillText('patient-intake', findVoiceFillForm('patient-intake')!, text).catch((caught) => caught);
       expect(error.getStatus()).toBe(503);
       expect(error.message).toBe('Voice fill is unavailable right now. Please fill the form manually. (code: codex-exec)');
-      expect(warn.mock.calls.map((call) => String(call[0]).replace(/ms=\d+/, 'ms=N'))).toEqual([
-        'voice-fill form=patient-intake ms=N textChars=44 failed step=codex-exec exit=1 signal=none ' +
+      expect(warn.mock.calls.map((call) => String(call[0]).replace(/([mM]s)=\d+/g, '$1=N'))).toEqual([
+        'voice-fill form=patient-intake ms=N transcribeMs=N extractMs=N textChars=44 failed step=codex-exec exit=1 signal=none ' +
           `reason="Codex request failed. Check the server OAuth login and model availability." detail="${notSupported.replace(/"/g, "'")}"`,
       ]);
     } finally {

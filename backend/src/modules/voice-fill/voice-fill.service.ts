@@ -107,10 +107,15 @@ export class VoiceFillService {
     getText: () => Promise<string>,
   ): Promise<VoiceFillResult> {
     const started = Date.now();
-    const outcome = (detail: string) => `voice-fill form=${formId} ms=${Date.now() - started} ${inputSize} ${detail}`;
+    let transcribedAt: number | undefined;
+    const outcome = (detail: string) => {
+      const stages = transcribedAt === undefined ? '' : ` transcribeMs=${transcribedAt - started} extractMs=${Date.now() - transcribedAt}`;
+      return `voice-fill form=${formId} ms=${Date.now() - started}${stages} ${inputSize} ${detail}`;
+    };
     let step: 'transcribe' | 'extract' = 'transcribe';
     try {
       const transcript = normalizeTranscript(await getText());
+      transcribedAt = Date.now();
       step = 'extract';
       if (!transcript) {
         this.logger.log(outcome('fields=0 transcript=empty'));
