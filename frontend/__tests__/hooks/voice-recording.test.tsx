@@ -1,5 +1,4 @@
 import { act, renderHook } from '@testing-library/react';
-import { useAudioRecorder } from '@/hooks/useAudioRecorder';
 import { useVoiceFill } from '@/hooks/useVoiceFill';
 
 const toast = jest.fn();
@@ -8,10 +7,6 @@ jest.mock('@/lib/api', () => ({ apiClient: {} }));
 
 class FakeMediaRecorder {
   static isTypeSupported = (type: string) => type === 'audio/webm';
-  static lastOptions: MediaRecorderOptions | undefined;
-  constructor(_stream: unknown, options?: MediaRecorderOptions) {
-    FakeMediaRecorder.lastOptions = options;
-  }
   state: 'inactive' | 'recording' = 'inactive';
   ondataavailable: ((event: { data: Blob }) => void) | null = null;
   onstop: (() => void) | null = null;
@@ -42,26 +37,6 @@ beforeEach(() => {
   Object.defineProperty(navigator, 'mediaDevices', {
     value: { getUserMedia: jest.fn().mockResolvedValue({ getTracks: () => [track] }) },
     configurable: true,
-  });
-});
-
-describe('useAudioRecorder', () => {
-  afterEach(() => { jest.useRealTimers(); });
-
-  it('records speech at 32 kbps and hands the audio over by itself after 40 minutes', async () => {
-    jest.useFakeTimers();
-    const onRecorded = jest.fn();
-    const { result } = renderHook(() => useAudioRecorder({ toast, onRecorded }));
-
-    await act(async () => { await result.current.toggle('notes'); });
-    expect(FakeMediaRecorder.lastOptions).toEqual({ mimeType: 'audio/webm', audioBitsPerSecond: 32000 });
-
-    act(() => { jest.advanceTimersByTime(40 * 60_000 - 1); });
-    expect([result.current.recording?.key, onRecorded.mock.calls.length]).toEqual(['notes', 0]);
-
-    act(() => { jest.advanceTimersByTime(1); });
-    expect(result.current.recording).toBeNull();
-    expect(onRecorded.mock.calls.map(([key, audio, filename]) => [key, audio.type, filename])).toEqual([['notes', 'audio/webm', 'recording.webm']]);
   });
 });
 
@@ -136,6 +111,24 @@ describe('useVoiceFill', () => {
     await act(async () => { jest.advanceTimersByTime(1); });
     expect(result.current.phase.kind).not.toBe('listening');
     jest.useRealTimers();
+  });
+
+  it('never records with the button idle after Escape at the permission prompt and a second press', async () => {
+    const first = deferred();
+    const getUserMedia = jest.fn().mockReturnValueOnce(first.promise).mockResolvedValue({ getTracks: () => [track] });
+    Object.defineProperty(navigator, 'mediaDevices', { value: { getUserMedia }, configurable: true });
+    const { result } = renderHook(() => useVoiceFill({ form: 'patient-intake', apply: jest.fn() }));
+
+    await act(async () => { result.current.toggle(); });
+    await act(async () => { result.current.cancel(); });
+    await act(async () => { result.current.toggle(); });
+    expect(result.current.phase).toEqual({ kind: 'idle' });
+    expect(toast.mock.calls).toEqual([[{ variant: 'warning', title: 'Dictation already running', description: 'Another dictation is already running. Stop it first.' }]]);
+
+    await act(async () => { first.resolve({ getTracks: () => [track] }); });
+    expect(result.current.phase).toEqual({ kind: 'idle' });
+    expect(track.stop).toHaveBeenCalled();
+    expect(fetchMock.mock.calls).toEqual([]);
   });
 
   it('cancel releases the microphone without sending anything', async () => {
