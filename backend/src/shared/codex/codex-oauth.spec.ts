@@ -176,6 +176,27 @@ ${exec}
     });
   });
 
+  it('runs the login check once for back-to-back requests and again for a request after a failed check', async () => {
+    const calls = path.join(directory, 'calls');
+    const loginLog = path.join(directory, 'login-output');
+    fs.writeFileSync(loginLog, 'Logged in using ChatGPT');
+    process.env.PHARMACY_AGENT_CODEX_PATH = fakeCodex(
+      `echo login >> ${calls}; cat ${loginLog}; exit 0`,
+      `echo exec >> ${calls}; prev=""; for a in "$@"; do [ "$prev" = "-o" ] && echo '{"ok":true}' > "$a"; prev="$a"; done; exit 0`,
+    );
+    const request = () => completeJsonWithCodexOAuth({ prompt: PROMPT, schema: {}, timeoutMs: 10000 });
+    expect(await request()).toBe('{"ok":true}\n');
+    expect(await request()).toBe('{"ok":true}\n');
+    expect(fs.readFileSync(calls, 'utf8').split('\n').filter(Boolean)).toEqual(['login', 'exec', 'exec']);
+
+    resetCodexOAuthReadiness();
+    fs.writeFileSync(loginLog, 'Logged in using an API key');
+    expect((await failure()).kind).toBe('codex-login');
+    fs.writeFileSync(loginLog, 'Logged in using ChatGPT');
+    expect(await request()).toBe('{"ok":true}\n');
+    expect(fs.readFileSync(calls, 'utf8').split('\n').filter(Boolean)).toEqual(['login', 'exec', 'exec', 'login', 'login', 'exec']);
+  });
+
   it('reports a failing login status as a login failure with the existing message', async () => {
     process.env.PHARMACY_AGENT_CODEX_PATH = fakeCodex('echo "Not logged in" >&2; exit 1', 'exit 0');
     const error = await failure();

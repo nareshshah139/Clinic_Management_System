@@ -1,4 +1,4 @@
-import { ServiceUnavailableException } from '@nestjs/common';
+import { Logger, ServiceUnavailableException } from '@nestjs/common';
 import { spawn } from 'child_process';
 import * as fs from 'fs/promises';
 import * as os from 'os';
@@ -118,11 +118,13 @@ function run(args: string[], input: string, timeout: number, secrets: readonly s
 }
 
 const usesChatGptOAuth = (status: string) => /chatgpt|access token/i.test(status) && !/api key/i.test(status);
+const READINESS_TTL_MS = 60_000;
+const logger = new Logger('CodexOAuth');
 
 let readiness: { at: number; ready: Promise<boolean> } | undefined;
 
 export function isCodexOAuthReady(): Promise<boolean> {
-  if (!readiness || Date.now() - readiness.at > 60_000) {
+  if (!readiness || Date.now() - readiness.at > READINESS_TTL_MS) {
     readiness = {
       at: Date.now(),
       ready: run(['login', 'status'], '', 10000).then(usesChatGptOAuth, () => false),
@@ -136,13 +138,17 @@ export function resetCodexOAuthReadiness(): void {
 }
 
 export async function requireCodexOAuthLogin(message: string): Promise<void> {
+  if (readiness && Date.now() - readiness.at <= READINESS_TTL_MS && await readiness.ready) return;
   const status = await run(['login', 'status'], '', 10000).catch((error: unknown) => {
+    readiness = { at: Date.now(), ready: Promise.resolve(false) };
     if (error instanceof CodexFailure && error.kind === 'codex-exec') {
       throw new CodexFailure(error.message, 'codex-login', error.exitCode, error.signal, error.diagnostic);
     }
     throw error;
   });
-  if (!usesChatGptOAuth(status)) throw new CodexFailure(message, 'codex-login', 0, null, codexDiagnostic(status, []));
+  const ready = usesChatGptOAuth(status);
+  readiness = { at: Date.now(), ready: Promise.resolve(ready) };
+  if (!ready) throw new CodexFailure(message, 'codex-login', 0, null, codexDiagnostic(status, []));
 }
 
 export interface CodexJsonRequest {
@@ -153,7 +159,9 @@ export interface CodexJsonRequest {
 }
 
 export async function completeJsonWithCodexOAuth({ prompt, schema, model, timeoutMs }: CodexJsonRequest): Promise<string> {
+  const started = Date.now();
   await requireCodexOAuthLogin('Codex ChatGPT OAuth login is required on the server.');
+  const loginMs = Date.now() - started;
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'codex-json-'));
   try {
     const schemaPath = path.join(directory, 'schema.json');
@@ -164,6 +172,7 @@ export async function completeJsonWithCodexOAuth({ prompt, schema, model, timeou
       '-s', 'read-only', '-C', directory, '--output-schema', schemaPath, '-o', outputPath,
       ...(model ? ['-m', model] : []), '-c', 'model_reasoning_effort="low"', '-',
     ], prompt, timeoutMs, [prompt]);
+    logger.log(`codex json loginMs=${loginMs} execMs=${Date.now() - started - loginMs}`);
     return await fs.readFile(outputPath, 'utf8');
   } finally {
     await fs.rm(directory, { recursive: true, force: true });
