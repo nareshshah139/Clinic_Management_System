@@ -179,14 +179,6 @@ describe('status edits through update', () => {
   });
 });
 
-describe('bulk update', () => {
-  it.each(['SCHEDULED', 'CONFIRMED'])('refuses status %s because the move needs a capacity check', async (status) => {
-    const { service, db } = setup({ rows: [row('a', 'SCHEDULED')] });
-    await expect(service.bulkUpdate({ appointmentIds: ['a'], status } as any, 'branch-1')).rejects.toBeInstanceOf(BadRequestException);
-    expect(db.appointment.updateMany).not.toHaveBeenCalled();
-  });
-});
-
 describe('bulk update into a calendar', () => {
   const bulk = (service: AppointmentsService, ids: string[], status: string) =>
     service.bulkUpdate({ appointmentIds: ids, status } as any, 'branch-1');

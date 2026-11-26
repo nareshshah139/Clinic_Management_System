@@ -38,7 +38,7 @@ describe('AppointmentsService.bulkUpdate', () => {
 
   it('performs update when all appointments exist', async () => {
     prismaMock.appointment.findMany.mockResolvedValue([{ id: 'a1' }, { id: 'a2' }]);
-    prismaMock.appointment.updateMany.mockResolvedValue({ count: 2 });
+    prismaMock.appointment.updateMany.mockResolvedValue({ count: 1 });
 
     const res = await service.bulkUpdate({ appointmentIds: ['a1', 'a2'], status: 'CANCELLED' } as any, branchId);
     expect(res).toEqual({ updated: 2, appointmentIds: ['a1', 'a2'] });
