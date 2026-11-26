@@ -12,7 +12,7 @@ stateDiagram-v2
   [*] --> s0
   s0 --> s1: an admin bulk-updates the status / the desk cancels / the desk edits the status
   s0 --> s2: the doctor starts the visit
-  s1 --> s0: an admin bulk-updates the status / the desk edits the status
+  s1 --> s0: the desk edits the status
   s1 --> s3: the desk confirms the voice check-in
   s2 --> s0: the visit is deleted
   s2 --> s4: the doctor completes the visit

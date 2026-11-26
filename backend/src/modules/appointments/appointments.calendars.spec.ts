@@ -25,6 +25,7 @@ function setup({ rows, limit = 1, staleStatus }: { rows: Row[]; limit?: number; 
       findMany: jest.fn(async ({ where }: any) => [...store.values()]
         .filter((r) => (where.status?.in ? where.status.in.includes(r.status) : true))
         .filter((r) => (where.id?.not ? r.id !== where.id.not : true))
+        .filter((r) => (where.id?.in ? where.id.in.includes(r.id) : true))
         .filter((r) => (where.doctorId ? r.doctorId === where.doctorId : true))
         .map((r) => ({ ...r, patient: { name: r.id } }))),
       findFirst: jest.fn(async ({ where }: any) => {
@@ -177,9 +178,33 @@ describe('status edits through update', () => {
 });
 
 describe('bulk update', () => {
-  it.each(['SCHEDULED', 'CONFIRMED'])('refuses status %s because the move needs a capacity check', async (status) => {
-    const { service, db } = setup({ rows: [row('a', 'SCHEDULED')] });
-    await expect(service.bulkUpdate({ appointmentIds: ['a'], status } as any, 'branch-1')).rejects.toBeInstanceOf(BadRequestException);
+  const bulk = (service: AppointmentsService, ids: string[], status: string) =>
+    service.bulkUpdate({ appointmentIds: ids, status } as any, 'branch-1');
+
+  it.each([
+    ['CANCELLED', 'SCHEDULED'],
+    ['CANCELLED', 'CONFIRMED'],
+    ['CANCELLED', 'NO_SHOW'],
+    ['SCHEDULED', 'CONFIRMED'],
+    ['SCHEDULED', 'CHECKED_IN'],
+    ['SCHEDULED', 'NO_SHOW'],
+    ['CONFIRMED', 'SCHEDULED'],
+  ])('refuses %s to %s because the move needs a capacity check', async (from, to) => {
+    const { service, db } = setup({ rows: [row('a', from)] });
+    await expect(bulk(service, ['a'], to)).rejects.toBeInstanceOf(BadRequestException);
+    expect(db.appointment.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('refuses to un-cancel into a slot another patient took, and writes nothing', async () => {
+    const { service, db, store } = setup({ rows: [row('a', 'CANCELLED'), row('b', 'CONFIRMED')] });
+    await expect(bulk(service, ['a'], 'NO_SHOW')).rejects.toBeInstanceOf(BadRequestException);
+    expect(db.appointment.updateMany).not.toHaveBeenCalled();
+    expect(store.get('a')!.status).toBe('CANCELLED');
+  });
+
+  it('refuses the whole selection when one row would enter a calendar', async () => {
+    const { service, db } = setup({ rows: [row('a', 'CONFIRMED'), row('b', 'CANCELLED', '12:00-12:30')] });
+    await expect(bulk(service, ['a', 'b'], 'NO_SHOW')).rejects.toBeInstanceOf(BadRequestException);
     expect(db.appointment.updateMany).not.toHaveBeenCalled();
   });
 });
