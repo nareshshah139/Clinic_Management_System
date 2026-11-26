@@ -52,11 +52,11 @@ describe('stock alerts', () => {
 });
 
 describe('dues alerts', () => {
-  const OUTSTANDING = '/dashboard/billing?status=outstanding';
+  const OVERDUE = '/dashboard/billing?status=overdue';
 
   it('send reception from an overdue bill to the unpaid clinic bills', () => {
     const items = buildRoleNotifications({ overdueInvoices: [invoice] }, 'RECEPTION');
-    expect(items.map((i) => [i.title, i.href])).toEqual([['Overdue bill INV-7', OUTSTANDING]]);
+    expect(items.map((i) => [i.title, i.href])).toEqual([['Overdue bill INV-7', OVERDUE]]);
   });
 
   it('give an accountant, whom the billing page refuses, the dues without a link', () => {
@@ -68,7 +68,7 @@ describe('dues alerts', () => {
   it.each(['OWNER', 'ADMIN'])('send the %s summary of overdue bills to the unpaid clinic bills, and leave payments unlinked', (role) => {
     const items = buildRoleNotifications({ counts: { overdueInvoices: 2, pendingPayments: 1 } }, role);
     expect(items.map((i) => [i.title, i.href])).toEqual([
-      ['2 overdue clinic bills', OUTSTANDING],
+      ['2 overdue clinic bills', OVERDUE],
       ['1 payment awaiting reconciliation', undefined],
     ]);
   });

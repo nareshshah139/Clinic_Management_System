@@ -305,7 +305,7 @@ describe('system alerts drill-down', () => {
     await user.click(await screen.findByRole('button', { name: /Overdue Invoices\s*1/ }));
 
     expect(screen.getByRole('link', { name: 'INV-7 · Meera Joshi · ₹800.00 · due 02 Nov 2026' })).toHaveAttribute('href', '/dashboard/patients/p1');
-    expect(screen.getByRole('link', { name: 'Open unpaid clinic bills' })).toHaveAttribute('href', '/dashboard/billing?status=outstanding');
+    expect(screen.getByRole('link', { name: 'Open overdue clinic bills' })).toHaveAttribute('href', '/dashboard/billing?status=overdue');
   });
 
   it('keeps a zero count as plain text', async () => {

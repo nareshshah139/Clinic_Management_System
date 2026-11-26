@@ -232,9 +232,9 @@ describe('an accountant, whom the sales register and the billing page refuse', (
     mockBillingForAccountant = true;
     render(<DashboardPage />);
 
-    expect((await screen.findByRole('link', { name: /Overdue clinic bills/ })).getAttribute('href')).toBe('/dashboard/billing?status=outstanding');
+    expect((await screen.findByRole('link', { name: /Overdue clinic bills/ })).getAttribute('href')).toBe('/dashboard/billing?status=overdue');
     expect(screen.queryByRole('link', { name: /Payments awaiting reconciliation/ })).toBeNull();
-    expect(linkHrefs()).toEqual(['/dashboard/pharmacy/reports?report=daily-collection', '/dashboard/billing?status=outstanding']);
+    expect(linkHrefs()).toEqual(['/dashboard/pharmacy/reports?report=daily-collection', '/dashboard/billing?status=overdue']);
   });
 });
 

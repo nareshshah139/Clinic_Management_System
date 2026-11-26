@@ -7,7 +7,7 @@ import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { displayClinicDate } from '@/lib/date-display';
 import { paymentModeLabel } from '@/lib/clinic-payment-modes';
-import { LOW_STOCK_DEFINITION, LOW_STOCK_HREF, UPCOMING_DEFINITION } from '@/lib/clinic-counts';
+import { LOW_STOCK_DEFINITION, LOW_STOCK_HREF, OVERDUE_BILLS_HREF, UPCOMING_DEFINITION } from '@/lib/clinic-counts';
 import type { StatusVariant } from '@/lib/status-variants';
 
 export interface SystemAlerts {
@@ -32,7 +32,7 @@ const rupees = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'IN
 
 const ALERT_ITEMS: Array<{ key: AlertKey; label: string; tone: StatusVariant; note?: string; list?: { href: string; label: string }; rows: (alerts: SystemAlerts) => Row[] }> = [
   {
-    key: 'overdueInvoices', label: 'Overdue Invoices', tone: 'danger', list: { href: '/dashboard/billing?status=outstanding', label: 'Open unpaid clinic bills' },
+    key: 'overdueInvoices', label: 'Overdue Invoices', tone: 'danger', list: { href: OVERDUE_BILLS_HREF, label: 'Open overdue clinic bills' },
     rows: (a) => (a.overdueInvoices ?? []).map((invoice) => ({
       id: invoice.id,
       text: `${invoice.invoiceNo} · ${invoice.patient?.name ?? 'Patient'} · ${rupees.format(invoice.total)}${invoice.dueDate ? ` · due ${displayClinicDate(invoice.dueDate)}` : ''}`,

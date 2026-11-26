@@ -53,9 +53,10 @@ export const STATUS_VIEW: Record<ClinicBillStatus, { label: string; variant: 'wa
 
 export const KIND_LABEL: Record<BillKind, string> = { CONSULTATION: 'Consultation', PROCEDURE: 'Procedure' };
 
-const STATUS_FILTERS = ['outstanding', 'paid', 'void'] as const;
+const STATUS_FILTERS = ['outstanding', 'overdue', 'paid', 'void'] as const;
 export const STATUS_FILTER_OPTIONS = [
   { value: 'outstanding', label: 'Outstanding' },
+  { value: 'overdue', label: 'Overdue' },
   { value: 'paid', label: 'Paid' },
   { value: 'void', label: 'Void' },
 ] as const satisfies readonly { value: (typeof STATUS_FILTERS)[number]; label: string }[];

@@ -12,7 +12,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useRegisterQuery } from '@/components/register/useRegisterQuery';
 import { RegisterDateTime, RegisterDenied, RegisterGrid, type RegisterColumn } from '@/components/register/RegisterGrid';
-import { ClearFilters, DateRangeFilter, FilterBar, FilterSelect, RegisterSearch } from '@/components/register/RegisterFilters';
+import { ClearFilters, DateRangeFilter, FilterBar, FilterSelect, RegisterSearch, filterLabelClass } from '@/components/register/RegisterFilters';
 import { RegisterFooter } from '@/components/register/RegisterFooter';
 import { RowAction } from '@/components/register/RowAction';
 import { ClinicBillDialog, useVoidBill } from './ClinicBillDialog';
@@ -75,6 +75,7 @@ export function ClinicBillRegister({
   const data = load.data;
   const actions = data?.actions ?? NO_ACTIONS;
   const failed = load.status === 'error';
+  const overdue = query.filters.status === 'overdue';
 
   const actionsCell = (row: ClinicBillRow) => {
     const name = `bill ${row.billNo} for ${row.patient.name}`;
@@ -173,7 +174,14 @@ export function ClinicBillRegister({
           />
         }
       >
-        <DateRangeFilter range={{ from: query.from, to: query.to }} today={today} onChange={(range) => dispatch({ type: 'range', ...range })} />
+        {overdue ? (
+          <div className="flex flex-col gap-1">
+            <span className={filterLabelClass}>Period</span>
+            <span className="flex h-10 items-center text-sm font-medium text-muted-foreground">Any bill date</span>
+          </div>
+        ) : (
+          <DateRangeFilter range={{ from: query.from, to: query.to }} today={today} onChange={(range) => dispatch({ type: 'range', ...range })} />
+        )}
         <FilterSelect label="Status" allLabel="All" value={query.filters.status} options={STATUS_FILTER_OPTIONS} onChange={(value) => dispatch({ type: 'filter', key: 'status', value })} />
         {view.filtered && <ClearFilters onClear={clearAll} />}
       </FilterBar>
@@ -192,11 +200,19 @@ export function ClinicBillRegister({
         compact
         card={card}
         empty={
-          <EmptyState
-            title={`No clinic bills ${view.searching ? 'match your search' : 'in this period'}`}
-            description={`Nothing billed between ${formatDisplayDay(query.from)} and ${formatDisplayDay(query.to)}${view.searching ? ' with these filters' : ''}. Bills are created from an appointment on the calendar.`}
-            action={view.filtered ? <Button variant="outline" onClick={clearAll}>Clear filters</Button> : undefined}
-          />
+          overdue ? (
+            <EmptyState
+              title="No overdue clinic bills"
+              description="No unpaid bill is past its due date."
+              action={<Button variant="outline" onClick={clearAll}>Clear filters</Button>}
+            />
+          ) : (
+            <EmptyState
+              title={`No clinic bills ${view.searching ? 'match your search' : 'in this period'}`}
+              description={`Nothing billed between ${formatDisplayDay(query.from)} and ${formatDisplayDay(query.to)}${view.searching ? ' with these filters' : ''}. Bills are created from an appointment on the calendar.`}
+              action={view.filtered ? <Button variant="outline" onClick={clearAll}>Clear filters</Button> : undefined}
+            />
+          )
         }
       />
 

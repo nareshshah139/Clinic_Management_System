@@ -7,7 +7,7 @@ import { Prisma } from '@prisma/client';
 import { viewerGrants } from '../../shared/access/viewer-grants';
 import { isLowStock, readLowStock } from '../inventory/inventory-stock-query';
 import { readUpcomingAppointments } from '../appointments/upcoming-appointments';
-import { STATUS_WHERE } from '../billing/clinic-bill-register';
+import { statusWhere } from '../billing/clinic-bill-register';
 import {
   RevenueReportResponseDto,
   PaymentBreakdownDto,
@@ -1185,7 +1185,7 @@ export class ReportsService {
    * `counts.overdueInvoices`, `counts.expiryAlerts` and `counts.pendingPayments` MUST count every
    * row matching the same filter and permission gate as the corresponding list, while each list
    * stays capped at 10 rows. A section the viewer may not read counts 0. An overdue invoice is a
-   * clinic bill the register lists as outstanding whose due date has passed.
+   * clinic bill the register's overdue filter lists.
    */
   async getSystemAlerts(branchId: string, viewer: { id?: string; role?: string }): Promise<any> {
     const grants = await viewerGrants(this.prisma, viewer);
@@ -1199,11 +1199,7 @@ export class ReportsService {
     const now = new Date();
     const in30Days = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
-    const overdueWhere = {
-      branchId,
-      ...STATUS_WHERE.outstanding,
-      dueDate: { lt: now },
-    };
+    const overdueWhere = { branchId, ...statusWhere(now).overdue };
     const expiryWhere = { branchId, expiryDate: { gt: now, lt: in30Days } };
     const pendingPaymentWhere = { reconStatus: 'PENDING', invoice: { branchId } };
 

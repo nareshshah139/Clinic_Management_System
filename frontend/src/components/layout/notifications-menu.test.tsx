@@ -34,7 +34,7 @@ describe('NotificationsMenu', () => {
   it('opens the unpaid clinic bills from an overdue bill alert', async () => {
     const user = await openMenu('RECEPTION');
     await user.click(await screen.findByRole('menuitem', { name: /Overdue bill INV-7/ }));
-    expect(push).toHaveBeenCalledWith('/dashboard/billing?status=outstanding');
+    expect(push).toHaveBeenCalledWith('/dashboard/billing?status=overdue');
   });
 
   it('goes nowhere from a dues alert whose page the role cannot open', async () => {

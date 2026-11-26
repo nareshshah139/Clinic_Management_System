@@ -5,7 +5,6 @@ import { clinicDayRange, money } from '../pharmacy/register-utils';
 import { clinicBillActions } from './billing-access';
 import {
   BILL_ROW_INCLUDE,
-  STATUS_WHERE,
   VOID,
   billRow,
   orderBy,
@@ -14,6 +13,7 @@ import {
   refundableOf,
   rupees,
   searchWhere,
+  statusWhere,
   type ClinicBillQuery,
   type ClinicBillRegister,
   type ClinicReceipt,
@@ -39,8 +39,10 @@ export class ClinicBillRegisterService {
   /**
    * @cc [owner:nareshshah139,label:calculation;security] clinic-bill-register
    * The register MUST list only the branch's clinic bills dated in the clinic-time range and
-   * matching the search and status filter. Its totals MUST cover every matching bill, not only the
-   * page: billed, collected and outstanding over bills that are not void, and the void count apart.
+   * matching the search and status filter, except that the overdue filter lists every overdue bill
+   * whatever its date, as the overdue alert counts them. Its totals MUST cover every matching bill,
+   * not only the page: billed, collected and outstanding over bills that are not void, and the void
+   * count apart.
    */
   async list(
     query: ClinicBillQuery,
@@ -49,9 +51,11 @@ export class ClinicBillRegisterService {
   ): Promise<ClinicBillRegister> {
     const where: Prisma.NewInvoiceWhereInput = {
       branchId,
-      createdAt: clinicDayRange(query.from, query.to),
+      ...(query.status === 'overdue'
+        ? {}
+        : { createdAt: clinicDayRange(query.from, query.to) }),
       ...searchWhere(query.field, query.q),
-      ...(query.status ? STATUS_WHERE[query.status] : {}),
+      ...(query.status ? statusWhere(new Date())[query.status] : {}),
     };
     const live = { AND: [where, { status: { not: VOID } }] };
     const [bills, total, sums, voided, actions] = await Promise.all([
