@@ -1,5 +1,6 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { PurchaseInvoiceWorkbench } from '@/components/pharmacy/PurchaseInvoiceWorkbench';
 import { apiClient } from '@/lib/api';
 
@@ -376,6 +377,87 @@ describe('PurchaseInvoiceWorkbench', () => {
     expect(screen.queryByRole('checkbox', { name: /I verified the invoice/ })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Retry product check' })).toBeEnabled();
   });
+
+  it('keeps the product name and the fields around it editable while the automatic product check runs', async () => {
+    renderSavedInvoice(cosgloInvoice);
+    await editSelectedInvoice();
+    await reviewConfirmation();
+    const checkWith = api.suggestPharmacyPurchaseMasterMatches.getMockImplementation()!;
+    const releases: Array<() => void> = [];
+    api.suggestPharmacyPurchaseMasterMatches.mockImplementation((request: any) => new Promise(resolve => { releases.push(() => resolve(checkWith(request))); }));
+    const checksBefore = api.suggestPharmacyPurchaseMasterMatches.mock.calls.length;
+    const user = userEvent.setup();
+    const product = screen.getByLabelText('Product');
+    await user.click(product);
+    await user.keyboard('A');
+    await waitFor(() => expect(api.suggestPharmacyPurchaseMasterMatches).toHaveBeenCalledTimes(checksBefore + 1));
+    expect(screen.getByRole('button', { name: 'Confirm reviewed values & add stock' })).toBeDisabled();
+    expect(product).toBeEnabled();
+    expect(product).toHaveFocus();
+    await user.keyboard('bc');
+    expect(product).toHaveValue('Cosglo New CreamAbc');
+    expect(product).toHaveFocus();
+    await user.tab();
+    expect(screen.getByLabelText('Pack Size')).toHaveFocus();
+    await user.keyboard('Z');
+    expect(screen.getByLabelText('Pack Size')).toHaveValue('Z');
+    expect(screen.getByLabelText('Goods Received')).toBeEnabled();
+    await act(async () => { releases.splice(0).forEach(release => release()); });
+    await waitFor(() => expect(api.suggestPharmacyPurchaseMasterMatches).toHaveBeenCalledTimes(checksBefore + 2));
+    await act(async () => { releases.splice(0).forEach(release => release()); });
+    await reviewConfirmation();
+    expect(product).toHaveValue('Cosglo New CreamAbc');
+    expect(api.createPharmacyPurchaseInvoiceDraft).not.toHaveBeenCalled();
+    expect(api.updatePharmacyPurchaseInvoiceDraft).not.toHaveBeenCalled();
+    expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
+  }, 20000);
+
+  it('keeps the invoice product kind choice usable while the automatic product check runs', async () => {
+    renderSavedInvoice(cosgloInvoice);
+    await editSelectedInvoice();
+    await reviewConfirmation();
+    const checkWith = api.suggestPharmacyPurchaseMasterMatches.getMockImplementation()!;
+    const releases: Array<() => void> = [];
+    api.suggestPharmacyPurchaseMasterMatches.mockImplementation((request: any) => new Promise(resolve => { releases.push(() => resolve(checkWith(request))); }));
+    const checksBefore = api.suggestPharmacyPurchaseMasterMatches.mock.calls.length;
+    const user = userEvent.setup();
+    const kind = await screen.findByLabelText('Invoice product kind');
+    await user.selectOptions(kind, 'MEDICINE');
+    await waitFor(() => expect(api.suggestPharmacyPurchaseMasterMatches).toHaveBeenCalledTimes(checksBefore + 1));
+    expect(screen.getByRole('button', { name: 'Confirm reviewed values & add stock' })).toBeDisabled();
+    expect(kind).toBeEnabled();
+    await user.selectOptions(kind, 'COSMETIC');
+    expect(kind).toHaveValue('COSMETIC');
+    await act(async () => { releases.splice(0).forEach(release => release()); });
+    await waitFor(() => expect(api.suggestPharmacyPurchaseMasterMatches).toHaveBeenCalledTimes(checksBefore + 2));
+    await act(async () => { releases.splice(0).forEach(release => release()); });
+  }, 20000);
+
+  it('lets a corrected invoice name be typed in one go without rechecking the bill until it is applied', async () => {
+    renderSavedInvoice(cosgloInvoice);
+    await editSelectedInvoice();
+    await reviewConfirmation();
+    const checkWith = api.suggestPharmacyPurchaseMasterMatches.getMockImplementation()!;
+    const releases: Array<() => void> = [];
+    api.suggestPharmacyPurchaseMasterMatches.mockImplementation((request: any) => new Promise(resolve => { releases.push(() => resolve(checkWith(request))); }));
+    const checksBefore = api.suggestPharmacyPurchaseMasterMatches.mock.calls.length;
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: 'Correct invoice name' }));
+    const name = screen.getByLabelText('Corrected name for line 1');
+    await user.click(name);
+    await user.keyboard('A');
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 400)); });
+    expect(api.suggestPharmacyPurchaseMasterMatches).toHaveBeenCalledTimes(checksBefore);
+    expect(name).toBeEnabled();
+    expect(name).toHaveFocus();
+    await user.keyboard('bc');
+    expect(name).toHaveValue('Cosglo New CreamAbc');
+    expect(screen.getByLabelText('Product')).toHaveValue('Cosglo New Cream');
+    await user.click(screen.getByRole('button', { name: 'Apply name' }));
+    expect(screen.getByLabelText('Product')).toHaveValue('Cosglo New CreamAbc');
+    await waitFor(() => expect(api.suggestPharmacyPurchaseMasterMatches).toHaveBeenCalledTimes(checksBefore + 1));
+    await act(async () => { releases.splice(0).forEach(release => release()); });
+  }, 20000);
 
   it('ignores a stale failed check after line identity changes and a newer check completes', async () => {
     let rejectOld!: (error: Error) => void;

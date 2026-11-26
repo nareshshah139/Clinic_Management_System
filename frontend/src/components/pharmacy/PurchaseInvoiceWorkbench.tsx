@@ -4900,7 +4900,7 @@ function PurchaseInvoiceEditor({
                                     key={`name-correction:${line.localId}`}
                                     lineNumber={match.lineIndex + 1}
                                     name={line.productName}
-                                    disabled={busy || draftWriteBlocked}
+                                    disabled={editsLocked || draftWriteBlocked}
                                     onCorrect={async (name) => {
                                       const corrected = lines.map(current => current.localId === line.localId ? { ...current, productName: name } : current);
                                       updateLine(line.localId, "productName", name);
@@ -5038,7 +5038,7 @@ function PurchaseInvoiceEditor({
 
                                   {!status && <label className="mt-3 block text-sm">
                                     Invoice product kind
-                                    <NativeSelect className="mt-1 block w-full" value={line?.productKind || ""} disabled={busy || masterConfirming !== null} onChange={event => {
+                                    <NativeSelect className="mt-1 block w-full" value={line?.productKind || ""} disabled={editsLocked} onChange={event => {
                                       if (line) updateLine(line.localId, "productKind", event.target.value);
                                     }}>
                                       <option value="">Not recorded</option><option value="MEDICINE">Medicine</option><option value="COSMETIC">Cosmetic / skin care</option><option value="CONSUMABLE">Other consumable</option>
@@ -5855,7 +5855,7 @@ function PurchaseLineNameCorrection({ lineNumber, name, disabled, onCorrect }: {
       <Label htmlFor={`purchase-correct-name-${lineNumber}`}>Corrected name for line {lineNumber}</Label>
       <p id={`purchase-correct-name-help-${lineNumber}`} className="text-sm text-muted-foreground">Correct the name read from this bill. Existing catalogue names stay unchanged.</p>
       <div className="flex flex-col gap-2 sm:flex-row">
-        <Input id={`purchase-correct-name-${lineNumber}`} aria-describedby={`purchase-correct-name-help-${lineNumber}`}
+        <Input data-purchase-local-controls id={`purchase-correct-name-${lineNumber}`} aria-describedby={`purchase-correct-name-help-${lineNumber}`}
           value={value} disabled={disabled} onChange={event => setValue(event.target.value)} className="min-w-0 flex-1" />
         <Button type="button" disabled={disabled || !value.trim()} onClick={() => { void onCorrect(value.trim()); setEditing(false); }}>Apply name</Button>
         <Button type="button" variant="outline" disabled={disabled} onClick={() => setEditing(false)}>Cancel</Button>
