@@ -1,6 +1,4 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
-import { AppointmentStatus } from '@prisma/client';
-import { calendarOf } from './appointment-calendar';
 import { AppointmentsService } from './appointments.service';
 
 const DAY = '2099-05-04';
@@ -179,77 +177,35 @@ describe('status edits through update', () => {
   });
 });
 
-describe('bulk update into a calendar', () => {
+describe('bulk update', () => {
   const bulk = (service: AppointmentsService, ids: string[], status: string) =>
     service.bulkUpdate({ appointmentIds: ids, status } as any, 'branch-1');
-  const intoCalendar = [
-    ['SCHEDULED', 'SCHEDULED'],
-    ['CONFIRMED', 'CONFIRMED'],
-    ['NO_SHOW', 'CONFIRMED'],
-  ] as const;
 
-  it.each(intoCalendar)('un-cancelling into %s is refused like a booking when the slot is taken', async (status, holder) => {
-    const { service, db, store } = setup({ rows: [row('a', 'CANCELLED'), row('b', holder)] });
-    const booking = await conflictOf(service.create({ patientId: 'pat-1', doctorId: 'doc-1', date: DAY, slot: SLOT, calendar: calendarOf(status as AppointmentStatus)! }, 'branch-1'));
-    const body = await conflictOf(bulk(service, ['a'], status));
-    expect(body).toEqual(booking);
-    expect(body.overbook).toEqual({ allowed: false, booked: 1, limit: 1 });
+  it.each([
+    ['CANCELLED', 'SCHEDULED'],
+    ['CANCELLED', 'CONFIRMED'],
+    ['CANCELLED', 'NO_SHOW'],
+    ['SCHEDULED', 'CONFIRMED'],
+    ['SCHEDULED', 'CHECKED_IN'],
+    ['SCHEDULED', 'NO_SHOW'],
+    ['CONFIRMED', 'SCHEDULED'],
+  ])('refuses %s to %s because the move needs a capacity check', async (from, to) => {
+    const { service, db } = setup({ rows: [row('a', from)] });
+    await expect(bulk(service, ['a'], to)).rejects.toBeInstanceOf(BadRequestException);
+    expect(db.appointment.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('refuses to un-cancel into a slot another patient took, and writes nothing', async () => {
+    const { service, db, store } = setup({ rows: [row('a', 'CANCELLED'), row('b', 'CONFIRMED')] });
+    await expect(bulk(service, ['a'], 'NO_SHOW')).rejects.toBeInstanceOf(BadRequestException);
     expect(db.appointment.updateMany).not.toHaveBeenCalled();
     expect(store.get('a')!.status).toBe('CANCELLED');
   });
 
-  it.each(intoCalendar)('un-cancelling into %s is allowed while the slot is free in that calendar', async (status, holder) => {
-    const other = holder === 'SCHEDULED' ? 'CONFIRMED' : 'SCHEDULED';
-    const { service, store } = setup({ rows: [row('a', 'CANCELLED'), row('b', other)] });
-    await expect(bulk(service, ['a'], status)).resolves.toEqual({ updated: 1, appointmentIds: ['a'] });
-    expect(store.get('a')!.status).toBe(status);
-  });
-
-  it('moving a scheduled appointment into the Confirmed calendar checks the Confirmed calendar', async () => {
-    const { service, store } = setup({ rows: [row('a', 'SCHEDULED'), row('b', 'CONFIRMED')] });
-    await conflictOf(bulk(service, ['a'], 'NO_SHOW'));
-    expect(store.get('a')!.status).toBe('SCHEDULED');
-  });
-
-  it('refuses a second appointment un-cancelled into the slot the first one just took', async () => {
-    const { service, db } = setup({ rows: [row('a', 'CANCELLED'), row('b', 'CANCELLED')] });
-    await conflictOf(bulk(service, ['a', 'b'], 'SCHEDULED'));
-    expect(db.appointment.updateMany).toHaveBeenCalledTimes(1);
-  });
-
-  it('takes no lock and counts nothing for a status change inside the same calendar', async () => {
-    const { service, db } = setup({ rows: [row('a', 'CONFIRMED'), row('b', 'CONFIRMED')] });
-    await expect(bulk(service, ['a'], 'CHECKED_IN')).resolves.toEqual({ updated: 1, appointmentIds: ['a'] });
-    expect(db.$executeRaw).not.toHaveBeenCalled();
-    expect(db.appointment.findMany).toHaveBeenCalledTimes(1);
-  });
-
-  it('writes each row with the status, doctor, date, slot and room it read, and answers 409 when one moved', async () => {
-    const { service, db } = setup({ rows: [row('a', 'CANCELLED')] });
-    await bulk(service, ['a'], 'SCHEDULED');
-    expect(db.appointment.updateMany.mock.calls[0][0].where).toEqual({
-      id: 'a', branchId: 'branch-1', status: 'CANCELLED', doctorId: 'doc-1', date: new Date(`${DAY}T00:00:00.000Z`), slot: SLOT, roomId: null,
-    });
-    db.appointment.updateMany.mockResolvedValueOnce({ count: 0 });
-    await expect(bulk(service, ['a'], 'SCHEDULED')).rejects.toBeInstanceOf(ConflictException);
-  });
-
-  it('takes every doctor-day lock before any room lock, each in sorted order, whatever order the ids came in', async () => {
-    const rows = [
-      { ...row('a', 'CANCELLED'), doctorId: 'doc-2', roomId: 'room-9' },
-      { ...row('b', 'CANCELLED', '12:00-12:30'), doctorId: 'doc-1', roomId: 'room-1' },
-    ];
-    const keysFor = async (ids: string[]) => {
-      const { service, db } = setup({ rows });
-      await bulk(service, ids, 'SCHEDULED');
-      return db.$executeRaw.mock.calls.map((call: unknown[]) => call[1]);
-    };
-    const expected = [
-      `appointment-token:branch-1:doc-1:${DAY}`, `appointment-token:branch-1:doc-2:${DAY}`,
-      `appointment-room:branch-1:room-1:${DAY}`, `appointment-room:branch-1:room-9:${DAY}`,
-    ];
-    expect(await keysFor(['a', 'b'])).toEqual(expected);
-    expect(await keysFor(['b', 'a'])).toEqual(expected);
+  it('refuses the whole selection when one row would enter a calendar', async () => {
+    const { service, db } = setup({ rows: [row('a', 'CONFIRMED'), row('b', 'CANCELLED', '12:00-12:30')] });
+    await expect(bulk(service, ['a', 'b'], 'NO_SHOW')).rejects.toBeInstanceOf(BadRequestException);
+    expect(db.appointment.updateMany).not.toHaveBeenCalled();
   });
 });
 
