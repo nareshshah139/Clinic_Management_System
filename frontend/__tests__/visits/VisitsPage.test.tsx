@@ -16,16 +16,17 @@ jest.mock('@/lib/api', () => ({
     getAppointment: jest.fn(),
     createVisit: jest.fn(),
     completeVisit: jest.fn(),
+    getOpenVisit: jest.fn().mockResolvedValue({ visit: null }),
   },
 }));
 
 // Mock the MedicalVisitForm component to avoid complex rendering
 jest.mock('@/components/visits/MedicalVisitForm', () => {
-  return function MockMedicalVisitForm({ patientId, doctorId, identity, doctorControl }: { patientId: string; doctorId: string; identity?: React.ReactNode; doctorControl?: React.ReactNode }) {
+  return function MockMedicalVisitForm({ patientId, doctorId, identity, doctorControl, initialVisitId, startSeparate }: { patientId: string; doctorId: string; identity?: React.ReactNode; doctorControl?: React.ReactNode; initialVisitId?: string; startSeparate?: boolean }) {
     return (
       <div>
         <div data-testid="medical-visit-form">
-          Medical Visit Form - Patient: {patientId}, Doctor: {doctorId}
+          Medical Visit Form - Patient: {patientId}, Doctor: {doctorId}, Visit: {initialVisitId ?? 'new'}{startSeparate ? ', separate' : ''}
         </div>
         {identity}
         {doctorControl}
@@ -190,6 +191,124 @@ describe('VisitsPage', () => {
       const picker = await screen.findByRole('combobox', { name: 'Attending doctor' });
       await waitFor(() => expect(picker).toHaveTextContent('Dr. Praneeta Jain'));
       expect(screen.queryByText(/Booked with/)).not.toBeInTheDocument();
+      spy.mockRestore();
+    });
+  });
+
+  describe('starting documentation for a patient who already has an open visit', () => {
+    const DOCTOR = 'cdoctor0000000000000000001';
+    const doctors = [{ id: DOCTOR, firstName: 'Praneeta', lastName: 'Jain' }];
+    const openVisit = { id: 'visit-open', patientId: 'patient-123', doctorId: DOCTOR, appointmentId: null, createdAt: '2026-11-26T12:22:14.000Z', updatedAt: '2026-11-26T12:30:00.000Z' };
+    const signInAs = (me: { id: string; role: string }, query = '') => {
+      jest.mocked(apiClient.getPatients).mockResolvedValue({ data: [{ id: 'patient-123', name: 'Shabana Begum' }] } as any);
+      jest.mocked(apiClient.get).mockImplementation(async (path: string) => {
+        if (path === '/auth/me') return me as any;
+        return { users: doctors, pagination: { totalPages: 1 } } as any;
+      });
+      return jest.spyOn(navigation, 'useSearchParams').mockReturnValue(new URLSearchParams(query) as any);
+    };
+    const pickPatient = async () => {
+      fireEvent.focus(await screen.findByPlaceholderText('Search name, phone, or email'));
+      fireEvent.click(await screen.findByRole('option', { name: /Shabana Begum/ }));
+    };
+    const form = () => screen.findByTestId('medical-visit-form');
+    afterEach(() => {
+      jest.mocked(apiClient.getOpenVisit).mockResolvedValue({ visit: null });
+    });
+
+    it('opens the visit that is already open instead of a blank one, and says so', async () => {
+      const spy = signInAs({ id: DOCTOR, role: 'DOCTOR' });
+      jest.mocked(apiClient.getOpenVisit).mockResolvedValue({ visit: openVisit });
+      render(<VisitsPage />, { wrapper: LayoutSession });
+      await pickPatient();
+      fireEvent.click(await screen.findByRole('button', { name: 'Start Visit Documentation' }));
+      expect(await form()).toHaveTextContent(`Patient: patient-123, Doctor: ${DOCTOR}, Visit: visit-open`);
+      expect(apiClient.getOpenVisit).toHaveBeenCalledWith('patient-123', DOCTOR);
+      expect(screen.getByRole('status')).toHaveTextContent('Resumed the visit started at 05:52 pm');
+      expect(screen.getByRole('combobox', { name: 'Attending doctor' })).toBeDisabled();
+      spy.mockRestore();
+    });
+
+    it('starts a separate visit only when the doctor asks for one', async () => {
+      const spy = signInAs({ id: DOCTOR, role: 'DOCTOR' });
+      jest.mocked(apiClient.getOpenVisit).mockResolvedValue({ visit: openVisit });
+      render(<VisitsPage />, { wrapper: LayoutSession });
+      await pickPatient();
+      fireEvent.click(await screen.findByRole('button', { name: 'Start Visit Documentation' }));
+      await form();
+      fireEvent.click(screen.getByRole('button', { name: 'Start a separate visit' }));
+      await waitFor(() => expect(screen.getByTestId('medical-visit-form')).toHaveTextContent('Visit: new, separate'));
+      expect(screen.queryByText(/Resumed the visit/)).not.toBeInTheDocument();
+      spy.mockRestore();
+    });
+
+    it('opens a blank visit with no notice when nothing is open', async () => {
+      const spy = signInAs({ id: DOCTOR, role: 'DOCTOR' });
+      render(<VisitsPage />, { wrapper: LayoutSession });
+      await pickPatient();
+      fireEvent.click(await screen.findByRole('button', { name: 'Start Visit Documentation' }));
+      expect(await form()).toHaveTextContent('Visit: new');
+      expect(screen.queryByText(/Resumed the visit/)).not.toBeInTheDocument();
+      spy.mockRestore();
+    });
+
+    it('checks once when Start Visit Documentation is pressed twice', async () => {
+      const spy = signInAs({ id: DOCTOR, role: 'DOCTOR' });
+      jest.mocked(apiClient.getOpenVisit).mockResolvedValue({ visit: openVisit });
+      render(<VisitsPage />, { wrapper: LayoutSession });
+      await pickPatient();
+      const start = await screen.findByRole('button', { name: 'Start Visit Documentation' });
+      fireEvent.click(start);
+      fireEvent.click(start);
+      expect(await form()).toHaveTextContent('Visit: visit-open');
+      expect(apiClient.getOpenVisit).toHaveBeenCalledTimes(1);
+      spy.mockRestore();
+    });
+
+    it("resumes from the patient record's Start new visit link", async () => {
+      const spy = signInAs({ id: DOCTOR, role: 'DOCTOR' }, 'patientId=patient-123&autoStart=true');
+      jest.mocked(apiClient.getOpenVisit).mockResolvedValue({ visit: openVisit });
+      render(<VisitsPage />, { wrapper: LayoutSession });
+      expect(await form()).toHaveTextContent('Visit: visit-open');
+      expect(screen.getByRole('status')).toHaveTextContent('Resumed the visit started at 05:52 pm');
+      spy.mockRestore();
+    });
+
+    it("resumes the chosen doctor's visit for an admin", async () => {
+      const spy = signInAs({ id: 'admin-1', role: 'ADMIN' }, `patientId=patient-123&doctorId=${DOCTOR}&autoStart=true`);
+      jest.mocked(apiClient.getOpenVisit).mockResolvedValue({ visit: openVisit });
+      render(<VisitsPage />, { wrapper: LayoutSession });
+      expect(await form()).toHaveTextContent(`Doctor: ${DOCTOR}, Visit: visit-open`);
+      expect(apiClient.getOpenVisit).toHaveBeenCalledWith('patient-123', DOCTOR);
+      spy.mockRestore();
+    });
+
+    it('stays on the setup screen and says so when the check fails, rather than opening a blank visit', async () => {
+      const spy = signInAs({ id: DOCTOR, role: 'DOCTOR' });
+      jest.mocked(apiClient.getOpenVisit).mockRejectedValue(new Error('Network down'));
+      render(<VisitsPage />, { wrapper: LayoutSession });
+      await pickPatient();
+      fireEvent.click(await screen.findByRole('button', { name: 'Start Visit Documentation' }));
+      expect(await screen.findByText(/Could not check for an open visit/)).toBeInTheDocument();
+      expect(screen.queryByTestId('medical-visit-form')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Start Visit Documentation' })).toBeEnabled();
+      spy.mockRestore();
+    });
+
+    it.each([
+      ['an appointment', 'patientId=patient-123&appointmentId=appt-1&autoStart=true'],
+      ['a visit link', 'visitId=visit-open&patientId=patient-123'],
+    ])('does not look for another visit when opened from %s', async (_name, query) => {
+      const spy = signInAs({ id: DOCTOR, role: 'DOCTOR' }, query);
+      jest.mocked(apiClient.getAppointment).mockResolvedValue({ id: 'appt-1', patientId: 'patient-123', doctorId: DOCTOR } as any);
+      jest.mocked(apiClient.get).mockImplementation(async (path: string) => {
+        if (path === '/auth/me') return { id: DOCTOR, role: 'DOCTOR' } as any;
+        if (path === '/visits/visit-open') return { id: 'visit-open', patient: { id: 'patient-123' }, doctor: { id: DOCTOR } } as any;
+        return { users: doctors, pagination: { totalPages: 1 } } as any;
+      });
+      render(<VisitsPage />, { wrapper: LayoutSession });
+      await form();
+      expect(apiClient.getOpenVisit).not.toHaveBeenCalled();
       spy.mockRestore();
     });
   });

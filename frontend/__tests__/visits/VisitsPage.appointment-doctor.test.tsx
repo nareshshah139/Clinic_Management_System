@@ -10,7 +10,7 @@ jest.mock('@/lib/api', () => ({
   apiClient: {
     getPatients: jest.fn(), getPatient: jest.fn(), getUser: jest.fn(), get: jest.fn(), getAppointment: jest.fn(),
     getPatientVisitHistory: jest.fn(), getAllPatientVisitHistory: jest.fn(), getVisits: jest.fn(),
-    updateVisit: jest.fn(), createVisit: jest.fn(), completeVisit: jest.fn(),
+    updateVisit: jest.fn(), createVisit: jest.fn(), completeVisit: jest.fn(), getOpenVisit: jest.fn().mockResolvedValue({ visit: null }),
   },
 }));
 jest.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: jest.fn() }), toast: jest.fn() }));
