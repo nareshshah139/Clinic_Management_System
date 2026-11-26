@@ -44,7 +44,8 @@ export type BillingQuantityReview =
   | 'pack_item'
   | 'schedule_conflict'
   | 'schedule_unknown'
-  | 'pack_size_unknown';
+  | 'pack_size_unknown'
+  | 'product_unknown';
 
 export type BillingQuantity = {
   quantity: number;
@@ -238,6 +239,17 @@ export function billingQuantity(
       review: {
         reason: 'schedule_unknown',
         message: 'No frequency or duration to count from. Confirm the quantity.',
+      },
+    };
+  }
+
+  if (inventory === null && need.unit === 'doses') {
+    return {
+      quantity: need.amount,
+      unit: null,
+      review: {
+        reason: 'product_unknown',
+        message: `No stock item matched, so ${need.amount} is the dose count, not a selling unit. Confirm how many to bill once the product is chosen.`,
       },
     };
   }

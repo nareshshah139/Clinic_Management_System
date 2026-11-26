@@ -9,6 +9,7 @@ import { createHash } from 'node:crypto';
 import * as XLSX from 'xlsx';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../shared/database/prisma.service';
+import { expandPackMultiplier } from '../../shared/pack-size';
 import {
   InventoryItemType,
   InventoryStatus,
@@ -1177,7 +1178,7 @@ export class InventoryImportService {
     packUnit?: string;
     unit: UnitType;
   } {
-    const normalized = packSizeLabel.toLowerCase();
+    const normalized = expandPackMultiplier(packSizeLabel).toLowerCase();
     const stripMatch = normalized.match(/strip\s+of\s+(\d+)/);
     const genericMatch = normalized.match(/(\d+(?:\.\d+)?)\s*([a-z]+)/);
     const packSize = stripMatch

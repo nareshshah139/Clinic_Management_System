@@ -27,6 +27,7 @@ import sharp from 'sharp';
 import type { Express } from 'express';
 import { permissionGrants, userGrants } from '../../shared/access/permission-grants';
 import { PrismaService } from '../../shared/database/prisma.service';
+import { expandPackMultiplier } from '../../shared/pack-size';
 import { clinicDayOf, clinicDayRange, clinicDayStart } from './register-utils';
 import {
   ConfirmPharmacyPurchaseMasterDto,
@@ -2281,7 +2282,7 @@ export class PharmacyPurchaseInvoiceService {
   }
 
   private extractPackSize(packSize?: string): number | undefined {
-    const match = String(packSize ?? '').match(/\d+/);
+    const match = expandPackMultiplier(String(packSize ?? '')).match(/\d+/);
     if (!match) return undefined;
     const parsed = Number(match[0]);
     return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;

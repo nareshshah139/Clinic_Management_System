@@ -236,6 +236,9 @@ type DispenseTask = {
   lines?: DispenseTaskLine[];
 };
 
+const billingInventory = (stock: StockCheckResult): BillingInventory | null =>
+  stock.unit ? { unit: stock.unit, packSize: stock.packSize ?? null, packUnit: stock.packUnit ?? null } : null;
+
 function remainingBillingQuantity(medication: QueueMedication, inventory: BillingInventory | null): number {
   const source = medication.sourceItem ?? medication;
   if (medication.prescribedQuantity === null) return billingQuantity(source, inventory, medication.drugName).quantity;
@@ -368,7 +371,8 @@ export class PharmacyPrescriptionQueueService {
    * Measured items (bottles, tubes, creams, serums and similar) MUST fill 1 selling pack and be flagged.
    * Countable items MUST bill in the inventory selling unit (doses divided by pack size for strips,
    * boxes and packs). Free-text instruction schedules MUST override the structured frequency and flag
-   * a conflict. Lines with no computable schedule MUST fill 1 and be flagged. Flags MUST NOT block billing.
+   * a conflict. Lines with no computable schedule MUST fill 1 and be flagged. A line matched to no stock
+   * item MUST fill its dose count and be flagged, since it has no selling unit. Flags MUST NOT block billing.
    * Each line MUST also return remainingBillingQuantity: what it still needs after posted invoices, in that same unit.
    * Once any invoice for the prescription is posted, billingQuantity MUST fill only remainingBillingQuantity,
    * so a line already supplied fills 0.
@@ -382,9 +386,7 @@ export class PharmacyPrescriptionQueueService {
     const items = await Promise.all(
       entry.medications.map(async (item) => {
         const stock = await this.stockCheckMedication(item, branchId);
-        const inventory = stock.unit
-          ? { unit: stock.unit, packSize: stock.packSize ?? null, packUnit: stock.packUnit ?? null }
-          : null;
+        const inventory = billingInventory(stock);
         const course = billingQuantity(item.sourceItem ?? item, inventory, item.drugName);
         const remaining = remainingBillingQuantity(item, inventory);
         return {
@@ -402,6 +404,20 @@ export class PharmacyPrescriptionQueueService {
       checkedAt: new Date(),
       items: items.map(item => ({ ...item, prescriptionVersion: entry.prescriptionUpdatedAt?.toISOString() })),
     };
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:product] replacement-billing-quantity
+   * A replacement product chosen for a prescription line MUST be counted from that line's own need in the
+   * replacement's selling unit, with the review flags stockCheck gives. Reads MUST NOT link products,
+   * create tasks or change stock.
+   */
+  async replacementQuantity(prescriptionId: string, branchId: string, lineIndex: number, drugId: string) {
+    const entry = await this.findOne(prescriptionId, branchId);
+    const medication = entry.medications[lineIndex];
+    if (!medication) throw new BadRequestException('Prescription line no longer exists');
+    const stock = await this.stockCheckMedication({ ...medication, drugId, inventoryItemId: null }, branchId);
+    return billingQuantity(medication.sourceItem ?? medication, billingInventory(stock), medication.drugName);
   }
 
   /**

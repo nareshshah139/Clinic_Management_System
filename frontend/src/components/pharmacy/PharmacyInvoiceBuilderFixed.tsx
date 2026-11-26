@@ -1094,13 +1094,40 @@ export function PharmacyInvoiceBuilderFixed({
     });
   };
 
+  const recountForReplacement = async (itemId: string, prescriptionId: string, lineIndex: number, drugId: string) => {
+    let recount: PrescriptionStockItem['billingQuantity'] | undefined;
+    try {
+      recount = await apiClient.get<NonNullable<PrescriptionStockItem['billingQuantity']>>(
+        `/pharmacy/prescription-queue/${prescriptionId}/replacement-quantity`,
+        { lineIndex, drugId },
+      );
+    } catch (error) {
+      console.error('Replacement quantity check failed:', getErrorMessage(error));
+    }
+    setItems(current => current.map(item => {
+      if (item.id !== itemId || item.quantityConfirmed || item.drug?.id !== drugId) return item;
+      const recounted: InvoiceItem = {
+        ...item,
+        quantity: Math.max(1, recount?.quantity ?? item.quantity),
+        quantityReview: recount ? recount.review?.message : 'Could not recount for the replacement. Confirm how many to bill.',
+      };
+      calculateItemTotal(recounted);
+      return recounted;
+    }));
+  };
+
   /**
    * @cc [owner:nareshshah139,label:product] prescription-explicit-substitution
-   * A pharmacist-selected replacement MUST retain the original prescribed name, quantity,
-   * and instructions while replacing the billed product identity, price, GST and stock warning.
+   * A pharmacist-selected replacement MUST retain the original prescribed name and instructions, and a
+   * quantity the pharmacist confirmed, while replacing the billed product identity, price, GST and stock warning.
+   * A quantity not yet confirmed MUST be recounted from the prescription in the replacement's selling
+   * unit; if the recount fails the line MUST be flagged, never billed at the old count unflagged.
    */
   const addDrugToInvoice = (drug: Drug) => {
     if (substitutingItemId) {
+      const replaced = items.find(item => item.id === substitutingItemId);
+      if (replaced && !replaced.quantityConfirmed && replaced.prescriptionLineIndex !== undefined && prescriptionData?.id)
+        void recountForReplacement(replaced.id, prescriptionData.id, replaced.prescriptionLineIndex, drug.id);
       setItems(current => current.map(item => {
         if (item.id !== substitutingItemId) return item;
         const replacement: InvoiceItem = {
