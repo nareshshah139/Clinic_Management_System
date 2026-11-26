@@ -198,13 +198,47 @@ it('keeps every line when an inventory lookup fails and exposes a retry', async 
   expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Medicine needs review' }));
 });
 
+it('offers a labelled alternative on an out-of-stock line and keeps the in-stock lines on the icon', async () => {
+  render(<SalesBillPage />);
+  await loadPatient();
+  const unavailable = (await screen.findByRole('heading', { name: names[0], level: 4 })).closest('[data-invoice-item]') as HTMLElement;
+  const stocked = screen.getByRole('heading', { name: names[2], level: 4 }).closest('[data-invoice-item]') as HTMLElement;
+  expect(within(unavailable).getByText('Out of stock')).toBeInTheDocument();
+  expect(within(unavailable).getByRole('button', { name: `Choose alternative for ${names[0]}` })).toHaveTextContent('Choose alternative');
+  expect(within(stocked).queryByRole('button', { name: /choose alternative/i })).not.toBeInTheDocument();
+  expect(within(stocked).getByRole('button', { name: `Substitute ${names[2]}` })).toHaveAttribute('title', 'Choose an alternative');
+});
+
+it('replaces an out-of-stock line with the alternative the pharmacist picks, at the prescribed quantity', async () => {
+  const folirich = { id: 'drug-folirich', name: 'Folirich hair serum', price: 100, gstRate: 18, manufacturerName: 'Test', packSizeLabel: '1', totalStock: 100 };
+  const get = api.get.getMockImplementation()!;
+  api.get.mockImplementation(async (url, query: any) => url === '/drugs/autocomplete' ? [folirich] : get(url, query));
+  render(<SalesBillPage />);
+  await loadPatient();
+  const heading = await screen.findByRole('heading', { name: names[0], level: 4 });
+  const item = heading.closest('[data-invoice-item]') as HTMLElement;
+  expect(within(item).getByLabelText('Quantity')).toHaveValue(quantities[0]);
+  fireEvent.click(within(item).getByRole('button', { name: `Choose alternative for ${names[0]}` }));
+  expect(screen.getByText(`Choose a replacement for ${names[0]}.`, { exact: false })).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('Search Drugs'), { target: { value: 'Folirich' } });
+  const result = (await screen.findByRole('heading', { name: folirich.name, level: 4 })).closest('[role="button"]') as HTMLElement;
+  fireEvent.click(within(result).getByRole('button', { name: 'Add' }));
+  expect(within(item).getByRole('heading', { name: folirich.name, level: 4 })).toBeInTheDocument();
+  expect(within(item).getByText(`Prescribed: ${names[0]}`)).toBeInTheDocument();
+  expect(within(item).getByLabelText('Quantity')).toHaveValue(quantities[0]);
+  expect(within(item).queryByText('Out of stock')).not.toBeInTheDocument();
+  expect(within(item).queryByRole('button', { name: /choose alternative/i })).not.toBeInTheDocument();
+  expect(screen.getAllByRole('heading', { level: 4 })).toHaveLength(names.length);
+});
+
 it('substitutes an unmatched line with the chosen product and keeps its edited quantity', async () => {
   render(<SalesBillPage />);
   await loadPatient(secondPatient.name);
   const heading = await screen.findByRole('heading', { name: 'Unmatched cream', level: 4 });
   const item = heading.closest('[data-invoice-item]') as HTMLElement;
+  expect(within(item).getByText('No match')).toBeInTheDocument();
   fireEvent.change(within(item).getByLabelText('Quantity'), { target: { value: '2' } });
-  fireEvent.click(within(item).getByRole('button', { name: 'Substitute Unmatched cream' }));
+  fireEvent.click(within(item).getByRole('button', { name: 'Choose alternative for Unmatched cream' }));
   fireEvent.change(screen.getByLabelText('Search Drugs'), { target: { value: 'Nixiper' } });
   const result = (await screen.findByRole('heading', { name: names[1], level: 4 })).closest('[role="button"]') as HTMLElement;
   fireEvent.click(within(result).getByRole('button', { name: 'Add' }));
