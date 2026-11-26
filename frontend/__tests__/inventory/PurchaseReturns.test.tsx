@@ -527,6 +527,7 @@ it('undoes the ₹200 set-off its toast names, not the ₹800 payment recorded o
   expect(await screen.findByRole('button', { name: 'Undo payment for bill LIN-2' })).toBeInTheDocument();
 
   const setOffToast = (await screen.findByText('Set off ₹200.00 of credit against bill LIN-2.', { selector: 'div' })).closest('li')!;
+  const undoneBefore = screen.queryAllByText('Set-off undone', { selector: 'div' }).length;
   fireEvent.click(within(setOffToast).getByRole('button', { name: 'Undo' }));
   await waitFor(() => expect(post).toHaveBeenCalledTimes(3));
   expect(post.mock.calls.map(([url]) => url)).toEqual([
@@ -534,7 +535,7 @@ it('undoes the ₹200 set-off its toast names, not the ₹800 payment recorded o
     '/pharmacy/purchase-ledger/payments',
     '/inventory/workspace/credits/set-off/so-200/reverse',
   ]);
-  expect(await screen.findByText('Set-off undone', { selector: 'div' })).toBeInTheDocument();
+  await waitFor(() => expect(screen.queryAllByText('Set-off undone', { selector: 'div' })).toHaveLength(undoneBefore + 1));
 
   fireEvent.click(screen.getByRole('button', { name: 'Undo payment for bill LIN-2' }));
   await waitFor(() => expect(post).toHaveBeenCalledTimes(4));
@@ -582,6 +583,7 @@ it('lists returns as cards on a phone: distributor and amount, then the credit n
   try {
     renderBills();
     const list = await screen.findByRole('list', { name: 'Purchase returns' });
+    await within(list).findAllByText('Linae Distributors');
     expect(screen.queryByRole('table', { name: 'Purchase returns' })).not.toBeInTheDocument();
     const cards = within(list).getAllByRole('listitem');
     expect(cards.slice(0, 3).map((card) => [...card.firstElementChild!.children].map((line) => line.textContent))).toEqual([
