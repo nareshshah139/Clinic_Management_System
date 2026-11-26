@@ -95,6 +95,7 @@ export function stateRegistry<T extends object>(
 const FILL_TIMEOUT_MS = 240_000;
 
 export const VOICE_FILL_MAX_SPEECH_MS = 40 * 60_000;
+const VOICE_FILL_MAX_TEXT_CHARS = 60_000;
 
 let statusPromise: Promise<boolean> | null = null;
 
@@ -151,7 +152,7 @@ export async function requestVoiceFillFromText(form: VoiceFillFormId, text: stri
     const response = await fetch(`/api/voice-fill/${form}/text`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text: text.trim().slice(0, VOICE_FILL_MAX_TEXT_CHARS) }),
       credentials: 'include',
       signal: controller.signal,
     });

@@ -179,6 +179,14 @@ describe('requestVoiceFillFromText', () => {
     ]);
   });
 
+  it('sends at most the 60,000 characters the server accepts', async () => {
+    fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({ transcript: '', fields: {} }) });
+
+    await requestVoiceFillFromText('visit-consultation', `  ${'a'.repeat(61_000)}  `);
+
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).text).toBe('a'.repeat(60_000));
+  });
+
   it('formats an error status the same way as the audio route', async () => {
     fetchMock.mockResolvedValue({ ok: false, status: 403, text: async () => '{"message":"Forbidden resource"}' });
     await expect(requestVoiceFillFromText('inventory-item', 'paracetamol')).rejects.toThrow('Your role cannot fill this form by voice.');
