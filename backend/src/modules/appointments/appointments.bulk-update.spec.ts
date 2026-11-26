@@ -55,6 +55,25 @@ describe('AppointmentsService.bulkUpdate', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(prismaMock.appointment.updateMany).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ['CONFIRMED', 'CHECKED_IN'],
+    ['CHECKED_IN', 'NO_SHOW'],
+    ['SCHEDULED', 'CANCELLED'],
+    ['CONFIRMED', 'CANCELLED'],
+    ['NO_SHOW', 'CANCELLED'],
+  ])('moves %s rows to %s in one write, because no row enters a calendar', async (from, to) => {
+    prismaMock.appointment.findMany.mockResolvedValue([{ id: 'a1', status: from }, { id: 'a2', status: from }]);
+    prismaMock.appointment.updateMany.mockResolvedValue({ count: 2 });
+    await expect(
+      service.bulkUpdate({ appointmentIds: ['a1', 'a2'], status: to } as any, branchId),
+    ).resolves.toEqual({ updated: 2, appointmentIds: ['a1', 'a2'] });
+    expect(prismaMock.appointment.updateMany).toHaveBeenCalledTimes(1);
+    expect(prismaMock.appointment.updateMany.mock.calls[0][0].where).toEqual({
+      branchId,
+      OR: [{ id: 'a1', status: from }, { id: 'a2', status: from }],
+    });
+  });
 });
 
 

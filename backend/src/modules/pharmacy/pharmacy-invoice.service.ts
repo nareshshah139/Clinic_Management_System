@@ -961,7 +961,7 @@ export class PharmacyInvoiceService {
           billDiscountValue: invoice.billDiscountValue,
           billDiscountAmount: this.money(invoice.billDiscountAmount),
           revisedAt: invoice.revisedAt,
-          taxableAmount: this.money(invoice.subtotal - invoice.discountAmount),
+          taxableAmount: this.money(invoice.totalAmount - invoice.taxAmount),
           taxAmount: this.money(invoice.taxAmount),
           totalAmount,
           paidAmount,

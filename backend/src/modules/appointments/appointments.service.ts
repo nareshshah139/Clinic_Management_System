@@ -657,9 +657,7 @@ export class AppointmentsService {
 
   async bulkUpdate(bulkUpdateDto: BulkUpdateAppointmentsDto, branchId: string) {
     const { appointmentIds, ...updateData } = bulkUpdateDto;
-    if (updateData.status && isMovable(updateData.status)) {
-      throw new BadRequestException('Moving appointments into a calendar needs a capacity check; use reschedule');
-    }
+    const target = updateData.status ? calendarOf(updateData.status) : null;
 
     return this.prisma.$transaction(async (tx) => {
       const appointments = await tx.appointment.findMany({
@@ -670,6 +668,9 @@ export class AppointmentsService {
       }
       if (updateData.status) {
         for (const appointment of appointments) assertStatusEdit(appointment.status, updateData.status);
+      }
+      if (target && appointments.some(({ status }) => calendarOf(status) !== target)) {
+        throw new BadRequestException('Moving appointments into a calendar needs a capacity check; change them one at a time');
       }
       const result = await tx.appointment.updateMany({
         where: { branchId, OR: appointments.map(({ id, status }) => ({ id, status })) },

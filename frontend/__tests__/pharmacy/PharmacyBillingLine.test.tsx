@@ -83,7 +83,7 @@ const addDrug = async (query: string, name: string) => {
   fireEvent.click(await screen.findByRole("button", { name: new RegExp(name) }));
 };
 
-it("bills a manually added 5% GST medicine at 5%, not 18%", async () => {
+it("bills a manually added 5% GST medicine at 5% with the GST inside its price, not 18% on top", async () => {
   render(<PharmacyInvoiceBuilderFixed />);
   await addDrug("five", "Five Percent Tonic");
 
@@ -92,7 +92,9 @@ it("bills a manually added 5% GST medicine at 5%, not 18%", async () => {
   );
   expect(gstInput).toBeDefined();
   expect(screen.queryByDisplayValue("18")).toBeNull();
-  expect(screen.getByLabelText("Total for Five Percent Tonic")).toHaveTextContent("₹105.00");
+  expect(screen.getByLabelText("Total for Five Percent Tonic")).toHaveTextContent("₹100.00");
+  expect(screen.getByText("Total:").nextSibling).toHaveTextContent("₹100.00");
+  expect(screen.getByText("Includes GST:").nextSibling).toHaveTextContent("₹4.76");
 });
 
 it("leaves GST pending for a medicine with no known rate instead of charging 18%", async () => {

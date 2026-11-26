@@ -52,6 +52,22 @@ describe('a stocked tablet shows its price on the bill', () => {
     expect(await screen.findByLabelText('Unit price for Tab. Acnosis')).toHaveValue(250);
   });
 
+  it('as the line total, with the 12% GST inside the stock price instead of added to it', async () => {
+    api.get.mockImplementation(async (url: string) => {
+      if (url === '/drugs/autocomplete') return [acnosis];
+      return { data: [], packages: [] };
+    });
+    render(<PharmacyInvoiceBuilderFixed canLinkInventory />);
+
+    await userEvent.type(screen.getByLabelText('Search Drugs'), 'acnosis');
+    const row = (await screen.findByRole('heading', { name: 'Tab. Acnosis' })).closest('[role="button"]') as HTMLElement;
+    await userEvent.click(within(row).getByRole('button', { name: 'Add' }));
+
+    expect(await screen.findByLabelText('Total for Tab. Acnosis')).toHaveTextContent('₹250.00');
+    expect(screen.getByText('Total:').nextSibling).toHaveTextContent('₹250.00');
+    expect(screen.getByText('Includes GST:').nextSibling).toHaveTextContent('₹26.79');
+  });
+
   it('on a prescription line once its product is linked to stock', async () => {
     api.getPrescription.mockResolvedValue({
       id: 'rx-1',

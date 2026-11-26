@@ -204,12 +204,10 @@ const getDrugGstRate = (drug?: Partial<Drug> | null): number | null => {
 };
 
 const calculateItemTotal = (item: InvoiceItem) => {
-  const subtotal = item.quantity * item.unitPrice;
-  item.discountAmount = (subtotal * item.discountPercent) / 100;
-  const discountedAmount = subtotal - item.discountAmount;
-  // Unresolved GST is displayed as pending and cannot be submitted.
-  item.taxAmount = (discountedAmount * (item.taxPercent ?? 0)) / 100;
-  item.totalAmount = discountedAmount + item.taxAmount;
+  const [line] = priceBill([{ quantity: item.quantity, unitPrice: item.unitPrice, discountPercent: item.discountPercent, taxPercent: item.taxPercent ?? 0 }]).lines;
+  item.discountAmount = line.lineDiscount;
+  item.taxAmount = line.tax;
+  item.totalAmount = line.total;
 };
 
 const EMPTY_FIELDS: BillFields = {
@@ -2215,7 +2213,7 @@ export function PharmacyInvoiceBuilderFixed({
                 <div aria-hidden className={cn('hidden gap-x-2 border-b border-border pb-2 text-xs font-medium text-muted-foreground @2xl:grid', LINE_GRID)}>
                   <span>Item</span>
                   <span>Qty</span>
-                  <span>Price</span>
+                  <span title="MRP, GST included">Price</span>
                   <span>Disc %</span>
                   <span>Tax %</span>
                   <span className="text-right">Total</span>
@@ -2299,7 +2297,7 @@ export function PharmacyInvoiceBuilderFixed({
                           />
                         </div>
                         <div className="min-w-0">
-                          <Label htmlFor={`price-${item.id}`} className="mb-1 block truncate text-xs font-normal text-muted-foreground @2xl:sr-only">Unit Price</Label>
+                          <Label htmlFor={`price-${item.id}`} className="mb-1 block truncate text-xs font-normal text-muted-foreground @2xl:sr-only">Price (GST incl.)</Label>
                           <Input
                             id={`price-${item.id}`}
                             aria-label={`Unit price for ${billLineName(item)}`}
@@ -2545,13 +2543,13 @@ export function PharmacyInvoiceBuilderFixed({
                   <span className="tabular-nums">-₹{billDiscountAmount.toFixed(2)}</span>
                 </div>
               )}
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Tax:</span>
-                <span className="tabular-nums">{hasUnresolvedGst ? 'GST pending' : `₹${totalTax.toFixed(2)}`}</span>
-              </div>
               <div className="flex justify-between border-t border-border pt-2 text-base font-semibold">
                 <span>Total:</span>
                 <span className="tabular-nums">{hasUnresolvedGst ? 'GST pending' : `₹${grandTotal.toFixed(2)}`}</span>
+              </div>
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>Includes GST:</span>
+                <span className="tabular-nums">{hasUnresolvedGst ? 'GST pending' : `₹${totalTax.toFixed(2)}`}</span>
               </div>
             </div>
 

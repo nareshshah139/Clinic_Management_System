@@ -100,7 +100,7 @@ export function signedLine(line: ReportLine, sign: 1 | -1): ReportLine {
   };
 }
 
-/** A pharmacy bill line: unit price before tax, its own and its share of the bill discount, tax on the discounted value. */
+/** A pharmacy bill line: its price and discounts without the GST, which sits inside what was charged. */
 export function billLine(
   item: StoredLine & {
     name: string;
@@ -115,8 +115,8 @@ export function billLine(
     hsn: item.hsn,
     unit: item.unit,
     quantity: Number(item.quantity || 0),
-    gross: value.gross,
-    discount: value.discount,
+    gross: value.grossBeforeTax,
+    discount: value.discountBeforeTax,
     taxable: value.taxable,
     rate: money(item.taxPercent),
     ...splitIntraState(value.tax),

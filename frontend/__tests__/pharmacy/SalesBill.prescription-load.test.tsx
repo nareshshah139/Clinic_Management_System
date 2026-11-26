@@ -423,7 +423,7 @@ it('reads prescribed directions in words and still submits the frequency code', 
   expect(within(line).getByLabelText(`Dosage for ${names[1]}`)).toHaveValue('1 capsule');
   expect(within(line).getByRole('combobox', { name: `Frequency for ${names[1]}` })).toHaveDisplayValue('Once daily');
   expect(within(line).getByLabelText(`Duration for ${names[1]}`)).toHaveValue('30 days');
-  expect(within(line).getByLabelText(`Total for ${names[1]}`)).toHaveTextContent('₹525.00');
+  expect(within(line).getByLabelText(`Total for ${names[1]}`)).toHaveTextContent('₹500.00');
   expect(line.textContent).not.toMatch(/ONCE_DAILY|CAPSULE|DAYS|DRUG/);
   fireEvent.change(within(line).getByRole('combobox', { name: `Frequency for ${names[1]}` }), { target: { value: 'TWICE_DAILY' } });
   fireEvent.click(screen.getByRole('button', { name: 'Print Preview' }));
