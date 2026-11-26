@@ -70,7 +70,7 @@ The rules that held before the fix are the hand-off guards that already worked. 
 | A check-in starts only from `SCHEDULED`, `CONFIRMED` or `NO_SHOW`. This model's rules do not need it. `appointment-visit` needs it for `NoResurrection`. | `backend/src/modules/appointments/appointments.service.ts:89` | none here |
 | `cancelPrescription` refuses a prescription with a posted pharmacy bill, under the prescription row lock that billing takes. Fix 3. | `backend/src/modules/prescriptions/prescriptions.service.ts:525` | `BilledPrescriptionStaysActive` |
 
-`update` runs the status guards at `appointments.service.ts:518` and `bulkUpdate` at `:636`.
+`update` runs the status guards at `appointments.service.ts:518` and `bulkUpdate` at `:670`.
 
 ## Negative controls
 

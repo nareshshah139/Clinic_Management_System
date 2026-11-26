@@ -28,8 +28,8 @@ ASSUME MaxEdits \in Nat \ {0}
 Statuses == {"SCHEDULED", "CONFIRMED", "CHECKED_IN", "IN_PROGRESS", "COMPLETED",
              "CANCELLED", "NO_SHOW"}
 Waiting == {"SCHEDULED", "CONFIRMED"}
-\* bulkUpdate refuses targets that need a capacity check.
-BulkTargets == Statuses \ Waiting
+\* bulkUpdate checks capacity for a move into a calendar, which this model assumes passes.
+BulkTargets == Statuses
 \* The appointment statuses a check-in may start from in the fixed protocol.
 CheckInFrom == {"SCHEDULED", "CONFIRMED", "NO_SHOW"}
 \* The statuses only the visit writes: starting it and completing it.

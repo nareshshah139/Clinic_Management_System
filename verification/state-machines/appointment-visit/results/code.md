@@ -1,6 +1,6 @@
 # Appointment and its visit, code mode
 
-TLC explored 18 states and 131 steps. The chart has 4 states and 6 arrows.
+TLC explored 18 states and 155 steps. The chart has 4 states and 6 arrows.
 
 | Rule | Kind | Result |
 | --- | --- | --- |

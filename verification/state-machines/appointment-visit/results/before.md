@@ -1,6 +1,6 @@
 # Appointment and its visit, before mode
 
-TLC explored 130 states and 1733 steps. The chart has 7 states and 21 arrows.
+TLC explored 130 states and 1953 steps. The chart has 7 states and 21 arrows.
 
 | Rule | Kind | Result |
 | --- | --- | --- |

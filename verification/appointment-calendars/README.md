@@ -29,11 +29,11 @@ Each calendar has its own capacity. A booking or move counts only the appointmen
 | Confirm | `SCHEDULED` | `CONFIRMED` | Confirmed | `POST /appointments/:id/reschedule` with `calendar: CONFIRMED` |
 | Move back to Scheduled | `CONFIRMED` | `SCHEDULED` | Scheduled | same, `calendar: SCHEDULED` |
 | Change time | `SCHEDULED` or `CONFIRMED` | status of the target calendar | target calendar | same, new `slot` or `date` |
-| Status edit | any | any | target calendar when the calendar changes or a cancelled appointment comes back | `PATCH /appointments/:id` |
+| Status edit | any | any | target calendar when the calendar changes or a cancelled appointment comes back | `PATCH /appointments/:id`, `POST /appointments/bulk-update` |
 | Start visit | `SCHEDULED` or `CONFIRMED` | `IN_PROGRESS` | none, the patient is present | visits |
 | Cancel | not `COMPLETED`, `IN_PROGRESS` or `CANCELLED` | `CANCELLED` | none | `DELETE /appointments/:id` |
 
-A reschedule without `calendar` lands in Scheduled, so a patient moved to another day needs a fresh confirmation call. Bulk updates may not set `SCHEDULED` or `CONFIRMED`, because those moves need the capacity check.
+A reschedule without `calendar` lands in Scheduled, so a patient moved to another day needs a fresh confirmation call. A bulk update checks every appointment it moves into a calendar the same way, including a cancelled appointment brought back and a scheduled one set to `CHECKED_IN` or `NO_SHOW`. If one is refused, none change.
 
 ## What the model checks
 
@@ -67,7 +67,7 @@ The runner accepts only tla2tools v1.7.4. The correct protocol passes at limits 
 | Model | Code |
 | --- | --- |
 | `CalendarOf`, `EntryStatus` | `appointment-calendar.ts` |
-| `lock`, `Acquire` | `lockSchedule`, the first statement of the transaction in `create`, `reschedule` and `update` |
+| `lock`, `Acquire` | `lockSchedule`, the first statement of the transaction in `create`, `reschedule` and `update`. `bulkUpdate` takes the locks of every appointment it moves into a calendar through `lockSchedules`, all doctor-days first and then all room-days, each sorted. |
 | `Read`, `Observe` | the appointment re-read inside the transaction, and `checkSchedulingConflicts` restricted to the target calendar |
 | `Satisfied`, the `done` branch of `Decide` | `reschedule` returns the appointment unchanged when it is already in the target calendar, date, slot and room |
 | `Write` compare-and-set | `updateMany` filtered by the id, status, date and slot read in the transaction; zero rows is a 409 |
@@ -79,6 +79,6 @@ The runner accepts only tla2tools v1.7.4. The correct protocol passes at limits 
 - Two concurrent requests. Three-way races reduce to pairs here because every request takes the same doctor-day lock or writes one row with a compare-and-set.
 - Slots are disjoint in the model. Overlap arithmetic is `SchedulingUtils.doTimeSlotsOverlap`, covered by its unit tests.
 - Room locks are outside the model. Room conflicts follow the same calendar rule as doctor conflicts.
-- `PATCH /appointments/:id` status edits are outside the model. They check capacity whenever the calendar changes, including a scheduled patient set to `CHECKED_IN`. They do not refuse a demotion such as `IN_PROGRESS` back to `SCHEDULED`. No screen sends one, and `main` allowed the same.
+- `PATCH /appointments/:id` and bulk status edits are outside the model. They check capacity whenever the calendar changes, including a scheduled patient set to `CHECKED_IN`. They do not refuse a demotion such as `IN_PROGRESS` back to `SCHEDULED`. No screen sends one, and `main` allowed the same.
 - `NO_SHOW` and later statuses cannot be moved. The UI offers Reschedule only for `SCHEDULED` and `CONFIRMED`. Rebooking a no-show is a new booking.
 - `pg_advisory_xact_lock` gives mutual exclusion per key until commit or rollback.
