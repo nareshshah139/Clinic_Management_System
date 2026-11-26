@@ -10,7 +10,7 @@ import type { Redaction } from '@/components/issue-report/redaction';
 import type { User } from '@/lib/types';
 
 jest.mock('@/lib/api', () => ({ apiClient: { getIssueReportStatus: jest.fn(), submitIssueReport: jest.fn() } }));
-jest.mock('modern-screenshot', () => ({ domToCanvas: jest.fn() }));
+jest.mock('modern-screenshot', () => ({ createContext: jest.fn(async (_page: Node, options: object) => ({ ...options })), domToCanvas: jest.fn() }));
 
 const api = apiClient as jest.Mocked<typeof apiClient>;
 const capture = jest.mocked(domToCanvas);
@@ -308,8 +308,8 @@ describe('reopening after Done', () => {
   beforeEach(() => {
     api.getIssueReportStatus.mockResolvedValue({ enabled: true });
     api.submitIssueReport.mockResolvedValue({ number: 1, url: 'https://github.com/acme/clinic/issues/1' });
-    capture.mockImplementation(async (_page, options) => {
-    options?.onCloneNode?.(document.createElement('body'));
+    capture.mockImplementation(async (context) => {
+    (context as { onCloneNode?: (copy: Node) => void }).onCloneNode?.(document.createElement('body'));
     return { width: 10, height: 10, toBlob: (done: (blob: Blob) => void) => done(original) } as unknown as HTMLCanvasElement;
   });
   });

@@ -1,9 +1,9 @@
-import { domToCanvas } from 'modern-screenshot';
+import { createContext, domToCanvas } from 'modern-screenshot';
 import { startViewportCapture } from '@/lib/issue-report';
 
-jest.mock('modern-screenshot', () => ({ domToCanvas: jest.fn() }));
+jest.mock('modern-screenshot', () => ({ createContext: jest.fn(), domToCanvas: jest.fn() }));
 
-type CaptureOptions = { filter: (node: Node) => boolean; onCloneNode: (copy: Node) => void };
+type CaptureContext = { filter: (node: Node) => boolean; onCloneNode: (copy: Node) => void };
 
 const fakeCanvas = () =>
   ({
@@ -13,25 +13,33 @@ const fakeCanvas = () =>
   }) as unknown as HTMLCanvasElement;
 
 function controlledCapture() {
-  let options!: CaptureOptions;
+  let context!: CaptureContext;
   let finish!: (canvas: HTMLCanvasElement) => void;
   let fail!: (error: Error) => void;
-  jest.mocked(domToCanvas).mockImplementation((_node, opts) => {
-    options = opts as unknown as CaptureOptions;
+  jest.mocked(createContext).mockImplementation(async (_node, options) => ({ ...options }) as never);
+  jest.mocked(domToCanvas).mockImplementation((ctx) => {
+    context = ctx as unknown as CaptureContext;
     return new Promise<HTMLCanvasElement>((resolve, reject) => {
       finish = resolve;
       fail = reject;
     });
   });
-  return { options: () => options, finish: (c: HTMLCanvasElement) => finish(c), fail: (e: Error) => fail(e) };
+  return { context: () => context, finish: (c: HTMLCanvasElement) => finish(c), fail: (e: Error) => fail(e) };
 }
 
 const settled = async <T>(promise: Promise<T>) => {
   let done = false;
-  promise.then(() => (done = true), () => (done = true));
-  for (let i = 0; i < 5; i++) await Promise.resolve();
+  promise.then(
+    () => (done = true),
+    () => (done = true),
+  );
+  for (let i = 0; i < 10; i++) await Promise.resolve();
   return done;
 };
+
+afterEach(() => {
+  document.body.innerHTML = '';
+});
 
 describe('startViewportCapture', () => {
   it('waits until the page is copied before letting the caller open the dialog', async () => {
@@ -40,7 +48,7 @@ describe('startViewportCapture', () => {
 
     expect(await settled(started)).toBe(false);
 
-    capture.options().onCloneNode(document.createElement('body'));
+    capture.context().onCloneNode(document.createElement('body'));
     const { image } = await started;
     capture.finish(fakeCanvas());
 
@@ -67,11 +75,35 @@ describe('startViewportCapture', () => {
     const toasts = document.createElement('section');
     toasts.setAttribute('role', 'region');
     toasts.setAttribute('aria-label', 'Notifications alt+T');
-    const page = document.createElement('main');
 
-    expect(capture.options().filter(popover)).toBe(false);
-    expect(capture.options().filter(toasts)).toBe(false);
-    expect(capture.options().filter(page)).toBe(true);
-    expect(capture.options().filter(document.createTextNode('text'))).toBe(true);
+    expect(capture.context().filter(popover)).toBe(false);
+    expect(capture.context().filter(toasts)).toBe(false);
+    expect(capture.context().filter(document.createElement('main'))).toBe(true);
+    expect(capture.context().filter(document.createTextNode('text'))).toBe(true);
+  });
+
+  it('shows the selections and text the user entered, not the defaults in the markup', async () => {
+    document.body.innerHTML = `
+      <select><option value="in">In-person</option><option value="tele">Tele-video</option></select>
+      <input type="checkbox" />
+      <textarea>default text</textarea>`;
+    document.querySelector('select')!.value = 'tele';
+    document.querySelector<HTMLInputElement>('input')!.checked = true;
+    document.querySelector('textarea')!.value = 'typed by the clinician';
+
+    const capture = controlledCapture();
+    void startViewportCapture();
+    await settled(Promise.resolve());
+
+    // The library copies element by element and records a field's live value in its value attribute.
+    const copy = document.body.cloneNode(true) as HTMLElement;
+    copy.querySelector('select')!.setAttribute('value', 'tele');
+    copy.querySelector('textarea')!.setAttribute('value', 'typed by the clinician');
+    capture.context().onCloneNode(copy);
+
+    expect(copy.querySelector('option[value="tele"]')!.hasAttribute('selected')).toBe(true);
+    expect(copy.querySelector('option[value="in"]')!.hasAttribute('selected')).toBe(false);
+    expect(copy.querySelector('input')!.hasAttribute('checked')).toBe(true);
+    expect(copy.querySelector('textarea')!.textContent).toBe('typed by the clinician');
   });
 });
