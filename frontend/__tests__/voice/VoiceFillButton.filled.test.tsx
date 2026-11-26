@@ -16,7 +16,7 @@ class FakeMediaRecorder {
   }
   stop() {
     this.state = 'inactive';
-    this.ondataavailable?.({ data: new Blob(['audio'], { type: 'audio/webm' }) });
+    this.ondataavailable?.({ data: new Blob(['a'.repeat(2_000)], { type: 'audio/webm' }) });
     this.onstop?.();
   }
 }
@@ -30,9 +30,14 @@ const apply = jest.fn(() => ({
 beforeEach(() => {
   jest.clearAllMocks();
   resetVoiceFillStatusForTests();
-  global.fetch = jest.fn().mockResolvedValue({
-    ok: true, status: 200, json: async () => ({ transcript: 'Ramesh Kumar', fields: { firstName: 'Ramesh' } }), text: async () => '',
-  }) as unknown as typeof fetch;
+  global.fetch = jest.fn(async (url: string) => ({
+    ok: true,
+    status: 200,
+    json: async () => (url === '/api/voice-fill/patient-intake/text'
+      ? { transcript: 'Ramesh Kumar', fields: { firstName: 'Ramesh' } }
+      : { text: 'Ramesh Kumar', segments: [], speakers: { doctorText: '', patientText: '' } }),
+    text: async () => '',
+  })) as unknown as typeof fetch;
   Object.defineProperty(window, 'MediaRecorder', { value: FakeMediaRecorder, configurable: true, writable: true });
   Object.defineProperty(navigator, 'mediaDevices', {
     value: { getUserMedia: jest.fn().mockResolvedValue({ getTracks: () => [{ stop: jest.fn() }] }) },

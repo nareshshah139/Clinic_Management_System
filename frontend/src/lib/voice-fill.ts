@@ -96,6 +96,8 @@ export function stateRegistry<T extends object>(
 // transcription, then up to 120 s of Codex), so its 503 message reaches the user instead of a client abort.
 const FILL_TIMEOUT_MS = 240_000;
 
+export const VOICE_FILL_MAX_SPEECH_MS = 40 * 60_000;
+
 let statusPromise: Promise<boolean> | null = null;
 
 export function fetchVoiceFillStatus(): Promise<boolean> {

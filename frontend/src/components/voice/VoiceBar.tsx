@@ -28,13 +28,12 @@ import {
   fetchVoiceFillStatus,
   mergeVoiceFillFields,
   requestVoiceFillFromText,
+  VOICE_FILL_MAX_SPEECH_MS,
 } from '@/lib/voice-fill';
 import { useVoiceBar } from './VoiceBarProvider';
 import { VoiceCommandDialog } from './VoiceCommandDialog';
 import { formatElapsed, useCancelOnEscape, useElapsedSeconds } from './VoiceFillButton';
 
-// Matches useAudioRecorder's clip cap, so a long dictation is cut off at the same point on every voice surface.
-const MAX_SPEECH_MS = 40 * 60_000;
 // Well under the server's 60000-character cap, even for 3-byte scripts.
 const MAX_TYPED_CHARS = 8000;
 
@@ -142,7 +141,7 @@ function useSpeechIntoBox() {
     try {
       session = await startDictationSession({
         preference: 'full-transcript',
-        limits: { maxMs: MAX_SPEECH_MS },
+        limits: { maxMs: VOICE_FILL_MAX_SPEECH_MS },
         onView: (view) => {
           if (!isCurrent()) return;
           on.phase(view.phase);

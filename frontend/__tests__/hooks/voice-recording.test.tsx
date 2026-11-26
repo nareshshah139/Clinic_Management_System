@@ -20,7 +20,7 @@ class FakeMediaRecorder {
   }
   stop() {
     this.state = 'inactive';
-    this.ondataavailable?.({ data: new Blob(['audio'], { type: 'audio/webm' }) });
+    this.ondataavailable?.({ data: new Blob(['a'.repeat(2_000)], { type: 'audio/webm' }) });
     this.onstop?.();
   }
 }
@@ -66,14 +66,14 @@ describe('useAudioRecorder', () => {
 });
 
 describe('useVoiceFill', () => {
-  async function recordAndStop(result: { current: ReturnType<typeof useVoiceFill> }) {
-    await act(async () => { result.current.toggle(); });
-    act(() => { result.current.toggle(); });
-  }
+  const recordedText = (text: string) => json(201, { text, segments: [], speakers: { doctorText: '', patientText: '' } });
+  const routes = (fill: () => unknown) => fetchMock.mockImplementation(async (url: string) =>
+    url === '/api/visits/transcribe?speakers=none' ? recordedText('diagnosis acne') : fill());
+  const requests = () => fetchMock.mock.calls.map(([url, init]) => [url, init.body instanceof FormData ? 'audio' : JSON.parse(String(init.body))]);
 
-  it('records, uploads the audio for the form, applies the fields and offers Undo on the pill, not in a toast', async () => {
+  it('listens, sends the heard words to the form\'s text route, applies the fields and offers Undo on the pill, not in a toast', async () => {
     const response = deferred();
-    fetchMock.mockReturnValue(response.promise);
+    routes(() => response.promise);
     const undo = jest.fn();
     const apply = jest.fn(async () => ({ filled: [{ label: 'Diagnosis' }, { label: '2 medicines' }], undo }));
     const { result } = renderHook(() => useVoiceFill({ form: 'visit-consultation', apply }));
@@ -81,11 +81,13 @@ describe('useVoiceFill', () => {
     await act(async () => { result.current.toggle(); });
     expect(result.current.phase.kind).toBe('listening');
 
-    act(() => { result.current.toggle(); });
+    await act(async () => { result.current.toggle(); });
     expect(result.current.phase).toEqual({ kind: 'filling' });
-    expect(track.stop.mock.calls.length).toBe(1);
-    const [url, init] = fetchMock.mock.calls[0];
-    expect([url, ((init.body as FormData).get('file') as File).name]).toEqual(['/api/voice-fill/visit-consultation', 'recording.webm']);
+    expect(track.stop).toHaveBeenCalled();
+    expect(requests()).toEqual([
+      ['/api/visits/transcribe?speakers=none', 'audio'],
+      ['/api/voice-fill/visit-consultation/text', { text: 'diagnosis acne' }],
+    ]);
 
     await act(async () => { response.resolve(json(200, { transcript: 'diagnosis acne', fields: { diagnosis: 'Acne' } })); });
 
@@ -99,36 +101,51 @@ describe('useVoiceFill', () => {
   });
 
   it('tells the user what it heard, up to 120 characters, when nothing matched', async () => {
-    fetchMock.mockResolvedValue(json(200, { transcript: `  ${'a'.repeat(300)}`, fields: {} }));
+    routes(() => json(200, { transcript: `  ${'a'.repeat(300)}`, fields: {} }));
     const { result } = renderHook(() => useVoiceFill({ form: 'patient-intake', apply: () => ({ filled: [], undo: jest.fn() }) }));
 
-    await recordAndStop(result);
-    await act(async () => {});
+    await act(async () => { result.current.toggle(); });
+    await act(async () => { result.current.toggle(); });
 
     expect(toast.mock.calls).toEqual([[{ variant: 'info', title: 'Nothing to fill', description: `Heard: “${'a'.repeat(120)}”` }]]);
+    expect(result.current.phase).toEqual({ kind: 'idle' });
   });
 
   it('shows the mapped server error and returns to idle', async () => {
-    fetchMock.mockResolvedValue(json(413, { message: 'File too large' }));
+    routes(() => json(403, { message: 'Forbidden' }));
     const apply = jest.fn();
     const { result } = renderHook(() => useVoiceFill({ form: 'patient-intake', apply }));
 
-    await recordAndStop(result);
-    await act(async () => {});
+    await act(async () => { result.current.toggle(); });
+    await act(async () => { result.current.toggle(); });
 
-    expect(toast.mock.calls).toEqual([[{ variant: 'warning', title: 'Voice fill failed', description: 'The recording is too long. Try a shorter clip.' }]]);
+    expect(toast.mock.calls).toEqual([[{ variant: 'warning', title: 'Voice fill failed', description: 'Your role cannot fill this form by voice.' }]]);
     expect(apply.mock.calls).toEqual([]);
     expect(result.current.phase).toEqual({ kind: 'idle' });
   });
 
-  it('cancel releases the microphone without uploading', async () => {
+  it('keeps listening past 10 minutes and stops by itself at 40, like the voice bar', async () => {
+    jest.useFakeTimers();
+    routes(() => json(200, { transcript: 'diagnosis acne', fields: {} }));
+    const { result } = renderHook(() => useVoiceFill({ form: 'patient-intake', apply: () => ({ filled: [], undo: jest.fn() }) }));
+
+    await act(async () => { result.current.toggle(); });
+    await act(async () => { jest.advanceTimersByTime(40 * 60_000 - 1); });
+    expect(result.current.phase.kind).toBe('listening');
+
+    await act(async () => { jest.advanceTimersByTime(1); });
+    expect(result.current.phase.kind).not.toBe('listening');
+    jest.useRealTimers();
+  });
+
+  it('cancel releases the microphone without sending anything', async () => {
     const { result } = renderHook(() => useVoiceFill({ form: 'patient-intake', apply: jest.fn() }));
 
     await act(async () => { result.current.toggle(); });
-    act(() => { result.current.cancel(); });
+    await act(async () => { result.current.cancel(); });
 
     expect(result.current.phase).toEqual({ kind: 'idle' });
-    expect(track.stop.mock.calls.length).toBe(1);
+    expect(track.stop).toHaveBeenCalled();
     expect(fetchMock.mock.calls).toEqual([]);
   });
 });
