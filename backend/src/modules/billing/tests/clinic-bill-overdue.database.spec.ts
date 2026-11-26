@@ -104,6 +104,10 @@ databaseTests('Overdue clinic bills: alert count and register list', () => {
     await bill('settled', -1, { received: 100, balance: 0 });
     await bill('void', -1, { status: VOID });
     await bill('other-branch', -1, { branchId: 'B', patientId: 'q' });
+    const today = clinicDay(new Date());
+    const yesterday = clinicDay(new Date(Date.now() - DAY));
+    await bill('due-today', null, { dueDate: new Date(today) });
+    await bill('due-yesterday', null, { dueDate: new Date(yesterday) });
   }, 120000);
 
   afterAll(async () => {
@@ -113,7 +117,7 @@ databaseTests('Overdue clinic bills: alert count and register list', () => {
     await admin?.$disconnect();
   });
 
-  it('lists exactly the bills the alert counts, including ones billed before the period', async () => {
+  it('lists exactly the bills the alert counts, including ones billed before the period, and not a bill due today', async () => {
     const alerts = (await reports.getSystemAlerts('A', doctor)) as {
       counts: { overdueInvoices: number };
       overdueInvoices: { invoiceNo: string }[];
@@ -131,12 +135,12 @@ databaseTests('Overdue clinic bills: alert count and register list', () => {
       'A',
     );
 
-    const expected = ['last-year-past-due', 'part-paid-past-due', 'past-due'];
+    const expected = ['due-yesterday', 'last-year-past-due', 'part-paid-past-due', 'past-due'];
     expect(listed.rows.map((row) => row.billNo).sort()).toEqual(expected);
     expect(listed.total).toBe(alerts.counts.overdueInvoices);
     expect(alerts.overdueInvoices.map((row) => row.invoiceNo).sort()).toEqual(
       expected,
     );
-    expect(listed.totals).toMatchObject({ count: 3, outstanding: 260 });
+    expect(listed.totals).toMatchObject({ count: 4, outstanding: 360 });
   });
 });

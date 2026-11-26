@@ -1,5 +1,5 @@
 import type { Prisma } from '@prisma/client';
-import { money } from '../pharmacy/register-utils';
+import { clinicDay, clinicDayStart, money } from '../pharmacy/register-utils';
 import {
   clinicIdentity,
   type BranchRecord,
@@ -274,7 +274,8 @@ export const statusWhere = (
   now: Date,
 ): Record<StatusFilter, Prisma.NewInvoiceWhereInput> => ({
   outstanding: OUTSTANDING,
-  overdue: { ...OUTSTANDING, dueDate: { lt: now } },
+  // A due date is a clinic calendar day, so a bill is overdue only once its due day has ended.
+  overdue: { ...OUTSTANDING, dueDate: { lt: clinicDayStart(clinicDay(now)) } },
   paid: { status: { not: VOID }, balance: { lt: SETTLED } },
   void: { status: VOID },
 });
