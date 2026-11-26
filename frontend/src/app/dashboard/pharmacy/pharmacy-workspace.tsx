@@ -66,33 +66,19 @@ function PharmacyPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pharmacyWorkspaceRef = useRef<HTMLDivElement | null>(null);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
   const [dash, setDash] = useState<PharmacyDashboardData | null>(null);
   const [dashReloadKey, setDashReloadKey] = useState<number>(0);
   const [isAgentDockOpen, setIsAgentDockOpen] = useState(false);
   const requestedTab = searchParams.get('section') || searchParams.get('tab');
   const pharmacyTab: PharmacySideTab = requestedTab === 'counter' ? 'counter' : 'desk';
-  const { user } = useDashboardUser();
+  const { user, loading: isLoading } = useDashboardUser();
+  const isAuthenticated = !!user;
   const sells = canSellPharmacy(user?.role);
 
   useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        await apiClient.get('/auth/me');
-        setIsAuthenticated(true);
-      } catch {
-        const next = typeof window !== 'undefined'
-          ? window.location.pathname + window.location.search
-          : '/dashboard/pharmacy';
-        router.push('/login?next=' + encodeURIComponent(next));
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    void checkAuth();
-  }, [router]);
+    if (isLoading || user) return;
+    router.push('/login?next=' + encodeURIComponent(window.location.pathname + window.location.search));
+  }, [isLoading, user, router]);
 
   useEffect(() => {
     const loadDashboard = async () => {

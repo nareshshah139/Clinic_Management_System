@@ -2,6 +2,8 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import ProceduresPage from '@/app/dashboard/procedures/page';
 import { apiClient } from '@/lib/api';
 
+let mockSignedIn: { id: string; role: string } = { id: 'd1', role: 'DOCTOR' };
+jest.mock('@/components/layout/dashboard-user-context', () => ({ useDashboardUser: () => ({ user: mockSignedIn, loading: false }) }));
 jest.mock('@/lib/api', () => ({
   apiClient: {
     getPatients: jest.fn(),
@@ -28,7 +30,7 @@ const savedVisit = {
 };
 
 const signedInAs = (role: string, access: { canRecord: boolean; canConfigure: boolean }) => {
-  jest.mocked(apiClient.get).mockResolvedValue({ id: `${role}-user`, role } as any);
+  mockSignedIn = { id: `${role}-user`, role };
   jest.mocked(apiClient.getMyProcedureAccess).mockResolvedValue(access);
 };
 

@@ -43,7 +43,7 @@ it("shows a pharmacist today's sales on the desk", async () => {
   role = 'PHARMACIST';
   render(<PharmacyWorkspace />);
   expect(await screen.findByText('₹1240.00')).toBeInTheDocument();
-  expect(figuresAsked()).toBe(1);
+  expect(asked()).toEqual(['/pharmacy/dashboard']);
 });
 
 it('counts low stock on the desk with its definition, not the drug master total', async () => {
@@ -51,7 +51,7 @@ it('counts low stock on the desk with its definition, not the drug master total'
   role = 'PHARMACIST';
   render(<PharmacyWorkspace />);
   const lowStock = (await screen.findByText('Low stock')).parentElement as HTMLElement;
-  expect(lowStock).toHaveTextContent(/^Low stock4at or below minimum stock$/);
+  await waitFor(() => expect(lowStock).toHaveTextContent(/^Low stock4at or below minimum stock$/));
   expect(screen.queryByText('Stock')).toBeNull();
 });
 
@@ -71,8 +71,8 @@ it("never asks for the pharmacy's figures for reception, and offers no sale it w
   role = 'RECEPTION';
   render(<PharmacyWorkspace />);
   expect(await screen.findByText('Pharmacy Counter')).toBeInTheDocument();
-  await waitFor(() => expect(asked()).toContain('/auth/me'));
-  expect(figuresAsked()).toBe(0);
+  await waitFor(() => expect(screen.getByText('Inventory Control')).toBeInTheDocument());
+  expect(asked()).toEqual([]);
   expect(screen.queryByText('Sales')).toBeNull();
   expect(offered()).toEqual(['Pharmacy Counter', 'Inventory Control']);
 });
@@ -82,7 +82,7 @@ it('loads no desk figures on the counter, for any role', async () => {
   role = 'PHARMACIST';
   render(<PharmacyWorkspace />);
   expect(await screen.findByRole('region', { name: 'Counter cockpit' })).toBeInTheDocument();
-  expect([asked().includes('/auth/me'), figuresAsked()]).toEqual([true, 0]);
+  expect(asked()).toEqual([]);
 });
 
 it.each(['Cancel', 'Create Package'])('closes the create-package dialog on %s', async (action) => {
