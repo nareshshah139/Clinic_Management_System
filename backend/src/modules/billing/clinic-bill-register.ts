@@ -1,5 +1,5 @@
 import type { Prisma } from '@prisma/client';
-import { money } from '../pharmacy/register-utils';
+import { clinicDay, clinicDayStart, money } from '../pharmacy/register-utils';
 import {
   clinicIdentity,
   type BranchRecord,
@@ -21,7 +21,12 @@ export const CLINIC_BILL_STATUSES = [
 ] as const;
 export type ClinicBillStatus = (typeof CLINIC_BILL_STATUSES)[number];
 
-export const STATUS_FILTERS = ['outstanding', 'paid', 'void'] as const;
+export const STATUS_FILTERS = [
+  'outstanding',
+  'overdue',
+  'paid',
+  'void',
+] as const;
 export const SEARCH_FIELDS = ['patient', 'mobile', 'billNo'] as const;
 export const SORT_KEYS = ['billedAt', 'patient', 'amount', 'due'] as const;
 export const SORT_DIRECTIONS = ['asc', 'desc'] as const;
@@ -263,11 +268,17 @@ export function billRow(bill: BillRecord): ClinicBillRow {
   };
 }
 
-export const STATUS_WHERE: Record<StatusFilter, Prisma.NewInvoiceWhereInput> = {
-  outstanding: { status: { not: VOID }, balance: { gte: SETTLED } },
+const OUTSTANDING = { status: { not: VOID }, balance: { gte: SETTLED } };
+
+export const statusWhere = (
+  now: Date,
+): Record<StatusFilter, Prisma.NewInvoiceWhereInput> => ({
+  outstanding: OUTSTANDING,
+  // A due date is a clinic calendar day, so a bill is overdue only once its due day has ended.
+  overdue: { ...OUTSTANDING, dueDate: { lt: clinicDayStart(clinicDay(now)) } },
   paid: { status: { not: VOID }, balance: { lt: SETTLED } },
   void: { status: VOID },
-};
+});
 
 export function searchWhere(
   field: SearchField | undefined,

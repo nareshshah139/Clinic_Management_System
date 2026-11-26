@@ -52,17 +52,32 @@ describe('stock alerts', () => {
 });
 
 describe('dues alerts', () => {
-  it.each(['RECEPTION', 'ACCOUNTANT'])('send %s to the clinic billing page, not the pharmacy sales ledger', (role) => {
-    const items = buildRoleNotifications({ overdueInvoices: [invoice], pendingPayments: [payment] }, role);
-    expect(items.length).toBeGreaterThan(0);
-    expect(items.map((i) => i.href)).toEqual(items.map(() => '/dashboard/billing'));
+  const OVERDUE = '/dashboard/billing?status=overdue';
+
+  it('send reception from an overdue bill to the unpaid clinic bills', () => {
+    const items = buildRoleNotifications({ overdueInvoices: [invoice] }, 'RECEPTION');
+    expect(items.map((i) => [i.title, i.href])).toEqual([['Overdue bill INV-7', OVERDUE]]);
   });
 
-  it('send the owner summary of dues to the clinic billing page', () => {
-    const items = buildRoleNotifications({ counts: { overdueInvoices: 2, pendingPayments: 1 } }, 'ADMIN');
+  it('give an accountant, whom the billing page refuses, the dues without a link', () => {
+    const items = buildRoleNotifications({ overdueInvoices: [invoice], pendingPayments: [payment] }, 'ACCOUNTANT');
+    expect(items.map((i) => i.title)).toEqual(['Pending ₹500.00 (UPI)', 'Overdue bill INV-7']);
+    expect(items.map((i) => i.href)).toEqual([undefined, undefined]);
+  });
+
+  it.each(['OWNER', 'ADMIN'])('send the %s summary of overdue bills to the unpaid clinic bills, and leave payments unlinked', (role) => {
+    const items = buildRoleNotifications({ counts: { overdueInvoices: 2, pendingPayments: 1 } }, role);
     expect(items.map((i) => [i.title, i.href])).toEqual([
-      ['2 overdue invoices', '/dashboard/billing'],
-      ['1 pending payment', '/dashboard/billing'],
+      ['2 overdue clinic bills', OVERDUE],
+      ['1 payment awaiting reconciliation', undefined],
+    ]);
+  });
+
+  it('show a manager, whom the billing page refuses, the dues summary without links', () => {
+    const items = buildRoleNotifications({ counts: { overdueInvoices: 1, pendingPayments: 2 } }, 'MANAGER');
+    expect(items.map((i) => [i.title, i.href])).toEqual([
+      ['1 overdue clinic bill', undefined],
+      ['2 payments awaiting reconciliation', undefined],
     ]);
   });
 });

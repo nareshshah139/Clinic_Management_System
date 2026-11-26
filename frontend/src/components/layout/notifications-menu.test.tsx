@@ -31,10 +31,18 @@ async function openMenu(role: string) {
 beforeEach(() => push.mockReset());
 
 describe('NotificationsMenu', () => {
-  it('opens the clinic billing page from an overdue invoice alert', async () => {
+  it('opens the unpaid clinic bills from an overdue bill alert', async () => {
     const user = await openMenu('RECEPTION');
-    await user.click(await screen.findByRole('menuitem', { name: /Overdue Invoice INV-7/ }));
-    expect(push).toHaveBeenCalledWith('/dashboard/billing');
+    await user.click(await screen.findByRole('menuitem', { name: /Overdue bill INV-7/ }));
+    expect(push).toHaveBeenCalledWith('/dashboard/billing?status=overdue');
+  });
+
+  it('goes nowhere from a dues alert whose page the role cannot open', async () => {
+    const user = await openMenu('ACCOUNTANT');
+    await user.click(await screen.findByRole('menuitem', { name: /Overdue bill INV-7/ }));
+    await user.click(await screen.findByRole('button', { name: 'Notifications' }));
+    await user.click(await screen.findByRole('menuitem', { name: /Pending ₹500.00 \(UPI\)/ }));
+    expect(push).not.toHaveBeenCalled();
   });
 
   it('shows a doctor the appointment time and opens that visit', async () => {

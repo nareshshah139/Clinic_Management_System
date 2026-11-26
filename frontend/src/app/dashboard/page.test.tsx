@@ -223,17 +223,18 @@ describe('an accountant, whom the sales register and the billing page refuse', (
   it('shows the dues as counts and links only the collection report, which the accountant can open', async () => {
     render(<DashboardPage />);
 
-    expect((await screen.findByText('Overdue invoices')).closest('li')).toHaveTextContent('3Overdue invoices');
+    expect((await screen.findByText('Overdue clinic bills')).closest('li')).toHaveTextContent('3Overdue clinic billsunpaid past their due date');
     expect(screen.getByText('Payments awaiting reconciliation').closest('li')).toHaveTextContent('2Payments awaiting reconciliation');
     expect(linkHrefs()).toEqual(['/dashboard/pharmacy/reports?report=daily-collection']);
   });
 
-  it('links the dues to Billing once the role can open it, never to the pharmacy sales register', async () => {
+  it('links overdue bills to the unpaid clinic bills once the role can open Billing, and leaves payments unlinked', async () => {
     mockBillingForAccountant = true;
     render(<DashboardPage />);
 
-    await screen.findByText('Overdue invoices');
-    expect(linkHrefs()).toEqual(['/dashboard/pharmacy/reports?report=daily-collection', '/dashboard/billing', '/dashboard/billing']);
+    expect((await screen.findByRole('link', { name: /Overdue clinic bills/ })).getAttribute('href')).toBe('/dashboard/billing?status=overdue');
+    expect(screen.queryByRole('link', { name: /Payments awaiting reconciliation/ })).toBeNull();
+    expect(linkHrefs()).toEqual(['/dashboard/pharmacy/reports?report=daily-collection', '/dashboard/billing?status=overdue']);
   });
 });
 
@@ -287,6 +288,6 @@ describe('one widget failing', () => {
     const failed = await screen.findByRole('alert');
     expect(failed).toHaveTextContent('Collected today');
     expect(failed).toHaveTextContent('Ask an admin to check your role permissions');
-    expect((await screen.findByText('Overdue invoices')).closest('li')).toHaveTextContent('3Overdue invoices');
+    expect((await screen.findByText('Overdue clinic bills')).closest('li')).toHaveTextContent('3Overdue clinic bills');
   });
 });

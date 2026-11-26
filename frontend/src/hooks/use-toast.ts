@@ -132,6 +132,8 @@ const listeners: Array<(state: State) => void> = []
 
 let memoryState: State = { toasts: [] }
 
+export const freeToastSlots = () => TOAST_LIMIT - memoryState.toasts.filter((t) => t.open).length
+
 function dispatch(action: Action) {
   memoryState = reducer(memoryState, action)
   listeners.forEach((listener) => {

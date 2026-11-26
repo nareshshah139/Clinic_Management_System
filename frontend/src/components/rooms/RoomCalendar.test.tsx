@@ -99,3 +99,40 @@ it('fetches the picked date and ignores a slower earlier response', async () => 
   expect(screen.queryByText('Stale Patient')).toBeNull();
   expect(screen.getAllByText('Fresh Patient').length).toBeGreaterThan(0);
 });
+
+const statValue = (label: string) => screen.getAllByText(label)[0].nextElementSibling?.textContent;
+
+it('says the rooms could not be loaded, with Retry, instead of showing 0 rooms', async () => {
+  jest.mocked(apiClient.getRooms).mockRejectedValue(new Error('down'));
+  jest.mocked(apiClient.getAllRooms).mockRejectedValue(new Error('down'));
+  render(<RoomCalendar />);
+  expect(await screen.findByText('Could not load rooms')).toBeInTheDocument();
+  expect(screen.queryByText('Total Rooms')).toBeNull();
+  expect(screen.queryByRole('region', { name: 'Room occupancy by time' })).toBeNull();
+
+  jest.mocked(apiClient.getRooms).mockResolvedValue({ rooms } as never);
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+  expect(await screen.findByRole('region', { name: 'Room occupancy by time' })).toHaveTextContent('Laser Suite');
+  expect(screen.queryByText('Could not load rooms')).toBeNull();
+  expect(statValue('Total Rooms')).toBe('3');
+});
+
+it('still says there are no rooms when the clinic has none', async () => {
+  jest.mocked(apiClient.getRooms).mockResolvedValue({ rooms: [] } as never);
+  render(<RoomCalendar />);
+  await screen.findByText('Total Rooms');
+  expect(statValue('Total Rooms')).toBe('0');
+  expect(screen.queryByText('Could not load rooms')).toBeNull();
+  expect(screen.queryByRole('alert')).toBeNull();
+});
+
+it('does not count a room whose schedule failed to load as free', async () => {
+  jest.mocked(apiClient.getRoomSchedule).mockImplementation(((roomId: string) =>
+    roomId === 'r2' ? Promise.reject(new Error('down')) : Promise.resolve({ appointments: [] })) as never);
+  render(<RoomCalendar />);
+  await screen.findByRole('alert');
+  expect(statValue('Available')).toBe('—');
+  expect(statValue('Occupied')).toBe('—');
+  expect(statValue('Appointments')).toBe('—');
+  expect(screen.getAllByText('Not loaded')).toHaveLength(1);
+});

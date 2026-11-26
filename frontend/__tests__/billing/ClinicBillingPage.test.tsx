@@ -109,6 +109,18 @@ it('lists clinic bills with their totals, and the Outstanding filter asks the se
   expect(mockReplace).toHaveBeenLastCalledWith('/dashboard/billing?status=outstanding', { scroll: false });
 });
 
+it('opens the overdue alert link on the Overdue filter at any bill date, and says when nothing is overdue', async () => {
+  mockQuery = 'status=overdue';
+  server = () => ({ body: page([]) });
+  render(<BillingPage />);
+
+  expect(await screen.findByText('No overdue clinic bills')).toBeInTheDocument();
+  expect(screen.getByRole('combobox', { name: 'Status' })).toHaveDisplayValue('Overdue');
+  expect(screen.getByText('Any bill date')).toBeInTheDocument();
+  expect(screen.queryByRole('combobox', { name: 'Period' })).toBeNull();
+  expect(registerRequests()[0].params.get('status')).toBe('overdue');
+});
+
 it('collects a part payment with the mode the desk picked, and the row shows what is still due', async () => {
   let current = peel;
   server = ({ method, path }) => {

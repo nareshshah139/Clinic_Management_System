@@ -33,3 +33,5 @@ export function useDashboardUser() {
   return ctx;
 }
 
+/** The signed-in user where a dashboard provides one, without requiring it. */
+export const useOptionalDashboardUser = () => useContext(DashboardUserContext);

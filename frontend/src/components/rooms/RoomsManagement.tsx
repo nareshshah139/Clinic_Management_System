@@ -14,11 +14,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { apiClient } from '@/lib/api';
 import { useDashboardUser } from '@/components/layout/dashboard-user-context';
-import { Plus, Edit, Trash2, MapPin, Users } from 'lucide-react';
+import { AlertTriangle, Plus, Edit, Trash2, MapPin, Users } from 'lucide-react';
 
 import type { Room } from '@/lib/types';
 import { RoomTypeIcon } from './room-type-icon';
 import { useConfirm } from '@/components/ui/confirm-dialog';
+import { EmptyState } from '@/components/ui/empty-state';
 
 interface RoomFormData {
   name: string;
@@ -31,6 +32,7 @@ export default function RoomsManagement() {
   const { user } = useDashboardUser();
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(false);
+  const [load, setLoad] = useState<'loading' | 'loaded' | 'failed'>('loading');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingRoom, setEditingRoom] = useState<Room | null>(null);
   const { toast } = useToast();
@@ -63,8 +65,8 @@ export default function RoomsManagement() {
   }, []);
 
   const fetchRooms = async () => {
+    setLoad('loading');
     try {
-      setLoading(true);
       let res: any;
       try {
         res = await apiClient.getAllRooms();
@@ -73,15 +75,9 @@ export default function RoomsManagement() {
         res = await apiClient.getRooms();
       }
       setRooms(res?.rooms || []);
-    } catch (e) {
-      console.error('Failed to fetch rooms', e);
-      toast({
-        variant: 'destructive',
-        title: 'Failed to fetch rooms',
-        description: e instanceof Error ? e.message : 'Please try again.',
-      });
-    } finally {
-      setLoading(false);
+      setLoad('loaded');
+    } catch {
+      setLoad('failed');
     }
   };
 
@@ -184,6 +180,7 @@ export default function RoomsManagement() {
     }));
     return { total: activeRooms.length, typeStats };
   };
+  const count = (n: number) => (load === 'failed' ? '—' : n);
 
   const stats = getRoomStats();
 
@@ -207,7 +204,7 @@ export default function RoomsManagement() {
               <MapPin className="h-5 w-5 text-info" />
               <div>
                 <p className="text-sm text-muted-foreground">Total Rooms</p>
-                <p className="text-2xl font-bold">{stats.total}</p>
+                <p className="text-2xl font-bold">{count(stats.total)}</p>
               </div>
             </div>
           </CardContent>
@@ -219,7 +216,7 @@ export default function RoomsManagement() {
               <RoomTypeIcon type="Consultation" className="size-5 text-muted-foreground" />
               <div>
                 <p className="text-sm text-muted-foreground">Consultation</p>
-                <p className="text-2xl font-bold">{stats.typeStats.find(s => s.value === 'Consultation')?.count || 0}</p>
+                <p className="text-2xl font-bold">{count(stats.typeStats.find(s => s.value === 'Consultation')?.count || 0)}</p>
               </div>
             </div>
           </CardContent>
@@ -231,7 +228,7 @@ export default function RoomsManagement() {
               <RoomTypeIcon type="Procedure" className="size-5 text-muted-foreground" />
               <div>
                 <p className="text-sm text-muted-foreground">Procedure</p>
-                <p className="text-2xl font-bold">{stats.typeStats.find(s => s.value === 'Procedure')?.count || 0}</p>
+                <p className="text-2xl font-bold">{count(stats.typeStats.find(s => s.value === 'Procedure')?.count || 0)}</p>
               </div>
             </div>
           </CardContent>
@@ -243,7 +240,7 @@ export default function RoomsManagement() {
               <RoomTypeIcon type="Telemed" className="size-5 text-muted-foreground" />
               <div>
                 <p className="text-sm text-muted-foreground">Telemedicine</p>
-                <p className="text-2xl font-bold">{stats.typeStats.find(s => s.value === 'Telemed')?.count || 0}</p>
+                <p className="text-2xl font-bold">{count(stats.typeStats.find(s => s.value === 'Telemed')?.count || 0)}</p>
               </div>
             </div>
           </CardContent>
@@ -291,8 +288,17 @@ export default function RoomsManagement() {
             </Select>
           </div>
 
-          {loading ? (
+          {load === 'loading' ? (
             <div className="text-center py-8">Loading rooms...</div>
+          ) : load === 'failed' ? (
+            <div role="alert">
+              <EmptyState
+                icon={AlertTriangle}
+                title="Could not load rooms"
+                description="The room list is not available right now. Check your connection and try again."
+                action={<Button onClick={() => void fetchRooms()}>Retry</Button>}
+              />
+            </div>
           ) : rooms.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               No rooms found. Add your first room to get started.

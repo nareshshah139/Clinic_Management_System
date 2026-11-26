@@ -151,4 +151,5 @@ export {
   DialogPortal,
   DialogTitle,
   DialogTrigger,
+  ModalPresence,
 }

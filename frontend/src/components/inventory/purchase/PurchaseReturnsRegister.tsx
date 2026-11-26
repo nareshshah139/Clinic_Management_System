@@ -134,29 +134,33 @@ export function PurchaseReturnsRegister({
   };
 
   const undo = async (setOffId: string, label: string, focusRowId: string | null, key = requestKey()) => {
+    const entry = undoWindow.entry(setOffId);
+    if (!entry) {
+      toast({ variant: 'warning', title: 'Too late to undo this set-off', description: 'Undo lasts 30 seconds. You can still reverse it from Payments & dues.' });
+      return;
+    }
     if (undoing.current.has(setOffId)) return;
     undoing.current.add(setOffId);
-    const rowIds = undoWindow.sharing(setOffId);
-    undoWindow.mark(rowIds, setOffId, true);
+    undoWindow.mark(setOffId, true);
     try {
       await apiClient.post(
         `/inventory/workspace/credits/set-off/${encodeURIComponent(setOffId)}/reverse`,
         { reason: UNDO_REASON },
         { idempotencyKey: key },
       );
-      undoWindow.forget(rowIds);
+      undoWindow.forget(setOffId);
       toast({ title: 'Set-off undone', description: `${label} has its credit back.` });
       await reloadAll();
       if (focusRowId) focusRow(focusRowId);
     } catch (failure) {
       if ((failure as { status?: number } | null)?.status === 409) {
-        undoWindow.forget(rowIds);
+        undoWindow.forget(setOffId);
         toast({ variant: 'warning', title: 'This set-off was already undone', description: 'The list now shows the latest balance.' });
         await reloadAll();
         if (focusRowId) focusRow(focusRowId);
         return;
       }
-      undoWindow.mark(rowIds, setOffId, false);
+      undoWindow.remember(setOffId, entry.rowIds, setOffId);
       toast({
         variant: 'destructive',
         title: 'Could not undo the set-off',
@@ -177,7 +181,7 @@ export function PurchaseReturnsRegister({
     const creditIds = new Set(result.allocations.map((allocation) => allocation.creditId));
     const rowIds = rows.filter((row) => row.credit && creditIds.has(row.credit.id)).map((row) => row.id);
     if (from && !rowIds.includes(from.id)) rowIds.push(from.id);
-    undoWindow.remember(rowIds, result.setOffId);
+    undoWindow.remember(result.setOffId, rowIds, result.setOffId);
     const billNos = [...new Set(result.bills.map((bill) => bill.billNo))];
     const numbers = [...new Set(result.allocations.map((allocation) => allocation.creditNoteNumber).filter(Boolean))];
     const label = numbers.length === 1 ? `Credit note ${numbers[0]}` : from ? `Credit note ${from.creditNote?.number ?? from.returnRef}` : `${numbers.length} credit notes`;
@@ -220,11 +224,11 @@ export function PurchaseReturnsRegister({
     openId: action.openId,
     undo: {
       pending: (rowId) => {
-        const entry = undoWindow.pending[rowId];
+        const entry = undoWindow.latest(rowId);
         return entry ? (entry.undoing ? 'undoing' : 'ready') : null;
       },
       run: (row) => {
-        const entry = undoWindow.entry(row.id);
+        const entry = undoWindow.latest(row.id);
         if (entry) void undo(entry.value, `Credit note ${row.creditNote?.number ?? row.returnRef}`, row.id);
       },
     },

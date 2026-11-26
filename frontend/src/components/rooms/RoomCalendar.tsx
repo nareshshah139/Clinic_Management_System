@@ -10,8 +10,9 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { LoadingSkeleton } from '@/components/ui/skeleton';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Calendar, ChevronLeft, ChevronRight, Clock } from 'lucide-react';
+import { AlertTriangle, Calendar, ChevronLeft, ChevronRight, Clock } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { getISTDateString, minutesToHHMM, hhmmToMinutes, isSlotInPast } from '@/lib/utils';
 import { RoomTypeIcon } from './room-type-icon';
@@ -37,12 +38,11 @@ export default function RoomCalendar() {
   const [selectedDate, setSelectedDate] = useState<string>(() => getISTDateString());
   const latestScheduleRequest = useRef(0);
   const [rooms, setRooms] = useState<Room[]>([]);
-  const [roomSchedules, setRoomSchedules] = useState<Record<string, RoomSchedule>>({});
+  const [roomSchedules, setRoomSchedules] = useState<Record<string, RoomSchedule | null>>({});
   const [selectedRoomType, setSelectedRoomType] = useState<string>('all');
-  const [loading, setLoading] = useState(true);
+  const [status, setStatus] = useState<'loading' | 'ready' | 'failed'>('loading');
   const [search, setSearch] = useState('');
   const [gridMinutes, setGridMinutes] = useState<number>(30);
-  const [scheduleError, setScheduleError] = useState(false);
   const fetchRoomsRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fetchSchedulesRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
@@ -52,7 +52,7 @@ export default function RoomCalendar() {
     let min = Number.POSITIVE_INFINITY;
     let max = Number.NEGATIVE_INFINITY;
     for (const schedule of Object.values(roomSchedules)) {
-      for (const apt of schedule.appointments) {
+      for (const apt of schedule?.appointments ?? []) {
         const [s, e] = (apt.slot || '').split('-');
         if (!s || !e) continue;
         min = Math.min(min, hhmmToMinutes(s));
@@ -79,8 +79,8 @@ export default function RoomCalendar() {
   })();
 
   const fetchRooms = async () => {
+    setStatus('loading');
     try {
-      console.log('🏠 Fetching rooms...');
       let response: any;
       try {
         // Prefer endpoint with broader read permissions
@@ -92,47 +92,20 @@ export default function RoomCalendar() {
       const roomsData = response?.rooms || response;
       const roomsList = Array.isArray(roomsData) ? roomsData : [];
       setRooms(roomsList);
-      if (roomsList.length === 0) {
-        setLoading(false);
-      }
-    } catch (error: any) {
-      console.error('❌ Error fetching rooms:', error);
-      setRooms([]); // Ensure rooms is always an array
-      setLoading(false);
-      console.error('Failed to fetch rooms:', error?.message || error);
+      if (roomsList.length === 0) setStatus('ready');
+    } catch {
+      setStatus('failed');
     }
   };
 
   const fetchRoomSchedules = async () => {
     const requestId = ++latestScheduleRequest.current;
-    try {
-      const dateStr = selectedDate;
-      const schedules: Record<string, RoomSchedule> = {};
-      let failed = false;
-      const results = await Promise.all(
-        rooms.map(async (room) => {
-          try {
-            const schedule = await apiClient.getRoomSchedule(room.id, dateStr);
-            return { id: room.id, schedule };
-          } catch (error) {
-            console.error(`Error fetching schedule for room ${room.id}:`, error);
-            failed = true;
-            return { id: room.id, schedule: null };
-          }
-        })
-      );
-      if (requestId !== latestScheduleRequest.current) return;
-      for (const { id, schedule } of results) {
-        if (schedule) schedules[id] = schedule;
-      }
-      setRoomSchedules(schedules);
-      setScheduleError(failed);
-    } catch (error: any) {
-      console.error('Error fetching room schedules:', error?.message || error);
-      if (requestId === latestScheduleRequest.current) setScheduleError(true);
-    } finally {
-      if (requestId === latestScheduleRequest.current) setLoading(false);
-    }
+    const results = await Promise.all(
+      rooms.map(async (room) => [room.id, await apiClient.getRoomSchedule(room.id, selectedDate).catch(() => null)] as const),
+    );
+    if (requestId !== latestScheduleRequest.current) return;
+    setRoomSchedules(Object.fromEntries(results));
+    setStatus('ready');
   };
 
   useEffect(() => {
@@ -158,10 +131,7 @@ export default function RoomCalendar() {
     };
   }, [selectedDate, rooms]);
 
-  const retrySchedules = () => {
-    setScheduleError(false);
-    fetchRoomSchedules();
-  };
+  const scheduleFailed = Object.values(roomSchedules).includes(null);
 
   const [gridScroller, setGridScroller] = useState<HTMLDivElement | null>(null);
   const [moreRoomsRight, setMoreRoomsRight] = useState(false);
@@ -241,9 +211,22 @@ export default function RoomCalendar() {
     }
   };
 
-  if (loading) {
+  if (status === 'loading') {
     return (
       <LoadingSkeleton label="Loading room calendar…" />
+    );
+  }
+
+  if (status === 'failed') {
+    return (
+      <Card role="alert">
+        <EmptyState
+          icon={AlertTriangle}
+          title="Could not load rooms"
+          description="The room calendar is not available right now. Check your connection and try again."
+          action={<Button onClick={() => void fetchRooms()}>Retry</Button>}
+        />
+      </Card>
     );
   }
 
@@ -326,10 +309,10 @@ export default function RoomCalendar() {
         </div>
       </div>
 
-      {scheduleError && (
+      {scheduleFailed && (
         <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-destructive-border bg-destructive-soft p-3 text-sm text-destructive-text">
-          <span>Could not load the room schedule. Rooms shown as free may be occupied.</span>
-          <Button variant="outline" size="sm" onClick={retrySchedules}>Retry</Button>
+          <span>Could not load the room schedule. Rooms marked Not loaded may have bookings.</span>
+          <Button variant="outline" size="sm" onClick={() => void fetchRoomSchedules()}>Retry</Button>
         </div>
       )}
 
@@ -351,7 +334,7 @@ export default function RoomCalendar() {
               <div>
                 <p className="text-sm text-muted-foreground">Available</p>
                 <p className="text-2xl font-bold text-success-text">
-                  {filteredRooms.filter(room => {
+                  {scheduleFailed ? '—' : filteredRooms.filter(room => {
                     const schedule = roomSchedules[room.id];
                     return !schedule || schedule.appointments.length === 0;
                   }).length}
@@ -366,7 +349,7 @@ export default function RoomCalendar() {
               <div>
                 <p className="text-sm text-muted-foreground">Occupied</p>
                 <p className="text-2xl font-bold text-warning-text">
-                  {filteredRooms.filter(room => {
+                  {scheduleFailed ? '—' : filteredRooms.filter(room => {
                     const schedule = roomSchedules[room.id];
                     return schedule && schedule.appointments.length > 0;
                   }).length}
@@ -381,8 +364,8 @@ export default function RoomCalendar() {
               <div>
                 <p className="text-sm text-muted-foreground">Appointments</p>
                 <p className="text-2xl font-bold">
-                  {Object.values(roomSchedules).reduce((total, schedule) => 
-                    total + schedule.appointments.length, 0
+                  {scheduleFailed ? '—' : Object.values(roomSchedules).reduce((total, schedule) =>
+                    total + (schedule?.appointments.length ?? 0), 0
                   )}
                 </p>
               </div>
@@ -465,6 +448,9 @@ export default function RoomCalendar() {
                         style={{ top: `${((slot.startMin - dayStart) * 100) / total}%` }}
                       />
                     ))}
+                    {schedule === null && (
+                      <div className="absolute inset-0 flex items-start justify-center bg-muted/70 p-3 text-center text-sm font-medium text-muted-foreground">Not loaded</div>
+                    )}
                     {appointments.map((apt, idx) => {
                       const [s, e] = (apt.slot || '').split('-');
                       if (!s || !e) return null;

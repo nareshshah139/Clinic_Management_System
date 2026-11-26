@@ -368,7 +368,7 @@ it('keeps focus on the bill when an under-paid bill is the only row, and undoes 
   expect(paymentCell('LIN-101')).toHaveTextContent('₹200.00 due₹800.00 paidUndoMark paid');
 });
 
-it('forgets an Undo the server says was already reversed, and shows the latest balance', async () => {
+it('forgets an Undo the server says was already reversed or changed, and shows the latest balance', async () => {
   get
     .mockResolvedValueOnce(response())
     .mockResolvedValueOnce(withPayment('bill-a', { state: 'PAID', paid: 1000, outstanding: 0 }))
@@ -378,7 +378,8 @@ it('forgets an Undo the server says was already reversed, and shows the latest b
   fireEvent.click(await screen.findByRole('button', { name: 'Mark bill LIN-101 paid' }));
   fireEvent.click(screen.getByRole('button', { name: 'Record payment ₹1,000.00' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Undo payment for bill LIN-101' }));
-  expect(await screen.findByText('This payment was already undone')).toBeInTheDocument();
+  expect(await screen.findByText('This payment can no longer be undone')).toBeInTheDocument();
+  expect(screen.getByText('It was already undone or changed elsewhere. The list now shows bill LIN-101’s latest balance.')).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Undo payment for bill LIN-101' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
   expect(paymentCell('LIN-101')).toHaveTextContent('DueMark paid');

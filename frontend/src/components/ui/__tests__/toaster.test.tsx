@@ -1,7 +1,9 @@
-import { StrictMode } from 'react';
+import { StrictMode, useRef } from 'react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { act, render, screen } from '@testing-library/react';
 import { Toaster } from '@/components/ui/toaster';
+import { keepToastsAbove, ToastAction } from '@/components/ui/toast';
+import { ActionDialog } from '@/components/inventory/purchase/ActionDialog';
 import { toast, useToast } from '@/hooks/use-toast';
 
 function DismissAll() {
@@ -247,4 +249,142 @@ describe('how long a notification stays', () => {
     act(() => jest.advanceTimersByTime(500));
     expect(screen.getAllByText('Patient archived')).toHaveLength(1);
   });
+});
+
+describe('notifications next to row-action dialogs', () => {
+  beforeEach(() => jest.useFakeTimers());
+
+  function MarkPaid({ anchor }: { anchor: HTMLElement }) {
+    const amount = useRef<HTMLInputElement>(null);
+    return (
+      <ActionDialog
+        anchor={anchor}
+        title="Mark bill paid"
+        description="Record the payment for this bill."
+        saving={false}
+        initialFocus={amount}
+        onClose={() => {}}
+        onSubmit={async () => 'done'}
+        footer={() => <button type="submit">Save payment</button>}
+      >
+        <input ref={amount} aria-label="Amount" defaultValue="1200" />
+      </ActionDialog>
+    );
+  }
+
+  it('sets a showing notification aside while a row-action dialog is open and brings it back when it closes', () => {
+    render(<Toaster />);
+    act(() => {
+      toast({ title: 'Bill posted', description: 'Undo is available for a moment.' });
+    });
+    const anchor = document.body.appendChild(document.createElement('button'));
+
+    const { unmount } = render(<MarkPaid anchor={anchor} />);
+    act(() => jest.advanceTimersByTime(500));
+    expect(screen.getByRole('dialog', { name: 'Mark bill paid' })).toBeInTheDocument();
+    expect(screen.queryByText('Bill posted')).not.toBeInTheDocument();
+
+    unmount();
+    act(() => jest.advanceTimersByTime(1));
+    expect(screen.getByText('Bill posted')).toBeVisible();
+    anchor.remove();
+  });
+
+  it('keeps the notification a dialog raised as it closed when the set-aside ones come back', () => {
+    render(<Toaster />);
+    act(() => {
+      toast({ title: 'Stock saved' });
+      toast({ title: 'Bill sent' });
+      toast({ title: 'Patient checked in' });
+    });
+    const anchor = document.body.appendChild(document.createElement('button'));
+    const { unmount } = render(<MarkPaid anchor={anchor} />);
+    act(() => jest.advanceTimersByTime(500));
+
+    unmount();
+    act(() => {
+      toast({ title: 'Payment recorded' });
+      jest.advanceTimersByTime(1);
+    });
+
+    expect(screen.getByText('Payment recorded')).toBeVisible();
+    expect(screen.getByText('Patient checked in')).toBeVisible();
+    expect(screen.getByText('Bill sent')).toBeVisible();
+    expect(screen.queryByText('Stock saved')).not.toBeInTheDocument();
+    anchor.remove();
+  });
+});
+
+describe('notifications above a sticky action bar', () => {
+  const clearance = () => document.documentElement.style.getPropertyValue('--toast-clearance');
+
+  function placeBar(top: number, height: number) {
+    jest.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      return this.dataset.bar
+        ? ({ top, bottom: top + height, height, left: 0, right: 800, width: 800, x: 0, y: top } as DOMRect)
+        : new DOMRect();
+    });
+  }
+  const scroll = () =>
+    act(() => {
+      window.dispatchEvent(new Event('scroll'));
+    });
+
+  afterEach(() => jest.restoreAllMocks());
+
+  it('lifts the notifications by the room a bar held at the bottom edge takes, and follows the bar as the page scrolls', () => {
+    render(<Toaster />);
+    placeBar(window.innerHeight - 120, 120);
+
+    const { unmount } = render(<div data-bar="1" ref={keepToastsAbove}>Print Preview</div>);
+    expect(clearance()).toBe('120px');
+
+    placeBar(window.innerHeight - 300, 120);
+    scroll();
+    expect(clearance()).toBe('0px');
+
+    placeBar(window.innerHeight - 64, 64);
+    scroll();
+    expect(clearance()).toBe('64px');
+
+    unmount();
+    expect(clearance()).toBe('0px');
+  });
+
+  it('leaves notifications at the bottom when the bar floats above the bottom edge on a short page', () => {
+    render(<Toaster />);
+    placeBar(window.innerHeight - 180, 70);
+
+    const { unmount } = render(<div data-bar="1" ref={keepToastsAbove}>Print Preview</div>);
+    expect(clearance()).toBe('0px');
+    unmount();
+  });
+
+  it('offsets the notification stack by the published clearance on wide screens only, where it sits at the bottom', () => {
+    render(<Toaster />);
+    const stack = screen.getByRole('region').querySelector('ol')!;
+    expect(stack.className).toContain('md:bottom-[var(--toast-clearance,0px)]');
+    expect(stack.className).not.toMatch(/(^|\s)bottom-\[var/);
+  });
+});
+
+it('keeps the Undo on a notification whose title is one long unbroken bill number', () => {
+  const undo = jest.fn();
+  render(<Toaster />);
+  act(() => {
+    toast({
+      title: 'Bill SUPPLIER-INV-2026-000000000000000000000000000000000000000000000000000123 posted',
+      action: (
+        <ToastAction altText="Undo posting" onClick={undo}>
+          Undo
+        </ToastAction>
+      ),
+    });
+  });
+
+  const text = screen.getByText(/SUPPLIER-INV-2026/).parentElement!;
+  expect(text).toHaveClass('min-w-0');
+  expect(text.className).toContain('[overflow-wrap:anywhere]');
+  act(() => screen.getByRole('button', { name: 'Undo' }).click());
+  expect(undo).toHaveBeenCalledTimes(1);
 });
