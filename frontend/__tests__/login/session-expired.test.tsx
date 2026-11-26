@@ -34,7 +34,7 @@ describe('login after the session expired', () => {
   it('shows no expiry banner on a normal visit', () => {
     params = new URLSearchParams();
     render(<LoginPage />);
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Sign in to Linaé');
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Sign in to Linaé Skin, Hair and Aesthetic Clinic');
     expect(screen.queryByText(/session expired/i)).not.toBeInTheDocument();
   });
 

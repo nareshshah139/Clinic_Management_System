@@ -13,8 +13,8 @@ describe('login form', () => {
 
   it('names the clinic, shows no fake saved password, and lets Sign in be pressed empty', () => {
     render(<LoginPage />);
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Sign in to Linaé');
-    expect(screen.getByRole('img', { name: 'Linaé Skin, Hair & Aesthetic Clinic' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Sign in to Linaé Skin, Hair and Aesthetic Clinic');
+    expect(screen.getByRole('img', { name: 'Linaé Skin, Hair and Aesthetic Clinic' })).toBeInTheDocument();
     expect(screen.getByLabelText('Password')).not.toHaveAttribute('placeholder');
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeEnabled();
   });

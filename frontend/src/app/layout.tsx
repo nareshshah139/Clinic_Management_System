@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
+import { CLINIC_NAME } from "@/lib/clinic-brand";
 import { DEFAULT_PALETTE, PALETTE_BOOT_SCRIPT } from "@/lib/palette";
 
 const geistSans = Geist({
@@ -15,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: { default: "Linaé | Clinic Management", template: "%s | Linaé" },
+  title: { default: CLINIC_NAME, template: `%s | ${CLINIC_NAME}` },
   description: "Linaé clinic workspace for appointments, patient care, pharmacy and billing.",
 };
 

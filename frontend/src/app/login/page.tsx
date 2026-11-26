@@ -5,6 +5,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AuthCard } from '@/components/auth/AuthCard';
+import { CLINIC_NAME } from '@/lib/clinic-brand';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -72,7 +73,7 @@ function LoginPageInner() {
   const shownError = error ? splitErrorReference(error) : null;
 
   return (
-    <AuthCard title="Sign in to Linaé">
+    <AuthCard title={`Sign in to ${CLINIC_NAME}`}>
       <form
         onSubmit={(e) => { e.preventDefault(); void submit(); }}
         autoComplete="on"

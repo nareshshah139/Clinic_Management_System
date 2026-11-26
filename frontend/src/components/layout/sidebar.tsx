@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { CLINIC_NAME } from "@/lib/clinic-brand";
 import Link from "next/link";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Fragment, useMemo } from "react";
@@ -212,7 +213,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
       data-tour="sidebar"
     >
       <div className="flex h-16 items-center px-6 border-b border-[var(--border)]">
-        <Image src="/linae-name.png" alt="Linaé" width={304} height={112} priority className="h-8 w-auto" />
+        <Image src="/linae-name.png" alt={CLINIC_NAME} width={304} height={112} priority className="h-8 w-auto" />
       </div>
 
       {/* Navigation */}
