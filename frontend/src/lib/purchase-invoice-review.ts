@@ -69,8 +69,8 @@ const fields = [
   ['invoiceDate', 'invoice date', 'invoice-date', /invoice.?date/i],
   ['manufacturer', 'manufacturer', 'manufacturer', /manufacturer/i],
   ['packUnitType', 'stock unit', 'unit', /pack.?unit.?type|stock unit/i],
-  ['packSize', 'pack size', 'pack-size', /pack.?size/i],
-  ['productName', 'product', 'product', /product.?name|^product (?:is )?(?:required|missing)/i],
+  ['packSize', 'pack size', 'pack-size', /pack.?size|uncertain[_\s-]+pack\b/i],
+  ['productName', 'product', 'product', /product.?name|^product (?:is )?(?:required|missing)|uncertain[_\s-]+product/i],
   ['hsnCode', 'HSN', 'hsn', /hsn/i],
   ['batchNumber', 'batch', 'batch', /batch/i],
   ['expiryMonth', 'expiry', 'expiry-month', /expiry/i],
@@ -138,7 +138,7 @@ export function purchaseReviewIssue(raw: string, lineIndex?: number): PurchaseRe
       message: 'Invoice GSTIN differs from the saved supplier.',
       help: `${savedGstin ? `Saved supplier GSTIN: ${savedGstin}. ` : ''}Check both against the original. Correct the invoice if it was misread, or use Correct saved GSTIN if the supplier record is wrong. That action requires supplier-update permission. Do not change a verified GSTIN just to make it match.` };
   }
-  if (/independent_read_disagrees_row_count/i.test(body)) {
+  if (/row_count/i.test(body)) {
     return { ...base, label: 'line items', target: 'purchase-line-items', message: 'The OCR reads disagree on the number of invoice rows.',
       help: 'Count every row against the original, including repeated products with different batches. Restore missing rows or remove extra rows before confirming this check.' };
   }
@@ -148,7 +148,18 @@ export function purchaseReviewIssue(raw: string, lineIndex?: number): PurchaseRe
       message: `${prefix}This document was not recognized as a supplier purchase invoice.`, target: 'purchase-invoice-upload',
       help: 'Upload the correct supplier invoice, including every page, then scan it again. If the document is a supplier invoice and OCR misclassified it, choose Enter complete invoice manually and verify every row against the original before review.' };
   }
-  if (/missing.?pages|document_completeness|pdf_truncated|PURCHASE_OCR_PAGE_LIMIT|cropped.*rows/i.test(body)) {
+  if (/multiple_invoices/i.test(body)) {
+    return { ...base, key: `${index ?? 'header'}:multiple-invoices`, label: 'single invoice', requiresUpload: true,
+      uploadLabel: { text: 'Upload one invoice', accessibleName: 'Upload a single supplier invoice' },
+      message: 'This upload contains more than one invoice.', target: 'purchase-invoice-upload',
+      help: 'Upload each supplier invoice on its own, with every page, and scan it again.' };
+  }
+  if (/document_completeness_unconfirmed/i.test(body)) {
+    return { ...base, category: 'manual', key: `${index ?? 'header'}:completeness`, label: 'line items', target: 'purchase-line-items',
+      message: 'Check that no pages or rows are missing.',
+      help: 'The second reading could not confirm the bill is complete. Count the pages and rows against the original. If any are missing, upload every page and scan again.' };
+  }
+  if (/missing.?pages|pdf_truncated|PURCHASE_OCR_PAGE_LIMIT|cropped.*rows/i.test(body)) {
     return { ...base, key: `${index ?? 'header'}:pages`, label: 'complete invoice', requiresUpload: true,
       message: `${prefix}The complete invoice could not be verified.`, target: 'purchase-invoice-upload',
       help: 'Upload a clear file containing every invoice page, then extract it again before approving stock.' };
@@ -189,10 +200,11 @@ export function purchaseReviewIssue(raw: string, lineIndex?: number): PurchaseRe
     return { ...base, key: `${index ?? 'header'}:${field}:${missing ? 'missing' : 'check'}`,
       field, label, target, message: prefix + message, help };
   }
-  if (/total|taxable|gst|discount|rounding|rate|quantit(?:y|ies)|scheme.?amount/i.test(body)) {
-    return { ...base, category: 'totals', label: index === undefined ? 'invoice totals' : 'product amounts',
+  if (/total|taxable|gst|discount|rounding|rate|quantit(?:y|ies)|amount|net.?payable|mismatch/i.test(body)) {
+    const flagged = /^\w+$/.test(body);
+    return { ...base, ...(flagged && { key: `${index ?? 'header'}:amounts` }), category: 'totals', label: index === undefined ? 'invoice totals' : 'product amounts',
       target: index === undefined ? 'purchase-totals' : 'purchase-line-items',
-      message: prefix + body,
+      message: prefix + (flagged ? `Check ${index === undefined ? 'the invoice totals' : 'the line amounts'} against the original.` : body),
       help: 'Compare the quantities, rates, discounts, taxes and printed amounts with the original. Correct the affected values, then Save & Process to check them again.' };
   }
   return { ...base, label: 'invoice details', message: prefix + body.replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2'),

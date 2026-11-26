@@ -282,6 +282,17 @@ describe('Automatic purchase invoice intake', () => {
     expect(item.ocrConfidence).toBe(0.979);
   });
 
+  it('derives an unprinted line taxable amount from the printed row instead of zero, and still flags it', () => {
+    const line = (service as any).normalizeExtractedPurchaseLine({
+      ...draft.items[0], quantityPurchased: 10, purchaseRate: 18, discountPercent: 10, specialDiscountPercent: 0, schemeAmount: 2,
+      taxableAmount: null, gstAmount: undefined, lineTotal: undefined, cgstPercent: 6, sgstPercent: 6,
+    }, 1);
+    expect(line.taxableAmount).toBe(160);
+    expect(line.gstAmount).toBe(19.2);
+    expect(line.lineTotal).toBe(179.2);
+    expect(line.ocrFlags).toContain('missing_taxableAmount');
+  });
+
   it('flags missing printed amounts and quantities even when fallback arithmetic is possible', async () => {
     delete draft.netPayable;
     delete draft.taxableAmount;

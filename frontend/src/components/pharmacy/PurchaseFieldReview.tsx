@@ -82,7 +82,7 @@ export function confirmPurchaseChecks(flags: string[], values: Record<string, st
     const matchesEdit = !editedField || issue.field === editedField ||
       (issue.field === 'expiryMonth' && editedField === 'expiryYear') ||
       (issue.field === 'billType' && editedField === 'dueDate');
-    const confirmable = (issue.field || issue.category === 'manual' || /independent_read_disagrees_row_count/i.test(flag)) &&
+    const confirmable = (issue.field || issue.category === 'manual' || /row_count/i.test(flag)) &&
       !issue.requiresUpload && !purchaseCheckInvalid(issue, values) && matchesEdit;
     if (!confirmable) { remaining.push(flag); continue; }
     const key = issue.field || issue.key;

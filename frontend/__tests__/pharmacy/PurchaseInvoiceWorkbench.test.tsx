@@ -2776,9 +2776,9 @@ describe('PurchaseInvoiceWorkbench', () => {
       await screen.findByDisplayValue('APX-001');
       fireEvent.click(await reviewConfirmation());
       await waitFor(() => expect(api.createPharmacyPurchaseInvoiceDraft).toHaveBeenCalledTimes(1));
-      const saved = api.createPharmacyPurchaseInvoiceDraft.mock.calls[0][0] as { ocrFlags: string[]; items: { ocrFlags?: string }[] };
+      const saved = api.createPharmacyPurchaseInvoiceDraft.mock.calls[0][0] as { ocrFlags: string[]; items: { ocrFlags?: string[] }[] };
       expect(saved.ocrFlags).toEqual([]);
-      expect(saved.items[0].ocrFlags || '').toBe('');
+      expect(saved.items[0].ocrFlags || []).toEqual([]);
       await waitFor(() => expect(api.reviewPharmacyPurchaseInvoice).toHaveBeenCalledTimes(1));
     });
 

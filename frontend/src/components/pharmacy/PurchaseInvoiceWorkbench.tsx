@@ -2441,7 +2441,7 @@ function PurchaseInvoiceEditor({
     if (!errors.length) {
       const confirmTotals = (flags: string[], values: Record<string, string>, scope: string, index?: number) => flags.filter(flag => {
         const issue = purchaseReviewIssue(flag, index);
-        if (issue.category !== 'totals' || !/^(?:(?:AUTO|OCR):\s*)*(?:uncertain|independent_read_disagrees)[_-]/i.test(flag)) return true;
+        if (issue.category !== 'totals') return true;
         checks[scope] = { ...checks[scope], [issue.key]: { flags: [flag], snapshot: purchaseCheckSnapshot(issue, values) } };
         return false;
       });
@@ -3695,7 +3695,7 @@ function PurchaseInvoiceEditor({
   const hardOcrFlags = [
     ...confirmPurchaseChecks(currentHeaderFlags, header, checkedOcr.header).flags,
     ...lines.flatMap((line, index) => confirmPurchaseChecks(currentLineFlags[index], line, checkedOcr[line.localId], index).flags),
-  ].filter(flag => !(purchaseReviewIssue(flag).category === 'totals' && /^(?:(?:AUTO|OCR):\s*)*(?:uncertain|independent_read_disagrees)[_-]/i.test(flag)));
+  ].filter(flag => purchaseReviewIssue(flag).category !== 'totals');
   const postingBlocker = stockStatusUnknown
     ? "Refresh stock status before continuing."
     : draftWriteBlocked

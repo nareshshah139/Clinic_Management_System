@@ -2626,8 +2626,14 @@ export class PharmacyPurchaseInvoiceService {
         raw?.quantityPurchased ?? raw?.paidQuantity ?? raw?.quantity ?? raw?.qty,
       ) ?? 0;
     const freeQuantity = this.optionalQuantity(raw?.freeQuantity ?? raw?.freeQty) ?? 0;
+    const printedRate = this.optionalMoney(raw?.purchaseRate ?? raw?.rate ?? raw?.ptr);
+    const discountPercent = this.optionalMoney(raw?.discountPercent ?? raw?.discount) ?? 0;
+    const specialDiscountPercent = this.optionalMoney(raw?.specialDiscountPercent) ?? 0;
+    const schemeAmount = this.optionalMoney(raw?.schemeAmount) ?? 0;
     const taxableAmount =
-      this.optionalMoney(raw?.taxableAmount ?? raw?.taxableValue) ?? 0;
+      this.optionalMoney(raw?.taxableAmount ?? raw?.taxableValue) ??
+      (printedRate === undefined ? 0 : this.money(this.money(quantityPurchased * printedRate) *
+        Math.max(0, 1 - (Math.min(100, Math.max(0, discountPercent)) + Math.min(100, Math.max(0, specialDiscountPercent))) / 100) - schemeAmount));
     const gstPercent = this.optionalMoney(raw?.gstPercent ?? raw?.taxPercent);
     const explicitCgst = this.optionalMoney(raw?.cgstPercent);
     const explicitSgst = this.optionalMoney(raw?.sgstPercent);
@@ -2650,7 +2656,7 @@ export class PharmacyPurchaseInvoiceService {
       this.optionalMoney(raw?.lineTotal ?? raw?.totalAmount ?? raw?.amount) ??
       this.money(taxableAmount + gstAmount);
     const purchaseRate =
-      this.optionalMoney(raw?.purchaseRate ?? raw?.rate ?? raw?.ptr) ??
+      printedRate ??
       (quantityPurchased > 0 ? this.money(taxableAmount / quantityPurchased) : 0);
     const confidenceValue = raw?.ocrConfidence ?? raw?.confidence;
     const confidence = confidenceValue !== undefined && confidenceValue !== null && confidenceValue !== '' && Number.isFinite(Number(confidenceValue))
@@ -2689,11 +2695,9 @@ export class PharmacyPurchaseInvoiceService {
       freeQuantity,
       mrp: this.optionalMoney(raw?.mrp) ?? 0,
       oldMrp: this.optionalMoney(raw?.oldMrp),
-      discountPercent:
-        this.optionalMoney(raw?.discountPercent ?? raw?.discount) ?? 0,
-      specialDiscountPercent:
-        this.optionalMoney(raw?.specialDiscountPercent) ?? 0,
-      schemeAmount: this.optionalMoney(raw?.schemeAmount) ?? 0,
+      discountPercent,
+      specialDiscountPercent,
+      schemeAmount,
       purchaseRate,
       taxableAmount,
       cgstPercent,
