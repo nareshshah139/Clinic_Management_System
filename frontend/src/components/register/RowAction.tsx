@@ -33,7 +33,6 @@ export function RowAction({
       aria-label={label}
       aria-disabled="true"
       aria-describedby={reasonId}
-      tabIndex={-1}
       className="size-9 lg:size-8 cursor-not-allowed text-muted-foreground opacity-60 hover:bg-transparent"
     >
       {icon}

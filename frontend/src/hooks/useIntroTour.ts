@@ -1,191 +1,95 @@
-/**
- * Custom hook for managing Intro.js tours
- * 
- * @module useIntroTour
- */
+import { useCallback, useEffect, useRef } from 'react';
+import type introJs from 'intro.js';
 
-import { useEffect, useRef, useCallback } from 'react';
+type Tour = ReturnType<typeof introJs.tour>;
 
 export interface TourStep {
+  /** CSS selector. The step points at the first match on screen and is left out when nothing matches. */
   element?: string;
+  title: string;
   intro: string;
-  title?: string;
-  position?: 'top' | 'bottom' | 'left' | 'right' | 'auto';
-  tooltipClass?: string;
-  highlightClass?: string;
+  position?: 'top' | 'bottom' | 'left' | 'right';
 }
 
-export interface TourOptions {
-  steps: TourStep[];
-  exitOnEsc?: boolean;
-  exitOnOverlayClick?: boolean;
-  showStepNumbers?: boolean;
-  showBullets?: boolean;
-  showProgress?: boolean;
-  scrollToElement?: boolean;
-  overlayOpacity?: number;
-  doneLabel?: string;
-  nextLabel?: string;
-  prevLabel?: string;
-  skipLabel?: string;
+const isShown = (element: Element) =>
+  element.getClientRects().length > 0 && getComputedStyle(element).visibility !== 'hidden';
+
+function stepsOnScreen(steps: readonly TourStep[]) {
+  return steps.flatMap(({ element, ...step }) => {
+    if (!element) return [step];
+    const target = Array.from(document.querySelectorAll(element)).find(isShown);
+    return target ? [{ ...step, element: target }] : [];
+  });
 }
 
-/**
- * Hook for managing Intro.js tours
- * 
- * @param options - Tour configuration options
- * @returns Object with start and exit methods
- */
-export function useIntroTour(options: TourOptions) {
-  const introRef = useRef<any>(null);
+// intro.js renders each step after its change callbacks run, leaves the tooltip dialog unnamed
+// and writes "ariadisabled" instead of aria-disabled, so the labels follow its DOM instead.
+function labelTooltip() {
+  const tooltip = document.querySelector('.introjs-tooltip');
+  const title = tooltip?.querySelector('.introjs-tooltip-title');
+  const text = tooltip?.querySelector('.introjs-tooltiptext');
+  if (!tooltip || !title || !text) return;
+  title.id = 'tour-step-title';
+  text.id = 'tour-step-text';
+  tooltip.setAttribute('aria-labelledby', title.id);
+  tooltip.setAttribute('aria-describedby', text.id);
+  tooltip.querySelectorAll('[role="button"]').forEach((button) => {
+    button.setAttribute('aria-disabled', String(button.classList.contains('introjs-disabled')));
+  });
+}
 
-  // Wait for an element matching the selector to exist and be visible
-  const waitForElement = useCallback(async (selector: string, timeoutMs: number = 5000): Promise<Element | null> => {
-    if (typeof window === 'undefined') return null;
-    const startTime = Date.now();
-
-    const isElementReady = (el: Element | null) => {
-      if (!el) return false;
-      const rect = (el as HTMLElement).getBoundingClientRect();
-      const style = window.getComputedStyle(el as HTMLElement);
-      return (
-        rect.width > 0 &&
-        rect.height > 0 &&
-        style.visibility !== 'hidden' &&
-        style.display !== 'none'
-      );
-    };
-
-    return await new Promise<Element | null>((resolve) => {
-      const tryFind = () => {
-        const el = document.querySelector(selector);
-        if (isElementReady(el)) {
-          resolve(el);
-          return;
-        }
-        if (Date.now() - startTime >= timeoutMs) {
-          resolve(null);
-          return;
-        }
-        // Use rAF for responsive polling without blocking
-        window.requestAnimationFrame(tryFind);
-      };
-      tryFind();
-    });
-  }, []);
+export function useIntroTour(steps: readonly TourStep[]) {
+  const tourRef = useRef<Tour | null>(null);
+  const mountedRef = useRef(false);
 
   useEffect(() => {
-    // Dynamically import intro.js to avoid SSR issues
-    const loadIntro = async () => {
-      if (typeof window !== 'undefined') {
-        const introJs = (await import('intro.js')).default;
-        
-        introRef.current = introJs();
-        
-        if (introRef.current) {
-          introRef.current.setOptions({
-            exitOnEsc: options.exitOnEsc ?? true,
-            exitOnOverlayClick: options.exitOnOverlayClick ?? true,
-            showStepNumbers: options.showStepNumbers ?? true,
-            showBullets: options.showBullets ?? true,
-            showProgress: options.showProgress ?? true,
-            scrollToElement: options.scrollToElement ?? true,
-            overlayOpacity: options.overlayOpacity ?? 0.7,
-            positionPrecedence: ['bottom', 'top', 'right', 'left'],
-            doneLabel: options.doneLabel ?? 'Done',
-            nextLabel: options.nextLabel ?? 'Next →',
-            prevLabel: options.prevLabel ?? '← Back',
-            skipLabel: options.skipLabel ?? 'Skip',
-            steps: options.steps as any,
-          });
-
-          // Ensure target elements are present before each step to improve highlight reliability
-          introRef.current.onbeforechange(async () => {
-            try {
-              const currentIndex: number = introRef.current?._currentStep ?? 0;
-              const steps: any[] = (options.steps as any[]) ?? [];
-              const step = steps[currentIndex];
-              const selector = typeof step?.element === 'string' ? step.element : null;
-              if (selector) {
-                const el = await waitForElement(selector, 5000);
-                if (el) {
-                  (el as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
-                  // Give layout a tick then refresh intro's positioning
-                  setTimeout(() => {
-                    try { introRef.current?.refresh(); } catch {}
-                  }, 50);
-                }
-              }
-            } catch {}
-          });
-
-          // Refresh positions after change in case of lazy content
-          introRef.current.onafterchange(() => {
-            try { introRef.current?.refresh(); } catch {}
-          });
-
-          // Keep tooltip positioned correctly on viewport changes
-          const handleResize = () => {
-            try { introRef.current?.refresh(); } catch {}
-          };
-          window.addEventListener('resize', handleResize);
-          window.addEventListener('orientationchange', handleResize);
-          (introRef.current as any)._handleResize = handleResize;
-        }
-      }
-    };
-
-    void loadIntro();
-
+    mountedRef.current = true;
     return () => {
-      if (introRef.current) {
-        try {
-          introRef.current.exit(true);
-        } catch (e) {
-          // Ignore errors on cleanup
-        }
-        try {
-          const hr = (introRef.current as any)?._handleResize;
-          if (hr) {
-            window.removeEventListener('resize', hr);
-            window.removeEventListener('orientationchange', hr);
-          }
-        } catch {}
-      }
+      mountedRef.current = false;
+      void tourRef.current?.exit(true);
+      tourRef.current = null;
     };
-  }, [options, waitForElement]);
-
-  const start = useCallback(() => {
-    if (!introRef.current) return;
-    try {
-      const steps: any[] = (options.steps as any[]) ?? [];
-      const firstSelector = typeof steps?.[0]?.element === 'string' ? steps[0].element : null;
-      if (firstSelector) {
-        // Try to wait for the first element before starting, but don't block forever
-        void (async () => {
-      try {
-            await waitForElement(firstSelector, 5000);
-          } catch {}
-          try { introRef.current?.start(); } catch (e) { console.error('Error starting tour:', e); }
-        })();
-      } else {
-        introRef.current.start();
-      }
-      } catch (e) {
-        console.error('Error starting tour:', e);
-      }
-  }, [options.steps, waitForElement]);
-
-  const exit = useCallback(() => {
-    if (introRef.current) {
-      try {
-        introRef.current.exit(true);
-      } catch (e) {
-        // Ignore errors
-      }
-    }
   }, []);
 
-  return { start, exit };
+  return useCallback(async (opener?: HTMLElement) => {
+    const { default: introJs } = await import('intro.js');
+    if (!mountedRef.current) return;
+    await tourRef.current?.exit(true);
+    const tour = introJs.tour().setOptions({
+      steps: stepsOnScreen(steps),
+      nextLabel: 'Next',
+      prevLabel: 'Back',
+      doneLabel: 'Done',
+      skipLabel: 'Skip tour',
+      showBullets: false,
+      showProgress: false,
+      showStepNumbers: true,
+      exitOnOverlayClick: true,
+      scrollToElement: false,
+      positionPrecedence: ['bottom', 'top', 'right', 'left'],
+    });
+    // The dashboard scrolls inside <main>, not the window. intro.js only scrolls the window and
+    // places its highlight once, so the step's element is scrolled here and every scroll re-places it.
+    tour.onBeforeChange((target) => {
+      if (!target.classList.contains('introjsFloatingElement')) target.scrollIntoView({ block: 'center' });
+      return true;
+    });
+    let frame = 0;
+    const follow = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => tour.refresh());
+    };
+    document.addEventListener('scroll', follow, true);
+    const labeller = new MutationObserver(labelTooltip);
+    labeller.observe(document.body, { childList: true, subtree: true, characterData: true });
+    tour.onExit(() => {
+      document.removeEventListener('scroll', follow, true);
+      cancelAnimationFrame(frame);
+      labeller.disconnect();
+      if (tourRef.current === tour) tourRef.current = null;
+      opener?.focus();
+    });
+    tourRef.current = tour;
+    await tour.start();
+  }, [steps]);
 }
-

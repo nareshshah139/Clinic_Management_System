@@ -4,7 +4,7 @@ export type Role = (typeof ROLES)[number];
 export type Capability =
   | 'dashboard' | 'patients' | 'appointments' | 'visits' | 'procedures' | 'rooms'
   | 'pharmacy-desk' | 'pharmacy-counter' | 'pharmacy-sales' | 'pharmacy-reports' | 'inventory'
-  | 'billing' | 'reports' | 'users' | 'fees' | 'backup';
+  | 'billing' | 'reports' | 'users' | 'fees' | 'backup' | 'audit-logs';
 
 /**
  * What each role may open, read by the sidebar and the home dashboard.
@@ -14,11 +14,11 @@ export type Capability =
 export const ROLE_CAPABILITIES: Readonly<Record<Role, readonly Capability[]>> = {
   OWNER: [
     'dashboard', 'patients', 'appointments', 'visits', 'procedures', 'rooms', 'pharmacy-desk', 'pharmacy-counter',
-    'pharmacy-sales', 'inventory', 'pharmacy-reports', 'billing', 'reports', 'users', 'fees', 'backup',
+    'pharmacy-sales', 'inventory', 'pharmacy-reports', 'billing', 'reports', 'users', 'fees', 'backup', 'audit-logs',
   ],
   ADMIN: [
     'dashboard', 'patients', 'appointments', 'visits', 'procedures', 'rooms', 'pharmacy-desk', 'pharmacy-counter',
-    'pharmacy-sales', 'inventory', 'pharmacy-reports', 'billing', 'reports', 'users', 'fees', 'backup',
+    'pharmacy-sales', 'inventory', 'pharmacy-reports', 'billing', 'reports', 'users', 'fees', 'backup', 'audit-logs',
   ],
   MANAGER: [
     'dashboard', 'patients', 'appointments', 'visits', 'procedures', 'pharmacy-desk', 'pharmacy-counter',

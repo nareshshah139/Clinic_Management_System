@@ -36,6 +36,11 @@ const pinnedEndCellClass = 'max-sm:sticky max-sm:right-0 max-sm:z-10 max-sm:bg-b
 
 const stopRowClick = (event: MouseEvent) => event.stopPropagation();
 
+const selectingIn = (element: HTMLElement) => {
+  const selection = window.getSelection();
+  return !!selection && !selection.isCollapsed && selection.rangeCount > 0 && selection.getRangeAt(0).intersectsNode(element);
+};
+
 function HeadLabel({ column }: { column: RegisterColumn<unknown> }) {
   const note = column.srNote && <span className="sr-only"> {column.srNote}</span>;
   if (column.hideLabel) return <span className="sr-only">{column.label}{note}</span>;
@@ -100,6 +105,9 @@ export function RegisterGrid<Row extends { id: string }, Sort extends string>({
   const loaded = load.data !== null;
   const firstLoad = !loaded && load.status === 'loading';
   const failed = load.status === 'error';
+  const open = (row: Row) => (event: MouseEvent<HTMLElement>) => {
+    if (!selectingIn(event.currentTarget)) onRowClick(row);
+  };
   return (
     <>
       {failed && (
@@ -126,7 +134,7 @@ export function RegisterGrid<Row extends { id: string }, Sort extends string>({
                 ))}
               {loaded && rows.length === 0 && <li className="px-3 py-2">{empty}</li>}
               {rows.map((row) => (
-                <li key={row.id} className="cursor-pointer border-b border-border px-3 py-2.5 last:border-b-0 hover:bg-[var(--accent-soft)]" onClick={() => onRowClick(row)}>
+                <li key={row.id} className="cursor-pointer border-b border-border px-3 py-2.5 last:border-b-0 hover:bg-[var(--accent-soft)]" onClick={open(row)}>
                   {card(row)}
                 </li>
               ))}
@@ -165,11 +173,13 @@ export function RegisterGrid<Row extends { id: string }, Sort extends string>({
                     ))}
                   {loaded && rows.length === 0 && (
                     <TableRow className="hover:bg-transparent">
-                      <TableCell colSpan={columns.length} className="whitespace-normal">{empty}</TableCell>
+                      <TableCell colSpan={columns.length} className="p-0!">
+                        <div className="sticky left-0 w-[100cqw]">{empty}</div>
+                      </TableCell>
                     </TableRow>
                   )}
                   {rows.map((row) => (
-                    <TableRow key={row.id} className={cn('group cursor-pointer', rowClass)} onClick={() => onRowClick(row)}>
+                    <TableRow key={row.id} className={cn('group cursor-pointer', rowClass)} onClick={open(row)}>
                       {columns.map((column) => (
                         <TableCell
                           key={column.key}

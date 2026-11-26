@@ -17,6 +17,10 @@ describe('the role capability table', () => {
     expect(rolesWith('backup')).toEqual(['OWNER', 'ADMIN']);
   });
 
+  it('holds the audit log for the owner and admin only', () => {
+    expect(rolesWith('audit-logs')).toEqual(['OWNER', 'ADMIN']);
+  });
+
   it('gives every role a home dashboard', () => {
     expect(rolesWith('dashboard')).toEqual([...ROLES]);
   });

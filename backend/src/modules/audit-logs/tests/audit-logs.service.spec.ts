@@ -71,27 +71,27 @@ describe('audit log service is add-only', () => {
           ? 0
           : op === 'deleteMany'
             ? { count: 0 }
-            : op === 'findUnique'
+            : op === 'findFirst'
               ? null
               : [];
       })),
   });
-  const service = new AuditLogsService({ auditLog: delegate } as any);
+  const service = new AuditLogsService({ auditLog: delegate, user: { findMany: async () => [] } } as any);
 
   beforeEach(() => {
     recorded.length = 0;
   });
 
   it('only reads when serving every query method', async () => {
-    await service.findAll({} as any);
-    await service.findOne('log-1');
-    await service.findByEntity('Patient', 'pat-1');
-    await service.findByUser('user-1', {} as any);
-    await service.getStatistics();
-    await service.exportLogs({} as any, 'json');
+    await service.findAll({} as any, 'branch-1');
+    await service.findOne('log-1', 'branch-1');
+    await service.findByEntity('Patient', 'pat-1', 'branch-1');
+    await service.findByUser('user-1', {} as any, 'branch-1');
+    await service.getStatistics(undefined, undefined, 'branch-1');
+    await service.exportLogs({} as any, 'json', 'branch-1');
     expect(recorded.length).toBeGreaterThan(0);
     expect(new Set(recorded)).toEqual(
-      new Set(['findMany', 'count', 'findUnique', 'groupBy']),
+      new Set(['findMany', 'count', 'findFirst', 'groupBy']),
     );
   });
 

@@ -46,8 +46,8 @@ export class AuditLogsController {
   @ApiOperation({ summary: 'Get all audit logs with filtering and pagination' })
   @ApiResponse({ status: 200, description: 'Audit logs retrieved successfully' })
   @ApiResponse({ status: 403, description: 'Forbidden - Admin access required' })
-  async findAll(@Query() query: QueryAuditLogsDto) {
-    return this.auditLogsService.findAll(query);
+  async findAll(@Request() req: AuthenticatedRequest, @Query() query: QueryAuditLogsDto) {
+    return this.auditLogsService.findAll(query, req.user.branchId);
   }
 
   @Get('statistics')
@@ -56,10 +56,11 @@ export class AuditLogsController {
   @ApiOperation({ summary: 'Get audit log statistics' })
   @ApiResponse({ status: 200, description: 'Statistics retrieved successfully' })
   async getStatistics(
+    @Request() req: AuthenticatedRequest,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
   ) {
-    return this.auditLogsService.getStatistics(startDate, endDate);
+    return this.auditLogsService.getStatistics(startDate, endDate, req.user.branchId);
   }
 
   @Get('export')
@@ -69,8 +70,8 @@ export class AuditLogsController {
   @ApiResponse({ status: 200, description: 'Logs exported successfully' })
   @Header('Content-Type', 'text/csv')
   @Header('Content-Disposition', 'attachment; filename="audit-logs.csv"')
-  async exportLogs(@Query() query: QueryAuditLogsDto): Promise<StreamableFile> {
-    const csv = await this.auditLogsService.exportLogs(query, 'csv');
+  async exportLogs(@Request() req: AuthenticatedRequest, @Query() query: QueryAuditLogsDto): Promise<StreamableFile> {
+    const csv = await this.auditLogsService.exportLogs(query, 'csv', req.user.branchId);
     const buffer = Buffer.from(csv, 'utf-8');
     return new StreamableFile(buffer);
   }
@@ -80,8 +81,8 @@ export class AuditLogsController {
   @Permissions('audit:export')
   @ApiOperation({ summary: 'Export audit logs as JSON' })
   @ApiResponse({ status: 200, description: 'Logs exported successfully' })
-  async exportLogsJSON(@Query() query: QueryAuditLogsDto) {
-    return this.auditLogsService.exportLogs(query, 'json');
+  async exportLogsJSON(@Request() req: AuthenticatedRequest, @Query() query: QueryAuditLogsDto) {
+    return this.auditLogsService.exportLogs(query, 'json', req.user.branchId);
   }
 
   @Get('entity/:entity/:entityId')
@@ -90,10 +91,11 @@ export class AuditLogsController {
   @ApiOperation({ summary: 'Get audit logs for a specific entity' })
   @ApiResponse({ status: 200, description: 'Entity audit logs retrieved' })
   async findByEntity(
+    @Request() req: AuthenticatedRequest,
     @Param('entity') entity: string,
     @Param('entityId') entityId: string,
   ) {
-    return this.auditLogsService.findByEntity(entity, entityId);
+    return this.auditLogsService.findByEntity(entity, entityId, req.user.branchId);
   }
 
   @Get('user/:userId')
@@ -102,10 +104,11 @@ export class AuditLogsController {
   @ApiOperation({ summary: 'Get audit logs for a specific user' })
   @ApiResponse({ status: 200, description: 'User audit logs retrieved' })
   async findByUser(
+    @Request() req: AuthenticatedRequest,
     @Param('userId') userId: string,
     @Query() query: QueryAuditLogsDto,
   ) {
-    return this.auditLogsService.findByUser(userId, query);
+    return this.auditLogsService.findByUser(userId, query, req.user.branchId);
   }
 
   @Get('my-activity')
@@ -116,7 +119,7 @@ export class AuditLogsController {
     @Request() req: AuthenticatedRequest,
     @Query() query: QueryAuditLogsDto,
   ) {
-    return this.auditLogsService.findByUser(req.user.id, query);
+    return this.auditLogsService.findByUser(req.user.id, query, req.user.branchId);
   }
 
   @Get(':id')
@@ -125,8 +128,8 @@ export class AuditLogsController {
   @ApiOperation({ summary: 'Get a specific audit log by ID' })
   @ApiResponse({ status: 200, description: 'Audit log retrieved' })
   @ApiResponse({ status: 404, description: 'Audit log not found' })
-  async findOne(@Param('id') id: string) {
-    return this.auditLogsService.findOne(id);
+  async findOne(@Request() req: AuthenticatedRequest, @Param('id') id: string) {
+    return this.auditLogsService.findOne(id, req.user.branchId);
   }
 }
 

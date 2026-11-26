@@ -775,39 +775,34 @@ function VisitsPageInner() {
               {
                 title: "Starting a Visit",
                 items: [
-                  "Select a patient from the search bar or dropdown",
+                  "Search for the patient by name, phone or email",
                   "Choose the consulting doctor",
-                  "View patient history in the 'Patient History' tab",
-                  "Click 'Start Visit Documentation' to begin"
+                  "Check past visits in the 'Patient History' tab",
+                  "Press 'Start Visit Documentation' to begin"
                 ]
               },
               {
-                title: "Role-Based Access",
+                title: "Who Sees What",
                 items: [
-                  "Nurse: Record vitals, photos, complaints, and assessments",
-                  "Doctor: Complete SOAP documentation and prescriptions",
-                  "Each role sees features appropriate to their scope"
+                  "Nurses record vitals and photos",
+                  "Doctors, admins and owners see the full consultation"
                 ]
               },
               {
-                title: "Visit Documentation",
+                title: "Consultation",
                 items: [
-                  "Follow the SOAP format: Subjective, Objective, Assessment, Plan",
-                  "Record vitals, complaints, examination findings",
-                  "Add dermatology-specific assessments and procedures",
-                  "Create prescriptions with medications and instructions",
-                  "Upload photos to document patient condition",
-                  "Set follow-up appointments and review dates"
+                  "Work through Vitals, Complaints, Diagnosis, Treatment, Investigations and Follow-up",
+                  "Add medicines and instructions to the prescription under Treatment",
+                  "Add photos in the Photos tab",
+                  "Set a Review Date below Follow-up. Completing the visit books the first free slot that day"
                 ]
               },
               {
                 title: "Patient History",
                 items: [
-                  "View complete timeline of past visits",
-                  "See previous diagnoses and treatments",
-                  "Access past prescriptions and photos",
-                  "Resume incomplete visits from history",
-                  "Track patient progress over time"
+                  "See past visits with their diagnoses, newest first",
+                  "Open a past prescription with View Prescription",
+                  "Press Resume session to reopen a past visit"
                 ]
               }
             ]}

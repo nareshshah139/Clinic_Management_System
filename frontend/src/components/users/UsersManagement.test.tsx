@@ -235,4 +235,14 @@ describe('UsersManagement', () => {
     fireEvent.click(save);
     expect(api.updateUserPermissions).not.toHaveBeenCalled();
   });
+
+  it('names every role a new user can be given in the quick guide', async () => {
+    render(<UsersManagement />);
+    fireEvent.click(screen.getByRole('button', { name: 'Quick guide' }));
+    const roleLine = within(await screen.findByRole('dialog')).getByText(/^Choose the role/).textContent;
+
+    for (const role of ['Owner', 'Admin', 'Manager', 'Doctor', 'Nurse', 'Receptionist', 'Pharmacist', 'Accountant', 'Lab technician']) {
+      expect(roleLine).toContain(role);
+    }
+  });
 });

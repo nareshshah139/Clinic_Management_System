@@ -21,6 +21,7 @@ import { DashboardUserProvider } from "./dashboard-user-context";
 import { AnalyticsMount } from "@/lib/analytics";
 import { ReportIssueProvider } from "@/components/issue-report/ReportIssueProvider";
 import { SessionExpiredDialog } from "@/components/auth/SessionExpiredDialog";
+import { OfflineBanner } from "./offline-banner";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -129,6 +130,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             {/* Main content */}
             <div className="min-w-0 flex-1 flex flex-col overflow-hidden">
               <Header leading={<MobileNavigation />} />
+
+              <OfflineBanner />
 
               {/* Page content */}
               <main className="min-w-0 flex-1 overflow-auto p-4 md:p-6">

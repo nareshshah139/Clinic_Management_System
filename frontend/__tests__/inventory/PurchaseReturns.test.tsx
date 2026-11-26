@@ -488,7 +488,8 @@ it('sets the credit off from Mark paid in one step when the credit held covers t
   expect(screen.getByText('Undo is in the Payment column for 30 seconds.')).toBeInTheDocument();
 
   post.mockResolvedValue({ id: 'so-9', reversed: ['a-1'] });
-  fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+  const toast = screen.getByText('Set off ₹1,000.00 of credit against bill LIN-2.', { selector: 'div' }).closest('li')!;
+  fireEvent.click(within(toast).getByRole('button', { name: 'Undo' }));
   await waitFor(() => expect(post.mock.calls[1]?.slice(0, 2)).toEqual(['/inventory/workspace/credits/set-off/so-9/reverse', { reason: 'Undone from purchase list' }]));
 });
 

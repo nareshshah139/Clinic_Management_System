@@ -103,7 +103,7 @@ function Select({ label, value, options, onChange }: { label: string; value: str
 }
 
 /** A month or quarter in one pick, or any range of days. */
-export function PeriodPicker({ value, today, onChange }: { value: { from: string; to: string }; today: string; onChange: (range: { from: string; to: string }) => void }) {
+export function PeriodPicker({ value, today, onChange, onPreset = onChange }: { value: { from: string; to: string }; today: string; onChange: (range: { from: string; to: string }) => void; onPreset?: (range: { from: string; to: string }) => void }) {
   const presets = periodPresets(today);
   const selected = presetFor(value, today);
   const [custom, setCustom] = useState(selected === "custom");
@@ -119,7 +119,7 @@ export function PeriodPicker({ value, today, onChange }: { value: { from: string
         onChange={(id) => {
           if (id === "custom") return setCustom(true);
           setCustom(false);
-          onChange(presets.find((preset) => preset.id === id)!.range);
+          onPreset(presets.find((preset) => preset.id === id)!.range);
         }}
       />
       {custom && (

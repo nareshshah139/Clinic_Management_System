@@ -1240,6 +1240,7 @@ model InventoryAudit {
 model AuditLog {
   id        String   @id @default(cuid())
   userId    String?
+  branchId  String?
   action    String
   entity    String
   entityId  String
@@ -1252,6 +1253,7 @@ model AuditLog {
   @@index([timestamp], map: "audit_logs_timestamp_idx")
   @@index([entity, entityId, timestamp], map: "audit_logs_entity_entityId_timestamp_idx")
   @@index([userId, timestamp], map: "audit_logs_userId_timestamp_idx")
+  @@index([branchId, timestamp], map: "audit_logs_branchId_timestamp_idx")
   @@map("audit_logs")
 }
 

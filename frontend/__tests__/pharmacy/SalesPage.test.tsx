@@ -142,7 +142,6 @@ it('reopens a draft bill in Sales, and blocks print and WhatsApp with a reason',
 
   const print = screen.getByRole('button', { name: 'Print draft bill for Meera Shah' });
   expect(print).toHaveAttribute('aria-disabled', 'true');
-  expect(print).toHaveAttribute('tabindex', '-1');
   expect(print).toHaveAccessibleDescription('Finish this draft bill first');
   fireEvent.click(print);
   expect(document.querySelector('iframe')).toBeNull();
@@ -170,12 +169,12 @@ it('writes the WhatsApp message with clinic, date, modes and balance due', async
   expect(screen.getByText('Due ₹200.00')).toBeInTheDocument();
 });
 
-it('keeps a disabled WhatsApp action out of the tab order but explains why', async () => {
+it('keeps a disabled WhatsApp action reachable by keyboard and explains why', async () => {
   get.mockResolvedValue(response({ rows: [row({ billNo: 'PHI-2026-015', mobile: null })] }));
   render(<SalesPage />);
   const button = await screen.findByRole('button', { name: 'Send PHI-2026-015 on WhatsApp' });
   expect(button).toHaveAttribute('aria-disabled', 'true');
-  expect(button).toHaveAttribute('tabindex', '-1');
+  expect(button).not.toHaveAttribute('tabindex');
   expect(button).toHaveAccessibleDescription('No mobile number');
   expect(screen.getByText('—', { selector: 'td' })).toBeInTheDocument();
 });
@@ -370,12 +369,13 @@ it('commits a typed dd/mm/yyyy date on Enter and refuses a From after To without
   fireEvent.keyDown(from, { key: 'Enter' });
   await waitFor(() => expect(lastRequest()).toMatchObject({ from: '2026-11-05', to: '2027-03-31' }));
 
+  fireEvent.click(await screen.findByRole('button', { name: 'Change dates, 05/11/2026 to 31/03/2027' }));
   const to = panel().getByLabelText('To');
   fireEvent.change(to, { target: { value: '01/11/2026' } });
-  fireEvent.blur(to);
+  fireEvent.keyDown(to, { key: 'Enter' });
   expect(screen.getByRole('alert')).toHaveTextContent('The From date is after the To date.');
   fireEvent.change(to, { target: { value: '01/11/0202' } });
-  fireEvent.blur(to);
+  fireEvent.click(panel().getByRole('button', { name: 'Apply' }));
   expect(screen.getByRole('alert')).toHaveTextContent('Enter the To date as dd/mm/yyyy, year 2000 or later.');
   expect(lastRequest()).toMatchObject({ from: '2026-11-05', to: '2027-03-31' });
 });
@@ -390,12 +390,14 @@ it('with FY 2025-26 open, typing From then To never requests a range longer than
   const from = panel().getByLabelText('From');
   fireEvent.change(from, { target: { value: '01/05/2026' } });
   fireEvent.blur(from);
-  expect(screen.getByRole('alert')).toHaveTextContent('The From date is after the To date.');
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   expect(registerCalls()).toHaveLength(calls);
 
   const to = panel().getByLabelText('To');
   fireEvent.change(to, { target: { value: '31/05/2026' } });
   fireEvent.blur(to);
+  expect(registerCalls()).toHaveLength(calls);
+  fireEvent.click(panel().getByRole('button', { name: 'Apply' }));
   await waitFor(() => expect(lastRequest()).toMatchObject({ from: '2026-05-01', to: '2026-05-31' }));
   expect(registerCalls().slice(calls).map(([, params]) => [(params as { from: string }).from, (params as { to: string }).to])).toEqual([['2026-05-01', '2026-05-31']]);
   expect(screen.queryByRole('alert')).not.toBeInTheDocument();
@@ -409,7 +411,7 @@ it('refuses a typed range of 426 days with an inline message and no request', as
   const calls = registerCalls().length;
   const to = panel().getByLabelText('To');
   fireEvent.change(to, { target: { value: '31/05/2026' } });
-  fireEvent.blur(to);
+  fireEvent.click(panel().getByRole('button', { name: 'Apply' }));
   expect(screen.getByRole('alert')).toHaveTextContent('Pick at most 400 days at a time.');
   expect(registerCalls()).toHaveLength(calls);
 });

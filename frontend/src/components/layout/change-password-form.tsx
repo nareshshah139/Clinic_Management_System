@@ -10,7 +10,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { useDashboardUser } from './dashboard-user-context';
 
 const MIN_LENGTH = 8;
-const MAX_LENGTH = 20;
+const MAX_LENGTH = 72;
 const EMPTY = { currentPassword: '', newPassword: '', confirmPassword: '' };
 
 function problemWith(form: typeof EMPTY): string {

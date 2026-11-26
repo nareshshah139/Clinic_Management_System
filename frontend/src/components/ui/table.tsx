@@ -12,7 +12,7 @@ function Table({
   return (
     <div
       data-slot="table-container"
-      className={cn("relative w-full overflow-x-auto rounded-lg border border-border", containerClassName)}
+      className={cn("relative w-full max-h-[max(24rem,calc(100dvh-16rem))] overflow-auto rounded-lg border border-border print:max-h-none print:overflow-visible", containerClassName)}
     >
       <table
         data-slot="table"
