@@ -16,13 +16,46 @@ const ToastViewport = React.forwardRef<
   <ToastPrimitives.Viewport
     ref={ref}
     className={cn(
-      "pointer-events-none fixed top-14 right-0 z-[100] flex max-h-[calc(100dvh-3.5rem)] w-full flex-col gap-2 p-4 sm:w-auto md:top-auto md:right-auto md:bottom-0 md:left-64 md:max-h-[calc(100dvh-4rem)] md:max-w-[340px]",
+      "pointer-events-none fixed top-14 right-0 z-[100] flex max-h-[calc(100dvh-3.5rem)] w-full flex-col gap-2 p-4 sm:w-auto md:top-auto md:right-auto md:bottom-[var(--toast-clearance,0px)] md:left-64 md:max-h-[calc(100dvh-4rem-var(--toast-clearance,0px))] md:max-w-[340px]",
       className
     )}
     {...props}
   />
 ))
 ToastViewport.displayName = ToastPrimitives.Viewport.displayName
+
+const clearances = new Map<HTMLElement, number>()
+let publishedClearance = -1
+
+function publishClearance() {
+  const px = Math.max(0, ...clearances.values())
+  if (px === publishedClearance) return
+  publishedClearance = px
+  document.documentElement.style.setProperty("--toast-clearance", `${px}px`)
+}
+
+function keepToastsAbove(bar: HTMLElement | null) {
+  if (!bar) return
+  const measure = () => {
+    const { top, bottom } = bar.getBoundingClientRect()
+    // A bar floating above the bottom edge on a short page leaves the notifications where they are: lifting them would cover the content above it.
+    clearances.set(bar, bottom >= window.innerHeight - 1 ? Math.round(window.innerHeight - top) : 0)
+    publishClearance()
+  }
+  measure()
+  const resized = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure)
+  resized?.observe(bar)
+  if (bar.parentElement) resized?.observe(bar.parentElement)
+  window.addEventListener("scroll", measure, { capture: true, passive: true })
+  window.addEventListener("resize", measure)
+  return () => {
+    resized?.disconnect()
+    window.removeEventListener("scroll", measure, { capture: true })
+    window.removeEventListener("resize", measure)
+    clearances.delete(bar)
+    publishClearance()
+  }
+}
 
 const toastVariants = cva(
   "group pointer-events-auto relative flex w-full items-center justify-between space-x-4 overflow-hidden rounded-md border p-6 pr-10 shadow-sm pointer-coarse:pr-12 transition-all data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-right-full data-[state=open]:slide-in-from-top-full data-[state=open]:sm:slide-in-from-top-full",
@@ -130,4 +163,5 @@ export {
   ToastDescription,
   ToastClose,
   ToastAction,
-} 
+  keepToastsAbove,
+}

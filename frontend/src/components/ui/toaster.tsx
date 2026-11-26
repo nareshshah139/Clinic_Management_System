@@ -10,7 +10,7 @@ import {
   ToastViewport,
   type ToastProps,
 } from "@/components/ui/toast"
-import { useToast } from "@/hooks/use-toast"
+import { freeToastSlots, useToast } from "@/hooks/use-toast"
 import { splitErrorReference } from "@/lib/utils"
 import { MODAL_CLOSED, MODAL_OPENED } from "@/lib/modal-events"
 
@@ -55,9 +55,11 @@ export function Toaster() {
     }
     const restore = () => {
       // A toast comes back only for the time it had left: its action, such as an Undo, may be bound to that window.
+      // One raised as the dialog closed is newer, so the oldest set-aside ones give way to it.
       const now = Date.now()
       parked
         .filter(({ endsAt }) => endsAt - now > 500)
+        .slice(0, Math.max(0, freeToastSlots()))
         .reverse()
         .forEach(({ toast: { title, description, action, variant }, endsAt }) =>
           latest.current.toast({ title, description, action, variant, duration: endsAt - now }),
@@ -83,7 +85,7 @@ export function Toaster() {
         const { text, reference } = typeof description === "string" ? splitErrorReference(description) : { text: description, reference: undefined }
         return (
           <Toast key={id} duration={duration ?? durationFor(variant, reference)} variant={variant} {...props}>
-            <div className="grid gap-1">
+            <div className="grid min-w-0 gap-1 [overflow-wrap:anywhere]">
               {title && <ToastTitle>{title}</ToastTitle>}
               {text && (
                 <ToastDescription>{text}</ToastDescription>

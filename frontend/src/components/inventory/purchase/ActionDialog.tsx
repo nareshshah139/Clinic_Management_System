@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
+import { ModalPresence } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 
 const GAP = 8;
@@ -127,6 +128,7 @@ export function ActionDialog({
               : 'inset-x-0 bottom-0 max-h-[90dvh] rounded-t-xl sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/3 sm:max-h-[calc(100dvh-2rem)] sm:w-[25rem] sm:-translate-x-1/2 sm:rounded-lg',
           )}
         >
+          <ModalPresence />
           <form onSubmit={submit} onKeyDown={enterSubmits} className="flex min-h-0 flex-1 flex-col" noValidate>
             <div className="min-h-0 flex-1 overflow-y-auto">
               <div data-dialog-content className="flex flex-col gap-3 p-4 pb-3">

@@ -17,7 +17,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { ToastAction } from '@/components/ui/toast';
+import { ToastAction, keepToastsAbove } from '@/components/ui/toast';
 import { useOnExaminationPanel } from '@/components/visits/on-examination-panel';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AlertCircle, CalendarDays, ChevronDown, ChevronRight, ChevronUp, FlaskConical, Languages, Mic, MicOff, MoreHorizontal, Pill, Plus, RotateCcw, Sparkles, Trash2, Wand2, X } from 'lucide-react';
@@ -5868,7 +5868,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
             </div>
             </fieldset>
 
-            <div data-rx-actions data-tour="rx-actions" className="sticky -bottom-4 z-20 flex items-center justify-between gap-3 border-t bg-background pb-4 pt-2 md:-bottom-6 md:pb-6">
+            <div ref={keepToastsAbove} data-rx-actions data-tour="rx-actions" className="sticky -bottom-4 z-20 flex items-center justify-between gap-3 border-t bg-background pb-4 pt-2 md:-bottom-6 md:pb-6">
               <div className="text-sm text-muted-foreground">Total items: {validItems.length} • Total qty: {totalQuantity}</div>
               <div className="flex gap-2">
                 <div className="hidden sm:flex items-center gap-2">

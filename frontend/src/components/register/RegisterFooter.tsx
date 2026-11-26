@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { keepToastsAbove } from '@/components/ui/toast';
 import { lastPage } from './register-query';
 
 export function RegisterFooter({
@@ -36,7 +37,7 @@ export function RegisterFooter({
   const first = (page - 1) * limit + 1;
   const end = Math.min(page * limit, total);
   return (
-    <div className="sticky -bottom-4 z-30 -mx-4 -mb-4 flex items-center justify-between gap-x-3 gap-y-1 border-t border-border bg-background px-3 py-1.5 shadow-[0_-4px_12px_-8px_rgb(0_0_0/0.25)] sm:flex-wrap sm:gap-x-4 sm:px-4 sm:py-2.5 md:-bottom-6 md:-mx-6 md:-mb-6 md:px-6 md:py-3">
+    <div ref={keepToastsAbove} className="sticky -bottom-4 z-30 -mx-4 -mb-4 flex items-center justify-between gap-x-3 gap-y-1 border-t border-border bg-background px-3 py-1.5 shadow-[0_-4px_12px_-8px_rgb(0_0_0/0.25)] sm:flex-wrap sm:gap-x-4 sm:px-4 sm:py-2.5 md:-bottom-6 md:-mx-6 md:-mb-6 md:px-6 md:py-3">
       <div role="status" aria-live="polite" aria-busy={busy} className={cn('min-w-0 flex-1 transition-opacity sm:flex-none', busy && 'opacity-50')}>
         <div className="text-sm font-semibold leading-tight sm:text-lg sm:leading-6">{summary}</div>
         {note && <p className="text-sm text-foreground max-sm:sr-only">{note}</p>}
