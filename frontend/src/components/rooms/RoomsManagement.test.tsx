@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import RoomsManagement from './RoomsManagement';
 import { apiClient } from '@/lib/api';
 
@@ -35,4 +35,25 @@ it('does not hide a server failure behind the active-only list', async () => {
   await waitFor(() => expect(apiClient.getAllRooms).toHaveBeenCalled());
   expect(apiClient.getRooms).not.toHaveBeenCalled();
   expect(screen.queryByText('Consult 1')).toBeNull();
+});
+
+it('says the rooms could not be loaded, with Retry, instead of an empty clinic', async () => {
+  jest.mocked(apiClient.getAllRooms).mockRejectedValue(Object.assign(new Error('boom'), { status: 500 }));
+  render(<RoomsManagement />);
+  expect(await screen.findByText('Could not load rooms')).toBeInTheDocument();
+  expect(screen.queryByText(/No rooms found/)).toBeNull();
+  expect(screen.getByText('Total Rooms').nextElementSibling).toHaveTextContent('—');
+
+  jest.mocked(apiClient.getAllRooms).mockResolvedValue({ rooms: [active, inactive] } as never);
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+  expect(await screen.findByText('Old Laser Suite')).toBeInTheDocument();
+  expect(screen.queryByText('Could not load rooms')).toBeNull();
+  expect(screen.getByText('Total Rooms').nextElementSibling).toHaveTextContent('1');
+});
+
+it('says there are no rooms yet when the clinic has none', async () => {
+  jest.mocked(apiClient.getAllRooms).mockResolvedValue({ rooms: [] } as never);
+  render(<RoomsManagement />);
+  expect(await screen.findByText(/No rooms found/)).toBeInTheDocument();
+  expect(screen.queryByText('Could not load rooms')).toBeNull();
 });
