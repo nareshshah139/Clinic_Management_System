@@ -422,10 +422,10 @@ databaseTests('Pharmacy bill numbers and discounts on PostgreSQL', () => {
       await race('A', 'edit reads first'),
       await race('B', 'return reads first'),
     ]).toEqual([
-      [refused, 56, [50, 6]],
-      ['edit saved', 50.4, [45, 5.4]],
+      [refused, 50, [44.64, 5.36]],
+      ['edit saved', 45, [40.18, 4.82]],
     ]);
-    const allowed = [JSON.stringify(['edit saved', 50.4, [45, 5.4]]), JSON.stringify([refused, 56, [50, 6]])];
+    const allowed = [JSON.stringify(['edit saved', 45, [40.18, 4.82]]), JSON.stringify([refused, 50, [44.64, 5.36]])];
     for (let round = 0; round < 6; round++)
       expect(allowed).toContain(JSON.stringify(await race(`T${round}`, 'together')));
   }, 120000);
@@ -456,7 +456,7 @@ databaseTests('Pharmacy bill numbers and discounts on PostgreSQL', () => {
       salesInvoiceId: sold.id,
       payload: { lines: [{ inventoryId: 'cream-batch', sourceLineId: sale.id, quantity: 1, disposition: 'RESTOCK' }] },
     } as any);
-    expect([revised.totalAmount, [returned.payload.lines[0].taxable, returned.payload.lines[0].tax]]).toEqual([100.8, [45, 5.4]]);
+    expect([revised.totalAmount, [returned.payload.lines[0].taxable, returned.payload.lines[0].tax]]).toEqual([90, [40.18, 4.82]]);
 
     await db.drug.create({ data: { id: 'gel', name: 'Synthetic Gel', price: 80, manufacturerName: 'Synthetic', packSizeLabel: '1', branchId: 'branch' } });
     await db.drug.create({ data: { id: 'gel-twin', name: 'Synthetic Gel Twin', price: 80, manufacturerName: 'Synthetic', packSizeLabel: '1', branchId: 'branch' } });
@@ -479,36 +479,36 @@ databaseTests('Pharmacy bill numbers and discounts on PostgreSQL', () => {
     ).toBe(
       '409: A batch sold on this bill is now linked to more than one product, so its return price cannot be revised exactly. Correct the bill through a return.',
     );
-    expect((await db.pharmacyInvoice.findUniqueOrThrow({ where: { id: gel.id } })).totalAmount).toBe(89.6);
+    expect((await db.pharmacyInvoice.findUniqueOrThrow({ where: { id: gel.id } })).totalAmount).toBe(80);
   }, 60000);
 
   it('keeps refund and payment request keys apart, so a reused key never returns the other kind', async () => {
     const sold = await invoices.checkout({ ...cream(1), paymentMethod: 'INSURANCE' as any, requestKey: 'insured-cream' }, 'branch', 'asha');
-    const receipt = await invoices.addPayment(sold.id, { requestKey: 'same-key', amount: 56, method: 'CASH' }, 'branch');
+    const receipt = await invoices.addPayment(sold.id, { requestKey: 'same-key', amount: 50, method: 'CASH' }, 'branch');
     await invoices.reviseDiscount(
       sold.id,
       { expectedVersion: (await db.pharmacyInvoice.findUniqueOrThrow({ where: { id: sold.id } })).mutationVersion, billDiscount: { kind: 'PERCENT', value: 10 }, lines: [], reason: 'Insurer discount' },
       'branch',
       'asha',
     );
-    const asRefund = await failure(invoices.recordRefund(sold.id, { requestKey: 'same-key', amount: 56, method: 'CASH' }, 'branch'));
-    const refund = await invoices.recordRefund(sold.id, { requestKey: 'same-key', amount: 5.6, method: 'CASH' }, 'branch');
-    const refundReplay = await invoices.recordRefund(sold.id, { requestKey: 'same-key', amount: 5.6, method: 'CASH' }, 'branch');
-    const receiptReplay = await invoices.addPayment(sold.id, { requestKey: 'same-key', amount: 56, method: 'CASH' }, 'branch');
+    const asRefund = await failure(invoices.recordRefund(sold.id, { requestKey: 'same-key', amount: 50, method: 'CASH' }, 'branch'));
+    const refund = await invoices.recordRefund(sold.id, { requestKey: 'same-key', amount: 5, method: 'CASH' }, 'branch');
+    const refundReplay = await invoices.recordRefund(sold.id, { requestKey: 'same-key', amount: 5, method: 'CASH' }, 'branch');
+    const receiptReplay = await invoices.addPayment(sold.id, { requestKey: 'same-key', amount: 50, method: 'CASH' }, 'branch');
     expect([
       asRefund,
       [refund.status, refund.amount, refundReplay.id === refund.id],
       [receiptReplay.id === receipt.id, receiptReplay.status, receiptReplay.amount],
       await db.pharmacyPayment.count({ where: { invoiceId: sold.id } }),
     ]).toEqual([
-      '400: Only ₹5.60 is due back on this bill. Reload it to see the latest amounts.',
-      ['REFUNDED', -5.6, true],
-      [true, 'COMPLETED', 56],
+      '400: Only ₹5.00 is due back on this bill. Reload it to see the latest amounts.',
+      ['REFUNDED', -5, true],
+      [true, 'COMPLETED', 50],
       2,
     ]);
   });
 
-  it('applies a bill discount before tax, keeps it on the draft, and revises a paid bill into a refund due', async () => {
+  it('takes a bill discount off the MRP price, keeps it on the draft, and revises a paid bill into a refund due', async () => {
     const discounted = {
       ...bill,
       paymentMethod: 'CASH' as const,
@@ -533,12 +533,12 @@ databaseTests('Pharmacy bill numbers and discounts on PostgreSQL', () => {
       330,
       45,
       25,
-      42.75,
-      327.75,
+      36.82,
+      285,
       [
-        [10, 7.26, 9.93, 92.67],
-        [0, 2.42, 1.38, 28.96],
-        [10, 15.32, 31.44, 206.12],
+        [10, 7.26, 8.86, 82.74],
+        [0, 2.42, 1.31, 27.58],
+        [10, 15.32, 26.65, 174.68],
       ],
     ]);
 
@@ -557,20 +557,20 @@ databaseTests('Pharmacy bill numbers and discounts on PostgreSQL', () => {
       print.invoice.paidAmount,
       print.invoice.balanceAmount,
     ]).toEqual([
-      285,
+      248.18,
       20,
       25,
       [
-        [82.74, 9.93],
-        [27.58, 1.38],
-        [174.68, 31.44],
+        [73.88, 8.86],
+        [26.27, 1.31],
+        [148.03, 26.65],
       ],
       [
-        [5, 27.58, 1.38],
-        [12, 82.74, 9.93],
-        [18, 174.68, 31.44],
+        [5, 26.27, 1.31],
+        [12, 73.88, 8.86],
+        [18, 148.03, 26.65],
       ],
-      327.75,
+      285,
       0,
     ]);
 
@@ -597,11 +597,11 @@ databaseTests('Pharmacy bill numbers and discounts on PostgreSQL', () => {
       await stock(),
     ]).toEqual([
       sold.invoiceNumber,
-      282.68,
-      327.75,
-      -45.07,
+      245.6,
+      285,
+      -39.4,
       'COMPLETED',
-      [['Senior citizen discount agreed by the doctor', 327.75, 282.68, 'Asha']],
+      [['Senior citizen discount agreed by the doctor', 285, 245.6, 'Asha']],
       stockBefore,
     ]);
     expect(
@@ -624,9 +624,9 @@ databaseTests('Pharmacy bill numbers and discounts on PostgreSQL', () => {
       ).rows
         .filter((r) => r.recordId === sold.id)
         .map((r) => [r.amount, r.due, r.refundDue, r.refunded, Boolean(r.revisedAt)]);
-    expect(await row()).toEqual([[282.68, 0, 45.07, 0, true]]);
+    expect(await row()).toEqual([[245.6, 0, 39.4, 0, true]]);
 
-    const refund = { requestKey: 'refund-1', amount: 45.07, method: 'CASH' as const };
+    const refund = { requestKey: 'refund-1', amount: 39.4, method: 'CASH' as const };
     const first = await invoices.recordRefund(sold.id, refund, 'branch');
     const replay = await invoices.recordRefund(sold.id, refund, 'branch');
     expect([
@@ -644,10 +644,10 @@ databaseTests('Pharmacy bill numbers and discounts on PostgreSQL', () => {
       '409: Refund request key was already used with different refund details',
       '400: Nothing is due back on this bill.',
       [
-        { amount: 327.75, method: 'CASH', status: 'COMPLETED' },
-        { amount: -45.07, method: 'CASH', status: 'REFUNDED' },
+        { amount: 285, method: 'CASH', status: 'COMPLETED' },
+        { amount: -39.4, method: 'CASH', status: 'REFUNDED' },
       ],
-      [[282.68, 0, 0, 45.07, true]],
+      [[245.6, 0, 0, 39.4, true]],
     ]);
     expect(
       await db.auditLog.count({ where: { entity: 'PharmacyInvoice', entityId: sold.id, action: 'PHARMACY_BILL_DISCOUNT_REVISED' } }),
@@ -665,9 +665,9 @@ databaseTests('Pharmacy bill numbers and discounts on PostgreSQL', () => {
       payload: { lines: [{ inventoryId: 'cream-batch', sourceLineId: creamSale.id, quantity: 1, disposition: 'RESTOCK' }] },
     } as any);
     expect([returned.payload.lines[0].taxable, returned.payload.lines[0].tax, returned.payload.lines[0].total]).toEqual([
-      36,
-      4.32,
-      40.32,
+      32.15,
+      3.86,
+      36.01,
     ]);
     expect(
       await failure(
@@ -688,6 +688,49 @@ databaseTests('Pharmacy bill numbers and discounts on PostgreSQL', () => {
       ),
     ).toBe('409: This bill is not finished yet. Change its discount in the draft.');
   }, 60000);
+  it('bills a medicine at its MRP, so the total is the price and the 5% GST sits inside it on the bill, its print and the register', async () => {
+    await db.drug.create({
+      data: { id: 'tacroz', name: 'Tacroz Forte 0.1% Oint', price: 853.13, manufacturerName: 'Synthetic', packSizeLabel: '1', branchId: 'branch' },
+    });
+    await db.inventoryItem.create({
+      data: {
+        id: 'tacroz-batch', branchId: 'branch', name: 'Tacroz Forte 0.1% Oint', type: 'MEDICINE', costPrice: 600, sellingPrice: 853.13, mrp: 853.13,
+        gstRate: 5, unit: 'PIECES', currentStock: 5, stockStatus: 'IN_STOCK', expiryDate: new Date('2099-01-01'),
+        drugs: { connect: { id: 'tacroz' } },
+      },
+    });
+    const sold = await invoices.checkout(
+      {
+        ...bill,
+        paymentMethod: 'CASH' as const,
+        requestKey: 'tacroz-mrp',
+        items: [{ drugId: 'tacroz', quantity: 1, unitPrice: 853.13, discountPercent: 0, taxPercent: 5 }],
+      },
+      'branch',
+      'asha',
+    );
+    expect([sold.subtotal, sold.discountAmount, sold.taxAmount, sold.totalAmount, sold.balanceAmount, sold.paymentStatus]).toEqual([
+      853.13, 0, 40.63, 853.13, 0, 'COMPLETED',
+    ]);
+    expect(sold.items.map((item: any) => [item.unitPrice, item.taxPercent, item.taxAmount, item.totalAmount])).toEqual([[853.13, 5, 40.63, 853.13]]);
+    expect(await db.pharmacyPayment.findMany({ where: { invoiceId: sold.id }, select: { amount: true, status: true } })).toEqual([
+      { amount: 853.13, status: 'COMPLETED' },
+    ]);
+    const print = await invoices.getPrintData(sold.id, 'branch');
+    expect([
+      print.invoice.subtotal,
+      print.invoice.taxableAmount,
+      print.invoice.taxAmount,
+      print.invoice.totalAmount,
+      print.lines.map((line) => [line.unitPrice, line.taxableAmount, line.taxAmount, line.totalAmount]),
+      print.gstSummary.map((slab) => [slab.taxPercent, slab.taxableAmount, slab.totalTax]),
+    ]).toEqual([853.13, 812.5, 40.63, 853.13, [[853.13, 812.5, 40.63, 853.13]], [[5, 812.5, 40.63]]]);
+    const rows = (
+      await register.list({ register: 'sales', from: '2000-01-01', to: '2099-12-31', sortBy: 'billNo', sortDir: 'asc', page: 1, limit: 50 }, 'branch')
+    ).rows.filter((r) => r.recordId === sold.id);
+    expect(rows.map((r) => [r.amount, r.due])).toEqual([[853.13, 0]]);
+  }, 60000);
+
   it('reports item margin at the discounted value the bill was charged, before and after a discount edit', async () => {
     await db.drug.create({
       data: { id: 'serum', name: 'Synthetic Serum', price: 100, manufacturerName: 'Synthetic', packSizeLabel: '1', branchId: 'branch' },
@@ -718,8 +761,8 @@ databaseTests('Pharmacy bill numbers and discounts on PostgreSQL', () => {
       );
       return report.rows.map((row: any) => [row.name, row.saleQuantity, row.salesAmount, row.purchase, row.netGst, row.profit, row.profitPercent]);
     };
-    // 2 x 100 at 12%, 10% bill discount: taxable 180, GST 21.60, total 201.60; cost 2 x 40 + 12% input GST = 89.60.
-    expect([sold.totalAmount, await margin()]).toEqual([201.6, [['Synthetic Serum', 2, 201.6, 89.6, 12, 100, 55.56]]]);
+    // 2 x 100 MRP at 12% less a 10% bill discount: total 180, of which taxable 160.71 and GST 19.29; cost 2 x 40 + 12% input GST = 89.60.
+    expect([sold.totalAmount, await margin()]).toEqual([180, [['Synthetic Serum', 2, 180, 89.6, 9.69, 80.71, 50.22]]]);
 
     await invoices.reviseDiscount(
       sold.id,
@@ -727,7 +770,7 @@ databaseTests('Pharmacy bill numbers and discounts on PostgreSQL', () => {
       'branch',
       'asha',
     );
-    // Revised to 20%: taxable 160, GST 19.20, total 179.20; profit is the taxable value less cost, 80.
-    expect(await margin()).toEqual([['Synthetic Serum', 2, 179.2, 89.6, 9.6, 80, 50]]);
+    // Revised to 20%: total 160, of which taxable 142.86 and GST 17.14; profit is the taxable value less cost, 62.86.
+    expect(await margin()).toEqual([['Synthetic Serum', 2, 160, 89.6, 7.54, 62.86, 44]]);
   }, 60000);
 });

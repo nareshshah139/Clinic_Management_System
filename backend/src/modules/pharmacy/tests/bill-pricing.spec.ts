@@ -7,31 +7,31 @@ const lines = [
 ];
 
 describe('priceBill', () => {
-  it('splits a 10% bill discount by largest remainder and taxes each line on its discounted value', () => {
+  it('splits a 10% bill discount by largest remainder and finds each line\'s GST inside what it is charged', () => {
     expect(priceBill(lines, { kind: 'PERCENT', value: 10 })).toEqual({
       lines: [
-        { gross: 99.99, lineDiscount: 0, billDiscount: 10, taxable: 89.99, tax: 4.5, total: 94.49 },
-        { gross: 47.5, lineDiscount: 4.75, billDiscount: 4.27, taxable: 38.48, tax: 4.62, total: 43.1 },
-        { gross: 36.5, lineDiscount: 0, billDiscount: 3.65, taxable: 32.85, tax: 5.91, total: 38.76 },
+        { gross: 99.99, lineDiscount: 0, billDiscount: 10, taxable: 85.7, tax: 4.29, total: 89.99 },
+        { gross: 47.5, lineDiscount: 4.75, billDiscount: 4.27, taxable: 34.36, tax: 4.12, total: 38.48 },
+        { gross: 36.5, lineDiscount: 0, billDiscount: 3.65, taxable: 27.84, tax: 5.01, total: 32.85 },
       ],
       subtotal: 183.99,
       lineDiscount: 4.75,
       billDiscount: 17.92,
       discount: 22.67,
-      taxable: 161.32,
-      tax: 15.03,
-      total: 176.35,
+      taxable: 147.9,
+      tax: 13.42,
+      total: 161.32,
     });
   });
 
   it('splits a rupee bill discount to the paisa', () => {
     const priced = priceBill(lines, { kind: 'AMOUNT', value: 50 });
     expect(priced.lines.map((line) => line.billDiscount)).toEqual([27.89, 11.93, 10.18]);
-    expect([priced.billDiscount, priced.taxable, priced.tax, priced.total]).toEqual([50, 129.24, 12.05, 141.29]);
+    expect([priced.billDiscount, priced.taxable, priced.tax, priced.total]).toEqual([50, 118.5, 10.74, 129.24]);
   });
 
   it('prices a bill without a bill discount from its own line discounts', () => {
-    expect(priceBill(lines, null)).toMatchObject({ billDiscount: 0, discount: 4.75, tax: 16.7, total: 195.94 });
+    expect(priceBill(lines, null)).toMatchObject({ billDiscount: 0, discount: 4.75, tax: 14.91, total: 179.24 });
   });
 
   it('refuses a rupee discount larger than the bill and a percentage over 100', () => {
@@ -84,7 +84,7 @@ describe('priceBill on a price that already includes GST (MRP)', () => {
     const bill = [one(635, 18), one(1990, 18), one(853.13, 5), one(120, 0, 3)];
     const priced = priceBill(bill, { kind: 'AMOUNT', value: 50 });
     expect([priced.subtotal, priced.discount, priced.total]).toEqual([3838.13, 50, 3788.13]);
-    expect(priced.lines.map((line) => line.taxable + line.tax)).toEqual(priced.lines.map((line) => line.total));
+    for (const line of priced.lines) expect(line.taxable + line.tax).toBeCloseTo(line.total, 2);
     expect(priced.taxable + priced.tax).toBeCloseTo(priced.total, 2);
   });
 

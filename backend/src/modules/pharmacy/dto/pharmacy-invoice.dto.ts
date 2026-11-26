@@ -86,7 +86,7 @@ export class PharmacyInvoiceItemDto {
   @Min(1)
   quantity: number;
 
-  @ApiProperty({ description: 'Unit price', example: 25.5 })
+  @ApiProperty({ description: 'Unit price (MRP), GST included', example: 25.5 })
   @Transform(({ value }) => {
     if (typeof value === 'string') {
       const num = parseFloat(value);
@@ -117,7 +117,7 @@ export class PharmacyInvoiceItemDto {
   discountPercent?: number = 0;
 
   @ApiPropertyOptional({
-    description: 'Tax percentage',
+    description: 'GST percentage contained in the unit price',
     example: 18,
     default: 0,
   })
@@ -229,7 +229,7 @@ export class CreatePharmacyInvoiceDto {
   @ApiPropertyOptional({
     type: BillDiscountDto,
     nullable: true,
-    description: 'Discount on the whole bill, split across lines before tax',
+    description: 'Discount on the whole bill, split across lines',
   })
   @IsOptional()
   @ValidateNested()

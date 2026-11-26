@@ -373,8 +373,8 @@ export function FinishedBillView({ id, notice, startEditing }: { id: string; not
                 tone="good"
               />
             )}
-            <Row label="Tax" value={formatRupees(bill.taxAmount)} />
             <div className="border-t pt-1"><Row label="Total" value={formatRupees(bill.totalAmount)} strong /></div>
+            <Row label="Includes GST" value={formatRupees(bill.taxAmount)} />
             <Row label="Paid" value={formatRupees(paid)} />
             {due > 0 && <Row label="Due" value={formatRupees(due)} tone="warn" />}
             {refundDue > 0 && <Row label="Refund due" value={formatRupees(refundDue)} tone="warn" />}

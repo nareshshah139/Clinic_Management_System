@@ -32,6 +32,8 @@ export class BillPricingError extends Error {}
 
 const paise = (rupees: number) => Math.round(Number((rupees * 100).toFixed(6)));
 const share = (paiseAmount: number, percent: number) => paise((paiseAmount * percent) / 10000);
+const taxWithin = (paiseAmount: number, percent: number) =>
+  paiseAmount - Math.round(Number(((paiseAmount * 100) / (100 + percent)).toFixed(6)));
 const rupees = (amount: number) => amount / 100;
 const sum = (values: number[]) => values.reduce((total, value) => total + value, 0);
 
@@ -69,25 +71,27 @@ function billDiscountPaise(discount: BillDiscount | null | undefined, net: numbe
 
 /**
  * @cc [owner:nareshshah139,label:product] bill-discount-apportionment
- * A bill discount MUST be applied before tax: it is split across lines in proportion to each line's value after
- * its own discount, in whole paise by largest remainder (ties to the earlier line), and each line's tax MUST be
- * charged on its discounted value. Every bill figure MUST be the sum of its line figures, so the bill, its print,
- * the GST report and a later return agree to the paisa.
+ * A line's unit price is its MRP, which already includes GST, so a line costs the customer its price times
+ * quantity less its discounts and MUST NEVER have GST added on top: the GST is found inside what is charged as
+ * the total less the total divided by one plus the rate. A bill discount MUST come off the price before the GST
+ * is found: it is split across lines in proportion to each line's value after its own discount, in whole paise
+ * by largest remainder (ties to the earlier line). Every bill figure MUST be the sum of its line figures, so the
+ * bill, its print, the GST report and a later return agree to the paisa.
  */
 export function priceBill(lines: PricingLine[], discount?: BillDiscount | null): BillPrice {
   const gross = lines.map((line) => paise(line.quantity * line.unitPrice));
   const lineDiscount = lines.map((line, index) => share(gross[index], line.discountPercent || 0));
   const net = gross.map((value, index) => value - lineDiscount[index]);
   const billDiscount = apportion(billDiscountPaise(discount, sum(net)), net);
-  const taxable = net.map((value, index) => value - billDiscount[index]);
-  const tax = lines.map((line, index) => share(taxable[index], line.taxPercent || 0));
+  const total = net.map((value, index) => value - billDiscount[index]);
+  const tax = lines.map((line, index) => taxWithin(total[index], line.taxPercent || 0));
   const priced = lines.map((_, index) => ({
     gross: rupees(gross[index]),
     lineDiscount: rupees(lineDiscount[index]),
     billDiscount: rupees(billDiscount[index]),
-    taxable: rupees(taxable[index]),
+    taxable: rupees(total[index] - tax[index]),
     tax: rupees(tax[index]),
-    total: rupees(taxable[index] + tax[index]),
+    total: rupees(total[index]),
   }));
   return {
     lines: priced,
@@ -95,9 +99,9 @@ export function priceBill(lines: PricingLine[], discount?: BillDiscount | null):
     lineDiscount: rupees(sum(lineDiscount)),
     billDiscount: rupees(sum(billDiscount)),
     discount: rupees(sum(lineDiscount) + sum(billDiscount)),
-    taxable: rupees(sum(taxable)),
+    taxable: rupees(sum(total) - sum(tax)),
     tax: rupees(sum(tax)),
-    total: rupees(sum(taxable) + sum(tax)),
+    total: rupees(sum(total)),
   };
 }
 
@@ -106,19 +110,37 @@ export type StoredLine = {
   unitPrice: number;
   discountAmount: number;
   billDiscountAmount?: number | null;
+  taxPercent: number;
   taxAmount: number;
   totalAmount: number;
 };
 
 /**
- * What a stored bill line was charged, in rupees: tax was charged on the value after the line's own discount
- * and its share of the bill discount, so taxable + tax is the line total. Every reader of line values uses this.
+ * What a stored bill line was charged, in rupees. A line prices at MRP, so its total is its price less its
+ * discounts and its tax sits inside that total. A line saved before MRP pricing had its tax added on top, which
+ * its stored total shows by sitting a whole tax above price less discounts; it keeps what it was charged.
+ * `grossBeforeTax` and `discountBeforeTax` give the same line without the GST, so taxable is gross less discount.
+ * Every reader of line values uses this.
  */
 export function storedLineValue(line: StoredLine) {
-  const gross = rupees(paise(Number(line.quantity || 0) * Number(line.unitPrice || 0)));
-  const lineDiscount = rupees(paise(Number(line.discountAmount || 0)));
-  const billDiscount = rupees(paise(Number(line.billDiscountAmount || 0)));
-  const taxable = rupees(paise(gross - lineDiscount - billDiscount));
-  const tax = rupees(paise(Number(line.taxAmount || 0)));
-  return { gross, lineDiscount, billDiscount, discount: rupees(paise(lineDiscount + billDiscount)), taxable, tax, total: rupees(paise(taxable + tax)) };
+  const gross = paise(Number(line.quantity || 0) * Number(line.unitPrice || 0));
+  const lineDiscount = paise(Number(line.discountAmount || 0));
+  const billDiscount = paise(Number(line.billDiscountAmount || 0));
+  const tax = paise(Number(line.taxAmount || 0));
+  const stored = paise(Number(line.totalAmount || 0));
+  const net = gross - lineDiscount - billDiscount;
+  const taxOnTop = Math.abs(stored - (net + tax)) < Math.abs(stored - net);
+  const total = taxOnTop ? net + tax : net;
+  const grossBeforeTax = taxOnTop ? gross : gross - taxWithin(gross, Number(line.taxPercent || 0));
+  return {
+    gross: rupees(gross),
+    lineDiscount: rupees(lineDiscount),
+    billDiscount: rupees(billDiscount),
+    discount: rupees(lineDiscount + billDiscount),
+    taxable: rupees(total - tax),
+    tax: rupees(tax),
+    total: rupees(total),
+    grossBeforeTax: rupees(grossBeforeTax),
+    discountBeforeTax: rupees(grossBeforeTax - (total - tax)),
+  };
 }

@@ -566,7 +566,7 @@ databaseTests('Pharmacy Report on PostgreSQL', () => {
     ]);
   });
 
-  it('reports a bill-discounted bill at the value the tax was charged on, in every GST report', async () => {
+  it('reports a bill saved with its GST added on top at the value the tax was charged on, in every GST report', async () => {
     // 1000 at 12% with a 10% bill discount: taxable 900, GST 108, total 1008.
     await db.pharmacyInvoice.create({
       data: {
@@ -622,6 +622,64 @@ databaseTests('Pharmacy Report on PostgreSQL', () => {
       hsn: { hsn: '30049099', taxable: 900 },
       gstr3b: { taxable: 900, cgst: 54, sgst: 54 },
       dayWise: { 'r12.taxable': 900, 'r12.cgst': 54, 'total.amount': 1008 },
+    });
+  });
+
+  it('reports a bill priced at MRP with the GST inside the price, in every GST report', async () => {
+    await db.pharmacyInvoice.create({
+      data: {
+        id: 'bill-mrp',
+        invoiceNumber: 'PHI-2026-701',
+        patientId: 'patient-branch',
+        doctorId: 'doc',
+        branchId: 'branch',
+        subtotal: 1000,
+        discountAmount: 100,
+        billDiscountKind: 'PERCENT',
+        billDiscountValue: 10,
+        billDiscountAmount: 100,
+        taxAmount: 42.86,
+        totalAmount: 900,
+        paymentMethod: 'CASH',
+        billingName: 'Meera Shah',
+        billingPhone: '9876543210',
+        status: 'CONFIRMED',
+        invoiceDate: new Date('2026-11-13T05:00:00Z'),
+        createdAt: new Date('2026-11-13T05:00:00Z'),
+        items: {
+          create: [
+            {
+              drugId: 'drug',
+              inventoryItemId: 'batch',
+              quantity: 1,
+              unitPrice: 1000,
+              discountAmount: 0,
+              billDiscountAmount: 100,
+              taxPercent: 5,
+              taxAmount: 42.86,
+              totalAmount: 900,
+            },
+          ],
+        },
+      },
+    });
+    const day = q('2026-11-13');
+    const one = async (id: any, sectionId?: string) => rowsOf(await reports.report(id, day, actor), sectionId)[0];
+    const gstr3b: any = await reports.report('gstr-3b', day, actor);
+    expect({
+      register: await one('sales-register'),
+      bills: await one('sales-bills'),
+      b2cs: await one('gstr-1', 'b2cs'),
+      hsn: await one('hsn-wise'),
+      gstr3b: gstr3b.sections[0].rows.find((r: any) => r.key === '3.1a').cells,
+      dayWise: await one('day-wise-summary'),
+    }).toMatchObject({
+      register: { billNo: 'PHI-2026-701', gross: 952.38, discount: 95.24, taxable: 857.14, cgst: 21.43, sgst: 21.43, total: 900 },
+      bills: { 'r5.taxable': 857.14, 'r5.cgst': 21.43, 'r5.sgst': 21.43 },
+      b2cs: { rate: 5, taxable: 857.14, cgst: 21.43, sgst: 21.43 },
+      hsn: { hsn: '30049099', taxable: 857.14 },
+      gstr3b: { taxable: 857.14, cgst: 21.43, sgst: 21.43 },
+      dayWise: { 'r5.taxable': 857.14, 'r5.cgst': 21.43, 'total.amount': 900 },
     });
   });
 

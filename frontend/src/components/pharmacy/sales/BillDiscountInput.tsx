@@ -89,7 +89,7 @@ export function BillDiscountInput({
       {problem ? (
         <p id={`${id}-problem`} role="alert" className="text-sm text-destructive-text">{problem}</p>
       ) : (
-        <p id={`${id}-hint`} className="text-xs text-muted-foreground">On the whole bill after item discounts, before tax.</p>
+        <p id={`${id}-hint`} className="text-xs text-muted-foreground">On the whole bill after item discounts.</p>
       )}
     </div>
   );
