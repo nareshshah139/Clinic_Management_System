@@ -12,7 +12,7 @@ async function main() {
     branch = await prisma.branch.create({
       data: {
         id: 'branch-seed-1',
-        name: 'Main Dermatology Clinic',
+        name: 'Linaé Skin, Hair and Aesthetic Clinic',
         address: 'Hyderabad, Telangana',
         city: 'Hyderabad',
         state: 'Telangana',

@@ -74,6 +74,7 @@ interface Drug {
   price: number;
   sellingPrice?: number | null;
   mrp?: number | null;
+  stockPrice?: number | null;
   gstRate?: number | null;
   manufacturerName: string;
   packSizeLabel: string;
@@ -401,7 +402,7 @@ export function PharmacyInvoiceBuilderFixed({
   };
 
   const getDrugUnitPrice = (drug?: Partial<Drug> | null) =>
-    firstPositiveNumber(drug?.price, drug?.sellingPrice, drug?.mrp);
+    firstPositiveNumber(drug?.stockPrice, drug?.price, drug?.sellingPrice, drug?.mrp);
 
   useEffect(() => {
     loadInitialData();
