@@ -1,4 +1,4 @@
-import { BillPricingError, priceBill } from '../bill-pricing';
+import { BillPricingError, priceBill, storedLineValue } from '../bill-pricing';
 
 const lines = [
   { quantity: 3, unitPrice: 33.33, discountPercent: 0, taxPercent: 5 },
@@ -40,5 +40,75 @@ describe('priceBill', () => {
     );
     expect(() => priceBill(lines, { kind: 'PERCENT', value: 101 })).toThrow('Bill discount cannot be more than 100%.');
     expect(priceBill(lines, { kind: 'AMOUNT', value: 179.24 }).total).toBe(0);
+  });
+});
+
+describe('priceBill on a price that already includes GST (MRP)', () => {
+  const one = (unitPrice: number, taxPercent: number, quantity = 1, discountPercent = 0) => ({
+    quantity,
+    unitPrice,
+    discountPercent,
+    taxPercent,
+  });
+
+  it('totals a line at MRP 853.13 with 5% GST at 853.13, not 895.79', () => {
+    expect(priceBill([one(853.13, 5)], null)).toEqual({
+      lines: [{ gross: 853.13, lineDiscount: 0, billDiscount: 0, taxable: 812.5, tax: 40.63, total: 853.13 }],
+      subtotal: 853.13,
+      lineDiscount: 0,
+      billDiscount: 0,
+      discount: 0,
+      taxable: 812.5,
+      tax: 40.63,
+      total: 853.13,
+    });
+  });
+
+  it('shows the GST contained in an 18% MRP instead of adding it', () => {
+    expect(priceBill([one(635, 18)], null)).toMatchObject({ taxable: 538.14, tax: 96.86, total: 635 });
+    expect(priceBill([one(1990, 18)], null)).toMatchObject({ taxable: 1686.44, tax: 303.56, total: 1990 });
+  });
+
+  it('takes a line discount off the MRP and finds the GST in what is left', () => {
+    expect(priceBill([one(853.13, 5, 2, 10)], null).lines[0]).toEqual({
+      gross: 1706.26,
+      lineDiscount: 170.63,
+      billDiscount: 0,
+      taxable: 1462.5,
+      tax: 73.13,
+      total: 1535.63,
+    });
+  });
+
+  it('takes a rupee bill discount off MRP x quantity, whatever the GST rates are', () => {
+    const bill = [one(635, 18), one(1990, 18), one(853.13, 5), one(120, 0, 3)];
+    const priced = priceBill(bill, { kind: 'AMOUNT', value: 50 });
+    expect([priced.subtotal, priced.discount, priced.total]).toEqual([3838.13, 50, 3788.13]);
+    expect(priced.lines.map((line) => line.taxable + line.tax)).toEqual(priced.lines.map((line) => line.total));
+    expect(priced.taxable + priced.tax).toBeCloseTo(priced.total, 2);
+  });
+
+  it('charges a zero-rated line its MRP with no GST', () => {
+    expect(priceBill([one(120, 0, 3)], null)).toMatchObject({ taxable: 360, tax: 0, total: 360 });
+  });
+});
+
+describe('storedLineValue', () => {
+  it('reads a bill line charged at MRP: the total is MRP x quantity and the GST sits inside it', () => {
+    expect(
+      storedLineValue({ quantity: 1, unitPrice: 853.13, discountAmount: 0, billDiscountAmount: 0, taxAmount: 40.63, totalAmount: 853.13 }),
+    ).toMatchObject({ gross: 853.13, taxable: 812.5, tax: 40.63, total: 853.13 });
+  });
+
+  it('keeps a line saved before MRP pricing at what it was charged, GST added on top', () => {
+    expect(
+      storedLineValue({ quantity: 1, unitPrice: 853.13, discountAmount: 0, billDiscountAmount: 0, taxAmount: 42.66, totalAmount: 895.79 }),
+    ).toMatchObject({ gross: 853.13, taxable: 853.13, tax: 42.66, total: 895.79 });
+  });
+
+  it('keeps a tax-free line the same on either basis', () => {
+    expect(
+      storedLineValue({ quantity: 3, unitPrice: 120, discountAmount: 0, billDiscountAmount: 0, taxAmount: 0, totalAmount: 360 }),
+    ).toMatchObject({ taxable: 360, tax: 0, total: 360 });
   });
 });
