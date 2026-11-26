@@ -1,4 +1,4 @@
-import { BillPricingError, priceBill, storedLineValue } from '../bill-pricing';
+import { BillPricingError, billTaxOnTop, priceBill, storedLineValue } from '../bill-pricing';
 
 const lines = [
   { quantity: 3, unitPrice: 33.33, discountPercent: 0, taxPercent: 5 },
@@ -96,19 +96,53 @@ describe('priceBill on a price that already includes GST (MRP)', () => {
 describe('storedLineValue', () => {
   it('reads a bill line charged at MRP: the total is MRP x quantity and the GST sits inside it', () => {
     expect(
-      storedLineValue({ quantity: 1, unitPrice: 853.13, discountAmount: 0, billDiscountAmount: 0, taxAmount: 40.63, totalAmount: 853.13 }),
+      storedLineValue({ quantity: 1, unitPrice: 853.13, discountAmount: 0, billDiscountAmount: 0, taxPercent: 5, taxAmount: 40.63, totalAmount: 853.13 }),
     ).toMatchObject({ gross: 853.13, taxable: 812.5, tax: 40.63, total: 853.13 });
   });
 
   it('keeps a line saved before MRP pricing at what it was charged, GST added on top', () => {
     expect(
-      storedLineValue({ quantity: 1, unitPrice: 853.13, discountAmount: 0, billDiscountAmount: 0, taxAmount: 42.66, totalAmount: 895.79 }),
+      storedLineValue({ quantity: 1, unitPrice: 853.13, discountAmount: 0, billDiscountAmount: 0, taxPercent: 5, taxAmount: 42.66, totalAmount: 895.79 }),
     ).toMatchObject({ gross: 853.13, taxable: 853.13, tax: 42.66, total: 895.79 });
   });
 
   it('keeps a tax-free line the same on either basis', () => {
     expect(
-      storedLineValue({ quantity: 3, unitPrice: 120, discountAmount: 0, billDiscountAmount: 0, taxAmount: 0, totalAmount: 360 }),
+      storedLineValue({ quantity: 3, unitPrice: 120, discountAmount: 0, billDiscountAmount: 0, taxPercent: 0, taxAmount: 0, totalAmount: 360 }),
     ).toMatchObject({ taxable: 360, tax: 0, total: 360 });
+  });
+});
+
+describe('billTaxOnTop', () => {
+  it('tells a bill saved with GST added on top from one priced at MRP', () => {
+    expect(billTaxOnTop({ subtotal: 1488.13, discountAmount: 148.81, taxAmount: 141.26, totalAmount: 1480.58 })).toBe(true);
+    expect(billTaxOnTop({ subtotal: 1488.13, discountAmount: 148.81, taxAmount: 123.74, totalAmount: 1339.32 })).toBe(false);
+  });
+
+  it('reads a bill with no GST the same on either basis', () => {
+    expect(billTaxOnTop({ subtotal: 360, discountAmount: 0, taxAmount: 0, totalAmount: 360 })).toBe(false);
+  });
+
+  it('classifies every bill of a seeded sweep, whichever way it was charged', () => {
+    let seed = 188;
+    const next = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+    const rates = [0, 5, 12, 18, 28];
+    for (let round = 0; round < 500; round++) {
+      const bill = Array.from({ length: 1 + Math.floor(next() * 4) }, () => ({
+        quantity: 1 + Math.floor(next() * 5),
+        unitPrice: Math.round(next() * 200000) / 100,
+        discountPercent: Math.floor(next() * 4) * 5,
+        taxPercent: rates[Math.floor(next() * rates.length)],
+      }));
+      const discount = next() < 0.5 ? null : { kind: 'PERCENT' as const, value: Math.floor(next() * 3) * 5 };
+      const priced = priceBill(bill, discount);
+      const onMrp = { subtotal: priced.subtotal, discountAmount: priced.discount, taxAmount: priced.tax, totalAmount: priced.total };
+      const addedOnTop = {
+        ...onMrp,
+        totalAmount: Math.round((priced.total + priced.tax) * 100) / 100,
+      };
+      expect(billTaxOnTop(onMrp)).toBe(false);
+      expect(billTaxOnTop(addedOnTop)).toBe(priced.tax >= 0.01);
+    }
   });
 });

@@ -34,6 +34,7 @@ const paise = (rupees: number) => Math.round(Number((rupees * 100).toFixed(6)));
 const share = (paiseAmount: number, percent: number) => paise((paiseAmount * percent) / 10000);
 const taxWithin = (paiseAmount: number, percent: number) =>
   paiseAmount - Math.round(Number(((paiseAmount * 100) / (100 + percent)).toFixed(6)));
+const taxOnTop = (net: number, tax: number, stored: number) => Math.abs(stored - (net + tax)) < Math.abs(stored - net);
 const rupees = (amount: number) => amount / 100;
 const sum = (values: number[]) => values.reduce((total, value) => total + value, 0);
 
@@ -129,9 +130,9 @@ export function storedLineValue(line: StoredLine) {
   const tax = paise(Number(line.taxAmount || 0));
   const stored = paise(Number(line.totalAmount || 0));
   const net = gross - lineDiscount - billDiscount;
-  const taxOnTop = Math.abs(stored - (net + tax)) < Math.abs(stored - net);
-  const total = taxOnTop ? net + tax : net;
-  const grossBeforeTax = taxOnTop ? gross : gross - taxWithin(gross, Number(line.taxPercent || 0));
+  const onTop = taxOnTop(net, tax, stored);
+  const total = onTop ? net + tax : net;
+  const grossBeforeTax = onTop ? gross : gross - taxWithin(gross, Number(line.taxPercent || 0));
   return {
     gross: rupees(gross),
     lineDiscount: rupees(lineDiscount),
@@ -143,4 +144,9 @@ export function storedLineValue(line: StoredLine) {
     grossBeforeTax: rupees(grossBeforeTax),
     discountBeforeTax: rupees(grossBeforeTax - (total - tax)),
   };
+}
+
+/** Whether a stored bill was charged with its GST added on top of the price, as bills saved before MRP pricing were. */
+export function billTaxOnTop(bill: { subtotal: number; discountAmount: number; taxAmount: number; totalAmount: number }) {
+  return taxOnTop(paise(bill.subtotal) - paise(bill.discountAmount), paise(bill.taxAmount), paise(bill.totalAmount));
 }

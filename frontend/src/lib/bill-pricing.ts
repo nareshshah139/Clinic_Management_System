@@ -95,3 +95,9 @@ export function priceBill(lines: PricingLine[], discount?: BillDiscount | null):
     total: rupees(sum(total)),
   };
 }
+
+export function billTaxOnTop(bill: { subtotal: number; discountAmount: number; taxAmount: number; totalAmount: number }) {
+  const net = paise(bill.subtotal) - paise(bill.discountAmount);
+  const stored = paise(bill.totalAmount);
+  return Math.abs(stored - (net + paise(bill.taxAmount))) < Math.abs(stored - net);
+}

@@ -145,3 +145,32 @@ it('prints a bill priced at MRP with its total as the price and the GST that pri
   expect(html).toContain('<div class="grand"><strong>Grand Total:</strong> ₹853.13</div>');
   expect(html).toContain('<div class="words">Includes GST ₹40.63</div>');
 });
+
+it('prints a bill saved with GST added on top the way it was charged: subtotal, discount, GST, then the total', () => {
+  const html = renderPharmacyBillHtml({
+    invoice: {
+      invoiceNumber: 'PHI-2026-002', invoiceDate: '2026-11-25T09:00:00.000Z', status: 'COMPLETED', subtotal: 1488.13, discountAmount: 148.81,
+      billDiscountKind: 'PERCENT', billDiscountValue: 10, billDiscountAmount: 148.81, taxAmount: 141.26, totalAmount: 1480.58,
+    },
+    lines: [{ name: 'Tacroz Forte 0.1% Oint', quantity: 1, unitPrice: 853.13, discountPercent: 0, taxPercent: 5, totalAmount: 895.79 }],
+  });
+  expect(html).toContain('<div><strong>Subtotal:</strong> ₹1,488.13</div>');
+  expect(html).toContain('<div><strong>Bill discount (10%):</strong> -₹148.81</div>');
+  expect(html).toContain('<div><strong>GST:</strong> ₹141.26</div>');
+  expect(html).toContain('<div class="grand"><strong>Grand Total:</strong> ₹1,480.58</div>');
+  expect(html).not.toContain('Includes GST');
+});
+
+it('prints a discounted bill priced at MRP with its total as the price less the discount and the GST it includes', () => {
+  const html = renderPharmacyBillHtml({
+    invoice: {
+      invoiceNumber: 'PHI-2026-003', invoiceDate: '2026-11-26T09:00:00.000Z', status: 'COMPLETED', subtotal: 1488.13, discountAmount: 148.81,
+      billDiscountKind: 'PERCENT', billDiscountValue: 10, billDiscountAmount: 148.81, taxAmount: 123.74, totalAmount: 1339.32,
+    },
+    lines: [{ name: 'Tacroz Forte 0.1% Oint', quantity: 1, unitPrice: 853.13, discountPercent: 0, taxPercent: 5, totalAmount: 767.82 }],
+  });
+  expect(html).toContain('<div><strong>Bill discount (10%):</strong> -₹148.81</div>');
+  expect(html).not.toContain('<strong>GST:</strong>');
+  expect(html).toContain('<div class="grand"><strong>Grand Total:</strong> ₹1,339.32</div>');
+  expect(html).toContain('<div class="words">Includes GST ₹123.74</div>');
+});

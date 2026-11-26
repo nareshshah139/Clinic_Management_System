@@ -6,7 +6,7 @@ import { apiClient } from '@/lib/api';
 import { getErrorMessage } from '@/lib/utils';
 import { displayClinicDate, displayClinicDateTime } from '@/lib/date-display';
 import { formatRupees, printHtml, renderPharmacyBillHtml, type PharmacyBillPrint } from '@/lib/pharmacy-invoice-print';
-import type { BillDiscount } from '@/lib/bill-pricing';
+import { billTaxOnTop, type BillDiscount } from '@/lib/bill-pricing';
 import { billNumberLabel, isIssuedBillNumber } from '@/lib/bill-number';
 import { toast } from '@/hooks/use-toast';
 import { requestKey } from '@/components/inventory/workspace-model';
@@ -148,6 +148,11 @@ function EditDiscountDialog({ bill, open, onOpenChange, onSaved, onReload }: {
             {preview.settlement.due > 0 && <Row label="Still to collect" value={formatRupees(preview.settlement.due)} tone="warn" />}
           </dl>
         )}
+        {billTaxOnTop(bill) && (
+          <p className="text-xs text-muted-foreground">
+            This bill added GST on top of the MRP. Saving prices it at MRP, so any refund includes the GST that was added on top.
+          </p>
+        )}
         <div className="space-y-1.5">
           <Label htmlFor={reasonId}>Reason *</Label>
           <Textarea id={reasonId} value={reason} maxLength={500} onChange={(event) => setReason(event.target.value)} placeholder="For example: senior citizen discount agreed by the doctor" rows={2} />
@@ -283,6 +288,7 @@ export function FinishedBillView({ id, notice, startEditing }: { id: string; not
   const { paid, due, refundDue } = settlementOf(bill);
   const collectable = editable && issued && due > 0;
   const lineDiscount = bill.discountAmount - bill.billDiscountAmount;
+  const taxOnTop = billTaxOnTop(bill);
   const reload = async () => {
     setEditing(false);
     const fresh = await fetchBill();
@@ -373,8 +379,9 @@ export function FinishedBillView({ id, notice, startEditing }: { id: string; not
                 tone="good"
               />
             )}
+            {taxOnTop && <Row label="Tax" value={formatRupees(bill.taxAmount)} />}
             <div className="border-t pt-1"><Row label="Total" value={formatRupees(bill.totalAmount)} strong /></div>
-            <Row label="Includes GST" value={formatRupees(bill.taxAmount)} />
+            {!taxOnTop && <Row label="Includes GST" value={formatRupees(bill.taxAmount)} />}
             <Row label="Paid" value={formatRupees(paid)} />
             {due > 0 && <Row label="Due" value={formatRupees(due)} tone="warn" />}
             {refundDue > 0 && <Row label="Refund due" value={formatRupees(refundDue)} tone="warn" />}

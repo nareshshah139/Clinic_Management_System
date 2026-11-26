@@ -1,5 +1,5 @@
-import { priceBill } from '@/lib/bill-pricing';
-import { priceBill as serverPriceBill } from '../../../backend/src/modules/pharmacy/bill-pricing';
+import { billTaxOnTop, priceBill } from '@/lib/bill-pricing';
+import { billTaxOnTop as serverBillTaxOnTop, priceBill as serverPriceBill } from '../../../backend/src/modules/pharmacy/bill-pricing';
 
 const lines = [
   { quantity: 3, unitPrice: 33.33, discountPercent: 0, taxPercent: 5 },
@@ -28,4 +28,16 @@ it('shows the price of a medicine on screen as its total, with the GST inside it
   expect(priceBill([{ quantity: 1, unitPrice: 853.13, discountPercent: 0, taxPercent: 5 }], null)).toMatchObject({ taxable: 812.5, tax: 40.63, total: 853.13 });
   expect(priceBill([{ quantity: 1, unitPrice: 635, discountPercent: 0, taxPercent: 18 }], null).total).toBe(635);
   expect(priceBill([{ quantity: 1, unitPrice: 1990, discountPercent: 0, taxPercent: 18 }], null).total).toBe(1990);
+});
+
+it('tells a bill charged with GST on top from one priced at MRP exactly as the server does', () => {
+  const bills = [
+    { subtotal: 1488.13, discountAmount: 148.81, taxAmount: 141.26, totalAmount: 1480.58 },
+    { subtotal: 1488.13, discountAmount: 148.81, taxAmount: 123.74, totalAmount: 1339.32 },
+    { subtotal: 360, discountAmount: 0, taxAmount: 0, totalAmount: 360 },
+    { subtotal: 853.13, discountAmount: 0, taxAmount: 42.66, totalAmount: 895.79 },
+    { subtotal: 853.13, discountAmount: 0, taxAmount: 40.63, totalAmount: 853.13 },
+  ];
+  expect(bills.map(billTaxOnTop)).toEqual([true, false, false, true, false]);
+  expect(bills.map(billTaxOnTop)).toEqual(bills.map(serverBillTaxOnTop));
 });

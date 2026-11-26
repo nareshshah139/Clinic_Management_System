@@ -118,3 +118,26 @@ it('names each sold line by the stock it sold, not the catalogue name', async ()
   expect(await screen.findAllByText('Tab. Flutas 150 mg')).not.toHaveLength(0);
   expect(screen.queryByText('Flutas 150')).not.toBeInTheDocument();
 });
+
+it('shows a bill priced at MRP with its total first and the GST it includes after it', async () => {
+  open('bill=inv-1&edit=discount');
+  const dialog = await screen.findByRole('dialog');
+  expect(within(dialog).queryByText(/GST on top/)).not.toBeInTheDocument();
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+  expect(screen.getByText('Includes GST', { selector: 'dt' }).nextSibling).toHaveTextContent('₹36.82');
+  expect(screen.getByText('Total', { selector: 'dt' }).nextSibling).toHaveTextContent('₹285.00');
+  expect(screen.queryByText('Tax', { selector: 'dt' })).not.toBeInTheDocument();
+});
+
+it('keeps a bill saved with GST added on top adding up, and says in the discount editor what a refund then includes', async () => {
+  current = { ...sold, taxAmount: 42.75, totalAmount: 327.75, payments: [{ ...paid, amount: 327.75 }] };
+  open('bill=inv-1');
+  expect(await screen.findByText('Tax', { selector: 'dt' })).toBeInTheDocument();
+  expect(screen.getByText('Tax', { selector: 'dt' }).nextSibling).toHaveTextContent('₹42.75');
+  expect(screen.getByText('Total', { selector: 'dt' }).nextSibling).toHaveTextContent('₹327.75');
+  expect(screen.queryByText('Includes GST', { selector: 'dt' })).not.toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Edit discount' }));
+  const dialog = await screen.findByRole('dialog');
+  expect(within(dialog).getByText('This bill added GST on top of the MRP. Saving prices it at MRP, so any refund includes the GST that was added on top.')).toBeInTheDocument();
+});
