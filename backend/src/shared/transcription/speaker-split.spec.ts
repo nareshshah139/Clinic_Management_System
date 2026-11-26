@@ -40,10 +40,16 @@ describe('splitSpeakers against a local chat completions endpoint', () => {
   const completion = (content: string) =>
     JSON.stringify({ choices: [{ message: { content } }] });
 
-  const turns = (...starts: Array<[number, string]>) =>
+  const turns = (
+    ...starts: Array<[number, string] | [number, string, string]>
+  ) =>
     completion(
       JSON.stringify({
-        turns: starts.map(([from, speaker]) => ({ from, speaker })),
+        turns: starts.map(([from, speaker, startsWith = '']) => ({
+          from,
+          startsWith,
+          speaker,
+        })),
       }),
     );
 
@@ -134,6 +140,41 @@ describe('splitSpeakers against a local chat completions endpoint', () => {
       doctorText: '',
       patientText: '',
     });
+  });
+
+  it('splits a line where a turn starts partway into it, from the words the model quotes', async () => {
+    reply = {
+      status: 200,
+      body: turns(
+        [0, 'DOCTOR'],
+        [0, 'PATIENT', 'Three days'],
+        [1, 'DOCTOR', 'Okay take this'],
+      ),
+    };
+
+    const split = await splitSpeakers({
+      text: 'how long has it hurt three days now. Okay take this twice a day.',
+    });
+
+    expect(split.segments.map(({ speaker, text }) => [speaker, text])).toEqual([
+      ['DOCTOR', 'how long has it hurt'],
+      ['PATIENT', 'three days now.'],
+      ['DOCTOR', 'Okay take this twice a day.'],
+    ]);
+    expect(split.patientText).toBe('three days now.');
+  });
+
+  it('starts a turn at the line start when the quoted words are not in the line', async () => {
+    reply = {
+      status: 200,
+      body: turns([0, 'DOCTOR'], [1, 'PATIENT', 'not in the text']),
+    };
+
+    const split = await splitSpeakers({
+      text: 'Any fever? Yes, since Monday.',
+    });
+
+    expect(split.patientText).toBe('Yes, since Monday.');
   });
 
   it('returns an empty split on an upstream error', async () => {

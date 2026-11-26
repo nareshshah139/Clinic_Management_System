@@ -32,10 +32,11 @@ const SPEAKER_TURNS_SCHEMA = {
         type: 'array',
         items: {
           type: 'object',
-          required: ['from', 'speaker'],
+          required: ['from', 'startsWith', 'speaker'],
           additionalProperties: false,
           properties: {
             from: { type: 'integer' },
+            startsWith: { type: 'string' },
             speaker: { type: 'string', enum: ['DOCTOR', 'PATIENT'] },
           },
         },
@@ -48,8 +49,9 @@ const SPEAKER_TURNS_SCHEMA = {
 const SYSTEM_PROMPT =
   'You are a medical scribe. The input is a clinical conversation as numbered lines. Mark where each speaker turn starts: DOCTOR or PATIENT. ' +
   'Cues: questions/instructions/orders/examination → DOCTOR; symptoms/history/concerns → PATIENT. ' +
-  'Return one entry each time the speaker changes, in order, as {"turns": [{"from": <first line number of the turn>, "speaker": "DOCTOR" | "PATIENT"}]}. ' +
-  'The first entry starts at line 0. Do not repeat the text.';
+  'Return one entry each time the speaker changes, in order, as {"turns": [{"from": <line number where the turn starts>, "startsWith": <text>, "speaker": "DOCTOR" | "PATIENT"}]}. ' +
+  'When a turn starts partway into a line, set startsWith to its first two to four words copied exactly; otherwise set it to "". ' +
+  'The first entry starts at line 0. Do not repeat any other text.';
 
 interface Line {
   text: string;
@@ -73,6 +75,14 @@ function linesOf(input: { text: string; segments?: unknown[] }): Line[] {
   return input.text
     .split(/(?<=[.?!\u0964])\s+/)
     .map((text) => ({ text: text.trim(), start_s: null, end_s: null }));
+}
+
+function offsetOf(text: string, startsWith: unknown): number {
+  const words =
+    typeof startsWith === 'string' ? startsWith.trim().toLowerCase() : '';
+  if (!words) return 0;
+  const at = text.toLowerCase().indexOf(words);
+  return at > 0 ? at : 0;
 }
 
 export async function splitSpeakers(input: {
@@ -121,32 +131,63 @@ export async function splitSpeakers(input: {
       logger.warn('speaker split: failed to parse JSON content');
       return EMPTY_SPLIT;
     }
-    const turns: Array<{ from: number; speaker: DiarizedSegment['speaker'] }> =
-      (Array.isArray(parsed?.turns) ? parsed.turns : [])
-        .filter(
-          (turn: any) =>
-            Number.isInteger(turn?.from) &&
-            (turn.speaker === 'DOCTOR' || turn.speaker === 'PATIENT'),
-        )
-        .sort((a: { from: number }, b: { from: number }) => a.from - b.from);
-    if (turns.length === 0) return EMPTY_SPLIT;
+    const starts = (Array.isArray(parsed?.turns) ? parsed.turns : [])
+      .filter(
+        (turn: any) =>
+          Number.isInteger(turn?.from) &&
+          turn.from >= 0 &&
+          turn.from < lines.length &&
+          (turn.speaker === 'DOCTOR' || turn.speaker === 'PATIENT'),
+      )
+      .map((turn: any) => ({
+        from: turn.from as number,
+        at: offsetOf(lines[turn.from].text, turn.startsWith),
+        speaker: turn.speaker as DiarizedSegment['speaker'],
+      }))
+      .sort(
+        (a: { from: number; at: number }, b: { from: number; at: number }) =>
+          a.from - b.from || a.at - b.at,
+      ) as Array<{
+      from: number;
+      at: number;
+      speaker: DiarizedSegment['speaker'];
+    }>;
+    if (starts.length === 0) return EMPTY_SPLIT;
     const segments: DiarizedSegment[] = [];
-    let next = 0;
-    lines.forEach((line, i) => {
-      while (next + 1 < turns.length && turns[next + 1].from <= i) next++;
-      const { speaker } = turns[next];
+    const add = (
+      speaker: DiarizedSegment['speaker'],
+      text: string,
+      line: Line,
+    ) => {
+      const piece = text.trim();
+      if (!piece) return;
       const previous = segments[segments.length - 1];
       if (previous?.speaker === speaker) {
-        previous.text = `${previous.text} ${line.text}`;
+        previous.text = `${previous.text} ${piece}`;
         previous.end_s = line.end_s;
       } else {
         segments.push({
           speaker,
-          text: line.text,
+          text: piece,
           start_s: line.start_s,
           end_s: line.end_s,
         });
       }
+    };
+    let speaker = starts[0].speaker;
+    let next = 0;
+    lines.forEach((line, i) => {
+      let cursor = 0;
+      while (next < starts.length && starts[next].from === i) {
+        const { at } = starts[next];
+        if (at > cursor) {
+          add(speaker, line.text.slice(cursor, at), line);
+          cursor = at;
+        }
+        speaker = starts[next].speaker;
+        next++;
+      }
+      add(speaker, line.text.slice(cursor), line);
     });
     const joined = (speaker: DiarizedSegment['speaker']) =>
       segments
