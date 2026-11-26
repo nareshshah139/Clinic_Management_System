@@ -289,6 +289,25 @@ describe('replacing an unmatched tablet course', () => {
     expect(within(item).queryByText(/dose count/)).not.toBeInTheDocument();
   });
 
+  it('does not offer to confirm a dose count before a product is chosen', async () => {
+    prescribeUnmatchedCourse(() => ({ quantity: 3, unit: 'STRIPS', review: null }));
+    render(<SalesBillPage />);
+    await loadPatient(secondPatient.name);
+    const item = (await screen.findByRole('heading', { name: 'Unmatched cream', level: 4 })).closest('[data-invoice-item]') as HTMLElement;
+    expect(within(item).getByText(/dose count/)).toBeInTheDocument();
+    expect(within(item).queryByRole('button', { name: 'Confirm' })).not.toBeInTheDocument();
+  });
+
+  it('says an unconfirmed quantity is recounted when choosing a replacement', async () => {
+    prescribeUnmatchedCourse(() => ({ quantity: 3, unit: 'STRIPS', review: null }));
+    render(<SalesBillPage />);
+    await loadPatient(secondPatient.name);
+    const item = (await screen.findByRole('heading', { name: 'Unmatched cream', level: 4 })).closest('[data-invoice-item]') as HTMLElement;
+    fireEvent.click(within(item).getByRole('button', { name: 'Choose alternative for Unmatched cream' }));
+    expect(await screen.findByText(/recounted for the replacement/)).toBeInTheDocument();
+    expect(screen.queryByText(/prescribed quantity will be kept/)).not.toBeInTheDocument();
+  });
+
   it('flags the line instead of billing the dose count when the recount fails', async () => {
     prescribeUnmatchedCourse(() => { throw new Error('offline'); });
     const item = await substituteWith(names[1]);
