@@ -25,7 +25,7 @@ function fixture() {
   };
   const service = new VisitsService(db);
   const pipe = new ValidationPipe({ transform: true, whitelist: true });
-  const create = async (history?: unknown) => service.create(await pipe.transform({ patientId: 'patient', doctorId: 'doctor', complaints: [{ complaint: 'Synthetic visit' }], history }, { type: 'body', metatype: CreateVisitDto }), 'branch');
+  const create = async (history?: unknown) => service.create(await pipe.transform({ patientId: 'patient', doctorId: 'doctor', complaints: [{ complaint: 'Synthetic visit' }], history, startSeparate: true }, { type: 'body', metatype: CreateVisitDto }), 'branch');
   return { db, visits, service, pipe, create };
 }
 
@@ -79,7 +79,7 @@ it('carries personal history into a consented tele-video visit without bypassing
   const { db, service, create } = fixture();
   await create({ personalHistory: 'Retain this patient history' });
   db.visit.create.mockClear();
-  const input = { patientId: 'patient', doctorId: 'doctor', complaints: [{ complaint: 'Synthetic visit' }], consultationType: ConsultationType.TELE_VIDEO };
+  const input = { patientId: 'patient', doctorId: 'doctor', complaints: [{ complaint: 'Synthetic visit' }], consultationType: ConsultationType.TELE_VIDEO, startSeparate: true };
   await expect(service.create(input, 'branch', 'staff')).rejects.toThrow(/consent/i);
   expect(db.visit.create).not.toHaveBeenCalled();
   const visit = await service.create({ ...input, teleVideoConsent: true }, 'branch', 'staff');

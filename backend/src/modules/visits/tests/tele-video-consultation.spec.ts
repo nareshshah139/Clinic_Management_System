@@ -18,7 +18,7 @@ function fixture() {
     patient: { findFirst: jest.fn().mockResolvedValue({ id: 'p' }), updateMany: jest.fn() },
     user: { findFirst: jest.fn().mockResolvedValue({ id: 'doctor' }) },
     visit: {
-      findFirst: jest.fn(async () => visit),
+      findFirst: jest.fn(async ({ where }: any = {}) => (where?.status && visit.status !== where.status ? null : visit)),
       create: jest.fn(async ({ data }) => (visit = { ...visit, ...data })),
       update: jest.fn(async ({ data }) => (visit = { ...visit, ...data })),
       findMany: jest.fn(async () => [visit]), count: jest.fn().mockResolvedValue(1),

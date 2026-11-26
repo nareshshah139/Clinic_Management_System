@@ -99,6 +99,7 @@ interface Props {
   appointmentId?: string;
   appointmentData?: { patient?: VisitPatientSummary } | null;
   initialVisitId?: string;
+  startSeparate?: boolean;
   onVisitIdChange?: (visitId: string | null) => void;
   onUnsavedChange?: (unsaved: boolean) => void;
   identity?: ReactNode;
@@ -239,7 +240,7 @@ const ROLE_PERMISSIONS = {
  * New visits default to In-person. Tele-video saves and exports MUST be blocked
  * until consent is checked; visit recovery MUST restore the consultation choice.
  */
-function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'DOCTOR', visitNumber = 1, visitDate, appointmentId, appointmentData, initialVisitId, onVisitIdChange, onUnsavedChange, identity, doctorControl, visitActions, patient, doctorRecord, initialVisitSnapshot, onDiscardLocalDraft }: Props & { initialVisitSnapshot?: VisitDetails; onDiscardLocalDraft: (saved: VisitDetails) => void }) {
+function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'DOCTOR', visitNumber = 1, visitDate, appointmentId, appointmentData, initialVisitId, startSeparate, onVisitIdChange, onUnsavedChange, identity, doctorControl, visitActions, patient, doctorRecord, initialVisitSnapshot, onDiscardLocalDraft }: Props & { initialVisitSnapshot?: VisitDetails; onDiscardLocalDraft: (saved: VisitDetails) => void }) {
   const visitVersionRef = useRef<number | undefined>(undefined);
   const restoredDraftVersion = useRef<number | undefined>(undefined);
   const automaticSaveBlocked = useRef(false);
@@ -275,6 +276,17 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
   useEffect(() => {
     onVisitIdChange?.(visitId);
   }, [visitId, onVisitIdChange]);
+  const visitCreation = useRef<Promise<VisitDetails> | null>(null);
+  const createVisitOnce = (payload: Record<string, unknown>, options?: { idempotencyKey?: string }) => {
+    if (!visitCreation.current) {
+      const creation = apiClient.createVisit(startSeparate ? { ...payload, startSeparate: true } : payload, options) as Promise<VisitDetails>;
+      visitCreation.current = creation;
+      creation.catch(() => {
+        if (visitCreation.current === creation) visitCreation.current = null;
+      });
+    }
+    return visitCreation.current;
+  };
   const [currentVisitNumber, setCurrentVisitNumber] = useState(visitNumber);
   const [visitStatus, setVisitStatus] = useState<VisitStatus | 'draft'>('draft');
   // A completed visit opens locked. Edit visit unlocks it until Save changes, a reload or leaving.
@@ -1476,7 +1488,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
         } else {
           const idemKey = buildIdempotencyKey('POST', null, payload as any);
           try {
-            visit = await apiClient.createVisit(payload, { idempotencyKey: idemKey });
+            visit = await createVisitOnce(payload, { idempotencyKey: idemKey });
             setVisitId((visit as VisitDetails).id);
           } catch (err: any) {
             const status = (err && typeof err === 'object' && 'status' in err) ? (err as any).status : undefined;
@@ -2090,7 +2102,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
                         const minimalPayload = getClinicalSavePatch();
                         let newVisit: any;
                         try {
-                          newVisit = await apiClient.createVisit(minimalPayload);
+                          newVisit = await createVisitOnce(minimalPayload);
                         } catch (error: any) {
                           if (error?.status !== 409 || !appointmentId) throw error;
                           blockAutomaticSave();
@@ -2157,7 +2169,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
                     if (consentMissing) throw new Error(TELE_VIDEO_CONSENT_REQUIRED);
                     if (!visitId) {
                       const minimalPayload = getClinicalSavePatch();
-                      const newVisit = await apiClient.createVisit(minimalPayload);
+                      const newVisit = await createVisitOnce(minimalPayload);
                       const newVisitId = (newVisit as VisitDetails).id;
                       acknowledgeMutationVersion((newVisit as VisitDetails).version);
                       setVisitId(newVisitId);

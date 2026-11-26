@@ -4,7 +4,8 @@ import { Injectable, BadRequestException, NotFoundException, ConflictException }
 import { PrismaService } from '../../shared/database/prisma.service';
 import { CreateVisitDto, UpdateVisitDto, CompleteVisitDto } from './dto/create-visit.dto';
 import { QueryVisitsDto, PatientVisitHistoryDto, DoctorVisitsDto } from './dto/query-visit.dto';
-import { Language, Prisma } from '@prisma/client';
+import { Language, Prisma, VisitStatus } from '@prisma/client';
+import { clinicDay, clinicDayStart } from '../pharmacy/register-utils';
 import { join, posix as pathPosix } from 'path';
 import { randomBytes } from 'crypto';
 import * as fs from 'fs';
@@ -47,6 +48,27 @@ export class VisitsService {
     const patient = await this.prisma.patient.findFirst({ where: { id: patientId, branchId } });
     if (!patient) throw new NotFoundException('Patient not found in this branch');
     return { personalHistory: (await this.latestPersonalHistory(patientId, branchId)) ?? null };
+  }
+
+  async findOpenVisit(
+    patientId: string,
+    doctorId: string,
+    branchId: string,
+    now = new Date(),
+    db: Pick<Prisma.TransactionClient, 'visit'> = this.prisma,
+  ) {
+    return db.visit.findFirst({
+      where: {
+        patientId,
+        doctorId,
+        status: VisitStatus.IN_PROGRESS,
+        deletedAt: null,
+        patient: { branchId },
+        createdAt: { gte: clinicDayStart(clinicDay(now)) },
+      },
+      orderBy: { updatedAt: 'desc' },
+      select: { id: true, patientId: true, doctorId: true, appointmentId: true, createdAt: true, updatedAt: true },
+    });
   }
 
   /**
@@ -134,6 +156,16 @@ export class VisitsService {
         }
         if (await tx.visit.findFirst({ where: { appointmentId } })) {
           throw new ConflictException('Visit already exists for this appointment');
+        }
+      } else if (!createVisitDto.startSeparate) {
+        await tx.$queryRaw`SELECT id FROM patients WHERE id = ${patientId} FOR UPDATE`;
+        const open = await this.findOpenVisit(patientId, doctorId, branchId, new Date(), tx);
+        if (open) {
+          throw new ConflictException({
+            code: 'OPEN_VISIT_EXISTS',
+            message: 'This patient already has an open visit with this doctor today. Open that visit, or start a separate one.',
+            visitId: open.id,
+          });
         }
       }
       // A patient's first doctor becomes their primary doctor unless one is already assigned.
