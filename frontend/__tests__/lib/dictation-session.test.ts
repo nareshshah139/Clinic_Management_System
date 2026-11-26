@@ -112,7 +112,7 @@ function harness(o: {
     fetch: ((url: string, init: RequestInit) => {
       const body = init.body instanceof FormData ? init.body.get('file') : JSON.parse(String(init.body));
       calls.push({ url, body });
-      return respond(replies[url], init.signal);
+      return respond(replies[url.split('?')[0]], init.signal);
     }) as unknown as typeof fetch,
     setTimeout: (fn: () => void, ms: number) => {
       const id = nextId++;
@@ -306,7 +306,7 @@ describe('startDictationSession over live transcription', () => {
 
     await h.advance(TAIL_MS);
     await expect(session.outcome).resolves.toEqual({ kind: 'text', text: 'Recorded words', via: 'recorded' });
-    expect(h.urls()).toEqual(['/api/visits/transcribe/live', '/api/visits/transcribe']);
+    expect(h.urls()).toEqual(['/api/visits/transcribe/live', '/api/visits/transcribe?speakers=none']);
     expect((h.calls[1].body as Blob).size).toBe(5_000);
     expect(h.notices).toHaveLength(1);
   });
