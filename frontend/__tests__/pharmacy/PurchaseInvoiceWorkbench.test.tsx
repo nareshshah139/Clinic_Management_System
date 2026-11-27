@@ -2565,6 +2565,18 @@ describe('PurchaseInvoiceWorkbench', () => {
     expect(document.getElementById('invoice-number-review-state')).toHaveTextContent('Needs checking');
   });
 
+  it.each([
+    [['independent_read_disagrees_invoiceNumber'], ' Then choose Confirm reviewed values & add stock to confirm the invoice checks that match the original.'],
+    [[], ''],
+  ])('tells staff how invoice checks %j are confirmed while product checks are pending', async (ocrFlags, hint) => {
+    api.suggestPharmacyPurchaseMasterMatches.mockResolvedValue({ matches: [{ lineIndex: 0, ocr: {}, candidates: [], recommendedAction: 'REVIEW_MATCHES', catalogueResolution: { state: 'missing' } }] } as any);
+    render(<PurchaseInvoiceWorkbench importedDraft={{ draft: { ...draftInvoice, invoiceDate: '2026-05-01', goodsReceivedDate: '2026-05-02', ocrFlags } }} />);
+    await screen.findByDisplayValue('APX-001');
+    await waitFor(() => expect(document.getElementById('purchase-posting-guidance')).toHaveTextContent(`Resolve the product checks before adding stock.${hint}`));
+    expect(document.getElementById('purchase-posting-guidance')?.textContent?.includes('Then choose')).toBe(!!hint);
+    expect(screen.getByRole('button', { name: 'Confirm reviewed values & add stock' })).toBeDisabled();
+  });
+
   describe('repeated valid corrections of one flagged field', () => {
     const flags = ['independent_read_disagrees_distributorGstin', 'independent_read_disagrees_invoiceNumber'];
     const renderScan = async (ocrFlags: string[], items = draftInvoice.items) => {

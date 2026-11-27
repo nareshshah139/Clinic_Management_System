@@ -1498,7 +1498,7 @@ function PurchaseInvoiceEditor({
     if (changes.goodsReceivedDate !== undefined) setReviewDate(changes.goodsReceivedDate);
     const next = { ...header, ...changes };
     if (changes.billType === 'CASH') next.dueDate = '';
-    let review = { flags: currentHeaderFlags, checked: checkedOcr.header ?? {} };
+    let review = { flags: pendingPurchaseOcrFlags(currentHeaderFlags, { ...next, printedAmounts: JSON.stringify(originalAmounts) }, checkedOcr.header), checked: checkedOcr.header ?? {} };
     for (const key of Object.keys(changes) as (keyof HeaderForm)[]) {
       if (changes[key] !== header[key]) review = confirmPurchaseChecks(review.flags, next, review.checked, undefined, key);
     }
@@ -1520,7 +1520,7 @@ function PurchaseInvoiceEditor({
     const line = lines[index];
     if (!line) return;
     const next = { ...line, [key]: value };
-    const review = confirmPurchaseChecks(currentLineFlags[index], next, checkedOcr[localId], index, key);
+    const review = confirmPurchaseChecks(pendingPurchaseOcrFlags(currentLineFlags[index], next, checkedOcr[localId], index), next, checkedOcr[localId], index, key);
     setCheckedOcr(current => ({ ...current, [localId]: review.checked }));
     setLines(current => current.map(row => row.localId === localId ? { ...next, ocrFlags: review.flags.join(', ') } : row));
   };
@@ -3693,6 +3693,7 @@ function PurchaseInvoiceEditor({
     ...confirmPurchaseChecks(currentHeaderFlags, header, checkedOcr.header).flags,
     ...lines.flatMap((line, index) => confirmPurchaseChecks(currentLineFlags[index], line, checkedOcr[line.localId], index).flags),
   ].filter(flag => !(purchaseReviewIssue(flag).category === 'totals' && /^(?:(?:AUTO|OCR):\s*)*(?:uncertain|independent_read_disagrees)[_-]/i.test(flag)));
+  const confirmLabel = access.commit ? postingLabel : "Confirm reviewed values & mark reviewed";
   const postingBlocker = stockStatusUnknown
     ? "Refresh stock status before continuing."
     : draftWriteBlocked
@@ -3702,7 +3703,7 @@ function PurchaseInvoiceEditor({
         : !access.review || !access.create
           ? "Confirming this invoice requires create and review permissions."
           : !catalogueReady
-            ? "Resolve the product checks before adding stock."
+            ? `Resolve the product checks before adding stock.${confirmationCount ? ` Then choose ${confirmLabel} to confirm the invoice checks that match the original.` : ""}`
             : invalidReviewValues.length > 0
               ? invalidReviewValues[0]
               : hardOcrFlags.length > 0
@@ -3782,9 +3783,9 @@ function PurchaseInvoiceEditor({
         ) : canReview && !access.commit && !access.create ? (
           <Button onClick={reviewInvoice} disabled={busy}>Mark Reviewed</Button>
         ) : !activeInvoice || editingSelectedInvoice ? (
-          <Button className="h-auto min-h-10 max-w-full whitespace-normal text-left" onClick={() => saveAndPostInvoice(access.commit)} disabled={busy || !!postingBlocker} aria-busy={busy} aria-label={access.commit ? postingLabel : "Confirm reviewed values & mark reviewed"} aria-describedby="purchase-posting-guidance">
+          <Button className="h-auto min-h-10 max-w-full whitespace-normal text-left" onClick={() => saveAndPostInvoice(access.commit)} disabled={busy || !!postingBlocker} aria-busy={busy} aria-label={confirmLabel} aria-describedby="purchase-posting-guidance">
             {busy && <Spinner className="h-4 w-4 " />}
-            {access.commit ? postingLabel : "Confirm reviewed values & mark reviewed"}
+            {confirmLabel}
           </Button>
         ) : (
           <Button disabled={!access.create || busy} onClick={() => editSavedDraft(activeInvoice)}>Review issues</Button>
