@@ -2565,6 +2565,60 @@ describe('PurchaseInvoiceWorkbench', () => {
     expect(document.getElementById('invoice-number-review-state')).toHaveTextContent('Needs checking');
   });
 
+  describe('repeated valid corrections of one flagged field', () => {
+    const flags = ['independent_read_disagrees_distributorGstin', 'independent_read_disagrees_invoiceNumber'];
+    const renderScan = async (ocrFlags: string[], items = draftInvoice.items) => {
+      render(<PurchaseInvoiceWorkbench importedDraft={{ draft: { ...draftInvoice, items, invoiceDate: '2026-05-01', goodsReceivedDate: '2026-05-02', ocrFlags } }} />);
+      await screen.findByDisplayValue('APX-001');
+    };
+    const savedFlags = async () => {
+      fireEvent.click(screen.getByRole('button', { name: /^Save draft$/ }));
+      await waitFor(() => expect(api.createPharmacyPurchaseInvoiceDraft).toHaveBeenCalled());
+      return api.createPharmacyPurchaseInvoiceDraft.mock.calls[0][0] as any;
+    };
+
+    it('keeps the supplier GSTIN settled and saved clean across valid replacements', async () => {
+      await renderScan(flags);
+      const status = () => document.getElementById('distributor-gstin-review-state');
+      for (const gstin of ['36ABCDE1234F1Z6', '36ABCDE1234F1Z7', '36ABCDE1234F1Z8']) {
+        fireEvent.change(screen.getByLabelText('GSTIN'), { target: { value: gstin } });
+        expect(status()).toHaveTextContent('Verified');
+        expect(screen.getByRole('navigation', { name: 'Invoice checks' })).toHaveTextContent('1 check to review');
+      }
+      expect((await savedFlags()).ocrFlags).toEqual(['independent_read_disagrees_invoiceNumber']);
+    });
+
+    it('keeps the invoice number settled and saved clean across valid replacements', async () => {
+      await renderScan(flags);
+      for (const invoiceNumber of ['APX-002', 'APX-003', 'APX-004']) {
+        fireEvent.change(screen.getByLabelText('Invoice No.'), { target: { value: invoiceNumber } });
+        expect(document.getElementById('invoice-number-review-state')).toHaveTextContent('Verified');
+        expect(screen.getByRole('navigation', { name: 'Invoice checks' })).toHaveTextContent('1 check to review');
+      }
+      expect((await savedFlags()).ocrFlags).toEqual(['independent_read_disagrees_distributorGstin']);
+    });
+
+    it('re-opens the GSTIN check when only the supplier name changes, then settles it on the next GSTIN correction', async () => {
+      await renderScan(['independent_read_disagrees_distributorGstin']);
+      fireEvent.change(screen.getByLabelText('GSTIN'), { target: { value: '36ABCDE1234F1Z6' } });
+      expect(document.getElementById('distributor-gstin-review-state')).toHaveTextContent('Verified');
+      fireEvent.change(screen.getByLabelText('Distributor'), { target: { value: 'Apex Distributors Pvt Ltd' } });
+      expect(document.getElementById('distributor-gstin-review-state')).toHaveTextContent('Needs checking');
+      fireEvent.change(screen.getByLabelText('GSTIN'), { target: { value: '36ABCDE1234F1Z7' } });
+      expect(document.getElementById('distributor-gstin-review-state')).toHaveTextContent('Verified');
+      expect((await savedFlags()).ocrFlags).toEqual([]);
+    });
+
+    it('keeps a line value settled and saved clean across valid replacements', async () => {
+      await renderScan([], [{ ...draftInvoice.items[0], ocrFlags: ['uncertain_batchNumber'] }] as any);
+      for (const batch of ['AZT2402', 'AZT2403', 'AZT2404']) {
+        fireEvent.change(screen.getByLabelText('Batch'), { target: { value: batch } });
+        expect(screen.queryByRole('navigation', { name: 'Invoice checks' })).not.toBeInTheDocument();
+      }
+      expect((await savedFlags()).items[0].ocrFlags).toEqual([]);
+    });
+  });
+
   it('keeps an invalid corrected supplier GSTIN flagged', async () => {
     render(<PurchaseInvoiceWorkbench importedDraft={{ draft: { ...draftInvoice, invoiceDate: '2026-05-01', goodsReceivedDate: '2026-05-02', ocrFlags: ['independent_read_disagrees_distributorGstin'] } }} />);
     await screen.findByDisplayValue('APX-001');
