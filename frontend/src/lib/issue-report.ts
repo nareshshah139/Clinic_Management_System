@@ -320,6 +320,39 @@ export const preloadScreenCapture = () =>
 const IMAGE_WAIT_BEFORE_COPY_MS = 300;
 const ASSET_FETCH_TIMEOUT_MS = 30_000;
 const STICKY_SHIFT = 'data-capture-sticky-shift';
+const EXACT_WIDTH = 'data-capture-width';
+
+/**
+ * Computed widths are rounded to six significant digits, so items that grow to fill a wrapping row can add up to
+ * a hair more than the row and push the last one onto a new line. Record each untransformed border-box element's
+ * laid-out width at full precision and return a function that removes the marks. Content-box widths are left
+ * alone: padding snaps to device pixels too, so the box minus its rounded padding is not the exact content width.
+ */
+function markExactWidths(root: Element): () => void {
+  const exact = [...root.querySelectorAll('*')].flatMap((el) => {
+    const style = getComputedStyle(el);
+    const rounded = parseFloat(style.width);
+    if (style.boxSizing !== 'border-box' || Number.isNaN(rounded)) return [];
+    const width = el.getBoundingClientRect().width;
+    const lost = Math.abs(width - rounded);
+    return lost > 0 && lost <= Math.max(rounded, 1) * 1e-5 ? [[el, width] as const] : [];
+  });
+  exact.forEach(([el, width]) => el.setAttribute(EXACT_WIDTH, String(width)));
+  return () => exact.forEach(([el]) => el.removeAttribute(EXACT_WIDTH));
+}
+
+/** Inline styles are serialized at the same six digits, so the exact widths travel as stylesheet text. */
+function pinExactWidths(copy: Element): void {
+  const rules = [...copy.querySelectorAll(`[${EXACT_WIDTH}]`)].map((el, i) => {
+    el.classList.add(`capture-width-${i}`);
+    const rule = `.capture-width-${i} { width: ${el.getAttribute(EXACT_WIDTH)}px !important; }`;
+    el.removeAttribute(EXACT_WIDTH);
+    return rule;
+  });
+  const sheet = document.createElement('style');
+  sheet.textContent = rules.join('\n');
+  copy.appendChild(sheet);
+}
 
 /**
  * The copy cannot scroll, so sticky elements land where they would sit unstuck. Record how far each
@@ -379,7 +412,7 @@ function reflectFormState(copy: Element): void {
  */
 /**
  * @cc [owner:nareshshah139] capture-matches-screen
- * The image is what the browser itself renders for the visible viewport at up to 2x pixel density,
+ * The image is what the browser itself renders for the visible viewport at any browser zoom and up to 2x pixel density,
  * including scrolled panels with their pinned headers, closed disclosures and the current values of
  * selects, checkboxes, radios and text areas, without popovers or notification toasts.
  */
@@ -390,26 +423,38 @@ export async function startViewportCapture(): Promise<{ image: Promise<Blob> }> 
     markCopied = resolve;
   });
   const unmarkSticky = markStickyShifts(document.body);
+  const unmarkWidths = markExactWidths(document.body);
+  const unmark = () => {
+    unmarkSticky();
+    unmarkWidths();
+  };
+  const { innerWidth: width, innerHeight: height } = window;
+  const density = window.devicePixelRatio || 1;
   try {
     const context = await createContext(document.body, {
-      width: window.innerWidth,
-      height: window.innerHeight,
-      scale: Math.min(window.devicePixelRatio || 1, 2),
-      style: { margin: '0' },
+      width,
+      height,
+      scale: Math.min(density, 2),
+      // The image lays out one unit per pixel and rounds thinner borders up to 1. Laying the copy out on the
+      // screen's own device pixels keeps borders the browser snapped to a device pixel (0.625px at 80% zoom on a
+      // 2x screen) from growing and squeezing the text beside them onto a second line. Only the output is capped.
+      style: { margin: '0', zoom: String(density) },
+      onCreateForeignObjectSvg: (svg) => {
+        svg.setAttribute('width', String(width * density));
+        svg.setAttribute('height', String(height * density));
+        svg.setAttribute('viewBox', `0 0 ${width * density} ${height * density}`);
+      },
       filter: (node) => !(node instanceof Element && node.matches(IGNORED_IN_CAPTURE)),
       features: { restoreScrollPosition: true },
       timeout: IMAGE_WAIT_BEFORE_COPY_MS,
       autoDestruct: true,
       onCloneNode: (copy) => {
-        unmarkSticky();
+        unmark();
         if (copy instanceof Element) {
           pinStickyShifts(copy);
+          pinExactWidths(copy);
           reflectFormState(copy);
         }
-        // Hinted glyph widths in the rendered SVG overflow the pixel widths copied from the page and wrap text mid-word.
-        const unhinted = document.createElement('style');
-        unhinted.textContent = '* { text-rendering: geometricPrecision !important; }';
-        copy.appendChild(unhinted);
         markCopied();
       },
     });
@@ -424,7 +469,7 @@ export async function startViewportCapture(): Promise<{ image: Promise<Blob> }> 
     );
     return { image };
   } finally {
-    unmarkSticky();
+    unmark();
   }
 }
 
