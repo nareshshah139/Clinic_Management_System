@@ -918,6 +918,14 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
   const latestDraftWriter = useRef(persistDraftToStorage);
   latestDraftWriter.current = persistDraftToStorage;
 
+  const committedDraftWriter = useRef(persistDraftToStorage);
+  useEffect(() => {
+    committedDraftWriter.current = persistDraftToStorage;
+  });
+  useEffect(() => () => {
+    if (draftWriteTimerRef.current !== null) committedDraftWriter.current();
+  }, [draftStorageKey]);
+
   const queueDraftWrite = useCallback(() => {
     if (discardDraftRef.current || !draftStorageKey || typeof window === 'undefined') return false;
     draftWriteTimerRef.current ??= window.setTimeout(() => {

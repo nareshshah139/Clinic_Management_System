@@ -79,3 +79,19 @@ it('writes a pending draft when the form closes', async () => {
 
   expect(savedNote()).toBe(NOTE);
 });
+
+it('keeps an edit still waiting to be written when the attending doctor changes', async () => {
+  const view = render(<MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v" userRole="ADMIN" />);
+  await flush();
+  const field = screen.getByLabelText('Clinical note');
+  await act(async () => { fireEvent.change(field, { target: { value: 'Review on Friday' } }); });
+  await act(async () => { jest.advanceTimersByTime(500); });
+  await act(async () => { fireEvent.change(field, { target: { value: 'Review on Monday' } }); });
+
+  view.rerender(<MedicalVisitForm patientId="p" doctorId="d2" initialVisitId="v" userRole="ADMIN" />);
+  await flush();
+  await act(async () => { jest.advanceTimersByTime(500); });
+
+  const moved = JSON.parse(localStorage.getItem('clinic:visit-draft:d2:p:visit-v') ?? '{}');
+  expect(moved?.data?.prescriptionClinical?.history?.pastHistory).toBe('Review on Monday');
+});
