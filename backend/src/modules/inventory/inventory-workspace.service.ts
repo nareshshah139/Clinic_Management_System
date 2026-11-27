@@ -1,5 +1,5 @@
 import { PharmacyPurchaseInvoiceStatus } from '@prisma/client';
-import { readStockIds, readStockPage } from './inventory-stock-query';
+import { readStockIds, readStockPage, readStockQuality, readStockTotals } from './inventory-stock-query';
 import { saveInventoryItemMetadata } from './inventory-item-metadata';
 import { reconcileInventoryLedger } from './inventory-ledger';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
@@ -243,20 +243,32 @@ async timeline(actor: WorkflowActor, q: Record<string, any> = {}) {
    * allowed to read the approval queue, without pagination or catalog-size limits.
    */
   async overview(actor:WorkflowActor) {
-    const caps=await this.workflow.capabilities(actor),p=await this.workflow.permissions(actor),has=(x:string)=>p.has(x);
-    const stock=has('inventory:item:read')?await this.stock(actor):null;
-    const docs=(await this.workflow.documents(actor,{limit:100}));
-    const active=await this.prisma.inventoryWorkflowDocument.groupBy({by:['kind','status'],where:{branchId:actor.branchId,kind:{in:Object.keys(caps.kinds).filter(k=>caps.kinds[k].read)}},_count:true});
-    const purchases=has('inventory:po:read')?await this.prisma.pharmacyPurchaseInvoice.groupBy({by:['status'],where:{branchId:actor.branchId},_count:true}):[];
-    const unlinked=has('inventory:po:read')?await this.prisma.pharmacyPurchaseInvoiceDocument.count({where:{branchId:actor.branchId,purchaseInvoiceId:null}}):0;
-    const low=stock?await this.stock(actor,{stock:'LOW'}):null,expiring=stock?await this.stock(actor,{expiryMonths:'3'}):null;
-    const ledger=new PharmacyPurchaseLedgerService(this.prisma),supplierAlerts=has('pharmacy:purchase-ledger:read')?await ledger.getAlerts(actor.branchId):null;
+    const [caps,p]=await Promise.all([this.workflow.capabilities(actor),this.workflow.permissions(actor)]),has=(x:string)=>p.has(x);
+    const purchaseReader=has('inventory:po:read'),ledger=new PharmacyPurchaseLedgerService(this.prisma);
+    const [stockSummary,docs,active,purchases,unlinked,supplierAlerts,pendingPurchase,creditNotesAwaited,pendingEdits]=await Promise.all([
+      has('inventory:item:read')?this.stockSummary(actor):null,
+      this.workflow.documents(actor,{limit:100}),
+      this.prisma.inventoryWorkflowDocument.groupBy({by:['kind','status'],where:{branchId:actor.branchId,kind:{in:Object.keys(caps.kinds).filter(k=>caps.kinds[k].read)}},_count:true}),
+      purchaseReader?this.prisma.pharmacyPurchaseInvoice.groupBy({by:['status'],where:{branchId:actor.branchId},_count:true}):[],
+      purchaseReader?this.prisma.pharmacyPurchaseInvoiceDocument.count({where:{branchId:actor.branchId,purchaseInvoiceId:null}}):0,
+      has('pharmacy:purchase-ledger:read')?ledger.getAlerts(actor.branchId):null,
+      purchaseReader?new PharmacyPurchaseRegisterService(this.prisma,ledger).toReviewCount(actor):0,
+      purchaseReader?new PharmacyPurchaseReturnsRegisterService(this.prisma).awaitedCount(actor):null,
+      ['OWNER','ADMIN','DOCTOR','PHARMACIST'].includes(actor.role) && has('pharmacy:drug:inventory-change:read')
+        ? this.prisma.drugInventoryChangeRequest.count({where:{branchId:actor.branchId,status:'PENDING'}}) : null,
+    ]);
     const supplierOverdue=supplierAlerts?{count:supplierAlerts.overdue.length,amount:money(supplierAlerts.overdue.reduce((n:number,r:any)=>n+r.outstanding,0)),asOf:supplierAlerts.asOfDate}:null;
-    const pendingPurchase=has('inventory:po:read')?await new PharmacyPurchaseRegisterService(this.prisma,ledger).toReviewCount(actor):0;
-    const creditNotesAwaited=has('inventory:po:read')?await new PharmacyPurchaseReturnsRegisterService(this.prisma).awaitedCount(actor):null;
-    const pendingEdits = ['OWNER','ADMIN','DOCTOR','PHARMACIST'].includes(actor.role) && has('pharmacy:drug:inventory-change:read')
-      ? await this.prisma.drugInventoryChangeRequest.count({where:{branchId:actor.branchId,status:'PENDING'}}) : null;
-    return {pendingEdits,pendingPurchase,creditNotesAwaited,supplierOverdue,branchId:actor.branchId,asOf:new Date().toISOString(),lowStock:low?.total,expiring:expiring?.total,capabilities:caps,stock:stock?{total:stock.total,quality:stock.quality,valuation:stock.valuation}:null,queues:active,purchases,unlinked,recent:docs.rows.slice(0,8)};
+    return {pendingEdits,pendingPurchase,creditNotesAwaited,supplierOverdue,branchId:actor.branchId,asOf:new Date().toISOString(),lowStock:stockSummary?.lowStock,expiring:stockSummary?.expiring,capabilities:caps,stock:stockSummary?.stock??null,queues:active,purchases,unlinked,recent:docs.rows.slice(0,8)};
+  }
+  private stockSummary(actor:WorkflowActor) {
+    const present=(item:any)=>this.present(item);
+    return this.prisma.$transaction(async tx => {
+      const quality=await readStockQuality(tx,actor.branchId);
+      const all=await readStockTotals(tx,actor.branchId,{},present);
+      const low=await readStockTotals(tx,actor.branchId,{stock:'LOW'},present);
+      const expiring=await readStockTotals(tx,actor.branchId,{expiryMonths:'3'},present);
+      return {stock:{total:all.total,quality,valuation:all.valuation},lowStock:low.total,expiring:expiring.total};
+    },{isolationLevel:'RepeatableRead',timeout:30000});
   }
   async suppliers(actor:WorkflowActor){await this.require(actor,'inventory:item:read');return this.prisma.supplier.findMany({where:{branchId:actor.branchId},orderBy:{name:'asc'}});}
   async owners(actor:WorkflowActor){await this.workflow.permissions(actor);return this.prisma.user.findMany({where:{branchId:actor.branchId,isActive:true},select:{id:true,firstName:true,lastName:true,role:true},orderBy:{firstName:'asc'}});}

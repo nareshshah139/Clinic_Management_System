@@ -130,6 +130,47 @@ const totals = Prisma.sql`jsonb_build_object(
   'landingUnknownBatches', count(*) FILTER (WHERE i."currentStock" > 0 AND (i.meta->>'landingCostPerStockUnit') IS NULL)
 )`;
 
+const qualityCounts = Prisma.sql`jsonb_build_object(${Prisma.join(Object.entries(issues).flatMap(([name, condition]) => [Prisma.sql`${name}`, Prisma.sql`count(*) FILTER (WHERE ${condition})`]))})`;
+const nonZero = (quality: Record<string, number>) =>
+  Object.fromEntries(Object.entries(quality).filter(([, count]) => count > 0));
+
+export async function readStockQuality(db: StockDatabase, branchId: string) {
+  const [row] = await db.$queryRaw<{ quality: Record<string, number> }[]>(
+    Prisma.sql`${branchItems(branchId)} SELECT ${qualityCounts} AS quality FROM branch_items i`,
+  );
+  return nonZero(row.quality);
+}
+
+async function aggregateStock(
+  db: StockDatabase,
+  filtered: () => Prisma.Sql,
+  expiryStart: Date,
+) {
+  const [aggregate] = await db.$queryRaw<
+    { total: number; current: any; expired: any }[]
+  >(Prisma.sql`${filtered()}
+    SELECT (SELECT count(*)::int FROM filtered) AS total,
+      (SELECT ${totals} FROM filtered i WHERE i."expiryDate" IS NULL OR i."expiryDate" >= ${expiryStart}) AS current,
+      (SELECT ${totals} FROM filtered i WHERE i."expiryDate" < ${expiryStart}) AS expired`);
+  for (const valuation of [aggregate.current, aggregate.expired])
+    for (const key of ['PTR', 'MRP', 'MRPExcludingTax', 'landingKnown'])
+      valuation[key] = money(valuation[key]);
+  return {
+    total: aggregate.total,
+    valuation: { current: aggregate.current, expired: aggregate.expired },
+  };
+}
+
+export async function readStockTotals(
+  db: StockDatabase,
+  branchId: string,
+  q: StockQuery,
+  present: (item: any) => any,
+) {
+  const { filtered, expiryStart } = await planStock(db, branchId, q, present);
+  return aggregateStock(db, filtered, expiryStart);
+}
+
 async function planStock(
   db: StockDatabase,
   branchId: string,
@@ -461,14 +502,9 @@ export async function readStockPage(
     { facets: Record<string, string[]>; quality: Record<string, number> }[]
   >(Prisma.sql`${base}
     SELECT jsonb_build_object(${Prisma.join(facetFields.flatMap((field) => [Prisma.sql`${field}`, Prisma.sql`coalesce(jsonb_agg(DISTINCT ${column(field)}::text) FILTER (WHERE coalesce(${column(field)}::text, '') <> ''), '[]'::jsonb)`]))}) AS facets,
-      jsonb_build_object(${Prisma.join(Object.entries(issues).flatMap(([name, condition]) => [Prisma.sql`${name}`, Prisma.sql`count(*) FILTER (WHERE ${condition})`]))}) AS quality
+      ${qualityCounts} AS quality
     FROM branch_items i`);
-  const [aggregate] = await db.$queryRaw<
-    { total: number; current: any; expired: any }[]
-  >(Prisma.sql`${filtered()}
-    SELECT (SELECT count(*)::int FROM filtered) AS total,
-      (SELECT ${totals} FROM filtered i WHERE i."expiryDate" IS NULL OR i."expiryDate" >= ${expiryStart}) AS current,
-      (SELECT ${totals} FROM filtered i WHERE i."expiryDate" < ${expiryStart}) AS expired`);
+  const { total, valuation } = await aggregateStock(db, filtered, expiryStart);
   const ids = await selectIds({ offset: (page - 1) * limit, limit });
   const hydrated = await db.inventoryItem.findMany({
     where: { branchId, id: { in: ids } },
@@ -480,9 +516,6 @@ export async function readStockPage(
     ...(matches.has(id) ? { searchMatch: matches.get(id) } : {}),
     ...(audit ? { auditState: q.audit } : {}),
   }));
-  for (const valuation of [aggregate.current, aggregate.expired])
-    for (const key of ['PTR', 'MRP', 'MRPExcludingTax', 'landingKnown'])
-      valuation[key] = money(valuation[key]);
   return {
     filterScope: {
       batchView,
@@ -496,19 +529,17 @@ export async function readStockPage(
       sortOrder,
     },
     rows,
-    total: aggregate.total,
+    total,
     page,
     limit,
-    totalPages: Math.ceil(aggregate.total / limit),
+    totalPages: Math.ceil(total / limit),
     facets: Object.fromEntries(
       Object.entries(summary.facets).map(([field, values]) => [
         field,
         values.sort(),
       ]),
     ),
-    valuation: { current: aggregate.current, expired: aggregate.expired },
-    quality: Object.fromEntries(
-      Object.entries(summary.quality).filter(([, count]) => count > 0),
-    ),
+    valuation,
+    quality: nonZero(summary.quality),
   };
 }
