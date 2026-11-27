@@ -27,52 +27,43 @@ interface DashboardLayoutProps {
   children: ReactNode;
 }
 
+/** The profile in one request; /auth/me only when the profile is refused, as for a role outside clinic staff. */
+async function loadSignedInUser(): Promise<User | null> {
+  try {
+    return await apiClient.get<User>("/users/me");
+  } catch (error) {
+    if ((error as ApiError | undefined)?.status === 401) throw error;
+    console.error("Failed to load full user profile; using minimal identity", error);
+  }
+  const me = await apiClient.get<{ id?: string; role?: string; branchId?: string }>("/auth/me");
+  if (!me?.id) return null;
+  return {
+    id: me.id,
+    firstName: "",
+    lastName: "",
+    name: "",
+    email: "",
+    phone: "",
+    role: (me.role as any) || "UNKNOWN",
+    status: "ACTIVE",
+    branchId: me.branchId || "",
+    isActive: true,
+    createdAt: "",
+    updatedAt: "",
+  } as unknown as User;
+}
+
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchCurrentUser = useCallback(async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const me = await apiClient.get<{
-        id?: string;
-        role?: string;
-        branchId?: string;
-      }>("/auth/me");
-      if (me?.id) {
-        try {
-          const fullUser = await apiClient.get<User>(`/users/${me.id}`);
-          setUser({
-            ...(fullUser as User),
-            role: (me.role as any) ?? (fullUser as any).role,
-          });
-        } catch (innerError) {
-          console.error(
-            "Failed to load full user profile; using minimal identity",
-            innerError,
-          );
-          setUser({
-            id: me.id!,
-            firstName: "",
-            lastName: "",
-            name: "",
-            email: "",
-            phone: "",
-            role: (me.role as any) || "UNKNOWN",
-            status: "ACTIVE",
-            branchId: (me.branchId as any) || "",
-            isActive: true,
-            createdAt: "",
-            updatedAt: "",
-          } as unknown as User);
-        }
-      } else {
-        setUser(null);
-      }
+      setUser(await loadSignedInUser());
     } catch (error) {
-      const apiError = error as ApiError | undefined;
-      if (apiError?.status === 401) {
+      if ((error as ApiError | undefined)?.status === 401) {
         setUser(null);
         router.replace("/login");
         return;

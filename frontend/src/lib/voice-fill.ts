@@ -1,6 +1,5 @@
 import { apiClient } from '@/lib/api';
 import { handleUnauthorizedRedirect } from '@/lib/authRedirect';
-import { postAudio } from '@/lib/speech-to-text';
 
 export type VoiceFillFormId = 'patient-intake' | 'visit-consultation' | 'inventory-item' | 'voice-command';
 export type VoiceFillRow = Record<string, string | number>;
@@ -92,9 +91,11 @@ export function stateRegistry<T extends object>(
   );
 }
 
-// Outlasts the server's whole run on a 40-minute recording (upload, ~13 s of ffmpeg, ~30 s of parallel
-// transcription, then up to 120 s of Codex), so its 503 message reaches the user instead of a client abort.
+// Outlasts Codex's 120 s extraction timeout on a 40-minute transcript, so its 503 message reaches the user instead of a client abort.
 const FILL_TIMEOUT_MS = 240_000;
+
+export const VOICE_FILL_MAX_SPEECH_MS = 40 * 60_000;
+const VOICE_FILL_MAX_TEXT_CHARS = 60_000;
 
 let statusPromise: Promise<boolean> | null = null;
 
@@ -144,14 +145,6 @@ export interface VoiceFillResponse {
 const toVoiceFillResponse = (res: Partial<VoiceFillResponse> | null): VoiceFillResponse =>
   ({ transcript: typeof res?.transcript === 'string' ? res.transcript : '', fields: res?.fields ?? {} });
 
-export async function requestVoiceFill(form: VoiceFillFormId, audio: Blob, filename: string): Promise<VoiceFillResponse> {
-  const res = await postAudio<Partial<VoiceFillResponse> | null>(`/api/voice-fill/${form}`, audio, filename, {
-    timeoutMs: FILL_TIMEOUT_MS,
-    describeError: formatVoiceFillError,
-  });
-  return toVoiceFillResponse(res);
-}
-
 export async function requestVoiceFillFromText(form: VoiceFillFormId, text: string): Promise<VoiceFillResponse> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FILL_TIMEOUT_MS);
@@ -159,7 +152,7 @@ export async function requestVoiceFillFromText(form: VoiceFillFormId, text: stri
     const response = await fetch(`/api/voice-fill/${form}/text`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text: text.trim().slice(0, VOICE_FILL_MAX_TEXT_CHARS) }),
       credentials: 'include',
       signal: controller.signal,
     });

@@ -4,6 +4,7 @@ import request from 'supertest';
 import { JwtAuthGuard } from '../../../shared/guards/jwt-auth.guard';
 import { createLiveTranscriptionCall } from '../../../shared/transcription/openai-realtime';
 import { splitSpeakers } from '../../../shared/transcription/speaker-split';
+import { transcribeWithOpenAI } from '../../../shared/transcription/openai-transcribe';
 import { ReviewBookingService } from '../review-booking';
 import { VisitsController } from '../visits.controller';
 import { VisitsService } from '../visits.service';
@@ -15,9 +16,13 @@ jest.mock('../../../shared/transcription/openai-realtime', () => ({
 jest.mock('../../../shared/transcription/speaker-split', () => ({
   splitSpeakers: jest.fn(),
 }));
+jest.mock('../../../shared/transcription/openai-transcribe', () => ({
+  transcribeWithOpenAI: jest.fn(),
+}));
 
 const createCall = jest.mocked(createLiveTranscriptionCall);
 const split = jest.mocked(splitSpeakers);
+const transcribe = jest.mocked(transcribeWithOpenAI);
 const OFFER = 'v=0\r\no=- 1 2 IN IP4 127.0.0.1\r\ns=-\r\n';
 
 describe('live transcription routes', () => {
@@ -90,6 +95,34 @@ describe('live transcription routes', () => {
   it('POST /visits/transcribe/speakers rejects a non-string body with 400', async () => {
     await post('/visits/transcribe/speakers').send({ text: 5 }).expect(400);
     expect(split).not.toHaveBeenCalled();
+  });
+
+  const upload = (path: string) =>
+    post(path).attach('file', Buffer.from('audio'), { filename: 'recording.webm', contentType: 'audio/webm' });
+
+  it('POST /visits/transcribe?speakers=none returns the transcript without asking for a speaker split', async () => {
+    transcribe.mockResolvedValue({ text: 'Fever since Monday.', segments: [] });
+
+    await upload('/visits/transcribe?speakers=none').expect(201, {
+      text: 'Fever since Monday.',
+      segments: [],
+      speakers: { doctorText: '', patientText: '' },
+    });
+
+    expect(split).not.toHaveBeenCalled();
+  });
+
+  it('POST /visits/transcribe still splits speakers by default', async () => {
+    transcribe.mockResolvedValue({ text: 'Fever since Monday.', segments: [] });
+    split.mockResolvedValue({ segments: [], doctorText: '', patientText: 'Fever since Monday.' });
+
+    await upload('/visits/transcribe').expect(201, {
+      text: 'Fever since Monday.',
+      segments: [],
+      speakers: { doctorText: '', patientText: 'Fever since Monday.' },
+    });
+
+    expect(split).toHaveBeenCalledWith({ text: 'Fever since Monday.', segments: [] });
   });
 
   it.each(['chunk-start', 'chunk', 'chunk-complete'])(

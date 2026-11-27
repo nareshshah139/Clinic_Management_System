@@ -1,14 +1,16 @@
 ------------------------------ MODULE Dictation ------------------------------
-(* Voice capture in the browser, on three surfaces.
+(* Voice capture in the browser, on two surfaces.
 
    bar    the dashboard voice bar dictates into its box, then sends the text
           to voice fill and shows "Working it out..." until the reply.
    field  a form field's mic button dictates straight into the field with the
           patient-preferred setting, so a live transcript goes through the
           speaker split before it is inserted.
-   clip   a voice fill button records one audio clip with useAudioRecorder.
 
-   bar and field share one dictation session (dictation-session.ts). Its real
+   bar and field share one dictation session (dictation-session.ts). The voice
+   fill button on intake forms (useVoiceFill.ts) runs the same session with
+   the full-transcript setting and then sends one fill request, as bar does.
+   It is not a separate surface here. Its real
    state is the closure variables phase, ended, live, uploading, stopSent, the
    data channel, the armed timers and the module-level microphoneHolder. The
    record ds holds those variables under their code names. A live transcript
@@ -18,9 +20,8 @@
    like, or never. Only timers carry fairness.
 
    MODE "before" is the code before the fix, kept as a regression control.
-   "fixed" adds a timeout on the upload and speaker-split requests, ignores a
-   completed event for a failed item, and ignores a stale microphone denial in
-   useAudioRecorder. "code" is the code today, which takes the same branches
+   "fixed" adds a timeout on the upload and speaker-split requests and ignores
+   a completed event for a failed item. "code" is the code today, which takes the same branches
    as "fixed". Every other mode is "fixed" with one guard removed. *)
 EXTENDS Naturals
 
@@ -28,25 +29,21 @@ CONSTANTS MODE
 
 ASSUME MODE \in {"before", "code", "fixed", "typeProbe", "noRequestTimeout", "noMaxTimer",
                  "noFillTimeout", "noReleaseOnFinish", "noStopCapture",
-                 "noLeaveLiveOnSettle", "completedOverwritesFailure",
-                 "staleDenialClears"}
+                 "noLeaveLiveOnSettle", "completedOverwritesFailure"}
 
-Surfaces == {"bar", "field", "clip"}
+Surfaces == {"bar", "field"}
 Outcomes == {"none", "live", "recorded", "empty", "error", "cancelled"}
 Texts == {"live", "recorded"}
-Attempts == {1, 2}
 
 RequestTimeout == MODE \notin {"before", "noRequestTimeout"}
 FailedItemSticks == MODE \notin {"before", "completedOverwritesFailure"}
-StaleDenialIgnored == MODE \notin {"before", "staleDenialClears"}
 FillTimeout == MODE # "noFillTimeout"
 MaxTimer == MODE # "noMaxTimer"
 
-VARIABLES surface, ds, bar, tFill, clip
+VARIABLES surface, ds, bar, tFill
 
-vars == <<surface, ds, bar, tFill, clip>>
+vars == <<surface, ds, bar, tFill>>
 
-Dictating == surface # "clip"
 Pref == IF surface = "field" THEN "patient" ELSE "full"
 
 -----------------------------------------------------------------------------
@@ -61,15 +58,6 @@ Started ==
    item |-> "none", acked |-> FALSE, failedOnce |-> FALSE,
    outcome |-> IF MODE = "typeProbe" THEN "bogus" ELSE "none",
    lock |-> "held", mic |-> TRUE]
-
-\* The clip surface runs no dictation.
-NoSession ==
-  [Started EXCEPT !.ended = TRUE, !.live = FALSE, !.dc = "none", !.sdp = "none",
-                  !.tConnect = FALSE, !.tMax = FALSE, !.lock = "free", !.mic = FALSE]
-
-ClipIdle ==
-  [ui |-> FALSE, gen |-> 0, att |-> [a \in Attempts |-> "none"],
-   attGen |-> [a \in Attempts |-> 0], rec |-> "none", timer |-> FALSE]
 
 \* leaveLive
 LeaveLive(d) ==
@@ -127,9 +115,9 @@ SessionStep(nd) ==
        THEN /\ bar' = IF nd.outcome \in Texts THEN "working" ELSE "done"
             /\ tFill' = (nd.outcome \in Texts /\ FillTimeout)
        ELSE UNCHANGED <<bar, tFill>>
-  /\ UNCHANGED <<surface, clip>>
+  /\ UNCHANGED <<surface>>
 
-Open == Dictating /\ ~ds.ended
+Open == ~ds.ended
 
 -----------------------------------------------------------------------------
 \* The doctor or receptionist.
@@ -210,62 +198,19 @@ RequestTimerFires ==
 ServerAnswersFill ==
   /\ bar = "working"
   /\ bar' = "done" /\ tFill' = FALSE
-  /\ UNCHANGED <<surface, ds, clip>>
+  /\ UNCHANGED <<surface, ds>>
 
 FillTimerFires ==
   /\ bar = "working" /\ tFill
   /\ bar' = "done" /\ tFill' = FALSE
-  /\ UNCHANGED <<surface, ds, clip>>
-
------------------------------------------------------------------------------
-\* useAudioRecorder.
-
-ClipStep(c) == clip' = c /\ UNCHANGED <<surface, ds, bar, tFill>>
-
-Release(c) == [c EXCEPT !.rec = "none", !.timer = FALSE]
-
-YouStartClip ==
-  /\ surface = "clip" /\ ~clip.ui
-  /\ \E a \in Attempts :
-       /\ clip.att[a] = "none"
-       /\ \A b \in Attempts : b < a => clip.att[b] # "none"
-       /\ ClipStep([clip EXCEPT !.ui = TRUE, !.att[a] = "pending", !.attGen[a] = clip.gen])
-
-YouStopClip ==
-  /\ surface = "clip" /\ clip.ui /\ clip.rec = "recording"
-  /\ ClipStep([Release(clip) EXCEPT !.ui = FALSE])
-
-YouCancelClip ==
-  /\ surface = "clip" /\ clip.ui /\ clip.gen < 2
-  /\ ClipStep([Release(clip) EXCEPT !.ui = FALSE, !.gen = @ + 1])
-
-BrowserGrantsMic ==
-  /\ surface = "clip"
-  /\ \E a \in Attempts :
-       /\ clip.att[a] = "pending"
-       /\ ClipStep(IF clip.attGen[a] # clip.gen
-                     THEN [clip EXCEPT !.att[a] = "settled"]
-                     ELSE [clip EXCEPT !.att[a] = "settled", !.rec = "recording", !.timer = TRUE])
-
-BrowserDeniesMic ==
-  /\ surface = "clip"
-  /\ \E a \in Attempts :
-       /\ clip.att[a] = "pending"
-       /\ ClipStep(IF StaleDenialIgnored /\ clip.attGen[a] # clip.gen
-                     THEN [clip EXCEPT !.att[a] = "settled"]
-                     ELSE [Release(clip) EXCEPT !.att[a] = "settled", !.ui = FALSE])
-
-ClipTimerFires ==
-  /\ surface = "clip" /\ clip.timer /\ clip.rec = "recording"
-  /\ ClipStep([Release(clip) EXCEPT !.ui = FALSE])
+  /\ UNCHANGED <<surface, ds>>
 
 -----------------------------------------------------------------------------
 Init ==
   /\ surface \in Surfaces
-  /\ ds = IF surface = "clip" THEN NoSession ELSE Started
+  /\ ds = Started
   /\ bar = IF surface = "bar" THEN "listening" ELSE "none"
   /\ tFill = FALSE
-  /\ clip = ClipIdle
 
 Next ==
   \/ YouStop \/ YouDiscard
@@ -275,8 +220,6 @@ Next ==
   \/ ConnectTimerFires \/ TailTimerFires \/ FinishTimerFires \/ MaxTimerFires
   \/ RequestTimerFires
   \/ ServerAnswersFill \/ FillTimerFires
-  \/ YouStartClip \/ YouStopClip \/ YouCancelClip
-  \/ BrowserGrantsMic \/ BrowserDeniesMic \/ ClipTimerFires
 
 \* Fairness only on timers. No server, peer, browser prompt or user is assumed to act.
 Spec ==
@@ -284,7 +227,6 @@ Spec ==
   /\ WF_vars(ConnectTimerFires) /\ WF_vars(TailTimerFires)
   /\ WF_vars(FinishTimerFires) /\ WF_vars(MaxTimerFires)
   /\ WF_vars(RequestTimerFires) /\ WF_vars(FillTimerFires)
-  /\ WF_vars(ClipTimerFires)
 
 -----------------------------------------------------------------------------
 TypeOK ==
@@ -303,16 +245,12 @@ TypeOK ==
   /\ ds.mic \in BOOLEAN
   /\ bar \in {"none", "listening", "working", "done"}
   /\ tFill \in BOOLEAN
-  /\ clip.ui \in BOOLEAN /\ clip.gen \in 0..2
-  /\ clip.att \in [Attempts -> {"none", "pending", "settled"}]
-  /\ clip.attGen \in [Attempts -> 0..2]
-  /\ clip.rec \in {"none", "recording"} /\ clip.timer \in BOOLEAN
 
 \* The one-dictation lock is held exactly while the session has not ended.
-LockAgrees == Dictating => ((ds.lock = "held") <=> ~ds.ended)
+LockAgrees == (ds.lock = "held") <=> ~ds.ended
 
 \* An ended session has stopped the microphone tracks.
-MicOffWhenEnded == Dictating => (ds.ended => ~ds.mic)
+MicOffWhenEnded == ds.ended => ~ds.mic
 
 \* While live, the data channel exists and no transcription request is out.
 LiveAgrees ==
@@ -325,12 +263,9 @@ OneTranscription == ~(ds.speakers # "none" /\ ds.upload # "none")
 \* A transcript item the server reported as failed stays failed.
 ItemFailureSticks == ds.failedOnce => ds.item = "failed"
 
-\* Whenever useAudioRecorder records, the button shows it is recording.
-ClipShownWhileRecording == clip.rec = "recording" => clip.ui
-
 \* Liveness.
 
-LeavesFinishing == [](Dictating /\ ds.phase = "finishing" /\ ~ds.ended => <>ds.ended)
+LeavesFinishing == [](ds.phase = "finishing" /\ ~ds.ended => <>ds.ended)
 
 LockReleased == [](ds.lock = "held" => <>(ds.lock = "free"))
 

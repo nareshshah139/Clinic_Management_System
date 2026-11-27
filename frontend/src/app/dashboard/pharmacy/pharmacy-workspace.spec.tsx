@@ -8,8 +8,9 @@ jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn() }),
   useSearchParams: () => ({ get: (key: string) => (key === 'section' ? section : null) }),
 }));
+let loading = false;
 jest.mock('@/components/layout/dashboard-user-context', () => ({
-  useDashboardUser: () => ({ user: { id: 'u1', role }, loading: false }),
+  useDashboardUser: () => ({ user: { id: 'u1', role }, loading }),
 }));
 jest.mock('@/lib/api', () => ({ apiClient: { get: jest.fn() } }));
 jest.mock('@/components/common/QuickGuide', () => ({ QuickGuide: () => null }));
@@ -43,7 +44,7 @@ it("shows a pharmacist today's sales on the desk", async () => {
   role = 'PHARMACIST';
   render(<PharmacyWorkspace />);
   expect(await screen.findByText('₹1240.00')).toBeInTheDocument();
-  expect(figuresAsked()).toBe(1);
+  expect(asked()).toEqual(['/pharmacy/dashboard']);
 });
 
 it('counts low stock on the desk with its definition, not the drug master total', async () => {
@@ -51,7 +52,7 @@ it('counts low stock on the desk with its definition, not the drug master total'
   role = 'PHARMACIST';
   render(<PharmacyWorkspace />);
   const lowStock = (await screen.findByText('Low stock')).parentElement as HTMLElement;
-  expect(lowStock).toHaveTextContent(/^Low stock4at or below minimum stock$/);
+  await waitFor(() => expect(lowStock).toHaveTextContent(/^Low stock4at or below minimum stock$/));
   expect(screen.queryByText('Stock')).toBeNull();
 });
 
@@ -71,10 +72,26 @@ it("never asks for the pharmacy's figures for reception, and offers no sale it w
   role = 'RECEPTION';
   render(<PharmacyWorkspace />);
   expect(await screen.findByText('Pharmacy Counter')).toBeInTheDocument();
-  await waitFor(() => expect(asked()).toContain('/auth/me'));
-  expect(figuresAsked()).toBe(0);
+  await waitFor(() => expect(screen.getByText('Inventory Control')).toBeInTheDocument());
+  expect(asked()).toEqual([]);
   expect(screen.queryByText('Sales')).toBeNull();
   expect(offered()).toEqual(['Pharmacy Counter', 'Inventory Control']);
+});
+
+it('keeps the same counter mounted, so its drafts survive, while the layout refreshes the same user', async () => {
+  section = 'counter';
+  role = 'PHARMACIST';
+  loading = false;
+  const { rerender } = render(<PharmacyWorkspace />);
+  const cockpit = await screen.findByRole('region', { name: 'Counter cockpit' });
+
+  loading = true;
+  rerender(<PharmacyWorkspace />);
+  expect(screen.getByRole('region', { name: 'Counter cockpit' })).toBe(cockpit);
+
+  loading = false;
+  rerender(<PharmacyWorkspace />);
+  expect(screen.getByRole('region', { name: 'Counter cockpit' })).toBe(cockpit);
 });
 
 it('loads no desk figures on the counter, for any role', async () => {
@@ -82,7 +99,7 @@ it('loads no desk figures on the counter, for any role', async () => {
   role = 'PHARMACIST';
   render(<PharmacyWorkspace />);
   expect(await screen.findByRole('region', { name: 'Counter cockpit' })).toBeInTheDocument();
-  expect([asked().includes('/auth/me'), figuresAsked()]).toEqual([true, 0]);
+  expect(asked()).toEqual([]);
 });
 
 it.each(['Cancel', 'Create Package'])('closes the create-package dialog on %s', async (action) => {

@@ -187,6 +187,7 @@ const INITIAL_VITALS: VitalsState = {
 const AUTO_SAVE_INTERVAL_MS = 8000;
 const AUTO_SAVE_RETRY_MS = 15000;
 const DRAFT_STORAGE_VERSION = 1;
+const DRAFT_WRITE_DELAY_MS = 500;
 
 const createDraftStorageKey = (
   doctorId: string,
@@ -631,6 +632,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
   const autoSaveSuccessNotifiedRef = useRef(false);
   const autoSaveFailureNotifiedRef = useRef(false);
   const lastDraftJsonRef = useRef<string | null>(null);
+  const draftWriteTimerRef = useRef<number | null>(null);
   const lastStorageKeyRef = useRef<string | null>(null);
   const justSavedRef = useRef(false);
   const lastIdempotencyKeyRef = useRef<string | null>(null);
@@ -797,6 +799,10 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
 
   const persistDraftToStorage = useCallback(
     (force = false, draftOverride?: MedicalVisitDraftState) => {
+      if (draftWriteTimerRef.current !== null) {
+        clearTimeout(draftWriteTimerRef.current);
+        draftWriteTimerRef.current = null;
+      }
       if (discardDraftRef.current || !draftStorageKey || typeof window === 'undefined') return false;
       try {
     const payload = draftOverride ?? serializeDraft();
@@ -922,6 +928,23 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
   const autoSaveRunner = useRef<() => Promise<void>>(async () => {});
   const latestDraftWriter = useRef(persistDraftToStorage);
   latestDraftWriter.current = persistDraftToStorage;
+
+  const committedDraftWriter = useRef(persistDraftToStorage);
+  useEffect(() => {
+    committedDraftWriter.current = persistDraftToStorage;
+  });
+  useEffect(() => () => {
+    if (draftWriteTimerRef.current !== null) committedDraftWriter.current();
+  }, [draftStorageKey]);
+
+  const queueDraftWrite = useCallback(() => {
+    if (discardDraftRef.current || !draftStorageKey || typeof window === 'undefined') return false;
+    draftWriteTimerRef.current ??= window.setTimeout(() => {
+      draftWriteTimerRef.current = null;
+      latestDraftWriter.current();
+    }, DRAFT_WRITE_DELAY_MS);
+    return true;
+  }, [draftStorageKey]);
 
   /**
    * @cc [owner:nareshshah139,label:product] shared-clinical-conflict-gate
@@ -1272,22 +1295,21 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
         hasUnsavedChangesRef.current = false;
         clearAutoSaveTimer();
         setSaveStatus((status) => (status === 'unsaved' ? 'idle' : status));
-        persistDraftToStorage();
+        queueDraftWrite();
       }
       return;
     }
 
     hasUnsavedChangesRef.current = true;
     setSaveStatus(automaticSaveBlocked.current ? 'error' : 'unsaved');
-    const changed = persistDraftToStorage();
-    if (changed) {
+    if (queueDraftWrite()) {
       scheduleAutoSave();
     }
   }, [
     editSignature,
     clearAutoSaveTimer,
     serializeDraft,
-    persistDraftToStorage,
+    queueDraftWrite,
     scheduleAutoSave,
     vitals,
     painScore,
@@ -1318,10 +1340,10 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
     return () => {
       clearAutoSaveTimer();
       try {
-        persistDraftToStorage();
+        latestDraftWriter.current();
       } catch {}
     };
-  }, [clearAutoSaveTimer, persistDraftToStorage]);
+  }, [clearAutoSaveTimer]);
 
   const saveShortcut = useRef<(complete: boolean) => void>(() => {});
   useEffect(() => {
@@ -1334,13 +1356,24 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
         return;
       }
       try {
-        persistDraftToStorage();
+        latestDraftWriter.current();
       } catch {}
       event.preventDefault();
       event.returnValue = '';
     };
+    const writePendingDraft = () => {
+      if (draftWriteTimerRef.current === null) return;
+      try {
+        latestDraftWriter.current();
+      } catch {}
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') writePendingDraft();
+    };
 
     window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('pagehide', writePendingDraft);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     const handleKeyDown = (e: KeyboardEvent) => {
       const isSave = (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's';
       const isComplete = (e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 's';
@@ -1352,9 +1385,11 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
     document.addEventListener('keydown', handleKeyDown);
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('pagehide', writePendingDraft);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [persistDraftToStorage]);
+  }, []);
   const patientDetails: VisitContextPatient | null = patient ?? appointmentData?.patient ?? null;
 
 
@@ -1567,6 +1602,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
         if ((e as { status?: number })?.status === 409) {
           blockAutomaticSave();
         }
+        latestDraftWriter.current();
         setSaveStatus('error');
         toast({
           variant: 'destructive',

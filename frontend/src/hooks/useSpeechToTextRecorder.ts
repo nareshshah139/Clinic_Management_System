@@ -22,7 +22,7 @@ interface UseSpeechToTextRecorderOptions<F extends string> {
   applyText: (field: F, text: string) => void;
 }
 
-const MIC_UNAVAILABLE_TITLE: Record<MicUnavailableError['reason'], string> = {
+export const MIC_UNAVAILABLE_TITLE: Record<MicUnavailableError['reason'], string> = {
   unsupported: 'Voice capture unavailable',
   denied: 'Microphone access denied',
   busy: 'Dictation already running',

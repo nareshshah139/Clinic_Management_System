@@ -219,7 +219,7 @@ async function openDictationSession(o: DictationOptions, release: () => void): P
     formData.append('file', blob, recordedType === 'audio/mp4' ? 'recording.m4a' : 'recording.webm');
     limitRequest({ kind: 'error', title: SPEECH_ERROR_TITLE, description: 'Transcription took too long. Please dictate again.' });
     try {
-      const response = await deps.fetch('/api/visits/transcribe', {
+      const response = await deps.fetch(o.preference === 'full-transcript' ? '/api/visits/transcribe?speakers=none' : '/api/visits/transcribe', {
         method: 'POST',
         body: formData,
         credentials: 'include',

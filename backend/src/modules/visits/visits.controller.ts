@@ -666,6 +666,7 @@ export class VisitsController {
   async transcribeAudio(
     @UploadedFile() file: Express.Multer.File,
     @Request() _req: AuthenticatedRequest,
+    @Query('speakers') speakers?: string,
   ) {
     if (!file) {
       this.logger.warn('transcribeAudio: no file provided');
@@ -717,6 +718,9 @@ export class VisitsController {
         };
       }
       this.logger.log(`✓ Successfully transcribed ${text.length} characters`);
+      if (speakers === 'none') {
+        return { text, segments: [], speakers: { doctorText: '', patientText: '' } };
+      }
 
       const split = await splitSpeakers({ text, segments });
       return {

@@ -3,6 +3,8 @@ import ProceduresPage from '@/app/dashboard/procedures/page';
 import { apiClient } from '@/lib/api';
 import { resolveDefaultDoctorId } from '@/lib/default-visit-doctor';
 
+let mockSignedIn: { id: string; role: string } = { id: 'd1', role: 'DOCTOR' };
+jest.mock('@/components/layout/dashboard-user-context', () => ({ useDashboardUser: () => ({ user: mockSignedIn, loading: false }) }));
 jest.mock('@/lib/api', () => ({
   apiClient: {
     getPatients: jest.fn(),
@@ -53,7 +55,7 @@ beforeEach(() => {
       ? [{ id: 'd1', firstName: 'Meera', lastName: 'Iyer' }, { id: 'd2', firstName: 'Second', lastName: 'Doctor' }]
       : [{ id: 'n1', firstName: 'Ann', lastName: 'Nurse' }],
   }) as any);
-  jest.mocked(apiClient.get).mockResolvedValue({ id: 'd1', role: 'DOCTOR' } as any);
+  mockSignedIn = { id: 'd1', role: 'DOCTOR' };
   jest.mocked(apiClient.getVisits).mockResolvedValue({ visits: [savedFotonaVisit] } as any);
   jest.mocked(apiClient.getMyProcedureAccess).mockResolvedValue({ canRecord: true, canConfigure: true });
   jest.mocked(apiClient.createProcedure).mockResolvedValue({} as any);
@@ -84,9 +86,10 @@ describe('ProceduresPage', () => {
   });
 
   it('selects the signed-in doctor, since procedures have no appointment to defer to', async () => {
-    jest.mocked(apiClient.get).mockResolvedValue({ id: 'd2', role: 'DOCTOR' } as any);
+    mockSignedIn = { id: 'd2', role: 'DOCTOR' };
     await renderReady();
     await waitFor(() => expect(screen.getByRole('combobox', { name: 'Doctor *' })).toHaveTextContent('Dr. Second Doctor'));
+    expect(apiClient.get).not.toHaveBeenCalledWith('/auth/me');
   });
 
   it('finds a patient by server search instead of a capped list', async () => {

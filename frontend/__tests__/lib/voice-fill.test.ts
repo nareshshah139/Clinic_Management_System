@@ -6,7 +6,6 @@ import {
   applyVoiceFillRegistry,
   formatVoiceFillError,
   mergeVoiceFillFields,
-  requestVoiceFill,
   requestVoiceFillFromText,
   voiceDraftLines,
   type VoiceFillRegistry,
@@ -161,31 +160,6 @@ describe('visit voice fill', () => {
   });
 });
 
-describe('requestVoiceFill', () => {
-  const fetchMock = jest.fn();
-  beforeEach(() => {
-    fetchMock.mockReset();
-    global.fetch = fetchMock as unknown as typeof fetch;
-  });
-
-  it('uploads the recording as multipart field file and returns the transcript and fields', async () => {
-    fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({ transcript: 'BP 120 by 80', fields: { bpSystolic: 120, bpDiastolic: 80 } }) });
-
-    const response = await requestVoiceFill('visit-consultation', new Blob(['audio'], { type: 'audio/webm' }), 'recording.webm');
-
-    expect(response).toEqual({ transcript: 'BP 120 by 80', fields: { bpSystolic: 120, bpDiastolic: 80 } });
-    const [url, init] = fetchMock.mock.calls[0];
-    expect([url, init.method, init.credentials]).toEqual(['/api/voice-fill/visit-consultation', 'POST', 'include']);
-    const file = (init.body as FormData).get('file') as File;
-    expect([file.name, file.type]).toEqual(['recording.webm', 'audio/webm']);
-  });
-
-  it('turns an error status into a short message', async () => {
-    fetchMock.mockResolvedValue({ ok: false, status: 403, text: async () => '{"message":"Forbidden resource"}' });
-    await expect(requestVoiceFill('inventory-item', new Blob(['a']), 'recording.webm')).rejects.toThrow('Your role cannot fill this form by voice.');
-  });
-});
-
 describe('requestVoiceFillFromText', () => {
   const fetchMock = jest.fn();
   beforeEach(() => {
@@ -203,6 +177,14 @@ describe('requestVoiceFillFromText', () => {
     expect([url, init.method, init.credentials, init.headers, init.body]).toEqual([
       '/api/voice-fill/visit-consultation/text', 'POST', 'include', { 'Content-Type': 'application/json' }, '{"text":"BP 120 by 80"}',
     ]);
+  });
+
+  it('sends at most the 60,000 characters the server accepts', async () => {
+    fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({ transcript: '', fields: {} }) });
+
+    await requestVoiceFillFromText('visit-consultation', `  ${'a'.repeat(61_000)}  `);
+
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).text).toBe('a'.repeat(60_000));
   });
 
   it('formats an error status the same way as the audio route', async () => {

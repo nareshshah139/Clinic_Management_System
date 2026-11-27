@@ -3,7 +3,6 @@
  * Only the browser boundary is stubbed: getUserMedia, MediaRecorder, RTCPeerConnection and fetch.
  */
 import { act, renderHook } from '@testing-library/react';
-import { useAudioRecorder } from '@/hooks/useAudioRecorder';
 import { useSpeechToTextRecorder } from '@/hooks/useSpeechToTextRecorder';
 import { DICTATION_LIMITS, startDictationSession, type MicUnavailableError } from '@/lib/dictation-session';
 import type { SpeechToTextPreference } from '@/lib/speech-to-text';
@@ -182,28 +181,5 @@ describe('a live transcript piece that fails and then completes', () => {
   it('ItemFailureSticks: the failed piece sends the dictation to the recording upload', async () => {
     const field = await failThenComplete();
     expect(field.applyText.mock.calls).toEqual([['notes', 'Recorded words']]);
-  });
-});
-
-describe('voice fill clip: Escape while the permission prompt is open, then press again', () => {
-  async function staleDenialThenGrant() {
-    const first = deferred<FakeStream>();
-    const second = deferred<FakeStream>();
-    stubBrowser(jest.fn().mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise), never);
-    const hook = renderHook(() => useAudioRecorder({ toast: jest.fn(), onRecorded: jest.fn() }));
-    await step(() => void hook.result.current.toggle('notes'));
-    await step(() => hook.result.current.cancel());
-    await step(() => void hook.result.current.toggle('notes'));
-    await step(() => first.reject(new Error('Permission dismissed')));
-    await step(() => second.resolve(new FakeStream()));
-    return hook;
-  }
-
-  it('ClipShownWhileRecording: the button shows recording while the microphone records', async () => {
-    const { result } = await staleDenialThenGrant();
-    expect({ shown: result.current.recording?.key ?? null, recorder: FakeRecorder.last.state }).toEqual({
-      shown: 'notes',
-      recorder: 'recording',
-    });
   });
 });

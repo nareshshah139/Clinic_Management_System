@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import ProceduresPage from '@/app/dashboard/procedures/page';
 import { apiClient } from '@/lib/api';
 
+jest.mock('@/components/layout/dashboard-user-context', () => ({ useDashboardUser: () => ({ user: { id: 'nurse', role: 'NURSE' }, loading: false }) }));
 jest.mock('@/lib/api', () => ({ apiClient: {
   getPatients: jest.fn(), getUsers: jest.fn(), get: jest.fn(), getMyProcedureAccess: jest.fn(), createProcedure: jest.fn(),
 } }));

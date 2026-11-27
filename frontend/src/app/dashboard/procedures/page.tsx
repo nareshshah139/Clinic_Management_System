@@ -21,6 +21,7 @@ import { Activity, Settings, Save, User } from 'lucide-react';
 import type { ProcedureVisitResponse, StaffSummary, VisitSummary } from '@/lib/types';
 import { QuickGuide } from '@/components/common/QuickGuide';
 import { resolveDefaultDoctorId } from '@/lib/default-visit-doctor';
+import { useDashboardUser } from '@/components/layout/dashboard-user-context';
 import { useToast } from '@/hooks/use-toast';
 import { getErrorMessage } from '@/lib/utils';
 import { PatientPicker } from '@/components/procedures/PatientPicker';
@@ -51,7 +52,6 @@ type Loadable<T> = { status: 'loading' } | { status: 'error'; message: string } 
 interface Staff {
   doctors: StaffSummary[];
   nurses: StaffSummary[];
-  defaultDoctorId: string;
   access: MyProcedureAccess;
 }
 
@@ -79,6 +79,8 @@ const SKIN_FIELDS: Array<{ key: keyof SkinTypes; label: string; placeholder: str
 
 export default function ProceduresPage() {
   const { toast } = useToast();
+  const { user } = useDashboardUser();
+  const defaultDoctorId = user ? resolveDefaultDoctorId({ role: user.role, userId: user.id, current: '' }) : '';
   const [staff, setStaff] = useState<Loadable<Staff>>({ status: 'loading' });
   const [record, setRecord] = useState<ProcedureRecord>(() => emptyProcedure());
   const [activeTab, setActiveTab] = useState('new');
@@ -96,15 +98,7 @@ export default function ProceduresPage() {
         apiClient.getUsers({ role: UserRole.NURSE, limit: 50 }),
         apiClient.getMyProcedureAccess(),
       ]);
-      let defaultDoctorId = '';
-      try {
-        const me = await apiClient.get<{ id?: string; role?: string }>('/auth/me');
-        defaultDoctorId = resolveDefaultDoctorId({ role: me?.role, userId: me?.id, current: '' });
-      } catch (error) {
-        console.error('Failed to resolve signed-in user:', error);
-      }
-      setStaff({ status: 'ready', data: { doctors: usersOf(doctorsRes), nurses: usersOf(nursesRes), defaultDoctorId, access } });
-      setRecord((prev) => ({ ...prev, doctorId: prev.doctorId || defaultDoctorId }));
+      setStaff({ status: 'ready', data: { doctors: usersOf(doctorsRes), nurses: usersOf(nursesRes), access } });
     } catch (error) {
       setStaff({ status: 'error', message: getErrorMessage(error) });
     }
@@ -113,6 +107,10 @@ export default function ProceduresPage() {
   useEffect(() => {
     void loadStaff();
   }, [loadStaff]);
+
+  useEffect(() => {
+    if (defaultDoctorId) setRecord((prev) => (prev.doctorId ? prev : { ...prev, doctorId: defaultDoctorId }));
+  }, [defaultDoctorId]);
 
   const loadHistory = useCallback(async (patientId?: string) => {
     const request = ++historyRequest.current;
@@ -156,7 +154,6 @@ export default function ProceduresPage() {
       bodyParts: prev.bodyParts.includes(part) ? prev.bodyParts.filter((p) => p !== part) : [...prev.bodyParts, part],
     }));
 
-  const defaultDoctorId = staff.status === 'ready' ? staff.data.defaultDoctorId : '';
   const access = staff.status === 'ready' ? staff.data.access : null;
   const canRecord = access?.canRecord ?? false;
   const total = totalShots(record.shotCounts);

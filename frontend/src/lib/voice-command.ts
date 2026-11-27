@@ -351,13 +351,18 @@ export interface VoiceCommandSource {
 async function findPatients(command: VoiceCommand, source: VoiceCommandSource): Promise<PatientOption[]> {
   const tokens = nameTokens(command.patientName ?? '');
   const terms = [...new Set([tokens.join(' '), tokens[0], tokens[tokens.length - 1]])].filter((term) => term && term.length >= 2);
-  let byName: PatientOption[] = [];
-  for (const term of terms) {
-    byName = await source.searchPatients(term);
-    if (byName.length) break;
-  }
   const phone = command.patientPhone ? command.patientPhone.replace(/^\+?91(?=\d{10}$)/, '') : '';
-  const byPhone = phone.length >= 4 ? await source.searchPatients(phone) : [];
+  const searchByName = async () => {
+    for (const term of terms) {
+      const found = await source.searchPatients(term);
+      if (found.length) return found;
+    }
+    return [];
+  };
+  const [byName, byPhone] = await Promise.all([
+    searchByName(),
+    phone.length >= 4 ? source.searchPatients(phone) : Promise.resolve([]),
+  ]);
   return [...new Map([...byPhone, ...byName].map((p) => [p.id, p])).values()];
 }
 
@@ -385,12 +390,24 @@ export async function resolveVoiceCommand(
   const blocked = blockedReason(action, context.role);
   if (blocked) return { action: 'unavailable', reason: blocked };
   const clock = clinicClock(context.now);
-  const patient = picks.patient
-    ? resolved(picks.patient)
-    : matchPatients(await findPatients(command, source), { name: command.patientName, phone: command.patientPhone });
-  const patientId = resolvedValue(patient)?.id;
   const date = picks.date ? resolved(picks.date) : chooseDate(command.date, clock.today);
+  const patientChoice = picks.patient
+    ? Promise.resolve(resolved(picks.patient))
+    : findPatients(command, source).then((found) => matchPatients(found, { name: command.patientName, phone: command.patientPhone }));
 
+  if (action === 'schedule_appointment') {
+    const doctorChoice = picks.doctor
+      ? Promise.resolve(resolved(picks.doctor))
+      : source.doctors().then((doctors) => matchDoctors(command.doctorName, doctors));
+    const slotChoiceFor = picks.slot
+      ? Promise.resolve(resolved(picks.slot))
+      : doctorChoice.then((doctor) => slotChoice(command, resolvedValue(doctor)?.id, date, clock, source));
+    const [patient, doctor, slot] = await Promise.all([patientChoice, doctorChoice, slotChoiceFor]);
+    return { action, patient, doctor, date, slot, visitType: command.visitType ?? 'OPD', notes: command.notes };
+  }
+
+  const patient = await patientChoice;
+  const patientId = resolvedValue(patient)?.id;
   switch (action) {
     case 'open_patient':
       return { action, patient };
@@ -398,11 +415,6 @@ export async function resolveVoiceCommand(
       const today = patientId ? (await source.appointments(patientId, clock.today))
         .filter((a) => a.date === clock.today && ACTIVE.includes(a.status)) : [];
       return { action, patient, appointment: today.length === 1 ? today[0] : null };
-    }
-    case 'schedule_appointment': {
-      const doctor = picks.doctor ? resolved(picks.doctor) : matchDoctors(command.doctorName, await source.doctors());
-      const slot = picks.slot ? resolved(picks.slot) : await slotChoice(command, resolvedValue(doctor)?.id, date, clock, source);
-      return { action, patient, doctor, date, slot, visitType: command.visitType ?? 'OPD', notes: command.notes };
     }
     case 'reschedule_appointment':
     case 'cancel_appointment':

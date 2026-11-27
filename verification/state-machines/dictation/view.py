@@ -20,24 +20,10 @@ STEPS = {
     "RequestTimerFires": "the request times out",
     "ServerAnswersFill": "voice fill answers",
     "FillTimerFires": "the 240 second abort fires",
-    "YouStartClip": "you press the voice fill button",
-    "YouStopClip": "you press stop",
-    "YouCancelClip": "you press Escape",
-    "BrowserGrantsMic": "the browser grants the microphone",
-    "BrowserDeniesMic": "the browser denies the microphone",
-    "ClipTimerFires": "the 40 minute cap stops it",
 }
 
 
-def clip_state(c):
-    if c["rec"] == "recording":
-        return "Clip recording" if c["ui"] else "Recording while the button shows idle"
-    return "Asking for the microphone" if c["ui"] else "Voice fill button idle"
-
-
 def state(v):
-    if v["surface"] == "clip":
-        return clip_state(v["clip"])
     d = v["ds"]
     if d["failedOnce"] and d["item"] == "final":
         return "Live preview kept a failed piece"
@@ -52,17 +38,5 @@ def state(v):
     return "Listening with live preview" if d["live"] else "Listening, recording only"
 
 
-def settled_attempt(frm, to):
-    a, b = frm["clip"], to["clip"]
-    for i, (was, now) in enumerate(zip(a["att"], b["att"])):
-        if was == "pending" and now == "settled":
-            return i
-    return None
-
-
 def step(action, frm, to):
-    if action in ("BrowserGrantsMic", "BrowserDeniesMic"):
-        i = settled_attempt(frm, to)
-        if i is not None and frm["clip"]["attGen"][i] != frm["clip"]["gen"]:
-            return "the browser denies an old request" if action == "BrowserDeniesMic" else "the browser grants an old request"
     return STEPS.get(action, action)

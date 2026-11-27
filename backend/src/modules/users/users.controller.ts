@@ -85,6 +85,11 @@ export class UsersController {
     return this.usersService.findAllUsers(query, req.user.branchId);
   }
 
+  @Get('me')
+  findCurrentUser(@Request() req: AuthenticatedRequest) {
+    return this.usersService.findUserById(req.user.id, req.user.branchId);
+  }
+
   @Get('statistics')
   getUserStatistics(@Query() query: UserStatisticsDto, @Request() req: AuthenticatedRequest) {
     return this.usersService.getUserStatistics(query, req.user.branchId);
@@ -184,7 +189,7 @@ export class UsersController {
 
   /**
    * @cc [owner:nareshshah139,label:product] users-static-routes-before-id
-   * GET /users/branches, /users/permissions, /users/roles, /users/statistics and /users/dashboard
+   * GET /users/me, /users/branches, /users/permissions, /users/roles, /users/statistics and /users/dashboard
    * MUST reach their own handlers and never be read as a user id. Nest matches in declaration
    * order, so every route that starts with `:id` stays below this line.
    */
