@@ -2532,6 +2532,31 @@ describe('PurchaseInvoiceWorkbench', () => {
     await waitFor(() => expect(api.updatePharmacyPurchaseInvoiceDraft).toHaveBeenLastCalledWith('pinv-1', expect.objectContaining({ ocrFlags: ['uncertain_distributorGstin'] })));
   });
 
+  it('settles the supplier GSTIN and invoice number checks when each is corrected in a scanned draft', async () => {
+    const flags = ['independent_read_disagrees_distributorGstin', 'independent_read_disagrees_invoiceNumber'];
+    render(<PurchaseInvoiceWorkbench importedDraft={{ draft: { ...draftInvoice, invoiceDate: '2026-05-01', goodsReceivedDate: '2026-05-02', ocrFlags: flags } }} />);
+    await screen.findByDisplayValue('APX-001');
+    const checks = await screen.findByRole('navigation', { name: 'Invoice checks' });
+    expect(checks).toHaveTextContent('2 checks to review');
+    fireEvent.change(screen.getByLabelText('Distributor'), { target: { value: 'Apex Distributors Pvt Ltd' } });
+    expect(checks).toHaveTextContent('2 checks to review');
+    fireEvent.change(screen.getByLabelText('GSTIN'), { target: { value: '36ABCDE1234F1Z6' } });
+    expect(checks).toHaveTextContent('1 check to review');
+    expect(document.getElementById('distributor-gstin-review-state')).toHaveTextContent('Verified');
+    expect(document.getElementById('distributor-name-review-state')).toBeNull();
+    fireEvent.change(screen.getByLabelText('Invoice No.'), { target: { value: 'APX-002' } });
+    expect(screen.queryByRole('navigation', { name: 'Invoice checks' })).not.toBeInTheDocument();
+    expect(document.getElementById('invoice-number-review-state')).toHaveTextContent('Verified');
+  });
+
+  it('keeps an invalid corrected supplier GSTIN flagged', async () => {
+    render(<PurchaseInvoiceWorkbench importedDraft={{ draft: { ...draftInvoice, invoiceDate: '2026-05-01', goodsReceivedDate: '2026-05-02', ocrFlags: ['independent_read_disagrees_distributorGstin'] } }} />);
+    await screen.findByDisplayValue('APX-001');
+    fireEvent.change(screen.getByLabelText('GSTIN'), { target: { value: '36ABCDE' } });
+    expect(screen.getByRole('navigation', { name: 'Invoice checks' })).toHaveTextContent('1 check to review');
+    expect(document.getElementById('distributor-gstin-review-state')).toHaveTextContent('Needs correction');
+  });
+
   it('keeps invalid expiry red and unconfirmable while preserving the save validation', async () => {
     renderSavedInvoice({ ...draftInvoice, distributorDlNo: 'DL-TEST', unresolvedOcrFlags: 1, items: [{ ...draftInvoice.items[0], packUnitType: 'Strip', expiryMonth: 13, ocrFlags: ['uncertain_expiry'] }] });
     await editSelectedInvoice();
