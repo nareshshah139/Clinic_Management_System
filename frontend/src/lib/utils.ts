@@ -1,4 +1,3 @@
-import { displayUtcDate } from '@/lib/date-display';
 import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
 import type { TimeSlotConfig } from './types'
@@ -72,45 +71,11 @@ function calculateAgeFromDob(dob: string | Date): number | null {
   }
 }
 
-export function isDefaultDob(dob: string | Date | null | undefined): boolean {
-  if (!dob) return false;
-  try {
-    const birthDate = new Date(dob);
-    if (isNaN(birthDate.getTime())) return false;
-    const today = new Date();
-    return (
-      birthDate.getFullYear() === today.getFullYear() &&
-      birthDate.getMonth() === today.getMonth() &&
-      birthDate.getDate() === today.getDate()
-    );
-  } catch {
-    return false;
-  }
-}
-
-export function formatDob(dob: string | Date | null | undefined): string {
-  if (!dob) return 'N/A';
-  if (isDefaultDob(dob)) return 'N/A';
-  try {
-    return displayUtcDate(dob, 'N/A');
-  } catch {
-    return 'N/A';
-  }
-}
-
 export function formatAge(patient: { age?: number | null; dob?: string | Date | null } | null | undefined): string {
   if (!patient) return 'N/A';
   const age = calculateAge(patient);
   return age != null ? `${age} yrs` : 'N/A';
 }
-
-// Default time slot configuration for IST
-export const DEFAULT_TIME_SLOT_CONFIG: TimeSlotConfig = {
-  startHour: 9,
-  endHour: 18,
-  stepMinutes: 30,
-  timezone: 'Asia/Kolkata'
-};
 
 // Time slot utilities
 export function generateTimeSlots(config: TimeSlotConfig = {
@@ -255,31 +220,6 @@ export function isConflictError(error: any): boolean {
   return error?.status === 409;
 }
 
-export function getConflictSuggestions(error: any): string[] {
-  if (!isConflictError(error)) return [];
-  const suggestions = error?.body?.suggestions;
-  return Array.isArray(suggestions) ? suggestions : [];
-}
-
-// Detailed conflict messages for UI
-export function getConflictDetails(error: any): string[] {
-  if (!isConflictError(error)) return [];
-  const conflicts = error?.body?.conflicts;
-  if (!Array.isArray(conflicts) || conflicts.length === 0) return [];
-
-  return conflicts.map((c: any) => {
-    const base = typeof c?.message === 'string' && c.message.trim().length > 0
-      ? c.message.trim()
-      : (typeof c?.type === 'string' ? `${c.type} conflict` : 'Scheduling conflict');
-    const appt = c?.conflictingAppointment;
-    const extraParts: string[] = [];
-    if (appt?.patientName) extraParts.push(`with ${appt.patientName}`);
-    if (appt?.slot) extraParts.push(`at ${appt.slot}`);
-    const extras = extraParts.length ? ` (${extraParts.join(', ')})` : '';
-    return `${base}${extras}`;
-  });
-}
-
 // Cleanup utilities for component unmounting
 export function createCleanupTimeouts(): {
   addTimeout: (id: NodeJS.Timeout) => void;
@@ -294,36 +234,6 @@ export function createCleanupTimeouts(): {
       timeouts.clear();
     }
   };
-}
-
-// Form validation utilities
-export function validateAppointmentForm(data: {
-  doctorId: string;
-  patientId: string;
-  date: string;
-  slot: string;
-  visitType: string;
-}): string[] {
-  const errors: string[] = [];
-  
-  if (!data.doctorId?.trim()) errors.push('Please select a doctor');
-  if (!data.patientId?.trim()) errors.push('Please select a patient');
-  if (!data.date?.trim()) errors.push('Please select a date');
-  if (!data.slot?.trim()) errors.push('Please select a time slot');
-  if (!data.visitType?.trim()) errors.push('Please select visit type');
-  
-  // Validate date is not in the past
-  const today = getISTDateString();
-  if (data.date && data.date < today) {
-    errors.push('Cannot schedule appointments in the past');
-  }
-  
-  // Validate slot format
-  if (data.slot && !/^\d{2}:\d{2}-\d{2}:\d{2}$/.test(data.slot)) {
-    errors.push('Invalid time slot format');
-  }
-  
-  return errors;
 }
 
 // Room filtering utilities
@@ -350,114 +260,4 @@ export function filterRoomsByVisitType(rooms: any[], visitType: string): any[] {
                roomTypeLower.includes('clinic');
     }
   });
-}
-
-/**
- * Calculate relevance score for drug search results
- * Higher score = more relevant match
- * Heavily prioritizes prefix matches over contains matches
- */
-export function calculateDrugRelevanceScore(drug: any, searchQuery: string): number {
-  if (!searchQuery.trim()) return 0;
-  
-  const query = searchQuery.toLowerCase().trim();
-  const drugName = (drug.name || '').toLowerCase();
-  const genericName = (drug.genericName || '').toLowerCase();
-  const manufacturerName = (drug.manufacturerName || '').toLowerCase();
-  const composition = (drug.composition1 || '').toLowerCase();
-  const category = (drug.category || '').toLowerCase();
-  
-  let score = 0;
-  
-  // TIER 1: Exact matches get highest priority (10000+ points)
-  // Generic name gets equal priority to drug name for exact matches
-  if (drugName === query) score += 10000;
-  if (genericName === query) score += 10000; // Same as drug name
-  
-  // TIER 2: Full name/generic starts with query (8000+ points) 
-  // Generic name gets equal priority to drug name for prefix matches
-  if (drugName.startsWith(query)) score += 8000;
-  if (genericName.startsWith(query)) score += 8000; // Same as drug name
-  
-  // TIER 3: Word boundary prefix matches (6000+ points)
-  // Each word in the drug name or generic name that starts with the query gets equal score
-  const queryWords = query.split(/\s+/);
-  queryWords.forEach((word: string) => {
-    if (word.length >= 2) {
-      const drugWords: string[] = drugName.split(/\s+/);
-      const genericWords: string[] = genericName.split(/\s+/);
-      
-      // Equal scores for word-level prefix matches
-      drugWords.forEach((drugWord: string) => {
-        if (drugWord.startsWith(word)) score += 6000;
-      });
-      
-      genericWords.forEach((genericWord: string) => {
-        if (genericWord.startsWith(word)) score += 6000; // Same as drug name
-      });
-    }
-  });
-  
-  // TIER 4: Manufacturer starts with query (1000+ points)
-  if (manufacturerName.startsWith(query)) score += 2000;
-  
-  // TIER 5: Contains matches get much lower priority (100-500 points)
-  // This ensures prefix matches always rank higher than contains matches
-  // Generic name gets equal priority to drug name for contains matches
-  if (drugName.includes(query) && !drugName.startsWith(query)) score += 500;
-  if (genericName.includes(query) && !genericName.startsWith(query)) score += 500; // Same as drug name
-  if (composition.includes(query)) score += 300;
-  if (manufacturerName.includes(query) && !manufacturerName.startsWith(query)) score += 200;
-  if (category.includes(query)) score += 100;
-  
-  // TIER 6: Partial word contains matches (50-150 points)
-  queryWords.forEach(word => {
-    if (word.length >= 3) {
-      // Only add points if it's not already a prefix match
-      // Generic name gets equal priority to drug name for partial word matches
-      if (drugName.includes(word) && !drugName.startsWith(word)) score += 150;
-      if (genericName.includes(word) && !genericName.startsWith(word)) score += 150; // Same as drug name
-      if (composition.includes(word)) score += 80;
-      if (manufacturerName.includes(word) && !manufacturerName.startsWith(word)) score += 50;
-    }
-  });
-  
-  // Bonus factors (small bonuses to break ties)
-  // Boost score for shorter drug names (more specific matches)
-  if (drugName.length > 0) {
-    const lengthBonus = Math.max(0, 50 - drugName.length);
-    score += lengthBonus;
-  }
-  
-  // Boost score for active drugs
-  if (drug.isActive) score += 10;
-  
-  // Boost score for drugs with price (available in stock)
-  if (drug.price && drug.price > 0) score += 20;
-  
-  return score;
-}
-
-/**
- * Sort drug search results by relevance
- */
-export function sortDrugsByRelevance(drugs: any[], searchQuery: string): any[] {
-  if (!searchQuery.trim() || !Array.isArray(drugs)) return drugs;
-  
-  return drugs
-    .map(drug => ({
-      ...drug,
-      _relevanceScore: calculateDrugRelevanceScore(drug, searchQuery)
-    }))
-    .sort((a, b) => {
-      // Primary sort: relevance score (descending)
-      const scoreDiff = b._relevanceScore - a._relevanceScore;
-      if (scoreDiff !== 0) return scoreDiff;
-      
-      // Secondary sort: alphabetical by name (ascending)
-      const nameA = (a.name || '').toLowerCase();
-      const nameB = (b.name || '').toLowerCase();
-      return nameA.localeCompare(nameB);
-    })
-    .map(({ _relevanceScore, ...drug }) => drug); // Remove the temporary score field
 }
