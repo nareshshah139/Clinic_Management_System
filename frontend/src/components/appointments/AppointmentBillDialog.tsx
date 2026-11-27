@@ -13,7 +13,6 @@ import { useToast } from '@/hooks/use-toast';
 import type { AppointmentInSlot, ClinicBillAccess } from '@/lib/types';
 import { paymentModeLabel, type DeskPaymentMode } from '@/lib/clinic-payment-modes';
 import { PaymentModePicker as ModePicker, ReceivedOnField, deskPayment, receivedOnInvalid } from '@/components/billing/PaymentModePicker';
-import { clinicToday } from '@/components/pharmacy/pharmacy-report-model';
 import { ReceiptButtons } from '@/components/billing/ReceiptButtons';
 import { BILL_TYPE_LABEL, FEE_LIST_PATH, defaultBillLine, parseRupees, rupee } from './appointment-billing-view';
 import { plural } from '@/lib/labels';
@@ -67,7 +66,7 @@ export function AppointmentBillDialog({
   const [payment, setPayment] = useState('');
   const [mode, setMode] = useState<Mode>('CASH');
   const [reference, setReference] = useState('');
-  const [receivedOn, setReceivedOn] = useState(clinicToday);
+  const [receivedOn, setReceivedOn] = useState<string | null>(null);
   const [formRound, setFormRound] = useState(0);
 
   const invoiceIds = (appointment?.billing?.invoices ?? []).map((i) => i.id).join(',');
@@ -92,7 +91,7 @@ export function AppointmentBillDialog({
     setPaidNow(null);
     setMode('CASH');
     setReference('');
-    setReceivedOn(clinicToday());
+    setReceivedOn(null);
     setFormRound((round) => round + 1);
   }, [appointment]);
 
