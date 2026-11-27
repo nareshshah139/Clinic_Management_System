@@ -1,4 +1,6 @@
 import React from 'react';
+import { clinicToday } from '@/components/pharmacy/pharmacy-report-model';
+import { addDays } from '@/lib/date-ranges';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import DoctorDayCalendar from './DoctorDayCalendar';
 import { apiClient } from '@/lib/api';
@@ -125,6 +127,36 @@ describe('DoctorDayCalendar billing on each row', () => {
     expect(within(dialog).queryByRole('button', { name: /Record/ })).toBeNull();
     fireEvent.keyDown(dialog, { key: 'Escape' });
     expect(await screen.findByRole('button', { name: 'Review bill: ₹500, paid' })).toBeInTheDocument();
+  });
+
+  it('dates a catch-up payment to the day the money was received, and refuses a future day', async () => {
+    renderDay([row('a2', '09:15-09:30', 'Ravi Kumar', { billType: 'REVIEW', billing: bill('DUE', 500, 300, true) })]);
+    api.getInvoiceById.mockResolvedValue({
+      id: 'cinv1', invoiceNo: 'INV-1', total: 500, received: 300, balance: 200,
+      items: [{ id: 'i1', name: 'Review consultation', qty: 1, total: 500 }],
+      payments: [],
+    });
+    api.processPayment.mockResolvedValue({ id: 'pay2' });
+    const today = clinicToday();
+    const twoDaysAgo = addDays(today, -2);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Review bill: ₹500, ₹200 due' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Bill for Ravi Kumar' });
+    expect(await within(dialog).findByText(/Received today/)).toBeInTheDocument();
+    expect(within(dialog).queryByLabelText('Received on')).toBeNull();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Change the day the money was received' }));
+    const day = within(dialog).getByLabelText('Received on');
+    expect(day).toHaveAttribute('max', today);
+    expect(day).toHaveAttribute('min', addDays(today, -30));
+
+    fireEvent.change(day, { target: { value: addDays(today, 1) } });
+    expect(within(dialog).getByText(/Choose a day from/)).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Record ₹200 payment' })).toBeDisabled();
+
+    fireEvent.change(day, { target: { value: twoDaysAgo } });
+    expect(within(dialog).getByText(/Reports count this payment on/)).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Record ₹200 payment' }));
+    await waitFor(() => expect(api.processPayment).toHaveBeenCalledWith({ invoiceId: 'cinv1', amount: 200, method: 'CASH', receivedOn: twoDaysAgo }));
   });
 
   it('creates a bill for the appointment, prefilled from its bill type, and takes the payment with it', async () => {

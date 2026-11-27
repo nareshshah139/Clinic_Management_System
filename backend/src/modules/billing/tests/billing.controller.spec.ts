@@ -233,7 +233,7 @@ describe('BillingController', () => {
       const result = await controller.processPayment(paymentDto, mockRequest as any);
 
       expect(result).toEqual(mockPayment);
-      expect(service.processPayment).toHaveBeenCalledWith(paymentDto, mockRequest.user.branchId);
+      expect(service.processPayment).toHaveBeenCalledWith(paymentDto, mockRequest.user.branchId, mockRequest.user);
     });
   });
 

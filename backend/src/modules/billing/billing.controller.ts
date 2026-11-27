@@ -136,7 +136,7 @@ export class BillingController {
     @Body() paymentDto: PaymentDto,
     @Request() req: AuthenticatedRequest,
   ) {
-    return this.billingService.processPayment(paymentDto, req.user.branchId);
+    return this.billingService.processPayment(paymentDto, req.user.branchId, req.user);
   }
 
   @Post('payments/bulk')

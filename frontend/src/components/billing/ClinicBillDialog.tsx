@@ -14,7 +14,8 @@ import { displayClinicDate, displayClinicDateTime } from '@/lib/date-display';
 import { paymentModeLabel, type DeskPaymentMode } from '@/lib/clinic-payment-modes';
 import { toast } from '@/hooks/use-toast';
 import { parseRupees, rupee } from '@/components/appointments/appointment-billing-view';
-import { PaymentModePicker, deskPayment } from './PaymentModePicker';
+import { PaymentModePicker, ReceivedOnField, deskPayment, receivedOnInvalid } from './PaymentModePicker';
+import { clinicToday } from '@/components/pharmacy/pharmacy-report-model';
 import { ReceiptButtons } from './ReceiptButtons';
 import { KIND_LABEL, STATUS_VIEW, voidBlockedReason, type ClinicBillActions, type ClinicBillRow, type ClinicReceipt } from './clinic-bill-model';
 
@@ -67,6 +68,7 @@ export function ClinicBillDialog({ billId, actions, collecting = false, onClose,
   const [amount, setAmount] = useState('');
   const [mode, setMode] = useState<DeskPaymentMode>('CASH');
   const [reference, setReference] = useState('');
+  const [receivedOn, setReceivedOn] = useState(clinicToday);
   const [key, setKey] = useState(requestKey);
   const [refund, setRefund] = useState<Refund | null>(null);
   const [voidBill, voidDialog] = useVoidBill();
@@ -90,6 +92,7 @@ export function ClinicBillDialog({ billId, actions, collecting = false, onClose,
     toast({ variant: 'success', title: message });
     setRefund(null);
     setReference('');
+    setReceivedOn(clinicToday());
     await load();
     onChanged();
   };
@@ -117,6 +120,7 @@ export function ClinicBillDialog({ billId, actions, collecting = false, onClose,
   const voided = bill.status === 'CANCELLED';
   const payValue = parseRupees(amount);
   const payInvalid = payValue !== null && (Number.isNaN(payValue) || payValue <= 0 || payValue > bill.due);
+  const dayInvalid = receivedOnInvalid(receivedOn);
   const canCollect = actions.collect && !voided && bill.due > 0;
   const refundValue = refund ? parseRupees(refund.amount) : null;
   const refundPayment = refund ? receipt.payments.find((p) => p.id === refund.paymentId) : undefined;
@@ -124,11 +128,11 @@ export function ClinicBillDialog({ billId, actions, collecting = false, onClose,
   const blocked = voidBlockedReason(bill);
 
   const collect = async () => {
-    if (!canCollect || payValue === null || payInvalid || saving) return;
+    if (!canCollect || payValue === null || payInvalid || dayInvalid || saving) return;
     setSaving(true);
     setError(null);
     try {
-      await apiClient.collectClinicPayment(deskPayment(bill.id, payValue, mode, reference), key);
+      await apiClient.collectClinicPayment(deskPayment(bill.id, payValue, mode, reference, receivedOn), key);
       setKey(requestKey());
       await changed(`${rupee(payValue)} ${paymentModeLabel(mode)} recorded on ${bill.billNo}`);
     } catch (e) {
@@ -249,7 +253,8 @@ export function ClinicBillDialog({ billId, actions, collecting = false, onClose,
             </label>
             {payInvalid && <p className="text-sm text-destructive-text">Enter an amount above 0 and up to the {rupee(bill.due)} due.</p>}
             <PaymentModePicker value={mode} onChange={setMode} label="Payment mode" reference={reference} onReference={setReference} />
-            <Button className="h-10 w-full" disabled={saving || payValue === null || payInvalid} onClick={() => void collect()}>
+            <ReceivedOnField key={key} value={receivedOn} onChange={setReceivedOn} />
+            <Button className="h-10 w-full" disabled={saving || payValue === null || payInvalid || dayInvalid} onClick={() => void collect()}>
               {saving ? 'Saving…' : payValue && !payInvalid ? `Record ${rupee(payValue)} payment` : 'Record payment'}
             </Button>
           </section>

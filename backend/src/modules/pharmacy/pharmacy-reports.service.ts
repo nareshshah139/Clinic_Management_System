@@ -1041,7 +1041,8 @@ export class PharmacyReportsService {
   private async clinicBills(branchId: string, day: string): Promise<ClinicBill[]> {
     const range = clinicDayRange(day, day);
     const bills = await this.prisma.newInvoice.findMany({
-      where: { branchId, OR: [{ createdAt: range }, { payments: { some: { createdAt: range, reconStatus: 'COMPLETED' } } }] },
+      // A payment counts on the day its money was received (issue #190), as in the revenue report.
+      where: { branchId, OR: [{ createdAt: range }, { payments: { some: { receivedAt: range, reconStatus: 'COMPLETED' } } }] },
       select: {
         id: true,
         invoiceNo: true,
@@ -1049,7 +1050,7 @@ export class PharmacyReportsService {
         status: true,
         total: true,
         patient: { select: { name: true } },
-        payments: { where: { reconStatus: 'COMPLETED' }, select: { mode: true, amount: true, createdAt: true } },
+        payments: { where: { reconStatus: 'COMPLETED' }, select: { mode: true, amount: true, receivedAt: true } },
       },
     });
     return bills.map((bill) => ({
@@ -1060,7 +1061,7 @@ export class PharmacyReportsService {
       customer: bill.patient?.name ?? null,
       total: money(bill.total),
       cancelled: bill.status === 'CANCELLED',
-      payments: bill.payments.map((p) => ({ mode: p.mode, amount: money(p.amount), day: clinicDay(p.createdAt) })),
+      payments: bill.payments.map((p) => ({ mode: p.mode, amount: money(p.amount), day: clinicDay(p.receivedAt) })),
     }));
   }
 
