@@ -194,9 +194,13 @@ export class PaymentDto {
   @IsObject()
   gatewayResponse?: Record<string, any>;
 
+  /**
+   * Clinic day (Asia/Kolkata, YYYY-MM-DD) the money was received, for a payment typed in later.
+   * Omitted means today. The service checks the day is real, not in the future and in its window.
+   */
   @IsOptional()
-  @IsDateString()
-  paymentDate?: string;
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'receivedOn must be a clinic day as YYYY-MM-DD' })
+  receivedOn?: string;
 }
 
 export class RefundDto {

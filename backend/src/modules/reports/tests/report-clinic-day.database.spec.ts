@@ -43,10 +43,10 @@ databaseTests('Report date ranges in clinic days on PostgreSQL', () => {
     await db.newInvoice.create({ data: { id: 'i1', invoiceNo: 'D-1', patientId: 'p', branchId: 'A', total: 5230, balance: 0, received: 5230,
       createdAt: new Date('2026-11-10T18:35:00.000Z'), items: { create: [{ serviceId: 'consult', name: 'Consultation', qty: 1, unitPrice: 5230, total: 5230, gstRate: 0 }] } } });
     await db.newPayment.createMany({ data: [
-      { invoiceId: 'i1', amount: 1000, mode: 'CASH', reconStatus: 'COMPLETED', createdAt: new Date('2026-11-11T04:30:00.000Z') },
-      { invoiceId: 'i1', amount: 200, mode: 'UPI', reconStatus: 'COMPLETED', createdAt: new Date('2026-11-11T18:29:00.000Z') },
-      { invoiceId: 'i1', amount: 4000, mode: 'CASH', reconStatus: 'COMPLETED', createdAt: new Date('2026-11-11T18:30:00.000Z') },
-      { invoiceId: 'i1', amount: 30, mode: 'CARD', reconStatus: 'COMPLETED', createdAt: new Date('2026-11-10T18:40:00.000Z') },
+      { invoiceId: 'i1', amount: 1000, mode: 'CASH', reconStatus: 'COMPLETED', createdAt: new Date('2026-11-11T04:30:00.000Z'), receivedAt: new Date('2026-11-11T04:30:00.000Z') },
+      { invoiceId: 'i1', amount: 200, mode: 'UPI', reconStatus: 'COMPLETED', createdAt: new Date('2026-11-11T18:29:00.000Z'), receivedAt: new Date('2026-11-11T18:29:00.000Z') },
+      { invoiceId: 'i1', amount: 4000, mode: 'CASH', reconStatus: 'COMPLETED', createdAt: new Date('2026-11-11T18:30:00.000Z'), receivedAt: new Date('2026-11-11T18:30:00.000Z') },
+      { invoiceId: 'i1', amount: 30, mode: 'CARD', reconStatus: 'COMPLETED', createdAt: new Date('2026-11-10T18:40:00.000Z'), receivedAt: new Date('2026-11-10T18:40:00.000Z') },
     ] });
   }, 120000);
 

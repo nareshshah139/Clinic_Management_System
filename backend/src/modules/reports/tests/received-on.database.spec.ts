@@ -78,7 +78,7 @@ databaseTests('Clinic takings on the day the money was received, on PostgreSQL',
     const on24 = await pharmacyReports.dailyCollection('2026-11-24', viewer);
     const on26 = await pharmacyReports.dailyCollection('2026-11-26', viewer);
     expect([on24.clinic!.net, on26.clinic!.net]).toEqual([700, 0]);
-    const row = on24.report.sections.find((s: any) => s.id === 'clinic-bills')!.rows[0] as any;
+    const row = on24.sections.find((s: any) => s.id === 'clinic-bills')!.rows[0] as any;
     expect([row.cells.number, row.cells.paidToday]).toEqual(['R-late', 700]);
   });
 

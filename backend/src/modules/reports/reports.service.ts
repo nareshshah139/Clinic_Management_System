@@ -66,10 +66,10 @@ import {
 } from './dto/query-reports.dto';
 
 /** groupBy rows keyed by instant, summed into clinic days, oldest first. */
-function byClinicDay<T extends { createdAt: Date }>(groups: T[], amount: (g: T) => number, count: (g: T) => number) {
+function byClinicDay<T extends { createdAt: Date } | { receivedAt: Date }>(groups: T[], amount: (g: T) => number, count: (g: T) => number) {
   const days = new Map<string, { amount: number; count: number }>();
   for (const g of groups) {
-    const day = clinicDay(g.createdAt);
+    const day = clinicDay('receivedAt' in g ? g.receivedAt : g.createdAt);
     const total = days.get(day) ?? { amount: 0, count: 0 };
     days.set(day, { amount: total.amount + amount(g), count: total.count + count(g) });
   }
@@ -89,9 +89,10 @@ export class ReportsService {
     const { startDate, endDate, period, doctorId, paymentMode, serviceType, includePaymentBreakdown } = query;
     const dateRange = reportRange({ startDate, endDate, period });
 
+    // Clinic money counts on the day it was received (issue #190), not the day it was typed in.
     const wherePayments: any = {
       reconStatus: 'COMPLETED',
-      createdAt: dateRange.instants,
+      receivedAt: dateRange.instants,
       invoice: {
         branchId,
         ...(doctorId ? { OR: [{ visit: { doctorId } }, { appointment: { doctorId } }] } : {}),
@@ -109,7 +110,7 @@ export class ReportsService {
       includePaymentBreakdown
         ? this.prisma.newPayment.groupBy({ by: ['mode'], where: wherePayments, _sum: { amount: true }, _count: { _all: true } })
         : Promise.resolve([] as any[]),
-      this.prisma.newPayment.groupBy({ by: ['createdAt'], where: wherePayments, _sum: { amount: true }, _count: { _all: true } }),
+      this.prisma.newPayment.groupBy({ by: ['receivedAt'], where: wherePayments, _sum: { amount: true }, _count: { _all: true } }),
     ]);
 
     const totalRevenue = sumAgg._sum.amount ?? 0;
@@ -365,7 +366,7 @@ export class ReportsService {
         select: { patientId: true, createdAt: true },
       }),
       this.prisma.newPayment.findMany({
-        where: { reconStatus: 'COMPLETED', createdAt: dateRange.instants, invoice: { patientId: { in: patientIds } } },
+        where: { reconStatus: 'COMPLETED', receivedAt: dateRange.instants, invoice: { patientId: { in: patientIds } } },
         select: { amount: true, invoice: { select: { patientId: true } } },
       }),
     ]);
@@ -410,7 +411,7 @@ export class ReportsService {
               this.prisma.newPayment.aggregate({
                 where: {
                   reconStatus: 'COMPLETED',
-                  createdAt: dateRange.instants,
+                  receivedAt: dateRange.instants,
                   invoice: { branchId, OR: [{ visit: { doctorId: d.id } }, { appointment: { doctorId: d.id } }] },
                 },
                 _sum: { amount: true },
@@ -772,7 +773,7 @@ export class ReportsService {
 
     const where: any = {
       invoice: { branchId },
-      createdAt: dateRange.instants,
+      receivedAt: dateRange.instants,
     };
     if (paymentMode) where.mode = paymentMode as any; // Fixed: use 'mode' instead of 'method'
     if (gateway) where.gateway = gateway;
@@ -795,9 +796,9 @@ export class ReportsService {
         where: { ...where, reconStatus: 'COMPLETED' },
         _count: { _all: true },
       }),
-      this.prisma.newPayment.groupBy({ by: ['createdAt'], where, _sum: { amount: true }, _count: { _all: true } }),
-      this.prisma.newPayment.groupBy({ by: ['createdAt'], where: { ...where, reconStatus: 'COMPLETED' }, _count: { _all: true } }),
-      this.prisma.newPayment.groupBy({ by: ['createdAt'], where: { ...where, reconStatus: 'FAILED' }, _count: { _all: true } }),
+      this.prisma.newPayment.groupBy({ by: ['receivedAt'], where, _sum: { amount: true }, _count: { _all: true } }),
+      this.prisma.newPayment.groupBy({ by: ['receivedAt'], where: { ...where, reconStatus: 'COMPLETED' }, _count: { _all: true } }),
+      this.prisma.newPayment.groupBy({ by: ['receivedAt'], where: { ...where, reconStatus: 'FAILED' }, _count: { _all: true } }),
     ]);
 
     const totalAmount = totalAmountAgg._sum.amount || 0;
@@ -844,7 +845,7 @@ export class ReportsService {
     let refundSummary: RefundSummaryDto = { totalRefunds: 0, totalRefundAmount: 0, refundRate: 0, averageRefundAmount: 0, refundReasons: [] };
     if (includeRefunds) {
       const refundWhere: Prisma.NewPaymentWhereInput = {
-        invoice: { branchId }, createdAt: dateRange.instants,
+        invoice: { branchId }, receivedAt: dateRange.instants,
         reconStatus: 'COMPLETED', ...(paymentMode ? { mode: paymentMode as any } : {}), ...(gateway ? { gateway } : {}),
       };
       const [refunds, positivePayments] = await Promise.all([
@@ -898,13 +899,13 @@ export class ReportsService {
     const [appointments, completed, revenueAgg, patients, activeDoctors, lowStockAlerts, pendingPayments, recentAppointmentsRaw, revenueLast7] = await Promise.all([
       this.prisma.appointment.count({ where: { branchId, date: today } }),
       this.prisma.appointment.count({ where: { branchId, date: today, status: 'COMPLETED' } }),
-      this.prisma.newPayment.aggregate({ where: { invoice: { branchId }, reconStatus: 'COMPLETED', createdAt: today }, _sum: { amount: true } }),
+      this.prisma.newPayment.aggregate({ where: { invoice: { branchId }, reconStatus: 'COMPLETED', receivedAt: today }, _sum: { amount: true } }),
       this.prisma.patient.count({ where: { branchId, createdAt: today } }),
       this.prisma.appointment.groupBy({ by: ['doctorId'], where: { branchId, date: today }, _count: { doctorId: true } }),
       readLowStock(this.prisma, branchId, 1).then((low) => low.total),
       this.prisma.newPayment.count({ where: { invoice: { branchId }, reconStatus: 'PENDING' } }),
       this.prisma.appointment.findMany({ where: { branchId }, orderBy: { date: 'desc' }, take: 10, select: { id: true, date: true, status: true, visitType: true, patient: { select: { name: true } }, doctor: { select: { firstName: true, lastName: true } } } }),
-      this.prisma.newPayment.groupBy({ by: ['createdAt'], where: { invoice: { branchId }, reconStatus: 'COMPLETED', createdAt: lastSevenDays }, _sum: { amount: true }, _count: { _all: true } }),
+      this.prisma.newPayment.groupBy({ by: ['receivedAt'], where: { invoice: { branchId }, reconStatus: 'COMPLETED', receivedAt: lastSevenDays }, _sum: { amount: true }, _count: { _all: true } }),
     ]);
 
     const recentAppointments: RecentAppointmentDto[] = recentAppointmentsRaw.map((a) => ({
@@ -1124,7 +1125,7 @@ export class ReportsService {
       this.prisma.appointment.count({ where: { branchId, status: 'NO_SHOW' as any } }),
       this.prisma.appointment.count({ where: { branchId, date: today } }),
       this.prisma.appointment.count({ where: { branchId, date: today, status: 'COMPLETED' as any } }),
-      this.prisma.newPayment.aggregate({ where: { invoice: { branchId }, reconStatus: 'COMPLETED', createdAt: thisMonth }, _sum: { amount: true } }),
+      this.prisma.newPayment.aggregate({ where: { invoice: { branchId }, reconStatus: 'COMPLETED', receivedAt: thisMonth }, _sum: { amount: true } }),
       this.prisma.newPayment.count({ where: { invoice: { branchId }, reconStatus: 'PENDING' } }),
       this.prisma.newInvoice.count({ where: { branchId, status: { in: ['PENDING', 'PARTIALLY_PAID', 'OVERDUE'] } } }),
       this.prisma.inventoryItem.count({ where: { branchId, NOT: { minStockLevel: null }, AND: [{ currentStock: { lte: 0 } }, { minStockLevel: { gt: 0 } }] } }),
