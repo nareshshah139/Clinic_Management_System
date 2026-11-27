@@ -15,7 +15,6 @@ import { paymentModeLabel, type DeskPaymentMode } from '@/lib/clinic-payment-mod
 import { toast } from '@/hooks/use-toast';
 import { parseRupees, rupee } from '@/components/appointments/appointment-billing-view';
 import { PaymentModePicker, ReceivedOnField, deskPayment, receivedOnInvalid } from './PaymentModePicker';
-import { clinicToday } from '@/components/pharmacy/pharmacy-report-model';
 import { ReceiptButtons } from './ReceiptButtons';
 import { KIND_LABEL, STATUS_VIEW, voidBlockedReason, type ClinicBillActions, type ClinicBillRow, type ClinicReceipt } from './clinic-bill-model';
 
@@ -68,7 +67,7 @@ export function ClinicBillDialog({ billId, actions, collecting = false, onClose,
   const [amount, setAmount] = useState('');
   const [mode, setMode] = useState<DeskPaymentMode>('CASH');
   const [reference, setReference] = useState('');
-  const [receivedOn, setReceivedOn] = useState(clinicToday);
+  const [receivedOn, setReceivedOn] = useState<string | null>(null);
   const [key, setKey] = useState(requestKey);
   const [refund, setRefund] = useState<Refund | null>(null);
   const [voidBill, voidDialog] = useVoidBill();
@@ -92,7 +91,7 @@ export function ClinicBillDialog({ billId, actions, collecting = false, onClose,
     toast({ variant: 'success', title: message });
     setRefund(null);
     setReference('');
-    setReceivedOn(clinicToday());
+    setReceivedOn(null);
     await load();
     onChanged();
   };
