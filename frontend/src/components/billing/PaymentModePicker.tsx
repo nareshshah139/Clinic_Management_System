@@ -62,7 +62,7 @@ export function ReceivedOnField({ value, onChange, today = clinicToday() }: { va
     <div className="space-y-1">
       <label className="flex flex-col gap-1 text-sm font-medium">
         Received on
-        <Input type="date" value={value ?? ''} min={min} max={max} onChange={(e) => onChange(e.target.value || null)} aria-invalid={invalid || undefined} className="h-10 w-44 text-base" />
+        <Input type="date" value={value ?? ''} min={min} max={max} onChange={(e) => onChange(e.target.value || (e.target.validity.badInput ? '' : null))} aria-invalid={invalid || undefined} className="h-10 w-44 text-base" />
       </label>
       {invalid ? (
         <p className="text-sm text-destructive-text">Choose a day from {displayCalendarDate(min)} to today.</p>
