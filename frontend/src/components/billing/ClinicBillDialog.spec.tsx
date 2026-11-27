@@ -55,4 +55,16 @@ describe('ClinicBillDialog Received on across midnight', () => {
     await waitFor(() => expect(api.collectClinicPayment).toHaveBeenCalled());
     expect(api.collectClinicPayment.mock.calls[0][0]).toEqual({ invoiceId: 'inv1', amount: 200, method: 'CASH', receivedOn: '2026-11-25' });
   });
+
+  it('sends the opening day when staff chose it, even when it is submitted after midnight', async () => {
+    const dialog = await openDialog();
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'Change the day the money was received' }));
+    fireEvent.change(within(dialog).getByLabelText('Received on'), { target: { value: '2026-11-26' } });
+
+    jest.setSystemTime(PAST_MIDNIGHT);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Record ₹200 payment' }));
+
+    await waitFor(() => expect(api.collectClinicPayment).toHaveBeenCalled());
+    expect(api.collectClinicPayment.mock.calls[0][0]).toEqual({ invoiceId: 'inv1', amount: 200, method: 'CASH', receivedOn: '2026-11-26' });
+  });
 });
