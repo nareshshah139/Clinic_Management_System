@@ -1,4 +1,6 @@
 import React from 'react';
+import { clinicToday } from '@/components/pharmacy/pharmacy-report-model';
+import { addDays } from '@/lib/date-ranges';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import DoctorDayCalendar from './DoctorDayCalendar';
 import { apiClient } from '@/lib/api';
@@ -125,6 +127,86 @@ describe('DoctorDayCalendar billing on each row', () => {
     expect(within(dialog).queryByRole('button', { name: /Record/ })).toBeNull();
     fireEvent.keyDown(dialog, { key: 'Escape' });
     expect(await screen.findByRole('button', { name: 'Review bill: ₹500, paid' })).toBeInTheDocument();
+  });
+
+  it('dates a catch-up payment to the day the money was received, and refuses a future day', async () => {
+    renderDay([row('a2', '09:15-09:30', 'Ravi Kumar', { billType: 'REVIEW', billing: bill('DUE', 500, 300, true) })]);
+    api.getInvoiceById.mockResolvedValue({
+      id: 'cinv1', invoiceNo: 'INV-1', total: 500, received: 300, balance: 200,
+      items: [{ id: 'i1', name: 'Review consultation', qty: 1, total: 500 }],
+      payments: [],
+    });
+    api.processPayment.mockResolvedValue({ id: 'pay2' });
+    const today = clinicToday();
+    const twoDaysAgo = addDays(today, -2);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Review bill: ₹500, ₹200 due' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Bill for Ravi Kumar' });
+    expect(await within(dialog).findByText(/Received today/)).toBeInTheDocument();
+    expect(within(dialog).queryByLabelText('Received on')).toBeNull();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Change the day the money was received' }));
+    const day = within(dialog).getByLabelText('Received on');
+    expect(day).toHaveAttribute('max', today);
+    expect(day).toHaveAttribute('min', addDays(today, -30));
+
+    fireEvent.change(day, { target: { value: addDays(today, 1) } });
+    expect(within(dialog).getByText(/Choose a day from/)).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Record ₹200 payment' })).toBeDisabled();
+
+    fireEvent.change(day, { target: { value: twoDaysAgo } });
+    expect(within(dialog).getByText(/Reports count this payment on/)).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Record ₹200 payment' }));
+    await waitFor(() => expect(api.processPayment).toHaveBeenCalledWith({ invoiceId: 'cinv1', amount: 200, method: 'CASH', receivedOn: twoDaysAgo }));
+  });
+
+  describe('across midnight', () => {
+    const NOT_THE_DATE = ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'setImmediate', 'clearImmediate', 'queueMicrotask', 'nextTick', 'requestAnimationFrame', 'cancelAnimationFrame', 'performance'] as const;
+    const PAST_MIDNIGHT = new Date('2026-11-26T18:35:00.000Z');
+
+    beforeEach(() => jest.useFakeTimers({ now: new Date('2026-11-26T18:25:00.000Z'), doNotFake: [...NOT_THE_DATE] }));
+    afterEach(() => jest.useRealTimers());
+
+    async function openPayDialog() {
+      renderDay([row('a2', '09:15-09:30', 'Ravi Kumar', { billType: 'REVIEW', billing: bill('DUE', 500, 300, true) })]);
+      api.getInvoiceById.mockResolvedValue({ id: 'cinv1', invoiceNo: 'INV-1', total: 500, received: 300, balance: 200, items: [{ id: 'i1', name: 'Review consultation', qty: 1, total: 500 }], payments: [] });
+      api.processPayment.mockResolvedValue({ id: 'pay2' });
+      fireEvent.click(await screen.findByRole('button', { name: 'Review bill: ₹500, ₹200 due' }));
+      return screen.findByRole('dialog', { name: 'Bill for Ravi Kumar' });
+    }
+
+    it('sends no Received on for a payment whose day was never chosen', async () => {
+      const dialog = await openPayDialog();
+      expect(await within(dialog).findByText(/Received today/)).toBeInTheDocument();
+      jest.setSystemTime(PAST_MIDNIGHT);
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Record ₹200 payment' }));
+      await waitFor(() => expect(api.processPayment).toHaveBeenCalled());
+      expect(api.processPayment.mock.calls[0][0]).toEqual({ invoiceId: 'cinv1', amount: 200, method: 'CASH' });
+    });
+
+    it('sends the day staff chose when submitted after midnight', async () => {
+      const dialog = await openPayDialog();
+      fireEvent.click(await within(dialog).findByRole('button', { name: 'Change the day the money was received' }));
+      fireEvent.change(within(dialog).getByLabelText('Received on'), { target: { value: '2026-11-25' } });
+      jest.setSystemTime(PAST_MIDNIGHT);
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Record ₹200 payment' }));
+      await waitFor(() => expect(api.processPayment).toHaveBeenCalled());
+      expect(api.processPayment.mock.calls[0][0]).toEqual({ invoiceId: 'cinv1', amount: 200, method: 'CASH', receivedOn: '2026-11-25' });
+    });
+
+    it('sends no Received on when a new bill is paid after midnight without choosing a day', async () => {
+      renderDay([row('a3', '09:30-09:45', 'Lakshmi Devi', { billType: 'PROCEDURE', visitType: 'PROCEDURE', notes: 'Chemical peel', visit: { id: 'v3', status: 'COMPLETED' }, billing: bill('NOT_BILLED', 0, 0, true) })]);
+      api.createInvoice.mockResolvedValue({ id: 'cinv9', invoiceNo: 'INV-9' });
+      api.processPayment.mockResolvedValue({ id: 'pay9' });
+      fireEvent.click(await screen.findByRole('button', { name: 'Procedure bill: not billed yet, visit finished' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Bill for Lakshmi Devi' });
+      fireEvent.change(within(dialog).getByRole('textbox', { name: 'Fee' }), { target: { value: '2500' } });
+      fireEvent.change(within(dialog).getByRole('textbox', { name: 'Paid now' }), { target: { value: '1000' } });
+      expect(within(dialog).getByText(/Received today/)).toBeInTheDocument();
+      jest.setSystemTime(PAST_MIDNIGHT);
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Create bill and record ₹1,000' }));
+      await waitFor(() => expect(api.processPayment).toHaveBeenCalled());
+      expect(api.processPayment.mock.calls[0][0]).toEqual({ invoiceId: 'cinv9', amount: 1000, method: 'CASH' });
+    });
   });
 
   it('creates a bill for the appointment, prefilled from its bill type, and takes the payment with it', async () => {

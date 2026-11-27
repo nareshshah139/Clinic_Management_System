@@ -622,7 +622,7 @@ export class ApiClient {
     return this.get<import('@/components/billing/clinic-bill-model').ClinicReceipt>(`/billing/invoices/${encodeURIComponent(invoiceId)}/receipt`);
   }
 
-  async collectClinicPayment(payment: { invoiceId: string; amount: number; method: string; reference?: string }, idempotencyKey: string) {
+  async collectClinicPayment(payment: { invoiceId: string; amount: number; method: string; reference?: string; receivedOn?: string }, idempotencyKey: string) {
     return this.post('/billing/payments', payment, { idempotencyKey });
   }
 

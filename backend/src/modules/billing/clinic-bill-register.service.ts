@@ -131,7 +131,7 @@ export class ClinicBillRegisterService {
         amount: rupees(paise(payment.amount)),
         mode: payment.mode,
         reference: payment.reference,
-        paidAt: payment.createdAt.toISOString(),
+        paidAt: payment.receivedAt.toISOString(),
         refundable: refundableOf(payment, bill.payments, bill.received),
       })),
     };

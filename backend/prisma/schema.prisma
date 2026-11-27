@@ -925,6 +925,8 @@ model NewPayment {
   gateway     String?
   reconStatus String       @default("PENDING")
   createdAt   DateTime     @default(now())
+  /// When the money changed hands. Defaults to entry time; the desk can date a catch-up entry to an earlier clinic day. Reports bucket takings by this, not createdAt.
+  receivedAt  DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
   refundOfId  String?
   invoice     NewInvoice   @relation(fields: [invoiceId], references: [id])
@@ -934,6 +936,7 @@ model NewPayment {
   @@index([invoiceId], map: "new_payments_invoiceId_idx")
   @@index([reconStatus, createdAt], map: "new_payments_reconStatus_createdAt_idx")
   @@index([refundOfId], map: "new_payments_refundOfId_idx")
+  @@index([reconStatus, receivedAt], map: "new_payments_reconStatus_receivedAt_idx")
   @@map("new_payments")
 }
 

@@ -12,7 +12,7 @@ import { displayCalendarDate, displayClinicDateTime } from '@/lib/date-display';
 import { useToast } from '@/hooks/use-toast';
 import type { AppointmentInSlot, ClinicBillAccess } from '@/lib/types';
 import { paymentModeLabel, type DeskPaymentMode } from '@/lib/clinic-payment-modes';
-import { PaymentModePicker as ModePicker, deskPayment } from '@/components/billing/PaymentModePicker';
+import { PaymentModePicker as ModePicker, ReceivedOnField, deskPayment, receivedOnInvalid } from '@/components/billing/PaymentModePicker';
 import { ReceiptButtons } from '@/components/billing/ReceiptButtons';
 import { BILL_TYPE_LABEL, FEE_LIST_PATH, defaultBillLine, parseRupees, rupee } from './appointment-billing-view';
 import { plural } from '@/lib/labels';
@@ -25,7 +25,7 @@ type InvoiceDetail = {
   balance: number;
   createdAt?: string;
   items: { id: string; name: string; qty: number; total: number }[];
-  payments: { id: string; amount: number; mode: string; reference?: string | null; createdAt: string }[];
+  payments: { id: string; amount: number; mode: string; reference?: string | null; createdAt: string; receivedAt?: string }[];
 };
 
 type Mode = DeskPaymentMode;
@@ -66,6 +66,8 @@ export function AppointmentBillDialog({
   const [payment, setPayment] = useState('');
   const [mode, setMode] = useState<Mode>('CASH');
   const [reference, setReference] = useState('');
+  const [receivedOn, setReceivedOn] = useState<string | null>(null);
+  const [formRound, setFormRound] = useState(0);
 
   const invoiceIds = (appointment?.billing?.invoices ?? []).map((i) => i.id).join(',');
   const load = useCallback(async () => {
@@ -89,6 +91,8 @@ export function AppointmentBillDialog({
     setPaidNow(null);
     setMode('CASH');
     setReference('');
+    setReceivedOn(null);
+    setFormRound((round) => round + 1);
   }, [appointment]);
 
   useEffect(() => {
@@ -120,7 +124,8 @@ export function AppointmentBillDialog({
   const paidInvalid = paidValue !== null && (Number.isNaN(paidValue) || (feeValue !== null && paidValue > feeValue));
   const paymentInvalid = paymentValue !== null && (Number.isNaN(paymentValue) || paymentValue <= 0 || (payInvoice !== null && paymentValue > payInvoice.balance));
 
-  const paymentOf = (invoiceId: string, amount: number) => deskPayment(invoiceId, amount, mode, reference);
+  const dayInvalid = receivedOnInvalid(receivedOn);
+  const paymentOf = (invoiceId: string, amount: number) => deskPayment(invoiceId, amount, mode, reference, receivedOn);
 
   const finish = async (message: string) => {
     toast({ variant: 'success', title: message });
@@ -129,7 +134,7 @@ export function AppointmentBillDialog({
   };
 
   const createBill = async () => {
-    if (feeValue === null || feeInvalid || paidInvalid || !line.trim()) return;
+    if (feeValue === null || feeInvalid || paidInvalid || !line.trim() || ((paidValue ?? 0) > 0 && dayInvalid)) return;
     setSaving(true);
     setError(null);
     try {
@@ -158,7 +163,7 @@ export function AppointmentBillDialog({
   };
 
   const recordPayment = async () => {
-    if (!payInvoice || paymentValue === null || paymentInvalid) return;
+    if (!payInvoice || paymentValue === null || paymentInvalid || dayInvalid) return;
     setSaving(true);
     setError(null);
     try {
@@ -232,7 +237,7 @@ export function AppointmentBillDialog({
                     {invoice.payments.map((p) => (
                       <li key={p.id} className="tabular-nums">
                         {p.amount < 0 ? `Refund ${rupee(-p.amount)}` : rupee(p.amount)} {paymentModeLabel(p.mode)}
-                        {p.amount > 0 && p.reference ? ` · ${p.reference}` : ''} · {displayClinicDateTime(p.createdAt)}
+                        {p.amount > 0 && p.reference ? ` · ${p.reference}` : ''} · {displayClinicDateTime(p.receivedAt ?? p.createdAt)}
                       </li>
                     ))}
                   </ul>
@@ -264,7 +269,8 @@ export function AppointmentBillDialog({
             </label>
             {paymentInvalid && <p className="text-sm text-destructive-text">Enter an amount above 0 and up to the {rupee(payInvoice.balance)} due.</p>}
             <ModePicker value={mode} onChange={setMode} label="Payment mode" reference={reference} onReference={setReference} />
-            <Button className="h-10 w-full" disabled={saving || paymentValue === null || paymentInvalid} onClick={() => void recordPayment()}>
+            <ReceivedOnField key={`pay-${formRound}`} value={receivedOn} onChange={setReceivedOn} />
+            <Button className="h-10 w-full" disabled={saving || paymentValue === null || paymentInvalid || dayInvalid} onClick={() => void recordPayment()}>
               {saving ? 'Saving…' : paymentValue && !paymentInvalid ? `Record ${rupee(paymentValue)} payment` : 'Record payment'}
             </Button>
           </section>
@@ -308,10 +314,11 @@ export function AppointmentBillDialog({
             {feeInvalid && <p className="text-sm text-destructive-text">Enter the fee as an amount above 0, for example 500.</p>}
             {paidInvalid && <p className="text-sm text-destructive-text">Paid now can be from 0 up to the fee.</p>}
             {(paidValue ?? 0) > 0 && <ModePicker value={mode} onChange={setMode} label="Payment mode" reference={reference} onReference={setReference} />}
+            {(paidValue ?? 0) > 0 && <ReceivedOnField key={`create-${formRound}`} value={receivedOn} onChange={setReceivedOn} />}
             <p className="text-xs text-muted-foreground">Consultation and procedure fees are billed without GST.</p>
             <div className="flex gap-2">
               {adding && <Button variant="outline" className="h-10" onClick={() => setAdding(false)} disabled={saving}>Cancel</Button>}
-              <Button className="h-10 flex-1" disabled={saving || feeValue === null || feeInvalid || paidInvalid || !line.trim()} onClick={() => void createBill()}>
+              <Button className="h-10 flex-1" disabled={saving || feeValue === null || feeInvalid || paidInvalid || !line.trim() || ((paidValue ?? 0) > 0 && dayInvalid)} onClick={() => void createBill()}>
                 {saving ? 'Saving…' : (paidValue ?? 0) > 0 && !paidInvalid ? `Create bill and record ${rupee(paidValue ?? 0)}` : 'Create bill'}
               </Button>
             </div>

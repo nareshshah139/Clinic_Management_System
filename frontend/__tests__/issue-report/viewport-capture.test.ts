@@ -3,7 +3,13 @@ import { startViewportCapture } from '@/lib/issue-report';
 
 jest.mock('modern-screenshot', () => ({ createContext: jest.fn(), domToCanvas: jest.fn() }));
 
-type CaptureContext = { filter: (node: Node) => boolean; onCloneNode: (copy: Node) => void };
+type CaptureContext = {
+  filter: (node: Node) => boolean;
+  onCloneNode: (copy: Node) => void;
+  onCreateForeignObjectSvg: (svg: SVGSVGElement) => void;
+  style: Record<string, string>;
+  scale: number;
+};
 
 const fakeCanvas = () =>
   ({
@@ -105,5 +111,56 @@ describe('startViewportCapture', () => {
     expect(copy.querySelector('option[value="in"]')!.hasAttribute('selected')).toBe(false);
     expect(copy.querySelector('input')!.hasAttribute('checked')).toBe(true);
     expect(copy.querySelector('textarea')!.textContent).toBe('typed by the clinician');
+  });
+});
+
+describe('startViewportCapture layout', () => {
+  const original = { innerWidth: window.innerWidth, innerHeight: window.innerHeight, devicePixelRatio: window.devicePixelRatio };
+  const resize = (size: Partial<typeof original>) =>
+    Object.entries(size).forEach(([key, value]) => Object.defineProperty(window, key, { value, configurable: true }));
+  afterEach(() => resize(original));
+
+  it.each([
+    ['80% browser zoom on a 2x screen', 1.6, '1.6', '3024', '1600', 1.6],
+    ['a 3x screen, with the output capped at 2x', 3, '3', '5670', '3000', 2],
+  ])('lays the copy out in device pixels on %s', async (_case, devicePixelRatio, zoom, width, height, scale) => {
+    resize({ innerWidth: 1890, innerHeight: 1000, devicePixelRatio });
+    const capture = controlledCapture();
+    const started = startViewportCapture();
+    await settled(started);
+
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    capture.context().onCreateForeignObjectSvg(svg);
+
+    expect(capture.context().style.zoom).toBe(zoom);
+    expect(capture.context().scale).toBe(scale);
+    expect(svg.getAttribute('width')).toBe(width);
+    expect(svg.getAttribute('height')).toBe(height);
+    expect(svg.getAttribute('viewBox')).toBe(`0 0 ${width} ${height}`);
+    capture.context().onCloneNode(document.createElement('body'));
+    await started;
+  });
+
+  it('keeps the exact widths of tabs that only fit their row at full precision', async () => {
+    document.body.innerHTML = `
+      <div role="tablist"><button id="tab" style="box-sizing: border-box; width: 106.055px">Purchase</button></div>
+      <div id="spinning" style="box-sizing: border-box; width: 80px; transform: rotate(45deg)"></div>`;
+    const laidOut = (id: string, width: number) =>
+      jest.spyOn(document.getElementById(id)!, 'getBoundingClientRect').mockReturnValue({ width } as DOMRect);
+    laidOut('tab', 106.0546875);
+    laidOut('spinning', 113.137);
+
+    const capture = controlledCapture();
+    const started = startViewportCapture();
+    await settled(started);
+    const copy = document.body.cloneNode(true) as HTMLElement;
+    capture.context().onCloneNode(copy);
+    await started;
+
+    const sheet = [...copy.querySelectorAll('style')].map((style) => style.textContent).join('\n');
+    const tab = copy.querySelector('#tab')!;
+    expect(sheet).toContain(`.${tab.classList[0]} { width: 106.0546875px !important; }`);
+    expect(copy.querySelector('#spinning')!.classList).toHaveLength(0);
+    expect(document.querySelector('[data-capture-width]')).toBeNull();
   });
 });

@@ -20,6 +20,7 @@ import {
   OutstandingInvoicesDto,
 } from './dto/query-billing.dto';
 import { VOID, heldPaise, leftToRefund, metadataOf, paise, refundedByPayment, rupees } from './clinic-bill-register';
+import { receivedAtFor } from './received-on';
 
 const RUPEES = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0, maximumFractionDigits: 2 });
 const PAYMENT_INVOICE = { invoice: { select: { id: true, invoiceNo: true, total: true } } } as const;
@@ -230,6 +231,7 @@ export class BillingService {
               mode: true,
               reconStatus: true,
               createdAt: true,
+              receivedAt: true,
             },
           },
         },
@@ -271,6 +273,7 @@ export class BillingService {
             gateway: true,
             reconStatus: true,
             createdAt: true,
+            receivedAt: true,
           },
           orderBy: { createdAt: 'desc' },
         },
@@ -375,10 +378,19 @@ export class BillingService {
    * and written in whole paise, so collecting the balance shown settles the bill. The invoice MUST
    * belong to the authenticated branch, otherwise nothing is written.
    */
-  async processPayment(paymentDto: PaymentDto, branchId: string) {
-    const { invoiceId, method, reference, gateway } = paymentDto;
+  /**
+   * @cc [owner:nareshshah139,label:product;security] payment-backdate-audit
+   * A desk payment MAY carry receivedOn, the clinic day its money was received; it is stored as
+   * receivedAt (see payment-received-on). A payment dated before today MUST write, in the same
+   * transaction, one PAYMENT_BACKDATED audit entry naming who entered it, the day received, the day
+   * entered, the amount and the bill. A gateway payment MUST NOT carry receivedOn.
+   */
+  async processPayment(paymentDto: PaymentDto, branchId: string, actor?: { id: string; branchId: string }, now = new Date()) {
+    const { invoiceId, method, reference, gateway, receivedOn } = paymentDto;
     const amount = rupees(paise(paymentDto.amount));
     if (!(amount > 0)) throw new BadRequestException('Enter a payment above ₹0.');
+    if (gateway && receivedOn) throw new BadRequestException('A gateway payment is dated when the gateway takes it; leave Received on empty.');
+    const receivedAt = receivedAtFor(receivedOn, now);
     const invoice = await this.findInvoiceById(invoiceId, branchId);
     if (invoice.status === VOID) throw new BadRequestException(this.refusal(invoice, VOID, 0, amount));
 
@@ -389,7 +401,24 @@ export class BillingService {
         include: PAYMENT_INVOICE,
       });
     }
-    return this.prisma.$transaction((tx) => this.payAtDesk(tx, invoice, amount, method, reference));
+    return this.prisma.$transaction(async (tx) => {
+      const payment = await this.payAtDesk(tx, invoice, amount, method, reference, receivedAt);
+      const enteredOn = clinicDay(now);
+      const receivedDay = clinicDay(receivedAt);
+      if (receivedDay < enteredOn) {
+        await tx.auditLog.create({
+          data: {
+            userId: actor?.id ?? null,
+            branchId,
+            action: 'PAYMENT_BACKDATED',
+            entity: 'NewPayment',
+            entityId: payment.id,
+            newValues: JSON.stringify({ receivedOn: receivedDay, enteredOn, receivedAt: receivedAt.toISOString(), amount, mode: method, invoiceId: invoice.id, invoiceNo: invoice.invoiceNo }),
+          },
+        });
+      }
+      return payment;
+    });
   }
 
   private async payAtDesk(
@@ -398,10 +427,11 @@ export class BillingService {
     amount: number,
     method: PaymentMode,
     reference?: string,
+    receivedAt?: Date,
   ) {
     await this.receive(tx, invoice, amount, BadRequestException);
     return tx.newPayment.create({
-      data: { invoiceId: invoice.id, amount, mode: method as any, reference: reference ?? null, reconStatus: 'COMPLETED' },
+      data: { invoiceId: invoice.id, amount, mode: method as any, reference: reference ?? null, reconStatus: 'COMPLETED', ...(receivedAt ? { receivedAt } : {}) },
       include: PAYMENT_INVOICE,
     });
   }
@@ -613,7 +643,7 @@ export class BillingService {
     if (method) where.mode = method;
     if (status) where.reconStatus = status;
 
-    if (startDate || endDate) where.createdAt = clinicInstants(startDate, endDate);
+    if (startDate || endDate) where.receivedAt = clinicInstants(startDate, endDate);
 
     if (search) {
       where.OR = [
@@ -660,7 +690,7 @@ export class BillingService {
       reconStatus: 'COMPLETED',
     };
 
-    if (startDate || endDate) where.createdAt = clinicInstants(startDate, endDate);
+    if (startDate || endDate) where.receivedAt = clinicInstants(startDate, endDate);
 
     if (method) where.mode = method;
     if (patientId) where.invoice = { patient: { id: patientId, branchId } };
@@ -669,14 +699,14 @@ export class BillingService {
       this.prisma.newPayment.aggregate({ where, _sum: { amount: true } }),
       this.prisma.newPayment.count({ where }),
       this.prisma.newPayment.groupBy({ by: ['mode'], where, _sum: { amount: true }, _count: { _all: true } }),
-      this.prisma.newPayment.groupBy({ by: ['createdAt'], where, _sum: { amount: true }, _count: { _all: true } }),
+      this.prisma.newPayment.groupBy({ by: ['receivedAt'], where, _sum: { amount: true }, _count: { _all: true } }),
     ]);
 
     return {
       totalAmount: sumAgg._sum.amount ?? 0,
       paymentCount: count,
       methodBreakdown: methodBreakdown.map(m => ({ method: m.mode, amount: m._sum.amount ?? 0, count: m._count._all })),
-      dailyBreakdown: dailyBreakdown.map(d => ({ date: d.createdAt, amount: d._sum.amount ?? 0, count: d._count._all })),
+      dailyBreakdown: dailyBreakdown.map(d => ({ date: d.receivedAt, amount: d._sum.amount ?? 0, count: d._count._all })),
       period: { startDate: startDate || null, endDate: endDate || null },
     };
   }
@@ -689,9 +719,9 @@ export class BillingService {
       reconStatus: 'COMPLETED',
     };
 
-    if (startDate || endDate) where.createdAt = clinicInstants(startDate, endDate);
+    if (startDate || endDate) where.receivedAt = clinicInstants(startDate, endDate);
 
-    const payments = await this.prisma.newPayment.findMany({ where, orderBy: { createdAt: 'asc' } });
+    const payments = await this.prisma.newPayment.findMany({ where, orderBy: { receivedAt: 'asc' } });
 
     const grouped = this.groupPaymentsByPeriod(payments as any, groupBy);
 
@@ -847,7 +877,7 @@ export class BillingService {
     const groups: Record<string, any> = {};
 
     payments.forEach(payment => {
-      const day = clinicDay(payment.createdAt);
+      const day = clinicDay(payment.receivedAt);
       const key =
         groupBy === 'week' ? addDays(day, -new Date(`${day}T00:00:00Z`).getUTCDay())
         : groupBy === 'month' ? day.slice(0, 7)
@@ -994,6 +1024,7 @@ export class BillingService {
               mode: PaymentMode.CASH,
               reference: 'SAMPLE',
               createdAt: paymentDate,
+              receivedAt: paymentDate,
               reconStatus: 'COMPLETED',
             },
           });
@@ -1009,6 +1040,7 @@ export class BillingService {
               mode: PaymentMode.UPI,
               reference: 'SAMPLE',
               createdAt: paymentDate,
+              receivedAt: paymentDate,
               reconStatus: 'COMPLETED',
             },
           });

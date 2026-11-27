@@ -83,6 +83,13 @@ it.each([['1', '2020'], ['12', '2100']])('allows valid expiry boundary %s/%s to 
   expect(confirmPurchaseChecks(['uncertain_expiry'], { expiryMonth, expiryYear }).flags).toEqual([]);
 });
 
+it('tells a valid uncertain value how it is settled, and gives an invalid one only its correction route', () => {
+  render(<PurchaseOcrChecklist flags={['independent_read_disagrees_invoiceNumber', 'independent_read_disagrees_distributorGstin']} values={{ invoiceNumber: 'LSS7809', distributorGstin: 'UNREADABLE' }} />);
+  const [invoice, gstin] = screen.getAllByRole('listitem');
+  expect(invoice).toHaveTextContent('Correct it if wrong, or confirm the invoice if it is right.');
+  expect(gstin).not.toHaveTextContent('confirm the invoice');
+});
+
 it('directs the wrong document to the correct invoice upload without confirming it', () => {
   render(<><PurchaseOcrChecklist flags={['not_a_purchase_invoice']} values={{}} /><input id="purchase-invoice-upload" aria-label="Invoice upload" /></>);
   const upload = screen.getByRole('link', { name: 'Upload correct supplier invoice' });
