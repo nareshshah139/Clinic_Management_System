@@ -282,6 +282,54 @@ it('keeps tele-video metadata in preview, print, PDF, WhatsApp and Email, and re
   }
 });
 
+it('prints medicine names, frequencies and timings in title case in preview, print, PDF, WhatsApp and Email, and keeps instructions as written', async () => {
+  paginateSourceContent = true;
+  const rx = { dosageUnit: 'TABLET', frequency: 'ONCE_DAILY', duration: 30, durationUnit: 'DAYS' };
+  const items = [
+    { ...rx, drugName: 'Ahaglo facewash', dosePattern: '1-0-1', timing: 'AM, PM', instructions: 'Wash twice daily' },
+    { ...rx, drugName: 'HYBLOK-ACE GEL CREAM 50 G', timing: 'AFTER MEALS', instructions: 'APPLY AT NIGHT' },
+    { ...rx, drugName: 'TYRODIN FSR 500MG TABLET', frequency: 'TWICE_DAILY', timing: 'After Breakfast' },
+    { ...rx, drugName: 'ZOCEF CV 500 TABLET', timing: '8 am, 12 pm' },
+  ];
+  const get = jest.spyOn(apiClient, 'get').mockResolvedValue({
+    patient: { phone: '+10000000000', email: 'synthetic@example.test' },
+    doctor: { id: 'case-doctor', firstName: 'Test', lastName: 'Doctor' },
+    prescription: { id: 'case-rx', items },
+  });
+  const print = jest.spyOn(window, 'print').mockImplementation(() => {});
+  const click = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+  const props = { patientId: 'case-patient', visitId: 'case-visit', doctorId: 'case-doctor', onBeforeExport: async () => 'case-visit' };
+  const expected = [
+    ['Ahaglo Facewash', '1-0-1', 'AM, PM', '30 days', 'Wash twice daily'],
+    ['Hyblok-Ace Gel Cream 50 g', 'Once Daily', 'After Meals', '30 days', 'Apply At Night'],
+    ['Tyrodin FSR 500 mg Tablet', 'Twice Daily', 'After Breakfast', '30 days', '—'],
+    ['Zocef CV 500 Tablet', 'Once Daily', '8 AM, 12 PM', '30 days', '—'],
+  ];
+  const printedRows = (root: Element | null) =>
+    Array.from(root?.querySelectorAll('.rx-row') ?? []).map((row) => Array.from(row.children).map((cell) => cell.textContent));
+  try {
+    render(<PrescriptionBuilder {...props} />);
+    await screen.findByDisplayValue('HYBLOK-ACE GEL CREAM 50 G');
+    await openPreview();
+    await settlePreviewPagination();
+    expect(printedRows(document.getElementById('prescription-print-root'))).toEqual(expected);
+    expect(printedRows(document.getElementById('pagedjs-container'))).toEqual(expected);
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: /^Print$/ })));
+    expect(printedRows(document.getElementById('prescription-print-host'))).toEqual(expected);
+    act(() => window.dispatchEvent(new Event('afterprint')));
+    for (const action of ['Download PDF', 'PDF via WhatsApp', 'Email']) {
+      mockPdfOutput.mockClear();
+      await act(async () => fireEvent.click(screen.getByRole('button', { name: action })));
+      await waitFor(() => expect(mockPdfOutput).toHaveBeenCalledTimes(1));
+      expect(printedRows(mockPdfOutput.mock.calls[0][0] as Element)).toEqual(expected);
+    }
+    expect(screen.getByDisplayValue('HYBLOK-ACE GEL CREAM 50 G')).toBeInTheDocument();
+  } finally {
+    get.mockRestore(); print.mockRestore(); click.mockRestore();
+    localStorage.removeItem('rxDraft:case-patient:case-visit');
+  }
+});
+
 it.each([false, true])('prints Diagnosis only once one is entered (space-optimized: %j)', async (spaceOptimized) => {
   paginateSourceContent = true;
   render(<PrescriptionBuilder patientId={`diagnosis-${spaceOptimized}`} visitId={null} doctorId="d-diagnosis" />);
