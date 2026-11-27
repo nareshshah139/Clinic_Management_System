@@ -2549,6 +2549,22 @@ describe('PurchaseInvoiceWorkbench', () => {
     expect(document.getElementById('invoice-number-review-state')).toHaveTextContent('Verified');
   });
 
+  it('settles both supplier checks when a saved supplier replaces the scanned name and GSTIN', async () => {
+    api.get.mockResolvedValue([{ id: 'supplier-1', name: 'Apex Distributors Pvt Ltd', gstNumber: '36ABCDE1234F1Z6' }]);
+    const flags = ['independent_read_disagrees_distributorGstin', 'independent_read_disagrees_distributorName', 'independent_read_disagrees_invoiceNumber'];
+    render(<PurchaseInvoiceWorkbench importedDraft={{ draft: { ...draftInvoice, invoiceDate: '2026-05-01', goodsReceivedDate: '2026-05-02', ocrFlags: flags } }} />);
+    await screen.findByDisplayValue('APX-001');
+    const checks = await screen.findByRole('navigation', { name: 'Invoice checks' });
+    expect(checks).toHaveTextContent('3 checks to review');
+    await screen.findByRole('option', { name: /Apex Distributors Pvt Ltd/ });
+    fireEvent.change(screen.getByLabelText('Saved supplier'), { target: { value: 'supplier-1' } });
+    expect(screen.getByLabelText('Distributor')).toHaveValue('Apex Distributors Pvt Ltd');
+    expect(checks).toHaveTextContent('1 check to review');
+    expect(document.getElementById('distributor-gstin-review-state')).toHaveTextContent('Verified');
+    expect(document.getElementById('distributor-name-review-state')).toHaveTextContent('Verified');
+    expect(document.getElementById('invoice-number-review-state')).toHaveTextContent('Needs checking');
+  });
+
   it('keeps an invalid corrected supplier GSTIN flagged', async () => {
     render(<PurchaseInvoiceWorkbench importedDraft={{ draft: { ...draftInvoice, invoiceDate: '2026-05-01', goodsReceivedDate: '2026-05-02', ocrFlags: ['independent_read_disagrees_distributorGstin'] } }} />);
     await screen.findByDisplayValue('APX-001');

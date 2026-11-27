@@ -1491,18 +1491,22 @@ function PurchaseInvoiceEditor({
     );
   }, [activeInvoice?.id, editingId]);
 
-  const updateHeader = (key: keyof HeaderForm, value: string) => {
+  const updateHeaderFields = (changes: Partial<HeaderForm>) => {
     invalidatePending();
     setManualReviewCandidateId(null);
 
-    if (key === "goodsReceivedDate") setReviewDate(value);
-    const next = { ...header, [key]: value };
-    if (key === 'billType' && value === 'CASH') next.dueDate = '';
-    const review = confirmPurchaseChecks(currentHeaderFlags, next, checkedOcr.header, undefined, key);
+    if (changes.goodsReceivedDate !== undefined) setReviewDate(changes.goodsReceivedDate);
+    const next = { ...header, ...changes };
+    if (changes.billType === 'CASH') next.dueDate = '';
+    let review = { flags: currentHeaderFlags, checked: checkedOcr.header ?? {} };
+    for (const key of Object.keys(changes) as (keyof HeaderForm)[]) {
+      if (changes[key] !== header[key]) review = confirmPurchaseChecks(review.flags, next, review.checked, undefined, key);
+    }
     setCheckedOcr(current => ({ ...current, header: review.checked }));
     setHeaderFlags(review.flags.join(', '));
     setHeader(next);
   };
+  const updateHeader = (key: keyof HeaderForm, value: string) => updateHeaderFields({ [key]: value });
 
   const updateLine = (localId: string, key: keyof LineForm, value: string) => {
     invalidatePending();
@@ -3434,16 +3438,9 @@ function PurchaseInvoiceEditor({
         readOnly={!editingChecks}
         disabled={editsLocked}
         nextAction={postingLabel}
-        onChange={(distributorName, distributorGstin) => {
-          invalidatePending();
-
-          setManualReviewCandidateId(null);
-          setHeader((current) => ({
-            ...current,
-            distributorName,
-            distributorGstin,
-          }));
-        }}
+        onChange={(distributorName, distributorGstin) =>
+          updateHeaderFields({ distributorName, distributorGstin })
+        }
         onSaved={() => setManualReviewCandidateId(null)}
         onBusy={setSavingSupplier}
         onEdit={
