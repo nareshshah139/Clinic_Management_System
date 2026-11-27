@@ -432,20 +432,20 @@ export async function startViewportCapture(): Promise<{ image: Promise<Blob> }> 
     unmarkWidths();
   };
   const { innerWidth: width, innerHeight: height } = window;
-  const scale = Math.min(window.devicePixelRatio || 1, 2);
+  const density = window.devicePixelRatio || 1;
   try {
     const context = await createContext(document.body, {
       width,
       height,
-      scale,
-      // The image lays out one unit per pixel and rounds thinner borders up to 1. Laying the copy out in device
-      // pixels keeps borders the browser snapped to a device pixel (0.625px at 80% zoom on a 2x screen) from
-      // growing and squeezing the text beside them onto a second line.
-      style: { margin: '0', zoom: String(scale) },
+      scale: Math.min(density, 2),
+      // The image lays out one unit per pixel and rounds thinner borders up to 1. Laying the copy out on the
+      // screen's own device pixels keeps borders the browser snapped to a device pixel (0.625px at 80% zoom on a
+      // 2x screen) from growing and squeezing the text beside them onto a second line. Only the output is capped.
+      style: { margin: '0', zoom: String(density) },
       onCreateForeignObjectSvg: (svg) => {
-        svg.setAttribute('width', String(width * scale));
-        svg.setAttribute('height', String(height * scale));
-        svg.setAttribute('viewBox', `0 0 ${width * scale} ${height * scale}`);
+        svg.setAttribute('width', String(width * density));
+        svg.setAttribute('height', String(height * density));
+        svg.setAttribute('viewBox', `0 0 ${width * density} ${height * density}`);
       },
       filter: (node) => !(node instanceof Element && node.matches(IGNORED_IN_CAPTURE)),
       features: { restoreScrollPosition: true },

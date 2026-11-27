@@ -8,6 +8,7 @@ type CaptureContext = {
   onCloneNode: (copy: Node) => void;
   onCreateForeignObjectSvg: (svg: SVGSVGElement) => void;
   style: Record<string, string>;
+  scale: number;
 };
 
 const fakeCanvas = () =>
@@ -120,9 +121,9 @@ describe('startViewportCapture layout', () => {
   afterEach(() => resize(original));
 
   it.each([
-    ['80% browser zoom on a 2x screen', 1.6, '1.6', '3024', '1600'],
-    ['a 3x screen, capped at 2x', 3, '2', '3780', '2000'],
-  ])('lays the copy out in device pixels on %s', async (_case, devicePixelRatio, zoom, width, height) => {
+    ['80% browser zoom on a 2x screen', 1.6, '1.6', '3024', '1600', 1.6],
+    ['a 3x screen, with the output capped at 2x', 3, '3', '5670', '3000', 2],
+  ])('lays the copy out in device pixels on %s', async (_case, devicePixelRatio, zoom, width, height, scale) => {
     resize({ innerWidth: 1890, innerHeight: 1000, devicePixelRatio });
     const capture = controlledCapture();
     const started = startViewportCapture();
@@ -132,6 +133,7 @@ describe('startViewportCapture layout', () => {
     capture.context().onCreateForeignObjectSvg(svg);
 
     expect(capture.context().style.zoom).toBe(zoom);
+    expect(capture.context().scale).toBe(scale);
     expect(svg.getAttribute('width')).toBe(width);
     expect(svg.getAttribute('height')).toBe(height);
     expect(svg.getAttribute('viewBox')).toBe(`0 0 ${width} ${height}`);
