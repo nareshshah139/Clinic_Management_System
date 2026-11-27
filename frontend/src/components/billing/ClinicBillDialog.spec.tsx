@@ -80,4 +80,17 @@ describe('ClinicBillDialog Received on across midnight', () => {
     await waitFor(() => expect(api.collectClinicPayment).toHaveBeenCalled());
     expect(api.collectClinicPayment.mock.calls[0][0]).toEqual({ invoiceId: 'inv1', amount: 200, method: 'CASH' });
   });
+
+  it('blocks the payment while the date is only partly typed, instead of saving it as today', async () => {
+    const dialog = await openDialog();
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'Change the day the money was received' }));
+    const field = within(dialog).getByLabelText('Received on');
+    fireEvent.change(field, { target: { value: '2026-11-25' } });
+    Object.defineProperty(field, 'validity', { configurable: true, value: { badInput: true } });
+    fireEvent.change(field, { target: { value: '' } });
+
+    expect(within(dialog).getByRole('button', { name: 'Record ₹200 payment' })).toBeDisabled();
+    expect(within(dialog).getByText(/Choose a day from/)).toBeInTheDocument();
+    expect(api.collectClinicPayment).not.toHaveBeenCalled();
+  });
 });
