@@ -60,15 +60,18 @@ export function ReceivedOnField({ value, onChange, today = clinicToday() }: { va
   }
   return (
     <div className="space-y-1">
-      <label className="flex flex-col gap-1 text-sm font-medium">
-        Received on
-        <Input type="date" value={value ?? ''} min={min} max={max} onChange={(e) => onChange(e.target.value || (e.target.validity.badInput ? '' : null))} aria-invalid={invalid || undefined} className="h-10 w-44 text-base" />
-      </label>
+      <div className="flex items-end gap-2">
+        <label className="flex flex-col gap-1 text-sm font-medium">
+          Received on
+          <Input type="date" value={value ?? ''} min={min} max={max} onChange={(e) => onChange(e.target.value)} aria-invalid={invalid || undefined} className="h-10 w-44 text-base" />
+        </label>
+        <button type="button" className="h-10 text-sm font-medium text-info-text underline underline-offset-2" onClick={() => { onChange(null); setOpen(false); }}>
+          Use today
+        </button>
+      </div>
       {invalid ? (
-        <p className="text-sm text-destructive-text">Choose a day from {displayCalendarDate(min)} to today.</p>
-      ) : value === null ? (
-        <p className="text-xs text-muted-foreground">Leave empty for today.</p>
-      ) : value !== today ? (
+        <p className="text-sm text-destructive-text">Choose a day from {displayCalendarDate(min)} to today, or use today.</p>
+      ) : value !== null && value !== today ? (
         <p className="text-xs text-muted-foreground">Reports count this payment on {displayCalendarDate(value)}, the day the money came in.</p>
       ) : null}
     </div>
