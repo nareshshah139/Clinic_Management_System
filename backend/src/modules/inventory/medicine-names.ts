@@ -150,16 +150,18 @@ const UPPERCASE_WORDS = new Set([
 ]);
 const UNIT_WORDS = new Set(['mg', 'mcg', 'ml', 'iu']);
 
+const LETTERS = '\\p{L}\\p{M}';
 const NUMBER = '\\d+(?:\\.\\d+)?';
 const DISPLAY_TOKEN = new RegExp(
-  `(?<![\\w.])(${NUMBER})\\s*(mg|mcg|µg|gm|g|iu)\\s*\\/\\s*(${NUMBER})\\s*(ml)(?![A-Za-z])` +
-    `|(?<![\\w.])(${NUMBER})\\s*(mg|mcg|µg|gm|g|ml|iu|%)(?![A-Za-z])` +
-    `|[A-Za-z0-9]+(?:['’][A-Za-z]+)*`,
-  'gi',
+  `(?<![${LETTERS}\\d_.:])(\\d{1,2}(?::\\d{2})?)\\s*(am|pm)(?![${LETTERS}])` +
+    `|(?<![${LETTERS}\\d_.])(${NUMBER})\\s*(mg|mcg|µg|gm|g|iu)\\s*\\/\\s*(${NUMBER})\\s*(ml)(?![${LETTERS}])` +
+    `|(?<![${LETTERS}\\d_.])(${NUMBER})\\s*(mg|mcg|µg|gm|g|ml|iu|%)(?![${LETTERS}])` +
+    `|[${LETTERS}\\d]+(?:['’][${LETTERS}]+)*`,
+  'giu',
 );
 
 function displayWord(word: string): string {
-  if (/^\d/.test(word) || (/[a-z]/.test(word) && /[A-Z]/.test(word.slice(1)))) return word;
+  if (/^\d/.test(word) || (/\p{Ll}/u.test(word) && /\p{Lu}/u.test(word.slice(1)))) return word;
   const lower = word.toLowerCase();
   if (UNIT_WORDS.has(lower)) return unit(lower);
   if (UPPERCASE_WORDS.has(lower) || /^[a-z]{1,3}\d/i.test(word) || /^[B-DF-HJ-NP-TV-XZ]{2,4}$/.test(word)) return word.toUpperCase();
@@ -167,14 +169,18 @@ function displayWord(word: string): string {
 }
 
 export function titleCaseDisplay(text: unknown): string {
-  return tidy(text).replace(DISPLAY_TOKEN, (match, ratioDose, ratioDoseUnit, ratioVolume, ratioVolumeUnit, amount, amountUnit) => {
-    if (ratioVolumeUnit) return `${ratioDose}${unit(ratioDoseUnit)}/${ratioVolume}${unit(ratioVolumeUnit)}`;
-    if (amountUnit) return amountUnit === '%' ? `${amount}%` : `${amount} ${unit(amountUnit)}`;
-    return displayWord(match);
-  });
+  return tidy(text).replace(
+    DISPLAY_TOKEN,
+    (match, clock, meridiem, ratioDose, ratioDoseUnit, ratioVolume, ratioVolumeUnit, amount, amountUnit) => {
+      if (meridiem) return `${clock} ${meridiem.toUpperCase()}`;
+      if (ratioVolumeUnit) return `${ratioDose}${unit(ratioDoseUnit)}/${ratioVolume}${unit(ratioVolumeUnit)}`;
+      if (amountUnit) return amountUnit === '%' ? `${amount}%` : `${amount} ${unit(amountUnit)}`;
+      return displayWord(match);
+    },
+  );
 }
 
 export function printedInstructions(text: unknown): string {
   const raw = String(text ?? '');
-  return /[A-Z]/.test(raw) && !/[a-z]/.test(raw) ? titleCaseDisplay(raw) : raw;
+  return /\p{Lu}/u.test(raw) && !/\p{Ll}/u.test(raw) ? titleCaseDisplay(raw) : raw;
 }
