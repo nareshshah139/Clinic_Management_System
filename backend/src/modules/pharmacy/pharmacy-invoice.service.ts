@@ -125,6 +125,8 @@ type GstSlabSummary = {
 
 @Injectable()
 export class PharmacyInvoiceService {
+  private readonly checkoutTails = new Map<string, Promise<void>>();
+
   constructor(
     private prisma: PrismaService,
     private invoiceNumbers: InvoiceNumbersService,
@@ -160,6 +162,25 @@ export class PharmacyInvoiceService {
     userId: string,
   ) {
     this.assertRequestKey(dto.requestKey);
+    const previous = this.checkoutTails.get(branchId) ?? Promise.resolve();
+    const posting = previous.then(() =>
+      this.postCheckout(dto, branchId, userId),
+    );
+    const tail = posting.then(() => undefined, () => undefined);
+    this.checkoutTails.set(branchId, tail);
+    try {
+      return await posting;
+    } finally {
+      if (this.checkoutTails.get(branchId) === tail)
+        this.checkoutTails.delete(branchId);
+    }
+  }
+
+  private async postCheckout(
+    dto: CheckoutPharmacyInvoiceDto,
+    branchId: string,
+    userId: string,
+  ) {
     if (dto.draftId) return this.finishDraft(dto, branchId, userId);
     const { requestKey, ...payload } = dto;
     const payloadHash = this.payloadHash(payload);
