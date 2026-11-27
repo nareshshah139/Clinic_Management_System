@@ -324,19 +324,16 @@ const EXACT_WIDTH = 'data-capture-width';
 
 /**
  * Computed widths are rounded to six significant digits, so items that grow to fill a wrapping row can add up to
- * a hair more than the row and push the last one onto a new line. Record each untransformed element's laid-out
- * width at full precision and return a function that removes the marks.
+ * a hair more than the row and push the last one onto a new line. Record each untransformed border-box element's
+ * laid-out width at full precision and return a function that removes the marks. Content-box widths are left
+ * alone: padding snaps to device pixels too, so the box minus its rounded padding is not the exact content width.
  */
 function markExactWidths(root: Element): () => void {
   const exact = [...root.querySelectorAll('*')].flatMap((el) => {
     const style = getComputedStyle(el);
     const rounded = parseFloat(style.width);
-    if (Number.isNaN(rounded)) return [];
-    const frame =
-      style.boxSizing === 'border-box'
-        ? 0
-        : ['padding-left', 'padding-right', 'border-left-width', 'border-right-width'].reduce((sum, name) => sum + parseFloat(style.getPropertyValue(name)), 0);
-    const width = el.getBoundingClientRect().width - frame;
+    if (style.boxSizing !== 'border-box' || Number.isNaN(rounded)) return [];
+    const width = el.getBoundingClientRect().width;
     const lost = Math.abs(width - rounded);
     return lost > 0 && lost <= Math.max(rounded, 1) * 1e-5 ? [[el, width] as const] : [];
   });
