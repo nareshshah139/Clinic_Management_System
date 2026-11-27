@@ -31,7 +31,7 @@ import { getErrorMessage } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { ensureGlobalPrintStyles } from '@/lib/printStyles';
 import { inferTimingFromDosePattern, PERIODIC_FREQUENCY_OPTIONS, getAllFrequencyOptions, addCustomFrequency, getTimingOptionsForFrequency, TIMING_OPTIONS, getAllTimingOptions, addCustomTiming, getAllDosePatternOptions, addCustomDosePattern, getAllDurationUnitOptions, addCustomDurationUnit } from '@/lib/frequency';
-import { printedMedicineName } from '@/lib/medicine-names';
+import { printedInstructions, printedMedicineName, titleCaseDisplay } from '@/lib/medicine-names';
 import { buildLearnedPrescriptionPlan, type LearnedPlanSuggestion } from '@/lib/prescription-learning';
 import { editRegimenRow, beginRegimenSelection, applyRegimenSuggestion, acceptRegimenField, regimenLabels, type RegimenField, type RegimenRow } from '@/lib/medicine-regimen-defaults';
 import { appendSpeechToText, type SpeechToTextPreference } from '@/lib/speech-to-text';
@@ -6249,10 +6249,10 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                           {validItems.map((it: any, idx: number) => (
                             <div key={`rx-row-${idx}`} className="rx-row" style={{ display: 'flex', gap: 0, borderBottom: '1px solid #e5e7eb', padding: rxRowPadding }}>
                               <div style={{ flex: rxColumnFlex.medicine, padding: rxCellPadding, overflowWrap: 'anywhere' }}>{printedMedicineName(it.drugName)}</div>
-                              <div style={{ flex: rxColumnFlex.frequency, padding: rxCellPadding }}>{(it.dosePattern || '').trim() || it.frequency.replaceAll('_',' ').toLowerCase()}</div>
-                              <div style={{ flex: rxColumnFlex.timing, padding: rxCellPadding }}>{it.timing || '—'}</div>
+                              <div style={{ flex: rxColumnFlex.frequency, padding: rxCellPadding }}>{titleCaseDisplay((it.dosePattern || '').trim() || it.frequency.replaceAll('_',' '))}</div>
+                              <div style={{ flex: rxColumnFlex.timing, padding: rxCellPadding }}>{titleCaseDisplay(it.timing) || '—'}</div>
                               <div style={{ flex: rxColumnFlex.duration, padding: rxCellPadding }}>{printedDuration(it) || '—'}</div>
-                              <div style={{ flex: rxColumnFlex.instructions, padding: rxCellPadding, overflowWrap: 'anywhere' }}>{it.instructions ? tt(`items.${items.indexOf(it)}.instructions`, it.instructions) : '—'}</div>
+                              <div style={{ flex: rxColumnFlex.instructions, padding: rxCellPadding, overflowWrap: 'anywhere' }}>{it.instructions ? printedInstructions(tt(`items.${items.indexOf(it)}.instructions`, it.instructions)) : '—'}</div>
                             </div>
                           ))}
                         </div>
@@ -6262,7 +6262,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                             <div key={`rx-${idx}`} className="rx-row" style={{ padding: '3px 0' }}>
                               <span style={{ fontWeight: 500 }}>{idx + 1}. {printedMedicineName(it.drugName)}</span>
                               {it.dosage ? ` ${it.dosage}${it.dosageUnit ? ' ' + it.dosageUnit.toLowerCase() : ''}` : ''} — {it.frequency.replaceAll('_',' ').toLowerCase()}{printedDuration(it) && ` × ${printedDuration(it)}`}
-                              {it.instructions && <span> — {tt(`items.${items.indexOf(it)}.instructions`, it.instructions)}</span>}
+                              {it.instructions && <span> — {printedInstructions(tt(`items.${items.indexOf(it)}.instructions`, it.instructions))}</span>}
                             </div>
                           ))}
                         </div>

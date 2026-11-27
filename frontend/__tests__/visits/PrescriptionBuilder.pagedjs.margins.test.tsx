@@ -296,6 +296,8 @@ it('prints medicine names, frequencies and timings in title case in preview, pri
     doctor: { id: 'case-doctor', firstName: 'Test', lastName: 'Doctor' },
     prescription: { id: 'case-rx', items },
   });
+  const patch = jest.spyOn(apiClient, 'patch').mockResolvedValue({ id: 'case-rx' });
+  const share = jest.spyOn(apiClient, 'sharePrescriptionPreview').mockResolvedValue({});
   const print = jest.spyOn(window, 'print').mockImplementation(() => {});
   const click = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
   const props = { patientId: 'case-patient', visitId: 'case-visit', doctorId: 'case-doctor', onBeforeExport: async () => 'case-visit' };
@@ -312,9 +314,11 @@ it('prints medicine names, frequencies and timings in title case in preview, pri
     await screen.findByDisplayValue('HYBLOK-ACE GEL CREAM 50 G');
     await openPreview();
     await settlePreviewPagination();
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Print$/ })).toBeEnabled());
     expect(printedRows(document.getElementById('prescription-print-root'))).toEqual(expected);
     expect(printedRows(document.getElementById('pagedjs-container'))).toEqual(expected);
     await act(async () => fireEvent.click(screen.getByRole('button', { name: /^Print$/ })));
+    await waitFor(() => expect(print).toHaveBeenCalled());
     expect(printedRows(document.getElementById('prescription-print-host'))).toEqual(expected);
     act(() => window.dispatchEvent(new Event('afterprint')));
     for (const action of ['Download PDF', 'PDF via WhatsApp', 'Email']) {
@@ -325,7 +329,7 @@ it('prints medicine names, frequencies and timings in title case in preview, pri
     }
     expect(screen.getByDisplayValue('HYBLOK-ACE GEL CREAM 50 G')).toBeInTheDocument();
   } finally {
-    get.mockRestore(); print.mockRestore(); click.mockRestore();
+    get.mockRestore(); patch.mockRestore(); share.mockRestore(); print.mockRestore(); click.mockRestore();
     localStorage.removeItem('rxDraft:case-patient:case-visit');
   }
 });
@@ -655,7 +659,7 @@ it.each([
     if (optimized) fireEvent.click(screen.getByRole('checkbox', { name: 'Space-optimized layout' }));
     await settlePreviewPagination();
     const assertHistory = (element: Element | null) => {
-      expect(element).toHaveTextContent(item.drugName);
+      expect(element).toHaveTextContent('Synthetic Medicine');
       const section = element?.querySelector('[data-personal-history]');
       if (personalHistory.trim()) {
         expect(section).toHaveTextContent('Personal history');
