@@ -68,13 +68,16 @@ describe('ClinicBillDialog Received on across midnight', () => {
     expect(api.collectClinicPayment.mock.calls[0][0]).toEqual({ invoiceId: 'inv1', amount: 200, method: 'CASH', receivedOn: '2026-11-26' });
   });
 
-  it('treats a cleared date as received today and still lets staff record the payment', async () => {
+  it('blocks a cleared date until staff choose a day or use today, and Use today sends no date', async () => {
     const dialog = await openDialog();
     fireEvent.click(await within(dialog).findByRole('button', { name: 'Change the day the money was received' }));
     const field = within(dialog).getByLabelText('Received on');
     fireEvent.change(field, { target: { value: '2026-11-25' } });
     fireEvent.change(field, { target: { value: '' } });
 
+    expect(within(dialog).getByRole('button', { name: 'Record ₹200 payment' })).toBeDisabled();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Use today' }));
+    expect(within(dialog).getByText(/Received today/)).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Record ₹200 payment' }));
 
     await waitFor(() => expect(api.collectClinicPayment).toHaveBeenCalled());
@@ -86,7 +89,6 @@ describe('ClinicBillDialog Received on across midnight', () => {
     fireEvent.click(await within(dialog).findByRole('button', { name: 'Change the day the money was received' }));
     const field = within(dialog).getByLabelText('Received on');
     fireEvent.change(field, { target: { value: '2026-11-25' } });
-    Object.defineProperty(field, 'validity', { configurable: true, value: { badInput: true } });
     fireEvent.change(field, { target: { value: '' } });
 
     expect(within(dialog).getByRole('button', { name: 'Record ₹200 payment' })).toBeDisabled();
