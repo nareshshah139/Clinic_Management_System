@@ -62,11 +62,13 @@ export function ReceivedOnField({ value, onChange, today = clinicToday() }: { va
     <div className="space-y-1">
       <label className="flex flex-col gap-1 text-sm font-medium">
         Received on
-        <Input type="date" value={value ?? today} min={min} max={max} onChange={(e) => onChange(e.target.value)} aria-invalid={invalid || undefined} className="h-10 w-44 text-base" />
+        <Input type="date" value={value ?? ''} min={min} max={max} onChange={(e) => onChange(e.target.value)} aria-invalid={invalid || undefined} className="h-10 w-44 text-base" />
       </label>
       {invalid ? (
         <p className="text-sm text-destructive-text">Choose a day from {displayCalendarDate(min)} to today.</p>
-      ) : value !== null && value !== today ? (
+      ) : value === null ? (
+        <p className="text-xs text-muted-foreground">Leave empty for today.</p>
+      ) : value !== today ? (
         <p className="text-xs text-muted-foreground">Reports count this payment on {displayCalendarDate(value)}, the day the money came in.</p>
       ) : null}
     </div>
