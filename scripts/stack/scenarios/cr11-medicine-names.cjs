@@ -484,12 +484,12 @@ const MISSING_STRENGTH = ["Cap. Omega 3", "Cap. Uprise D3 60000", "Tab. Acnosis"
       const loaded = await page.waitForFunction(() => [...document.querySelectorAll('input[placeholder="Search medicine name..."]')].some((el) => el.value.startsWith("13 74")), null, { timeout: 60000 }).then(() => true, () => false);
       check("doctor-1280 the old prescription opens with its saved names unchanged", loaded, true);
       const text = await previewText(page);
-      check("doctor-1280 reprint of the old prescription drops codes and pack sizes but keeps the strength", [text.includes("Flutas 150Mg"), text.includes("Antoxid-Hc Capsules"), text.includes("13 74"), text.includes("30S"), text.includes("(loose capsules)")], [true, true, false, false, false]);
+      check("doctor-1280 reprint of the old prescription drops codes and pack sizes but keeps the strength", [text.includes("Flutas 150 mg"), text.includes("Antoxid-HC Capsules"), text.includes("13 74"), text.includes("30S"), text.includes("(loose capsules)")], [true, true, false, false, false]);
       await shot(page, "doctor-1280-14-print-preview-old");
       check("the old prescription is unchanged in the database", JSON.parse((await db.prescription.findUnique({ where: { id: oldPrescription.id } })).items).map((it) => it.drugName), ["13 74 | Flutas 150Mg(Pc)", "1 Antoxid-Hc Capsules 30S (loose capsules)"]);
       const pdf = await call("doctor", "POST", `/prescriptions/${oldPrescription.id}/pdf`, {});
       const pdfText = execFileSync("pdftotext", ["-", "-"], { input: Buffer.from(String(pdf.fileUrl).split(",")[1], "base64") }).toString();
-      check("the old prescription PDF prints cleaned names", pdfText.split("\n").filter((line) => /^\d\. /.test(line)).map((line) => line.split(" — ")[0]), ["1. Flutas 150Mg 1 TABLET", "2. Antoxid-Hc Capsules 1 CAPSULE"]);
+      check("the old prescription PDF prints cleaned names", pdfText.split("\n").filter((line) => /^\d\. /.test(line)).map((line) => line.split(" — ")[0]), ["1. Flutas 150 mg 1 TABLET", "2. Antoxid-HC Capsules 1 CAPSULE"]);
       console.log(`NOTE doctor-1280 old visit console errors: ${JSON.stringify(seen.errors)}`);
       await context.close();
     }

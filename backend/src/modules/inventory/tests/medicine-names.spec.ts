@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import * as path from 'node:path';
-import { medicineNameProblems, printedMedicineName, standardMedicineName, strengthMissing } from '../medicine-names';
+import { medicineNameProblems, printedInstructions, printedMedicineName, standardMedicineName, strengthMissing, titleCaseDisplay } from '../medicine-names';
 import { parseRecordedName } from '../medicine-name-parser';
 
 const repo = path.resolve(__dirname, '../../../../..');
@@ -17,6 +17,13 @@ describe('standard medicine names (shared case table)', () => {
   it.each(cases.print.map((c: any) => [c.recorded, c]))('prints %s', (_recorded, c: any) => {
     expect(printedMedicineName(c.recorded)).toBe(c.printed);
     expect(printedMedicineName(c.printed)).toBe(c.printed);
+  });
+  it.each(cases.display.map((c: any) => [String(c.text), c]))('shows %j in title case', (_text, c: any) => {
+    expect(titleCaseDisplay(c.text)).toBe(c.display);
+    expect(titleCaseDisplay(c.display)).toBe(c.display);
+  });
+  it.each(cases.instructions.map((c: any) => [String(c.text), c]))('prints the instructions %j', (_text, c: any) => {
+    expect(printedInstructions(c.text)).toBe(c.display);
   });
   it.each(cases.parse.map((c: any) => [c.recorded, c]))('reads the recorded name %s', (_recorded, c: any) => {
     const parsed = parseRecordedName(c.recorded, c.hints);

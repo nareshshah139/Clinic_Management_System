@@ -1,5 +1,5 @@
 import { isDeepStrictEqual } from 'node:util';
-import { printedMedicineName } from '../inventory/medicine-names';
+import { printedInstructions, printedMedicineName } from '../inventory/medicine-names';
 import { displayClinicDate } from '../../common/date-display';
 import { Prisma } from '@prisma/client';
 import { medicineRegimenDefaults } from './medicine-regimen-defaults';
@@ -1410,7 +1410,7 @@ export class PrescriptionsService {
       items.forEach((it, idx) => {
         const line = `${idx + 1}. ${printedMedicineName(it.drugName)} ${it.dosage || ''} ${it.dosageUnit || ''} — ${it.frequency || ''}${it.duration ? ` x ${it.duration} ${it.durationUnit || ''}` : ''}`;
         doc.fontSize(11).text(line);
-        if (it.instructions) doc.fontSize(9).fillColor('#444').text(`Notes: ${it.instructions}`).fillColor('#000');
+        if (it.instructions) doc.fontSize(9).fillColor('#444').text(`Notes: ${printedInstructions(it.instructions)}`).fillColor('#000');
       });
     } catch {}
 

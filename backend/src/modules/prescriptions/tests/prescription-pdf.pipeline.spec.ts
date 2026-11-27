@@ -7,6 +7,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { PrescriptionsController } from '../prescriptions.controller';
 import { PrescriptionsService } from '../prescriptions.service';
+import { printedMedicineName } from '../../inventory/medicine-names';
 import { JwtAuthGuard } from '../../../shared/guards/jwt-auth.guard';
 import { IdempotencyInterceptor } from '../../../shared/interceptors/idempotency.interceptor';
 import { ApiClient } from '../../../../../frontend/src/lib/api';
@@ -158,11 +159,11 @@ describe('Prescription -> saved readback -> PDF pipeline', () => {
       writeFileSync(resolve(dir, file), bytes);
       return text;
     };
-    verifyPdf(created.pdf, payload.items[0].drugName, 'prescription-pipeline.pdf');
+    verifyPdf(created.pdf, printedMedicineName(payload.items[0].drugName), 'prescription-pipeline.pdf');
     for (const name of ['TEST VERSION A', 'TEST VERSION B', 'TEST VERSION A']) {
       await api.updatePrescription('pipeline-rx', { items: [{ ...payload.items[0], drugName: name }] });
       const pdf = await api.generatePrescriptionPdf('pipeline-rx');
-      verifyPdf(pdf, name, 'prescription-pipeline-updated.pdf');
+      verifyPdf(pdf, printedMedicineName(name), 'prescription-pipeline-updated.pdf');
     }
     expect(state.events).toHaveLength(5);
     await expect(api.post('/prescriptions', payload)).rejects.toMatchObject({ status: 400, message: expect.stringContaining('Missing Idempotency-Key header'), body: expect.objectContaining({ message: 'Missing Idempotency-Key header' }), requestId: expect.any(String) });

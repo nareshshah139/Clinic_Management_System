@@ -127,10 +127,10 @@ export function medicineNameProblems(fields: MedicineNameFields & { type?: strin
 
 /**
  * Cleans a saved prescription line for printing: removes a leading catalogue code, pack sizes and
- * dispensing notes. It never changes the strength or the words of the name.
+ * dispensing notes, then writes it in title case. It never changes the strength or the words of the name.
  */
 export function printedMedicineName(drugName: unknown): string {
-  return tidy(
+  return titleCaseDisplay(
     String(drugName ?? '')
       .replace(/^\s*\d[\d ]*\|\s*/, '')
       .replace(/^\s*\d{1,4}\s+(?=[A-Za-z][A-Za-z-]{2,})/, '')
@@ -140,4 +140,47 @@ export function printedMedicineName(drugName: unknown): string {
       .replace(/(?<![\w./])\d+(?:\.\d+)?\s*(?:ml|gm)\b/gi, ' ')
       .replace(/[\s,|]+$/, ''),
   );
+}
+
+const UPPERCASE_WORDS = new Set([
+  'am', 'pm', 'od', 'bd', 'tds', 'qds', 'qid', 'qhs', 'hs', 'sos', 'prn',
+  'sr', 'xr', 'er', 'cr', 'mr', 'ds', 'dt',
+  'cv', 'ms', 'hc', 'gsh', 'fsr', 'xdef',
+  'spf', 'pa', 'uv', 'uva', 'uvb', 'aha', 'bha', 'pha', 'prp',
+]);
+const UNIT_WORDS = new Set(['mg', 'mcg', 'ml', 'iu']);
+
+const LETTERS = '\\p{L}\\p{M}';
+const NUMBER = '\\d+(?:\\.\\d+)?';
+const DISPLAY_TOKEN = new RegExp(
+  `(?<![${LETTERS}\\d_.:])(\\d{1,2}(?::\\d{2})?)\\s*(am|pm)(?![${LETTERS}])` +
+    `|(?<![${LETTERS}\\d_.])(${NUMBER})\\s*(mg|mcg|µg|gm|g|iu)\\s*\\/\\s*(${NUMBER})\\s*(ml)(?![${LETTERS}])` +
+    `|(?<![${LETTERS}\\d_.])(${NUMBER})\\s*(mg|mcg|µg|gm|g|ml|iu|%)(?![${LETTERS}])` +
+    `|[${LETTERS}\\d]+(?:['’][${LETTERS}]+)*`,
+  'giu',
+);
+
+function displayWord(word: string): string {
+  if (/^\d/.test(word) || (/\p{Ll}/u.test(word) && /\p{Lu}/u.test(word.slice(1)))) return word;
+  const lower = word.toLowerCase();
+  if (UNIT_WORDS.has(lower)) return unit(lower);
+  if (UPPERCASE_WORDS.has(lower) || /^[a-z]{1,3}\d/i.test(word) || /^[B-DF-HJ-NP-TV-XZ]{2,4}$/.test(word)) return word.toUpperCase();
+  return lower.charAt(0).toUpperCase() + lower.slice(1);
+}
+
+export function titleCaseDisplay(text: unknown): string {
+  return tidy(text).replace(
+    DISPLAY_TOKEN,
+    (match, clock, meridiem, ratioDose, ratioDoseUnit, ratioVolume, ratioVolumeUnit, amount, amountUnit) => {
+      if (meridiem) return `${clock} ${meridiem.toUpperCase()}`;
+      if (ratioVolumeUnit) return `${ratioDose}${unit(ratioDoseUnit)}/${ratioVolume}${unit(ratioVolumeUnit)}`;
+      if (amountUnit) return amountUnit === '%' ? `${amount}%` : `${amount} ${unit(amountUnit)}`;
+      return displayWord(match);
+    },
+  );
+}
+
+export function printedInstructions(text: unknown): string {
+  const raw = String(text ?? '');
+  return /\p{Lu}/u.test(raw) && !/\p{Ll}/u.test(raw) ? titleCaseDisplay(raw) : raw;
 }
