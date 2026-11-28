@@ -138,3 +138,41 @@ it('never offers the visit being edited as its own last visit', async () => {
   await settled();
   expect(screen.queryByRole('region', { name: 'Last visit' })).toBeNull();
 });
+
+const savedDraft = {
+  id: 'draft',
+  entryType: 'visit',
+  encounterDate: '2026-11-12T05:00:00.000Z',
+  complaints: [{ complaint: 'Hair fall for 2 months' }],
+  diagnosis: [{ diagnosis: 'Telogen effluvium' }],
+  prescriptionItems: [],
+  prescription: null,
+  plan: {
+    dermatology: {
+      medicationPlan: [
+        { drugName: 'Minoxidil 5% Solution', frequency: 'TWICE_DAILY', duration: 90, durationUnit: 'DAYS', instructions: 'Apply to scalp' },
+        { drugName: 'Biotin 10mg Tablet', frequency: 'ONCE_DAILY', duration: 90, durationUnit: 'DAYS' },
+      ],
+    },
+  },
+};
+
+it('carries the medicines of a saved draft from its treatment plan when nothing was issued', async () => {
+  history = [savedDraft, olderVisit];
+  renderNewVisit();
+  const panel = await offer();
+  expect(panel.textContent).toContain('Telogen effluvium');
+  expect(panel.textContent).toContain('2 medicines');
+  fireEvent.click(within(panel).getByRole('button', { name: 'Start from last visit' }));
+  expect(((await screen.findByDisplayValue('Minoxidil 5% Solution')) as HTMLInputElement).value).toBe('Minoxidil 5% Solution');
+  expect(((await screen.findByDisplayValue('Biotin 10mg Tablet')) as HTMLInputElement).value).toBe('Biotin 10mg Tablet');
+  expect(screen.getByDisplayValue('Apply to scalp')).toBeTruthy();
+});
+
+it('prefers the issued prescription over the plan of the same visit', async () => {
+  history = [{ ...savedDraft, prescriptionItems: [{ drugName: 'Tab Finasteride 1mg', frequency: 'ONCE_DAILY', duration: 90, durationUnit: 'DAYS' }] }];
+  renderNewVisit();
+  fireEvent.click(within(await offer()).getByRole('button', { name: 'Start from last visit' }));
+  expect(((await screen.findByDisplayValue('Tab Finasteride 1mg')) as HTMLInputElement).value).toBe('Tab Finasteride 1mg');
+  expect(screen.queryByDisplayValue('Minoxidil 5% Solution')).toBeNull();
+});
