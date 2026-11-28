@@ -1474,7 +1474,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
             }
           }
           if (!res?.prescription?.id && !items.some(item => item.drugName.trim()) && Array.isArray(dermaPlan.medicationPlan)) {
-            hydrateItems(dermaPlan.medicationPlan.map(mapPrevRxItem).filter(Boolean) as PrescriptionItemForm[]);
+            hydrateItems(dermaPlan.medicationPlan.map(mapPlanRxItem).filter(Boolean) as PrescriptionItemForm[]);
           }
           if (!procedures && Array.isArray(dermaPlan.procedures) && dermaPlan.procedures.length > 0) {
             const procLine = dermaPlan.procedures.map((p: any) => p?.type).filter(Boolean).join(', ');
@@ -1923,6 +1923,11 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     };
   };
 
+  const mapPlanRxItem = (raw: any): PrescriptionItemForm | null => {
+    const row = mapPrevRxItem(raw);
+    return row && !raw?.frequency && !row.dosePattern ? { ...row, frequency: '' } : row;
+  };
+
   const normalizePrescriptionResponse = (res: any): any[] => {
     if (Array.isArray(res)) return res;
     if (res && typeof res === 'object') {
@@ -2010,7 +2015,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     });
   };
 
-  const lastVisitMedicines = (lastVisit?.medicines ?? []).map(mapPrevRxItem).filter(Boolean) as PrescriptionItemForm[];
   const carrySlots: CarrySlot[] = [
     { id: 'chiefComplaints', kind: 'chief complaints', from: lastVisit?.chiefComplaints ?? '', current: chiefComplaints, set: setChiefComplaints, cleared: '' },
     { id: 'diagnosis', kind: 'diagnosis', from: lastVisit?.diagnosis ?? '', current: diagnosis, set: setDiagnosis, cleared: '' },
@@ -2605,6 +2609,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
 
     return null;
   };
+
+  const lastVisitMedicines = (lastVisit?.medicines ?? []).map((row) => (lastVisit?.fromPlan ? mapPlanRxItem(row) : mapPrevRxItem(row))).filter(Boolean) as PrescriptionItemForm[];
 
   const removeItem = (index: number) => {
     recordHistory();

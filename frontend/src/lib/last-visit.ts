@@ -11,6 +11,7 @@ export type LastVisit = {
   menstrualHistory: string;
   familyHistory: { dm: boolean; htn: boolean; thyroid: boolean; others: string };
   medicines: unknown[];
+  fromPlan: boolean;
 };
 
 const parsed = (value: unknown): unknown => {
@@ -28,9 +29,9 @@ const records = (value: unknown) => {
 };
 const medicinesOf = (visit: Record<string, any>) => {
   const issued = records(visit.prescriptionItems);
-  if (issued.length) return issued;
+  if (issued.length) return { medicines: issued, fromPlan: false };
   const plan = (parsed(visit.plan) ?? {}) as Record<string, any>;
-  return records(plan.dermatology?.medicationPlan ?? plan.medicationPlan);
+  return { medicines: records(plan.dermatology?.medicationPlan ?? plan.medicationPlan), fromPlan: true };
 };
 
 const doctorOf = (visit: Record<string, any>) => {
@@ -52,7 +53,7 @@ function describeVisit(visit: Record<string, any>): LastVisit {
     medicationHistory: text(history.medicationHistory),
     menstrualHistory: text(history.menstrualHistory),
     familyHistory: { dm: family.dm === true, htn: family.htn === true, thyroid: family.thyroid === true, others: text(family.others) },
-    medicines: medicinesOf(visit),
+    ...medicinesOf(visit),
   };
 }
 
