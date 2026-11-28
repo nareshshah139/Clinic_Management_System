@@ -165,6 +165,16 @@ it('never sends the carry marker of a medicine row to the server', async () => {
   expect(JSON.stringify(plan)).not.toContain('carryId');
 });
 
+it('swaps the offer for the notice inside one container, which keeps Chrome from collapsing the medicine table', async () => {
+  renderNewVisit();
+  const panel = await offer();
+  const slot = panel.closest('[data-last-visit-slot]');
+  expect(slot).not.toBeNull();
+  fireEvent.click(within(panel).getByRole('button', { name: 'Start from last visit' }));
+  const notice = await screen.findByRole('region', { name: 'Carried forward' });
+  expect(notice.closest('[data-last-visit-slot]')).toBe(slot);
+});
+
 it('does not offer itself once the doctor has started this visit', async () => {
   renderNewVisit();
   await offer();
