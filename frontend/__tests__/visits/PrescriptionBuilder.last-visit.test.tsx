@@ -169,6 +169,65 @@ it('carries the medicines of a saved draft from its treatment plan when nothing 
   expect(screen.getByDisplayValue('Apply to scalp')).toBeTruthy();
 });
 
+const diagnosisOnlyVisit = {
+  id: 'acne-last',
+  entryType: 'visit',
+  encounterDate: '2026-11-12T05:00:00.000Z',
+  complaints: [{ complaint: 'Acne flare' }],
+  diagnosis: [{ diagnosis: 'Acne vulgaris' }],
+  prescriptionItems: [],
+};
+const olderAcneVisit = {
+  id: 'acne-old',
+  entryType: 'visit',
+  encounterDate: '2026-09-01T05:00:00.000Z',
+  createdAt: '2026-09-01T05:00:00.000Z',
+  doctorId: 'd',
+  diagnosis: [{ diagnosis: 'Acne vulgaris' }],
+  prescriptionItems: [{ drugName: 'Adapalene 0.1% Gel', frequency: 'ONCE_DAILY', duration: 30, durationUnit: 'DAYS' }],
+  planSummary: { followUpInstructions: 'Review in 4 weeks' },
+};
+const suggestedTreatment = () => screen.queryByDisplayValue('Adapalene 0.1% Gel');
+const suggestedFollowUp = () => screen.queryByDisplayValue('Review in 4 weeks');
+
+it('does not let a carried diagnosis fill treatment from another visit, and keeps the suggestion to apply on request', async () => {
+  history = [diagnosisOnlyVisit, olderAcneVisit];
+  renderNewVisit();
+  fireEvent.click(within(await offer()).getByRole('button', { name: 'Start from last visit' }));
+  expect(field('Diagnosis').value).toBe('Acne vulgaris');
+  await settled();
+  await settled();
+  expect(suggestedTreatment()).toBeNull();
+  expect(suggestedFollowUp()).toBeNull();
+
+  fireEvent.click(await screen.findByRole('button', { name: /Reapply learned plan/ }));
+  expect(((await screen.findByDisplayValue('Adapalene 0.1% Gel')) as HTMLInputElement).value).toBe('Adapalene 0.1% Gel');
+});
+
+it('leaves no treatment behind when a diagnosis-only carry is undone', async () => {
+  history = [diagnosisOnlyVisit, olderAcneVisit];
+  renderNewVisit();
+  fireEvent.click(within(await offer()).getByRole('button', { name: 'Start from last visit' }));
+  await settled();
+  fireEvent.click(within(await screen.findByRole('region', { name: 'Carried forward' })).getByRole('button', { name: 'Undo' }));
+  await settled();
+  await settled();
+  expect(field('Diagnosis').value).toBe('');
+  expect(field('Chief complaints').value).toBe('');
+  expect(suggestedTreatment()).toBeNull();
+  expect(suggestedFollowUp()).toBeNull();
+});
+
+it('still fills treatment for a diagnosis the doctor types over the carried one', async () => {
+  history = [diagnosisOnlyVisit, olderAcneVisit];
+  renderNewVisit();
+  fireEvent.click(within(await offer()).getByRole('button', { name: 'Start from last visit' }));
+  await settled();
+  expect(suggestedTreatment()).toBeNull();
+  fireEvent.change(field('Diagnosis'), { target: { value: 'Acne vulgaris, grade 3' } });
+  expect(((await screen.findByDisplayValue('Adapalene 0.1% Gel')) as HTMLInputElement).value).toBe('Adapalene 0.1% Gel');
+});
+
 it('prefers the issued prescription over the plan of the same visit', async () => {
   history = [{ ...savedDraft, prescriptionItems: [{ drugName: 'Tab Finasteride 1mg', frequency: 'ONCE_DAILY', duration: 90, durationUnit: 'DAYS' }] }];
   renderNewVisit();
