@@ -50,6 +50,8 @@ function pairs() {
   const add = (fg, bg, min) => list.push([fg, bg, min]);
   for (const s of SURFACES) { add('foreground', s, 4.5); add('muted-foreground', s, 4.5); }
   for (const s of ['primary', 'accent', ...STATUSES]) add('muted-foreground', `${s}-soft`, 4.5);
+  for (const s of ['primary', ...STATUSES]) add('foreground', `${s}-soft`, 4.5);
+  for (const s of ['info', 'highlight']) add('destructive', `${s}-soft`, 4.5);
   add('card-foreground', 'card', 4.5);
   add('popover-foreground', 'popover', 4.5);
   add('primary-foreground', 'primary', 4.5);

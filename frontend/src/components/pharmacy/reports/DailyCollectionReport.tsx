@@ -13,24 +13,34 @@ import { ReportInfoTip } from "../ReportInfoTip";
 import { apiParams, type ReportEntry, type ReportParams } from "./report-catalog";
 import { formatCell, formatRupee } from "./report-format";
 import { ReportTable } from "./ReportTable";
-import { ReportError, ReportNotes, ReportTiles } from "./TableReport";
+import { ReportError, ReportNotes, ReportTiles, type StreamTile } from "./TableReport";
+import { columnColour, ModeMark, STREAM, StreamHeading, type Stream, type TableColour } from "./collection-colour";
 import { ReportToolbar } from "./ReportToolbar";
 import { countPayload, draftChanged, initialDraft, previewCount, statusMessage, type CountDraft } from "./collection-model";
-import type { DailyCollectionReport as Report, ReportTile } from "./report-types";
+import type { DailyCollectionReport as Report } from "./report-types";
 
 const never = () => false;
 
 const CLINIC_SECTIONS = ["whole-day", "clinic-modes", "clinic-bills"];
 
+const TABLE_COLOUR: Record<string, TableColour> = {
+  "whole-day": { stream: "whole", columns: { clinic: "clinic", pharmacy: "pharmacy" }, total: "total" },
+  "clinic-modes": { stream: "clinic", total: "net" },
+  "clinic-bills": { stream: "clinic", due: "due" },
+  billing: { stream: "pharmacy" },
+  documents: { stream: "pharmacy", due: "due" },
+};
+
 function SectionTable({ report, id }: { report: Report; id: string }) {
   const section = report.sections.find((s) => s.id === id);
   if (!section) return null;
+  const colour = TABLE_COLOUR[id];
   return (
     <section className="space-y-2" aria-labelledby={`collection-${section.id}`}>
-      <h4 id={`collection-${section.id}`} className="text-base font-semibold">
+      <h4 id={`collection-${section.id}`} className={cn("text-base font-semibold", colour.stream !== "whole" && STREAM[colour.stream].label)}>
         {section.title}
       </h4>
-      <ReportTable section={section} />
+      <ReportTable section={section} colour={colour} />
     </section>
   );
 }
@@ -44,6 +54,10 @@ const COLUMN_HELP = {
   refunds: "Money handed back in this mode today: refunds on bills whose discount was revised, and customer returns. Refunds as store credit move no money.",
   expected: "On today's bills + On earlier bills + Counter sales - Refunds: what should be in hand.",
 };
+
+const RECONCILIATION: TableColour = { stream: "pharmacy", total: "expected" };
+const reconciliation = (key: keyof typeof COLUMN_HELP) => columnColour(RECONCILIATION, { key, label: COLUMN_LABEL[key], kind: "money" })!;
+const reconCell = (key: keyof typeof COLUMN_HELP, value: number) => cn(reconciliation(key).cell, value === 0 && "text-muted-foreground");
 
 /**
  * CR-33 section A and CR-17: the clinic's whole daily take. Consultation and procedure bills sit
@@ -134,28 +148,30 @@ export function DailyCollectionReport({ entry, params, today, onApply }: { entry
                 </h2>
                 <ReportTiles
                   tiles={[
-                    { label: "Whole day", value: report.wholeDay.total, kind: "money", help: "Clinic receipts less refunds, plus what the pharmacy expects in hand." },
-                    { label: "Clinic", value: report.wholeDay.clinic, kind: "money" },
-                    { label: "Pharmacy", value: report.wholeDay.pharmacy, kind: "money" },
-                  ] satisfies ReportTile[]}
+                    { label: "Whole day", value: report.wholeDay.total, kind: "money", stream: "whole", help: "Clinic receipts less refunds, plus what the pharmacy expects in hand." },
+                    { label: "Clinic", value: report.wholeDay.clinic, kind: "money", stream: "clinic" },
+                    { label: "Pharmacy", value: report.wholeDay.pharmacy, kind: "money", stream: "pharmacy" },
+                  ] satisfies StreamTile[]}
                 />
                 <SectionTable report={report} id="whole-day" />
               </section>
               <section aria-labelledby="collection-clinic" className="space-y-3">
-                <h2 id="collection-clinic" className="text-xl font-semibold">
+                <StreamHeading as="h2" id="collection-clinic" stream="clinic" className="text-xl font-semibold">
                   Clinic: consultations and procedures
-                </h2>
+                </StreamHeading>
                 <ReportTiles
                   tiles={[
-                    { label: "Clinic received", value: report.clinic.net, kind: "money", help: "Payments received today on clinic bills, whichever day the bill is from, less refunds." },
-                    { label: "Clinic billed today", value: report.clinic.billed, kind: "money" },
-                    { label: "Clinic still due", value: report.clinic.dueAtDayEnd, kind: "money", tone: report.clinic.dueAtDayEnd > 0 ? "warning" : undefined },
-                  ] satisfies ReportTile[]}
+                    { label: "Clinic received", value: report.clinic.net, kind: "money", stream: "clinic", help: "Payments received today on clinic bills, whichever day the bill is from, less refunds." },
+                    { label: "Clinic billed today", value: report.clinic.billed, kind: "money", stream: "clinic" },
+                    { label: "Clinic still due", value: report.clinic.dueAtDayEnd, kind: "money", stream: "clinic", tone: report.clinic.dueAtDayEnd > 0 ? "warning" : undefined },
+                  ] satisfies StreamTile[]}
                 />
                 <SectionTable report={report} id="clinic-modes" />
                 <SectionTable report={report} id="clinic-bills" />
               </section>
-              <h2 className="text-xl font-semibold">Pharmacy</h2>
+              <StreamHeading as="h2" stream="pharmacy" className="text-xl font-semibold">
+                Pharmacy
+              </StreamHeading>
             </>
           )}
           <p
@@ -172,19 +188,22 @@ export function DailyCollectionReport({ entry, params, today, onApply }: { entry
             <StatusIcon className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
             {status.text}
           </p>
-          <ReportTiles tiles={report.tiles} />
+          <ReportTiles tiles={report.tiles.map((tile) => ({ ...tile, stream: "pharmacy" as Stream }))} />
 
           <section aria-labelledby="collection-modes" className="space-y-2">
-            <h3 id="collection-modes" className="text-lg font-semibold">
+            <StreamHeading as="h3" id="collection-modes" stream="pharmacy" className="text-lg font-semibold">
               Pharmacy reconciliation by payment mode
-            </h3>
+            </StreamHeading>
             <ul className="space-y-3 md:hidden" aria-label="Pharmacy count by payment mode">
               {collection.modes.map((line, index) => {
                 const p = preview.lines[index];
                 return (
                   <li key={line.mode} className="rounded-lg border p-3">
                     <div className="flex items-baseline justify-between gap-2">
-                      <span className="text-lg font-semibold">{line.label}</span>
+                      <span className="inline-flex items-center gap-2 text-lg font-semibold">
+                        <ModeMark mode={line.mode} />
+                        {line.label}
+                      </span>
                       <span className="text-base tabular-nums">
                         Expected <strong>{formatRupee(line.expected)}</strong>
                       </span>
@@ -224,32 +243,34 @@ export function DailyCollectionReport({ entry, params, today, onApply }: { entry
             <div className="hidden overflow-x-auto rounded-md border md:block">
               <table aria-label="Pharmacy reconciliation by payment mode" className="w-full min-w-[52rem] border-separate border-spacing-0 text-base">
                 <thead>
-                  <tr className="[&>th]:border-b [&>th]:bg-muted [&>th]:px-3 [&>th]:py-2.5 [&>th]:font-semibold">
-                    <th scope="col" className="sticky left-0 z-10 whitespace-nowrap text-left">Mode</th>
+                  <tr className="[&>th]:border-b [&>th]:px-3 [&>th]:py-2.5 [&>th]:font-semibold">
+                    <th scope="col" className="sticky left-0 z-10 whitespace-nowrap bg-muted text-left">Mode</th>
                     {(Object.keys(COLUMN_HELP) as (keyof typeof COLUMN_HELP)[]).map((key) => (
-                      <th key={key} scope="col" className="whitespace-nowrap text-right">
+                      <th key={key} scope="col" className={cn("whitespace-nowrap text-right", reconciliation(key).head)}>
                         <span className="inline-flex flex-row-reverse items-center gap-1">
                           {COLUMN_LABEL[key]}
                           <ReportInfoTip label={`the ${key} column`}>{COLUMN_HELP[key]}</ReportInfoTip>
                         </span>
                       </th>
                     ))}
-                    <th scope="col" className="whitespace-nowrap text-right">Counted</th>
-                    <th scope="col" className="whitespace-nowrap text-right">Difference</th>
+                    <th scope="col" className="whitespace-nowrap bg-muted text-right">Counted</th>
+                    <th scope="col" className="whitespace-nowrap bg-muted text-right">Difference</th>
                   </tr>
                 </thead>
                 <tbody>
                   {collection.modes.map((line, index) => {
                     const p = preview.lines[index];
                     return (
-                      <tr key={line.mode} className="[&>td]:border-b [&>td]:bg-background [&>td]:px-3 [&>td]:py-2 [&>td]:tabular-nums">
-                        <th scope="row" className="sticky left-0 z-10 whitespace-nowrap border-b bg-background px-3 py-2 text-left font-medium">{line.label}</th>
-                        <td className="text-right">{formatCell(line.onTodaysBills, "money")}</td>
-                        <td className="text-right">{formatCell(line.onEarlierBills, "money")}</td>
-                        <td className="text-right">{formatCell(line.counterSales, "money")}</td>
-                        <td className={cn("text-right", line.refunds > 0 && "text-destructive")}>{line.refunds ? `-${formatCell(line.refunds, "money")}` : formatCell(0, "money")}</td>
-                        <td className="text-right font-semibold">{formatCell(line.expected, "money")}</td>
-                        <td className="text-right">
+                      <tr key={line.mode} className="[&>td]:border-b [&>td]:px-3 [&>td]:py-2 [&>td]:tabular-nums">
+                        <th scope="row" className="sticky left-0 z-10 whitespace-nowrap border-b bg-background px-3 py-2 text-left font-medium">
+                          <span className="inline-flex items-center gap-2"><ModeMark mode={line.mode} />{line.label}</span>
+                        </th>
+                        <td className={cn("text-right", reconCell("onTodaysBills", line.onTodaysBills))}>{formatCell(line.onTodaysBills, "money")}</td>
+                        <td className={cn("text-right", reconCell("onEarlierBills", line.onEarlierBills))}>{formatCell(line.onEarlierBills, "money")}</td>
+                        <td className={cn("text-right", reconCell("counterSales", line.counterSales))}>{formatCell(line.counterSales, "money")}</td>
+                        <td className={cn("text-right", reconCell("refunds", line.refunds), line.refunds > 0 && "text-destructive")}>{line.refunds ? `-${formatCell(line.refunds, "money")}` : formatCell(0, "money")}</td>
+                        <td className={cn("text-right", reconCell("expected", line.expected))}>{formatCell(line.expected, "money")}</td>
+                        <td className="bg-background text-right">
                           {report.canRecordCount ? (
                             <input
                               aria-label={`${line.label} counted`}
@@ -265,7 +286,7 @@ export function DailyCollectionReport({ entry, params, today, onApply }: { entry
                           )}
                         </td>
                         <td
-                          className={cn("text-right font-semibold", p.difference !== null && Math.abs(p.difference) >= 0.005 && (p.difference < 0 ? "text-destructive" : "text-warning-text"))}
+                          className={cn("bg-background text-right font-semibold", p.difference !== null && Math.abs(p.difference) >= 0.005 && (p.difference < 0 ? "text-destructive" : "text-warning-text"))}
                           data-testid={`difference-${line.mode}`}
                         >
                           {p.difference === null ? "—" : `${p.difference > 0 ? "+" : ""}${formatCell(p.difference, "money")}`}
@@ -275,15 +296,15 @@ export function DailyCollectionReport({ entry, params, today, onApply }: { entry
                   })}
                 </tbody>
                 <tfoot>
-                  <tr className="[&>td]:bg-muted [&>td]:px-3 [&>td]:py-2.5 [&>td]:font-semibold [&>td]:tabular-nums">
+                  <tr className="[&>td]:px-3 [&>td]:py-2.5 [&>td]:font-semibold [&>td]:tabular-nums">
                     <th scope="row" className="sticky left-0 z-10 bg-muted px-3 py-2.5 text-left font-semibold">Total</th>
-                    <td className="text-right">{formatCell(collection.modes.reduce((s, l) => s + l.onTodaysBills, 0), "money")}</td>
-                    <td className="text-right">{formatCell(collection.modes.reduce((s, l) => s + l.onEarlierBills, 0), "money")}</td>
-                    <td className="text-right">{formatCell(collection.modes.reduce((s, l) => s + l.counterSales, 0), "money")}</td>
-                    <td className="text-right">{formatCell(-collection.modes.reduce((s, l) => s + l.refunds, 0), "money")}</td>
-                    <td className="text-right" data-testid="expected-total">{formatCell(collection.expectedTotal, "money")}</td>
-                    <td className="text-right" data-testid="counted-total">{preview.counted === null ? "—" : formatCell(preview.counted, "money")}</td>
-                    <td className="text-right" data-testid="difference-total">
+                    <td className={cn("text-right", reconciliation("onTodaysBills").foot)}>{formatCell(collection.modes.reduce((s, l) => s + l.onTodaysBills, 0), "money")}</td>
+                    <td className={cn("text-right", reconciliation("onEarlierBills").foot)}>{formatCell(collection.modes.reduce((s, l) => s + l.onEarlierBills, 0), "money")}</td>
+                    <td className={cn("text-right", reconciliation("counterSales").foot)}>{formatCell(collection.modes.reduce((s, l) => s + l.counterSales, 0), "money")}</td>
+                    <td className={cn("text-right", reconciliation("refunds").foot)}>{formatCell(-collection.modes.reduce((s, l) => s + l.refunds, 0), "money")}</td>
+                    <td className={cn("text-right", reconciliation("expected").foot)} data-testid="expected-total">{formatCell(collection.expectedTotal, "money")}</td>
+                    <td className="bg-muted text-right" data-testid="counted-total">{preview.counted === null ? "—" : formatCell(preview.counted, "money")}</td>
+                    <td className="bg-muted text-right" data-testid="difference-total">
                       {preview.difference === null ? "—" : `${preview.difference > 0 ? "+" : ""}${formatCell(preview.difference, "money")}`}
                     </td>
                   </tr>
@@ -338,10 +359,10 @@ export function DailyCollectionReport({ entry, params, today, onApply }: { entry
             .filter((section) => section.id !== "modes" && !CLINIC_SECTIONS.includes(section.id))
             .map((section) => (
               <section key={section.id} className="space-y-2" aria-labelledby={`collection-${section.id}`}>
-                <h3 id={`collection-${section.id}`} className="text-lg font-semibold">
+                <StreamHeading as="h3" id={`collection-${section.id}`} stream="pharmacy" className="text-lg font-semibold">
                   {section.title}
-                </h3>
-                <ReportTable section={section} />
+                </StreamHeading>
+                <ReportTable section={section} colour={TABLE_COLOUR[section.id]} />
               </section>
             ))}
           <ReportNotes notes={report.notes} />

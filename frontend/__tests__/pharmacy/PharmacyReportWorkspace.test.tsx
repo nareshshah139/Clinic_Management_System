@@ -408,6 +408,72 @@ describe('Daily Collection', () => {
     expect(screen.getByRole('region', { name: 'Clinic: consultations and procedures' })).toHaveTextContent('Clinic still due₹500.00');
   });
 
+  it('mutes zero amounts and tints what is still due, keeping every figure and label', async () => {
+    const money = (key: string, label: string) => ({ key, label, kind: 'money' });
+    const whole = {
+      id: 'whole-day', title: 'Whole day by payment mode',
+      columns: [{ key: 'mode', label: 'Payment mode', kind: 'text' }, money('clinic', 'Clinic'), money('pharmacy', 'Pharmacy'), money('total', 'Total')],
+      rows: [{ key: 'CASH', cells: { mode: 'Cash', clinic: 500, pharmacy: 0, total: 500 } }],
+      totals: { mode: 'Total', clinic: 500, pharmacy: 0, total: 500 },
+    };
+    const clinicBills = {
+      id: 'clinic-bills', title: 'Clinic bills',
+      columns: [{ key: 'number', label: 'Bill No.', kind: 'text' }, money('amount', 'Amount'), money('due', 'Due')],
+      rows: [
+        { key: 'b1', cells: { number: 'INV-001', amount: 800, due: 500 } },
+        { key: 'b2', cells: { number: 'INV-002', amount: 300, due: 0 } },
+      ],
+      totals: { number: 'Total', amount: 1100, due: 500 },
+    };
+    const report = collection();
+    api.get.mockResolvedValue({
+      ...report,
+      clinic: { day: '2026-11-05', modes: [], billCount: 2, billed: 1100, collectedOnTodaysBills: 600, dueAtDayEnd: 500, received: 600, refunds: 0, net: 600 },
+      wholeDay: { modes: [], clinic: 500, pharmacy: 0, total: 500 },
+      sections: [whole, clinicBills, ...report.sections],
+    } as any);
+    render(<PharmacyReportWorkspace />);
+    await screen.findByTestId('collection-status');
+    const cells = (table: string, row: RegExp) => within(within(screen.getByRole('table', { name: table })).getByRole('row', { name: row })).getAllByRole('cell');
+
+    const [, clinic, pharmacy] = cells('Whole day by payment mode', /^Cash/);
+    expect(clinic).toHaveTextContent('500.00');
+    expect(clinic).not.toHaveClass('text-muted-foreground');
+    expect(pharmacy).toHaveTextContent('0.00');
+    expect(pharmacy).toHaveClass('text-muted-foreground');
+
+    const [, , owing] = cells('Clinic bills', /INV-001/);
+    expect(owing).toHaveTextContent('500.00');
+    expect(owing).toHaveClass('text-warning-text');
+    const [, , settled] = cells('Clinic bills', /INV-002/);
+    expect(settled).toHaveTextContent('0.00');
+    expect(settled).toHaveClass('text-muted-foreground');
+    expect(settled).not.toHaveClass('text-warning-text');
+
+    expect(desk().getByRole('row', { name: /^Card/ }).querySelectorAll('td')[4]).toHaveClass('text-muted-foreground');
+    expect(desk().getByRole('row', { name: /^Cash/ }).querySelectorAll('td')[4]).not.toHaveClass('text-muted-foreground');
+
+    const due = screen.getByText('Clinic still due').closest('div')!;
+    expect(due).toHaveTextContent('₹500.00');
+    expect(due).toHaveClass('bg-warning-soft');
+  });
+
+  it('shows a clinic with nothing due as a muted zero, not a warning', async () => {
+    const report = collection();
+    api.get.mockResolvedValue({
+      ...report,
+      clinic: { day: '2026-11-05', modes: [], billCount: 1, billed: 800, collectedOnTodaysBills: 800, dueAtDayEnd: 0, received: 800, refunds: 0, net: 800 },
+      wholeDay: { modes: [], clinic: 800, pharmacy: 1640, total: 2440 },
+    } as any);
+    render(<PharmacyReportWorkspace />);
+    await screen.findByTestId('collection-status');
+    const due = screen.getByText('Clinic still due').closest('div')!;
+    expect(due).toHaveTextContent('₹0.00');
+    expect(due).not.toHaveClass('bg-warning-soft');
+    expect(within(due).getByText('₹0.00')).toHaveClass('text-muted-foreground');
+    expect(within(screen.getByText('Clinic received').closest('div')!).getByText('₹800.00')).not.toHaveClass('text-muted-foreground');
+  });
+
   it('steps a day at a time and never past today', async () => {
     api.get.mockResolvedValue(collection() as any);
     render(<PharmacyReportWorkspace />);
