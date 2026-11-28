@@ -1,6 +1,7 @@
 import React from 'react';
 import { render, screen, fireEvent, cleanup, within, waitFor, act } from '@testing-library/react';
 import PrescriptionBuilder from '@/components/visits/PrescriptionBuilder';
+import type { PendingCarry } from '@/components/visits/LastVisitCarry';
 
 jest.setTimeout(30_000);
 
@@ -366,4 +367,60 @@ it('prefers the issued prescription over the plan of the same visit', async () =
   fireEvent.click(within(await offer()).getByRole('button', { name: 'Start from last visit' }));
   expect(((await screen.findByDisplayValue('Tab Finasteride 1mg')) as HTMLInputElement).value).toBe('Tab Finasteride 1mg');
   expect(screen.queryByDisplayValue('Minoxidil 5% Solution')).toBeNull();
+});
+
+it('keeps the carried items pending, and the source named, when the attending doctor is changed', async () => {
+  const pending = React.createRef<() => PendingCarry | null>();
+  const view = render(<PrescriptionBuilder patientId="p-last" visitId={null} doctorId="d" pendingCarryRef={pending} />);
+  fireEvent.click(within(await offer()).getByRole('button', { name: 'Start from last visit' }));
+  await screen.findByRole('region', { name: 'Carried forward' });
+  await settled();
+
+  view.rerender(<PrescriptionBuilder patientId="p-last" visitId={null} doctorId="d2" pendingCarryRef={pending} />);
+  await settled();
+
+  expect((await screen.findByRole('region', { name: 'Carried forward' })).textContent).toContain('10 Oct 2026 visit by Dr. Asha Rao');
+  expect(field('Diagnosis').value).toBe('Acne vulgaris');
+  const carried = pending.current?.();
+  expect(carried?.source).toContain('10 Oct 2026 visit by Dr. Asha Rao');
+  expect(carried?.items.map((item) => item.label)).toEqual(['Chief complaints', 'Diagnosis', 'Past history', 'Medication history', 'Family history', '2 medicines']);
+});
+
+it('forgets the carried items when the patient is changed', async () => {
+  const pending = React.createRef<() => PendingCarry | null>();
+  const view = render(<PrescriptionBuilder patientId="p-last" visitId={null} doctorId="d" pendingCarryRef={pending} />);
+  fireEvent.click(within(await offer()).getByRole('button', { name: 'Start from last visit' }));
+  await screen.findByRole('region', { name: 'Carried forward' });
+
+  view.rerender(<PrescriptionBuilder patientId="p-other" visitId={null} doctorId="d" pendingCarryRef={pending} />);
+  await settled();
+
+  expect(screen.queryByRole('region', { name: 'Carried forward' })).toBeNull();
+  expect(pending.current?.()).toBeNull();
+});
+
+const procedureOnlyVisit = {
+  id: 'v-done',
+  status: 'COMPLETED',
+  version: 3,
+  complaints: [{ complaint: 'Acne flare' }],
+  diagnosis: [{ diagnosis: 'Acne vulgaris' }],
+  plan: { dermatology: { procedurePlanned: 'Chemical peel, 3 sessions' } },
+};
+
+it('never fills a locked completed visit with a learned plan, and not once it is amended either', async () => {
+  history = [olderAcneVisit];
+  const answer = global.fetch as jest.Mock;
+  global.fetch = jest.fn(async (url: string, init?: unknown) => (String(url).match(/\/visits\/v-done$/) ? json(procedureOnlyVisit) : answer(url, init))) as unknown as typeof fetch;
+  const view = render(<PrescriptionBuilder patientId="p-last" visitId="v-done" doctorId="d" readOnly />);
+  await screen.findByDisplayValue('Acne vulgaris');
+  await settled();
+  await settled();
+  expect(screen.queryByDisplayValue('Adapalene 0.1% Gel')).toBeNull();
+  expect(screen.queryByDisplayValue('Review in 4 weeks')).toBeNull();
+
+  view.rerender(<PrescriptionBuilder patientId="p-last" visitId="v-done" doctorId="d" />);
+  await settled();
+  expect(screen.queryByDisplayValue('Adapalene 0.1% Gel')).toBeNull();
+  expect(screen.queryByDisplayValue('Review in 4 weeks')).toBeNull();
 });

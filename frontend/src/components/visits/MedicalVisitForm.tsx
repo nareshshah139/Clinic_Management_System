@@ -4,6 +4,7 @@ import { displayClinicTime } from '@/lib/date-display';
 import { LoadingSkeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from 'react';
+import { flushSync } from 'react-dom';
 import dynamic from 'next/dynamic';
 import { PRESCRIPTION_TOP_MARGIN_PX, PRESCRIPTION_BOTTOM_MARGIN_PX, printBackgroundKey, savedPrintBackground } from '@/lib/prescription-letterhead';
 import { useDoctorLetterhead } from '@/hooks/useDoctorLetterhead';
@@ -57,6 +58,7 @@ import { usePatientHistory, loadPatientHistory as fetchPatientHistory, visitEntr
 import { encounterTime } from '@/lib/patient-history';
 import PatientHistoryVisitCard from '@/components/visits/PatientHistoryVisitCard';
 import PrescriptionBuilder, { type ConsultationSummary } from '@/components/visits/PrescriptionBuilder';
+import { useUnreviewedCarryPrompt, type PendingCarry } from '@/components/visits/LastVisitCarry';
 import type { ExtraVitalsPatch } from '@/lib/voice-fill-visit';
 import { COMPLETION_RULE, canCompleteVisit, completionSteps } from '@/lib/visit-completion';
 import type VisitPhotosPanel from '@/components/visits/VisitPhotos';
@@ -75,6 +77,13 @@ const VisitPhotos = dynamic<ComponentProps<typeof VisitPhotosPanel>>(() => impor
   loading: () => <p className="py-6 text-sm text-muted-foreground" role="status">Loading photos…</p>,
 });
 const DoctorTour = dynamic(() => import('@/components/tours/DoctorTour').then((module) => module.DoctorTour), { ssr: false });
+
+const scrollParent = (element: HTMLElement) => {
+  for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+    if (parent.scrollHeight > parent.clientHeight && /auto|scroll/.test(getComputedStyle(parent).overflowY)) return parent;
+  }
+  return document.documentElement;
+};
 
 const CONSULTATION_SECTIONS = [
   { id: 'clinical', label: 'Vitals' },
@@ -918,6 +927,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
   const latestPayload = useRef(buildPayload);
   latestPayload.current = buildPayload;
   const syncPrescriptionRef = useRef<(savedVisitId: string) => Promise<void>>(null);
+  const pendingCarryRef = useRef<() => PendingCarry | null>(null);
   const manualSaveInFlight = useRef(false);
   const autoSaveRunner = useRef<() => Promise<void>>(async () => {});
   const latestDraftWriter = useRef(persistDraftToStorage);
@@ -1437,6 +1447,11 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
     }
   };
 
+  const [askCarryReview, carryReviewDialog] = useUnreviewedCarryPrompt((section) => {
+    flushSync(() => setActiveTab('consultation'));
+    jumpToSection(section);
+  });
+
   /**
    * @cc [owner:nareshshah139,label:product] completion-saves-prescription
    * Completing a visit MUST first save prescription items that differ from the saved
@@ -1472,6 +1487,8 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
         toast({ variant: 'warning', title: 'Not ready to complete', description: COMPLETION_RULE });
         return;
       }
+      const unreviewed = editMode === 'open' ? pendingCarryRef.current?.() : null;
+      if (unreviewed && !await askCarryReview(unreviewed)) return;
     }
     return holdVisitSave(async () => {
       try {
@@ -1754,8 +1771,16 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
   const jumpToSection = (id: string) => {
     const target = document.getElementById(`consult-${id}`);
     if (!target) return;
+    const field = target.querySelector<HTMLElement>('[data-carried] input, [data-carried] textarea') ?? target.querySelector<HTMLElement>('input, textarea, button, [tabindex]');
     target.scrollIntoView({ block: 'start' });
-    target.querySelector<HTMLElement>('input, textarea, button, [tabindex]')?.focus({ preventScroll: true });
+    const pane = scrollParent(target);
+    const top = (document.querySelector('[data-visit-bar]')?.getBoundingClientRect().bottom ?? 0) + 8;
+    const bottom = pane === document.documentElement ? window.innerHeight : pane.getBoundingClientRect().bottom;
+    const cardTop = target.getBoundingClientRect().top;
+    if (cardTop < top) pane.scrollBy({ top: cardTop - top });
+    const fieldBox = field?.getBoundingClientRect();
+    if (fieldBox?.height && (fieldBox.bottom > bottom || fieldBox.top < top)) pane.scrollBy({ top: fieldBox.top - top });
+    field?.focus({ preventScroll: true });
   };
   const requiredSteps = steps.filter((step) => step.required);
   const optionalSteps = steps.filter((step) => !step.required);
@@ -1885,6 +1910,8 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
           </Button>
         </div>
       )}
+
+      {carryReviewDialog}
 
       <Dialog open={shortcutsOpen} onOpenChange={setShortcutsOpen}>
         <DialogContent className="max-w-md">
@@ -2078,6 +2105,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
                       holdVisitSave={holdVisitSave}
                       readOnly={!canEdit}
                       syncPrescriptionRef={syncPrescriptionRef}
+                      pendingCarryRef={pendingCarryRef}
                       onBeforeExport={async () => {
                         const savedId = await save(false, true);
                         if (!savedId) {
