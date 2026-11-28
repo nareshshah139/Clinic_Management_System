@@ -131,7 +131,7 @@ export function queueStatusPage(
       WHERE patient."branchId" = ${branchId} AND coalesce(to_jsonb(p)->>'status', 'ACTIVE') NOT IN ('DRAFT', 'CANCELLED')
         AND to_jsonb(v)->>'deletedAt' IS NULL
     ), lines AS (
-      SELECT p.id, item, ordinal, ${explicit} AS explicit, ${doses} AS doses, ${lineMeasured} AS measured,
+      SELECT p.id, item, ordinal, CASE WHEN ${lineMeasured} THEN NULL ELSE ${explicit} END AS explicit, ${doses} AS doses, ${lineMeasured} AS measured,
         ${medicationName} AS name
       FROM branch_prescriptions p
       CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(p.items) = 'array' THEN p.items ELSE '[]'::jsonb END) WITH ORDINALITY AS source(item, ordinal)
