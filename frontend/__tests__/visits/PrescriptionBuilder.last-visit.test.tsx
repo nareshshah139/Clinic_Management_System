@@ -299,6 +299,19 @@ it('leaves no treatment behind when a diagnosis-only carry is undone', async () 
   expect(suggestedFollowUp()).toBeNull();
 });
 
+it('does not fill treatment from the carried diagnosis when the doctor replaces it with one that has no suggestion', async () => {
+  history = [diagnosisOnlyVisit, olderAcneVisit];
+  renderNewVisit();
+  fireEvent.click(within(await offer()).getByRole('button', { name: 'Start from last visit' }));
+  await settled();
+  fireEvent.change(field('Diagnosis'), { target: { value: 'Psoriasis' } });
+  await settled();
+  await settled();
+  expect(field('Diagnosis').value).toBe('Psoriasis');
+  expect(suggestedTreatment()).toBeNull();
+  expect(suggestedFollowUp()).toBeNull();
+});
+
 it('still fills treatment for a diagnosis the doctor types over the carried one', async () => {
   history = [diagnosisOnlyVisit, olderAcneVisit];
   renderNewVisit();
@@ -307,6 +320,36 @@ it('still fills treatment for a diagnosis the doctor types over the carried one'
   expect(suggestedTreatment()).toBeNull();
   fireEvent.change(field('Diagnosis'), { target: { value: 'Acne vulgaris, grade 3' } });
   expect(((await screen.findByDisplayValue('Adapalene 0.1% Gel')) as HTMLInputElement).value).toBe('Adapalene 0.1% Gel');
+});
+
+const frequencyOf = (drug: string) => screen.getByRole('combobox', { name: `Frequency for ${drug}` }).textContent;
+const planRow = (drugName: string, extra: Record<string, unknown> = {}) => ({ drugName, frequency: '', dosePattern: '', duration: 90, durationUnit: 'DAYS', ...extra });
+
+it('carries a draft medicine that has no frequency as blank instead of once daily, and still reads a dose pattern', async () => {
+  history = [{ ...savedDraft, plan: { dermatology: { medicationPlan: [planRow('Minoxidil 5% Solution'), planRow('Biotin 10mg Tablet', { dosePattern: '1-0-1' })] } } }, olderVisit];
+  renderNewVisit();
+  fireEvent.click(within(await offer()).getByRole('button', { name: 'Start from last visit' }));
+  await screen.findByDisplayValue('Minoxidil 5% Solution');
+  expect(frequencyOf('Minoxidil 5% Solution')).toBe('Frequency');
+  expect(frequencyOf('Biotin 10mg Tablet')).not.toBe('Once daily');
+  expect(frequencyOf('Biotin 10mg Tablet')).not.toBe('Frequency');
+});
+
+it('keeps the legacy default of once daily for an issued prescription line without a frequency', async () => {
+  history = [{ ...savedDraft, prescriptionItems: [{ drugName: 'Tab Legacy 5mg', duration: 10, durationUnit: 'DAYS' }] }];
+  renderNewVisit();
+  fireEvent.click(within(await offer()).getByRole('button', { name: 'Start from last visit' }));
+  await screen.findByDisplayValue('Tab Legacy 5mg');
+  expect(frequencyOf('Tab Legacy 5mg')).toBe('Once daily');
+});
+
+it('reopens a saved draft with a medicine that has no frequency as blank, not once daily', async () => {
+  const draft = { id: 'v-resume', status: 'IN_PROGRESS', version: 1, plan: { dermatology: { medicationPlan: [planRow('Minoxidil 5% Solution')] } } };
+  const answer = global.fetch as jest.Mock;
+  global.fetch = jest.fn(async (url: string, init?: unknown) => (String(url).match(/\/visits\/v-resume$/) ? json(draft) : answer(url, init))) as unknown as typeof fetch;
+  render(<PrescriptionBuilder patientId="p-last" visitId="v-resume" doctorId="d" />);
+  await screen.findByDisplayValue('Minoxidil 5% Solution');
+  expect(frequencyOf('Minoxidil 5% Solution')).toBe('Frequency');
 });
 
 it('prefers the issued prescription over the plan of the same visit', async () => {
