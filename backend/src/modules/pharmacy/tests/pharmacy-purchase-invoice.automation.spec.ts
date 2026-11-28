@@ -112,6 +112,20 @@ describe('Automatic purchase invoice intake', () => {
     expect(prisma.stockTransaction.create).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['no printed payment terms', 'STOCK_COMMITTED', null, '2026-02-01', []],
+    ['unreadable or conflicting printed payment terms', 'SAVED_FOR_REVIEW', 'UNCERTAIN', '2026-02-01', []],
+    ['no bill type but a model uncertainty flag', 'SAVED_FOR_REVIEW', null, '2026-02-01', ['uncertain_bill_type']],
+    ['an approval bill', 'SAVED_FOR_REVIEW', 'APPROVAL', '2026-02-01', []],
+    ['printed Cash', 'STOCK_COMMITTED', 'CASH', undefined, []],
+    ['printed Credit', 'STOCK_COMMITTED', 'CREDIT', '2026-02-01', []],
+  ])('automatic intake of a scan with %s ends as %s', async (_name, status, billType, dueDate, ocrFlags) => {
+    draft = (service as any).normalizeExtractedPurchaseDraft({ ...draft, billType, dueDate, ocrFlags }, []);
+    const result = await importInvoice();
+    expect(result.automation.status).toBe(status);
+    expect(prisma.stockTransaction.create).toHaveBeenCalledTimes(status === 'STOCK_COMMITTED' ? 1 : 0);
+  });
+
   it('does not require a doctor on a supplier purchase invoice', async () => {
     draft.doctorNameOrRegNo = '';
     const result = await importInvoice();

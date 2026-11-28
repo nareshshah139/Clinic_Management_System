@@ -38,11 +38,35 @@ describe('Purchase identity and access', () => {
     expect(checked.items[19][field]).toBe((first.items[19] as any)[field]);
   });
 
-  it('keeps unknown payment terms blocked even if OCR omitted its uncertainty flag', () => {
-    const service = new PharmacyPurchaseInvoiceService({} as any);
-    const checked = (service as any).normalizeExtractedPurchaseDraft({ ...invoice(twentyRows()), billType: null }, []);
-    expect(checked.ocrFlags).toContain('uncertain_bill_type');
-    expect(checked.items).toHaveLength(20);
+  describe('bill type of a scanned bill', () => {
+    const scan = (extra: Record<string, unknown>, flags: string[] = []) =>
+      (new PharmacyPurchaseInvoiceService({} as any) as any).normalizeExtractedPurchaseDraft({ ...invoice(twentyRows()), ...extra }, flags);
+
+    it.each([[null], [undefined], ['']])('defaults an unprinted bill type %j to Credit without a check', billType => {
+      const checked = scan({ billType });
+      expect(checked.billType).toBe('CREDIT');
+      expect(checked.ocrFlags).not.toContain('uncertain_bill_type');
+      expect(checked.items).toHaveLength(20);
+    });
+
+    it('keeps the model\'s own uncertain_bill_type flag when it returns no bill type', () => {
+      const checked = scan({ billType: null, ocrFlags: ['uncertain_bill_type', 'uncertain_distributorName'] });
+      expect(checked.ocrFlags).toEqual(expect.arrayContaining(['uncertain_bill_type', 'uncertain_distributorName']));
+    });
+
+    it.each([['CASH', 'CASH'], ['cash', 'CASH'], ['CREDIT', 'CREDIT']])('keeps a printed bill type %s as %s without a check', (billType, expected) => {
+      const checked = scan({ billType });
+      expect(checked.billType).toBe(expected);
+      expect(checked.ocrFlags).not.toContain('uncertain_bill_type');
+    });
+
+    it.each([['APPROVAL'], ['UNCERTAIN'], ['N/A']])('flags a %s bill type for review, because its payment terms are not established', billType => {
+      expect(scan({ billType }).ocrFlags).toContain('uncertain_bill_type');
+    });
+
+    it('keeps Credit for an unprinted bill type that carries a due date', () => {
+      expect(scan({ billType: null, dueDate: '2026-12-24' })).toMatchObject({ billType: 'CREDIT', dueDate: '2026-12-24' });
+    });
   });
 
   it('does not erase a strength decimal point when comparing product names', () => {
