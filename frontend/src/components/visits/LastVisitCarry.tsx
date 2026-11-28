@@ -50,7 +50,7 @@ export function useUnreviewedCarryPrompt(goToSection: (section: string) => void)
   const opener = useRef<HTMLElement | null>(null);
 
   const ask = useCallback((next: PendingCarry) => {
-    resolver.current?.(false);
+    if (resolver.current) return Promise.resolve(false);
     review.current = null;
     opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setPending(next);

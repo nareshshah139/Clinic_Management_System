@@ -2073,6 +2073,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     setAutofillUndoSnapshot(null);
   }, [patientId, doctorId, visitId]);
 
+  useEffect(() => { setCarried(null); }, [patientId]);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -2091,7 +2093,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       setLearningSourcesError('');
       setLastPrescription(null);
       setLastVisit(null);
-      setCarried(null);
 
       const [patientResult, doctorResult] = await Promise.allSettled([
         patientId ? Promise.resolve(patientId).then(loadPatientHistory).then(visitEntries) : Promise.resolve([]),
@@ -5612,7 +5613,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                         </tr>
                       )}
                       {items.map((it, idx) => (
-                        <tr key={idx} className={rx.row}>
+                        <tr key={idx} className={rx.row} data-carried={carriedRowStays(it) || undefined}>
                           <td className={rx.medicine} onMouseEnter={() => it.inventoryItemId ? prefetchDrugStockById(it.drugId, it.inventoryItemId) : prefetchDrugStockByName(it.drugName)} title={(() => { const key = it.inventoryItemId ? `inventory:${it.inventoryItemId}` : `name:${(it.drugName || '').trim().toLowerCase()}`; const stock = drugStockByKey[key]; return `Remaining stock: ${stock ?? '—'}`; })()}>
                             <div className="relative flex items-center gap-2">
                               <Input 

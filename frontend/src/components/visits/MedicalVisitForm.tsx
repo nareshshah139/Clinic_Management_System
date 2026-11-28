@@ -78,6 +78,13 @@ const VisitPhotos = dynamic<ComponentProps<typeof VisitPhotosPanel>>(() => impor
 });
 const DoctorTour = dynamic(() => import('@/components/tours/DoctorTour').then((module) => module.DoctorTour), { ssr: false });
 
+const scrollParent = (element: HTMLElement) => {
+  for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+    if (parent.scrollHeight > parent.clientHeight && /auto|scroll/.test(getComputedStyle(parent).overflowY)) return parent;
+  }
+  return document.documentElement;
+};
+
 const CONSULTATION_SECTIONS = [
   { id: 'clinical', label: 'Vitals' },
   { id: 'chief-complaints', label: 'Complaints' },
@@ -1765,7 +1772,9 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
     const target = document.getElementById(`consult-${id}`);
     if (!target) return;
     target.scrollIntoView({ block: 'start' });
-    target.querySelector<HTMLElement>('input, textarea, button, [tabindex]')?.focus({ preventScroll: true });
+    const covered = (document.querySelector('[data-visit-bar]')?.getBoundingClientRect().bottom ?? 0) - target.getBoundingClientRect().top;
+    if (covered > 0) scrollParent(target).scrollBy({ top: -(covered + 8) });
+    (target.querySelector<HTMLElement>('[data-carried] input, [data-carried] textarea') ?? target.querySelector<HTMLElement>('input, textarea, button, [tabindex]'))?.focus({ preventScroll: true });
   };
   const requiredSteps = steps.filter((step) => step.required);
   const optionalSteps = steps.filter((step) => !step.required);
