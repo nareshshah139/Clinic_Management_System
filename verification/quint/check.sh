@@ -30,4 +30,14 @@ if [ "${SERVICE:-}" != "" ]; then
 fi
 expect 0 'wrote act3/recorded.qnt' 'act3:convert' -- npm run -s act3:convert
 expect 1 '1 passing' 'act3:check passes the e2e run and fails the tampered one' -- npm run -s act3:check
+expect 0 'No violation found' 'voice:run holds draftIsLatest and ownerIsActive' -- npm run -s voice:run
+expect 0 'Observed reachesApplied' 'voice:observe reaches an applied draft' -- npm run -s voice:observe
+if [ "${SKIP_APALACHE:-}" = "" ]; then
+  expect 0 'No violation found' 'voice:verify:quick holds to 8 steps' -- npm run -s voice:verify:quick
+fi
+expect 0 '' 'voice:traces writes 200 traces' -- npm run -s voice:traces
+expect 0 'OK 200 traces, 4000 steps' 'voice:replay matches the real reducer' -- npm run -s voice:replay
+for m in no-attempt-check no-registration-check no-scope-reset; do
+  expect 1 'DIVERGED' "voice mutant $m is caught" -- env MUTANT=$m npm run -s voice:replay
+done
 exit $fail

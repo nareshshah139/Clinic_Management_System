@@ -2,7 +2,9 @@
   "name": "clinic-quint-demo",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=18" },
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "act1:open": "quint run spec/partnerSale.qnt --backend=typescript --seed=42 --max-samples=10000 --max-steps=12 --hide deducted returned",
     "act1:verify-open": "quint verify spec/partnerSale.qnt --max-steps=6 --invariant=stockConserved",
@@ -14,9 +16,16 @@
     "act2:replay:service": "TARGET=service node act2/replay.mjs",
     "act3:convert": "node act3/convert.mjs",
     "act3:check": "quint test act3/recorded.qnt --backend=typescript --match=Test",
+    "voice:run": "quint run spec/voiceBar.qnt --backend=typescript --seed=42 --max-samples=10000 --max-steps=20",
+    "voice:observe": "quint run spec/voiceBar.qnt --backend=typescript --step=stepMbt --seed=42 --max-samples=10000 --max-steps=20 --observation=reachesApplied",
+    "voice:verify": "quint verify spec/voiceBar.qnt --max-steps=12 --invariant=draftIsLatest,ownerIsActive",
+    "voice:verify:quick": "quint verify spec/voiceBar.qnt --max-steps=8 --invariant=draftIsLatest,ownerIsActive",
+    "voice:traces": "rm -rf extras/voice/traces && mkdir -p extras/voice/traces && quint run spec/voiceBar.qnt --backend=typescript --step=stepMbt --seed=7 --max-samples=200 --n-traces=200 --max-steps=20 --mbt --out-itf=extras/voice/traces/t_{seq}.itf.json",
+    "voice:replay": "node extras/voice/replay.mjs",
     "check": "sh check.sh"
   },
   "devDependencies": {
-    "@informalsystems/quint": "0.35.0"
+    "@informalsystems/quint": "0.35.0",
+    "esbuild": "0.28.2"
   }
 }
