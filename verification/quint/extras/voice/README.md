@@ -35,7 +35,6 @@ Run these from `verification/quint`. The outputs are under Measured.
 
 ```sh
 npm ci
-npm install --no-save esbuild@0.28.2
 npx quint typecheck spec/voiceBar.qnt
 npx quint run spec/voiceBar.qnt --backend=typescript --seed=42 --max-samples=10000 --max-steps=20
 npx quint run spec/voiceBar.qnt --backend=typescript --step=stepMbt --seed=42 --max-samples=10000 --max-steps=20 --observation=reachesApplied

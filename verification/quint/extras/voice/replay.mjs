@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const esbuild = await import('esbuild').catch(() => {
-  console.error('esbuild is missing. Run: npm install --no-save esbuild@0.28.2');
+  console.error('esbuild is missing. Run npm ci in verification/quint.');
   process.exit(2);
 });
 const SOURCE = fileURLToPath(new URL('../../../../frontend/src/lib/voice-bar.ts', import.meta.url));
