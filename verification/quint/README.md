@@ -42,6 +42,22 @@ SERVICE=1 npm run check
 
 `SERVICE=1` adds the partner sale and purchase bill replays against the real services, with every mutant patched into the real source and restored afterwards. It adds about 10 minutes.
 
+## Split it into its own repository
+
+The kit is a self-contained npm package. To publish it as a separate repository with its history, run this from the clinic repo root, then push the new branch to an empty repository:
+
+```bash
+git subtree split --prefix=verification/quint -b clinic-quint-demo
+```
+
+On its own, every Act 1, Act 2 stand-in and Act 3 script works, along with the OCR spec and its stand-in replay. Three replays read clinic source: the voice replay, and both service replays. Point them at a clinic checkout:
+
+```bash
+CLINIC_REPO=/path/to/Clinic_Management_System npm run check
+```
+
+Without `CLINIC_REPO`, `npm run check` skips the voice replay and says so.
+
 ## Files
 
 | File | Lines | Job |
@@ -53,6 +69,7 @@ SERVICE=1 npm run check
 | `act3/convert.mjs` | 16 | Turns a recorded run into a `quint test` run. |
 | `act3/traces/*.json` | | The e2e recording and a tampered copy. |
 | `check.sh` | | The rehearsal check behind `npm run check`. |
+| `clinic.mjs` | | Finds the clinic checkout for the replays that read its source. |
 | `spec/purchaseBill.qnt`, `extras/ocr/` | 117 | The scanned purchase bill subject. See [the OCR README](extras/ocr/README.md). |
 | `spec/voiceBar.qnt`, `extras/voice/` | 122 | The voice bar subject. See [the voice README](extras/voice/README.md). |
 

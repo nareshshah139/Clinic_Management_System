@@ -1,14 +1,15 @@
 // Drives the real PharmacyPurchaseInvoiceService over HTTP, on an isolated Postgres schema that
 // scripts/stack/boot.cjs creates, seeds and drops. Each trace gets its own bill; the supplier and the drug are shared.
+import { clinicPath } from '../../clinic.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 
-const { bootStack } = createRequire(import.meta.url)('../../../../scripts/stack/boot.cjs');
+const { bootStack } = createRequire(import.meta.url)(clinicPath('scripts/stack/boot.cjs'));
 
 // MUTANT removes one guard from the real service source before boot; the file is restored on exit.
 // Each entry is [from, to] pairs and each `from` must occur once. Line numbers are at 09d2709.
-const SERVICE = new URL('../../../../backend/src/modules/pharmacy/pharmacy-purchase-invoice.service.ts', import.meta.url);
+const SERVICE = clinicPath('backend/src/modules/pharmacy/pharmacy-purchase-invoice.service.ts');
 const REVIEW_REVISION = [`if (dto.expectedUpdatedAt && new Date(dto.expectedUpdatedAt).getTime() !== new Date(invoice.updatedAt).getTime()) {`, 'if (false) {']; // :1323
 const COMMIT_PRECHECK = [`    if (invoice.status !== 'REVIEWED') {
       throw new BadRequestException(
@@ -52,7 +53,7 @@ const MUTANTS = {
   'no-reject-precheck': [REJECT_PRECHECK],                               // :455 only; the claim at :456-457 still checks
 };
 const original = fs.readFileSync(SERVICE, 'utf8');
-const restore = () => fs.writeFileSync(SERVICE, original);
+const restore = () => process.env.MUTANT && fs.writeFileSync(SERVICE, original);
 if (process.env.MUTANT) {
   const edits = MUTANTS[process.env.MUTANT];
   assert(edits, `unknown MUTANT; one of ${Object.keys(MUTANTS).join(', ')}`);

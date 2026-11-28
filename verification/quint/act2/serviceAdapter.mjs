@@ -1,13 +1,14 @@
 // Drives the real PharmacyPartnerSalesService over HTTP, on an isolated Postgres schema that
 // scripts/stack/boot.cjs creates, seeds and drops. Each trace gets its own partner, sale and batches.
+import { clinicPath } from '../clinic.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 
-const { bootStack } = createRequire(import.meta.url)('../../../scripts/stack/boot.cjs');
+const { bootStack } = createRequire(import.meta.url)(clinicPath('scripts/stack/boot.cjs'));
 
 // MUTANT removes one guard from the real service source before boot; the file is restored on exit.
-const SERVICE = new URL('../../../backend/src/modules/pharmacy/pharmacy-partner-sales.service.ts', import.meta.url);
+const SERVICE = clinicPath('backend/src/modules/pharmacy/pharmacy-partner-sales.service.ts');
 const PRECHECK = [`          if ((sale.version ?? 0) !== dto.expectedVersion)
             throw new ConflictException(
               'Partner sale changed. Refresh before retrying outstanding stock.',
@@ -21,7 +22,7 @@ const MUTANTS = {
   'drop-discrepancy': [["return hasDiscrepancy ? 'RECONCILIATION_REQUIRED' : 'STOCK_COMMITTED';", "return 'STOCK_COMMITTED';"]], // :716
 };
 const original = fs.readFileSync(SERVICE, 'utf8');
-const restore = () => fs.writeFileSync(SERVICE, original);
+const restore = () => process.env.MUTANT && fs.writeFileSync(SERVICE, original);
 if (process.env.MUTANT) {
   const edits = MUTANTS[process.env.MUTANT];
   assert(edits, `unknown MUTANT; one of ${Object.keys(MUTANTS).join(', ')}`);

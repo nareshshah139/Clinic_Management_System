@@ -1,15 +1,15 @@
 // Replays every Quint trace in extras/voice/traces through the real voiceBarReducer and compares a projection after each step.
 // The reducer is frontend/src/lib/voice-bar.ts itself, bundled in memory. MUTANT=<name> patches its source text in memory
 // first (never on disk). STATS=1 also prints a tally of what the traces covered, to stderr.
+import { clinicPath } from '../../clinic.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 const esbuild = await import('esbuild').catch(() => {
   console.error('esbuild is missing. Run npm ci in verification/quint.');
   process.exit(2);
 });
-const SOURCE = fileURLToPath(new URL('../../../../frontend/src/lib/voice-bar.ts', import.meta.url));
+const SOURCE = clinicPath('frontend/src/lib/voice-bar.ts');
 const traceDir = new URL('./traces/', import.meta.url);
 
 // Each mutant removes one guard, to show the replay catches it. Each pattern must match exactly once.

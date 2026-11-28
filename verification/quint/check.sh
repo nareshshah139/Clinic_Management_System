@@ -2,6 +2,7 @@
 # Rehearsal check: runs every act and asserts the outcome the demo script expects.
 # A violation, a divergence and a failed recording are expected outcomes, so each step names its exit code.
 # SKIP_APALACHE=1 skips quint verify. SERVICE=1 adds the replays against the NestJS service on Postgres.
+# Outside the clinic repo, set CLINIC_REPO to a clinic checkout for the replays that read its source.
 set -u
 fail=0
 expect() { # expect <exit code> <pattern> <label> -- <command...>
@@ -53,8 +54,12 @@ expect 0 'No violation found' 'voice:run holds draftIsLatest and ownerIsActive' 
 expect 0 'Observed reachesApplied' 'voice:observe reaches an applied draft' -- npm run -s voice:observe
 verify 0 'No violation found' 'voice:verify:quick holds to 8 steps' voice:verify:quick
 expect 0 '' 'voice:traces writes 200 traces' -- npm run -s voice:traces
-expect 0 'OK 200 traces, 4000 steps' 'voice:replay matches the real reducer' -- npm run -s voice:replay
-mutants 1 'DIVERGED' 'voice catches mutant' voice:replay no-attempt-check no-registration-check no-scope-reset
+if node clinic.mjs; then
+  expect 0 'OK 200 traces, 4000 steps' 'voice:replay matches the real reducer' -- npm run -s voice:replay
+  mutants 1 'DIVERGED' 'voice catches mutant' voice:replay no-attempt-check no-registration-check no-scope-reset
+else
+  echo "SKIP voice:replay reads frontend/src/lib/voice-bar.ts. Set CLINIC_REPO to a clinic checkout."
+fi
 
 if [ "${SERVICE:-}" != "" ]; then
   echo "# NestJS service on Postgres"
