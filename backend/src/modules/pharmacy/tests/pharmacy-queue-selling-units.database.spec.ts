@@ -43,6 +43,7 @@ databaseTests('Queue coverage in selling units with PostgreSQL', () => {
     minoxidil: { drug: 'Minoxidil 5', unit: 'PACKS', packSize: 1, packUnit: 'g' },
     azithral: { drug: 'Azithral 500', unit: 'BOXES', packSize: 3, packUnit: 'tablets' },
     ketoconazole: { drug: 'Ketoconazole 2%', unit: 'BOTTLES', packSize: 100, packUnit: 'ml' },
+    cleanser: { drug: 'CETAPHIL GENTLE CLEANSER', unit: 'PIECES', packSize: 1, packUnit: 'tablets' },
   };
 
   beforeAll(async () => {
@@ -146,6 +147,8 @@ databaseTests('Queue coverage in selling units with PostgreSQL', () => {
       ['weekly-15-pieces', [line('foitrax', weekly)], confirmed(bill('foitrax', 15)), PrescriptionQueueStatus.PARTIAL, [[16, 15, 'partial']]],
       ['alternate-2-strips', [line('tricogroStrips', alternate)], confirmed(bill('tricogroStrips', 2)), PrescriptionQueueStatus.DISPENSED, [[15, 15, 'covered']]],
       ['alternate-1-strip', [line('tricogroStrips', alternate)], confirmed(bill('tricogroStrips', 1)), PrescriptionQueueStatus.PARTIAL, [[15, 10, 'partial']]],
+      ['legacy-quantity-cleanser-1-piece', [line('cleanser', { ...tablet, quantity: 5 })], confirmed(bill('cleanser', 1)), PrescriptionQueueStatus.DISPENSED, [[30, 30, 'covered']]],
+      ['legacy-quantity-cleanser-draft', [line('cleanser', { ...tablet, quantity: 5 })], [{ status: 'DRAFT', items: [bill('cleanser', 1)] }], PrescriptionQueueStatus.PENDING, [[30, 0, 'not_started']]],
       ['explicit-5-strips', [line('folvite', { ...tablet, quantity: 5 })], confirmed(bill('folvite', 5)), PrescriptionQueueStatus.DISPENSED, [[5, 5, 'covered']]],
       ['explicit-4-strips', [line('folvite', { ...tablet, quantity: 5 })], confirmed(bill('folvite', 4)), PrescriptionQueueStatus.PARTIAL, [[5, 4, 'partial']]],
       ['two-lines-5-strips', [line('tricogroStrips', tablet), line('tricogroStrips', tablet)], confirmed(bill('tricogroStrips', 5)), PrescriptionQueueStatus.PARTIAL, [[30, 30, 'covered'], [30, 20, 'partial']]],
@@ -187,12 +190,13 @@ databaseTests('Queue coverage in selling units with PostgreSQL', () => {
       line('foitrax', { dosage: 1, dosageUnit: 'TABLET', frequency: 'ONCE_DAILY', duration: 16, durationUnit: 'WEEKS', instructions: 'weekly once- Sunday' }),
       line('azithral', { dosage: 1, dosageUnit: 'TABLET', frequency: 'TWICE_DAILY', duration: 5, durationUnit: 'DAYS' }),
       line('minoxidil', { dosageUnit: 'APPLICATION', frequency: 'TWICE_DAILY', duration: 3, durationUnit: 'MONTHS' }),
+      line('cleanser', { dosage: 1, dosageUnit: 'TABLET', frequency: 'TWICE_DAILY', duration: 30, durationUnit: 'DAYS', quantity: 5 }),
     ]);
     const suggested = (await queue.stockCheck('billed-as-suggested', at.branchId)).items
       .map(item => ({ inventoryItemId: item.inventoryItemId, quantity: item.billingQuantity.quantity, unit: item.billingQuantity.unit }));
-    expect(suggested.map(({ quantity, unit }) => [quantity, unit])).toEqual([[3, 'STRIPS'], [1, 'BOTTLES'], [16, 'PIECES'], [4, 'BOXES'], [1, 'PACKS']]);
+    expect(suggested.map(({ quantity, unit }) => [quantity, unit])).toEqual([[3, 'STRIPS'], [1, 'BOTTLES'], [16, 'PIECES'], [4, 'BOXES'], [1, 'PACKS'], [1, 'PIECES']]);
 
-    const keys = ['tricogroStrips', 'serum', 'foitrax', 'azithral', 'minoxidil'];
+    const keys = ['tricogroStrips', 'serum', 'foitrax', 'azithral', 'minoxidil', 'cleanser'];
     await db.pharmacyInvoice.create({
       data: {
         branchId: at.branchId, prescriptionId: 'billed-as-suggested', patientId: at.patientId, doctorId,
@@ -204,7 +208,7 @@ databaseTests('Queue coverage in selling units with PostgreSQL', () => {
     expect((await listed(at.branchId)).get('billed-as-suggested')).toBe(PrescriptionQueueStatus.DISPENSED);
     const detail = await queue.findOne('billed-as-suggested', at.branchId);
     expect(detail.status).toBe(PrescriptionQueueStatus.DISPENSED);
-    expect(detail.medications.map(m => m.coverageStatus)).toEqual(['covered', 'covered', 'covered', 'covered', 'covered']);
+    expect(detail.medications.map(m => m.coverageStatus)).toEqual(['covered', 'covered', 'covered', 'covered', 'covered', 'covered']);
   });
 
   it('reports what each line still needs in the unit its stock is counted in', async () => {

@@ -1928,6 +1928,9 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     return row && !raw?.frequency && !row.dosePattern ? { ...row, frequency: '' } : row;
   };
 
+  const withoutQuantity = (row: PrescriptionItemForm | null): PrescriptionItemForm | null => (row ? { ...row, quantity: '' } : row);
+  const mapCopiedRxItem = (raw: any) => withoutQuantity(mapPrevRxItem(raw));
+
   const normalizePrescriptionResponse = (res: any): any[] => {
     if (Array.isArray(res)) return res;
     if (res && typeof res === 'object') {
@@ -1974,7 +1977,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     const sorted = [...visits].sort((a, b) => encounterTime(b) - encounterTime(a));
     for (const v of sorted) {
       if (!v || v.id === visitId || !Array.isArray(v.prescriptionItems)) continue;
-      const mapped = v.prescriptionItems.map(mapPrevRxItem).filter(Boolean) as PrescriptionItemForm[];
+      const mapped = v.prescriptionItems.map(mapCopiedRxItem).filter(Boolean) as PrescriptionItemForm[];
       if (!mapped.length) continue;
       return { visitId: v.id, date: encounterTime(v), items: mapped };
     }
@@ -2164,7 +2167,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     if (!allowOverwrite) return false;
 
     const mappedItems = plan.items
-      .map(mapPrevRxItem)
+      .map(mapCopiedRxItem)
       .filter((entry): entry is PrescriptionItemForm => Boolean(entry && entry.drugName));
     const nextItems = mappedItems.length ? [...mappedItems] : [];
     if (nextItems.length > 0 && !hasTrailingBlank(nextItems)) nextItems.push(createBlankItem());
@@ -2244,7 +2247,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     }
 
     const mappedItems = plan.items
-      .map(mapPrevRxItem)
+      .map(mapCopiedRxItem)
       .filter((entry): entry is PrescriptionItemForm => Boolean(entry && entry.drugName));
     const currentItems = clonePrescriptionItems(items).filter((entry) => (entry.drugName || '').trim());
     const normalizeDrugName = (value: string) => value.trim().toLowerCase();
@@ -2610,7 +2613,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     return null;
   };
 
-  const lastVisitMedicines = (lastVisit?.medicines ?? []).map((row) => (lastVisit?.fromPlan ? mapPlanRxItem(row) : mapPrevRxItem(row))).filter(Boolean) as PrescriptionItemForm[];
+  const lastVisitMedicines = (lastVisit?.medicines ?? []).map((row) => withoutQuantity(lastVisit?.fromPlan ? mapPlanRxItem(row) : mapPrevRxItem(row))).filter(Boolean) as PrescriptionItemForm[];
 
   const removeItem = (index: number) => {
     recordHistory();
@@ -2991,7 +2994,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
         instructions: x.instructions,
         route: x.route,
         timing: x.timing,
-        quantity: x.quantity,
+        quantity: '',
         notes: x.notes,
         isGeneric: x.isGeneric,
         applicationSite: x.applicationSite,

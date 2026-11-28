@@ -22,7 +22,9 @@ jest.mock('pagedjs', () => ({
 
 const medicine = { drugName: 'Doxycycline 100', dosage: 1, dosageUnit: 'TABLET', frequency: 'ONCE_DAILY', duration: 30, durationUnit: 'DAYS' };
 
-function clinicServer(status: 'COMPLETED' | 'IN_PROGRESS') {
+const bodies: Record<string, any> = {};
+
+function clinicServer(status: 'COMPLETED' | 'IN_PROGRESS', saved: Record<string, unknown> = medicine) {
   const calls: string[] = [];
   const reply = (code: number, body: unknown) => ({ ok: code < 400, status: code, headers: { get: (name: string) => (name.toLowerCase() === 'content-type' ? 'application/json' : null) }, json: async () => body, text: async () => JSON.stringify(body) });
   const visit = {
@@ -30,8 +32,8 @@ function clinicServer(status: 'COMPLETED' | 'IN_PROGRESS') {
     patient: { id: 'p', name: 'Synthetic Patient', phone: '+91 90000 00000', email: 'patient@example.test' },
     doctor: { id: 'd', firstName: 'Priya', lastName: 'Menon' },
     complaints: [{ complaint: 'Acne' }], diagnosis: [{ diagnosis: 'Acne vulgaris' }], history: {}, exam: {},
-    plan: { dermatology: { medicationPlan: [medicine] } },
-    prescription: { id: 'rx1', items: [medicine] },
+    plan: { dermatology: { medicationPlan: [saved] } },
+    prescription: { id: 'rx1', items: [saved] },
   };
   global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -39,6 +41,7 @@ function clinicServer(status: 'COMPLETED' | 'IN_PROGRESS') {
     if (method === 'GET') return url === '/api/visits/v1' ? reply(200, visit) : reply(200, []);
     if (url === '/api/prescriptions/interactions/preview') return reply(200, { interactions: [] });
     calls.push(`${method} ${url}`);
+    bodies[`${method} ${url}`] = init?.body ? JSON.parse(String(init.body)) : undefined;
     if (url === '/api/visits/v1') return reply(200, { ...visit, version: visit.version + 1 });
     if (url === '/api/prescriptions/rx1') return reply(200, { id: 'rx1' });
     return reply(201, {});
@@ -134,4 +137,13 @@ it('still saves the visit and the prescription before printing an open visit', a
   expect(within(dialog).getByRole('button', { name: 'Save Prescription' })).toBeEnabled();
   expect(screen.getByRole('button', { name: 'Create Prescription', hidden: true })).toBeEnabled();
   expect(screen.getByDisplayValue(medicine.drugName)).toBeEnabled();
+});
+
+it('keeps the tablet count saved on the prescription when an open visit is printed unchanged', async () => {
+  const calls = clinicServer('IN_PROGRESS', { ...medicine, quantity: 5 });
+  const dialog = await openSavedPrescriptionPreview();
+  await press(dialog, 'Print');
+  await waitFor(() => expect(printed).toHaveLength(1), { timeout: 10_000 });
+  expect(calls).toEqual(['PATCH /api/visits/v1', 'PATCH /api/prescriptions/rx1']);
+  expect(bodies['PATCH /api/prescriptions/rx1'].items).toEqual([expect.objectContaining({ drugName: medicine.drugName, quantity: 5 })]);
 });

@@ -90,6 +90,14 @@ it('starts the visit from the last one in one click: complaints, diagnosis, hist
   expect(screen.queryByRole('region', { name: 'Last visit' })).toBeNull();
 });
 
+it('does not carry the old quantity of a medicine, which the old builder stamped and no control edits', async () => {
+  renderNewVisit();
+  fireEvent.click(within(await offer()).getByRole('button', { name: 'Start from last visit' }));
+  await screen.findByDisplayValue('Adapalene 0.1% Gel');
+
+  expect(screen.getByText(/Total items: 2/).textContent).toContain('Total qty: 0');
+});
+
 it('says what came from the last visit, on the notice and on each section, until the doctor edits it', async () => {
   renderNewVisit();
   fireEvent.click(within(await offer()).getByRole('button', { name: 'Start from last visit' }));

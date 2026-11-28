@@ -367,8 +367,9 @@ export class PharmacyPrescriptionQueueService {
 
   /**
    * @cc [owner:nareshshah139,label:product] stock-check-billing-quantity
-   * Stock checks MUST return each line's billingQuantity. An explicit prescribed quantity MUST win.
-   * Measured items (bottles, tubes, creams, serums and similar) MUST fill 1 selling pack and be flagged.
+   * Stock checks MUST return each line's billingQuantity. An explicit prescribed quantity MUST win, except on a
+   * measured line, whose stored quantity cannot say how many packs. Measured items (bottles, tubes, creams, serums,
+   * cleansers and similar) MUST fill 1 selling pack and be flagged.
    * Countable items MUST bill in the inventory selling unit (doses divided by pack size for strips,
    * boxes and packs). Free-text instruction schedules MUST override the structured frequency and flag
    * a conflict. Lines with no computable schedule MUST fill 1 and be flagged. A line matched to no stock
