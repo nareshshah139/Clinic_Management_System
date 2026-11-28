@@ -11,7 +11,7 @@ export const STREAM: Record<Stream, Hue> = {
   whole: {
     tile: "border-primary bg-primary text-primary-foreground print:bg-transparent print:text-foreground",
     label: "text-primary-foreground print:text-foreground",
-    head: "bg-primary text-primary-foreground [&_button]:text-primary-foreground [&_button:hover]:text-primary-foreground print:bg-transparent print:text-foreground print:[&_button]:text-foreground",
+    head: "bg-primary text-primary-foreground [&_button]:text-primary-foreground [&_button:hover]:text-primary-foreground [&_button:focus-visible]:outline-primary-foreground! print:bg-transparent print:text-foreground print:[&_button]:text-foreground",
     cell: "bg-primary-soft/50 font-semibold",
     foot: "bg-primary-soft font-semibold",
     heading: "border-primary",
