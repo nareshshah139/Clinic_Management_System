@@ -55,6 +55,7 @@ beforeEach(() => {
   history = [lastVisit];
   visit = openVisit;
   Element.prototype.scrollIntoView = scrollIntoView;
+  Element.prototype.scrollBy = jest.fn();
   (apiClient.getAllPatientVisitHistory as jest.Mock).mockImplementation(async () => history);
   (apiClient.get as jest.Mock).mockImplementation(async (url: string) => url === '/visits/v' ? visit : url.includes('autocomplete') ? [] : {});
   (apiClient.updateVisit as jest.Mock).mockResolvedValue({ id: 'v', version: 2, status: 'IN_PROGRESS' });
@@ -499,6 +500,36 @@ describe('Review items', () => {
       await waitFor(() => expect(field('Chief complaints')).toHaveFocus());
 
       expect(cardTop).toBeGreaterThanOrEqual(barBottom);
+    } finally {
+      Element.prototype.getBoundingClientRect = original;
+    }
+  });
+
+  it('brings the first carried medicine fully into view below the sticky bar, even when it sits far down the Treatment card', async () => {
+    let scroll = 0;
+    const barBottom = 420;
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 844 });
+    Element.prototype.scrollIntoView = jest.fn(function (this: Element) { if (this.id === 'consult-treatment') scroll = 700 - 216; });
+    Element.prototype.scrollBy = jest.fn((options?: ScrollToOptions | number) => { scroll += typeof options === 'object' ? (options.top ?? 0) : 0; }) as typeof Element.prototype.scrollBy;
+    const rect = (top: number, height: number) => ({ top, bottom: top + height, height, left: 0, right: 0, width: 100, x: 0, y: top, toJSON: () => ({}) }) as DOMRect;
+    const original = Element.prototype.getBoundingClientRect;
+    Element.prototype.getBoundingClientRect = function (this: Element) {
+      if (this.hasAttribute('data-visit-bar')) return rect(0, barBottom);
+      if (this.id === 'consult-treatment') return rect(700 - scroll, 900);
+      if (this.id === 'rx-row-0-drug') return rect(1300 - scroll, 40);
+      return original.call(this);
+    };
+    try {
+      history = [lastVisit, olderAcneVisit];
+      await carryLastVisit();
+      editCarriedText();
+      await pressComplete();
+      await act(async () => { fireEvent.click(within(await dialog()).getByRole('button', { name: 'Review items' })); });
+      const row = await waitFor(() => { const input = screen.getByDisplayValue('Tab Doxycycline 100mg'); expect(input).toHaveFocus(); return input; });
+
+      const { top, bottom } = row.getBoundingClientRect();
+      expect(top).toBeGreaterThanOrEqual(barBottom);
+      expect(bottom).toBeLessThanOrEqual(window.innerHeight);
     } finally {
       Element.prototype.getBoundingClientRect = original;
     }
