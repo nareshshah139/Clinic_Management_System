@@ -2359,9 +2359,9 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   useEffect(() => {
     if (!learnedPlan || learnedPlanSuppressed || learnedPlanCurrent) return;
     if (!treatmentIsEmpty && !treatmentMachineOwned) return;
-    if (carriedDiagnosisStays) return;
+    if (carriedDiagnosisStays || diagnosis !== deferredDiagnosis) return;
     applyLearnedPlan(learnedPlan);
-  }, [learnedPlan, learnedPlanSuppressed, learnedPlanCurrent, treatmentIsEmpty, treatmentMachineOwned, carriedDiagnosisStays, applyLearnedPlan]);
+  }, [learnedPlan, learnedPlanSuppressed, learnedPlanCurrent, treatmentIsEmpty, treatmentMachineOwned, carriedDiagnosisStays, diagnosis, deferredDiagnosis, applyLearnedPlan]);
 
   // Throttle consecutive adds of the same drug (guards double/triple add)
   const lastDrugAddRef = useRef<{ key: string; at: number }>({ key: '', at: 0 });
