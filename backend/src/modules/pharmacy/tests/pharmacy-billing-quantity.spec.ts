@@ -10,6 +10,9 @@ const inventory: Record<string, Record<string, unknown>> = {
   'inv-tricogro-pieces': { id: 'inv-tricogro-pieces', name: 'TRICOGRO TABLET', unit: 'PIECES', packSize: 1, packUnit: 'tablets', sellingPrice: 15 },
   'inv-nopack': { id: 'inv-nopack', name: 'Nopack Tablet', unit: 'STRIPS', packSize: null, packUnit: null, sellingPrice: 100 },
   'inv-folvite': { id: 'inv-folvite', name: 'Folvite 5mg', unit: 'STRIPS', packSize: 10, packUnit: 'tablets', sellingPrice: 30 },
+  'inv-cleanser': { id: 'inv-cleanser', name: 'CETAPHIL GENTLE CLEANSER', unit: 'BOTTLES', packSize: 118, packUnit: 'ml', sellingPrice: 459 },
+  'inv-cream': { id: 'inv-cream', name: 'XEMOSE C8+ LIPID REPLENISHING ANT-ITCH CREAM', unit: 'TUBES', packSize: 200, packUnit: 'ml', sellingPrice: 3200 },
+  'inv-cleanser-pieces': { id: 'inv-cleanser-pieces', name: 'CETAPHIL GENTLE CLEANSER', unit: 'PIECES', packSize: 1, packUnit: 'tablets', sellingPrice: 459 },
 };
 
 const stockCheck = async (lines: Line[]) => {
@@ -86,6 +89,31 @@ describe('billing quantity from stockCheck', () => {
     const [item] = await stockCheck([{ drugName: 'Mystery Hair Serum', ...tablet }]);
     expect(item.billingQuantity).toMatchObject({ quantity: 1, unit: null, review: { reason: 'pack_item' } });
   });
+
+  describe('lines saved by the old builder, which stamped every medicine with dose 1 tablet and quantity 5', () => {
+    const legacy = { dosage: 1, dosageUnit: 'TABLET', duration: 30, durationUnit: 'DAYS', quantity: 5 };
+
+    it('fills 1 pack for a cleanser, a cream and a serum instead of the stale 5', async () => {
+      const items = await stockCheck([
+        { drugName: 'CETAPHIL GENTLE CLEANSER', inventoryItemId: 'inv-cleanser', frequency: 'TWICE_DAILY', ...legacy },
+        { drugName: 'XEMOSE C8+ LIPID REPLENISHING ANT-ITCH CREAM', inventoryItemId: 'inv-cream', frequency: 'THREE_TIMES_DAILY', ...legacy },
+        { drugName: 'Anaboom Pro Advanced Hair Serum', inventoryItemId: 'inv-serum', frequency: 'ONCE_DAILY', ...legacy },
+      ]);
+      expect(items.map((item) => [item.billingQuantity.quantity, item.billingQuantity.unit, item.billingQuantity.review?.reason])).toEqual([
+        [1, 'BOTTLES', 'pack_item'], [1, 'TUBES', 'pack_item'], [1, 'BOTTLES', 'pack_item'],
+      ]);
+    });
+
+    it('fills 1 pack for a cleanser whose stock is not counted in bottles or tubes', async () => {
+      const [item] = await stockCheck([{ drugName: 'CETAPHIL GENTLE CLEANSER', inventoryItemId: 'inv-cleanser-pieces', frequency: 'TWICE_DAILY', ...legacy }]);
+      expect(item.billingQuantity).toMatchObject({ quantity: 1, unit: 'PIECES', review: { reason: 'pack_item' } });
+    });
+
+    it('still bills a tablet line in its own count', async () => {
+      const [item] = await stockCheck([{ drugName: 'Folvite 5mg', inventoryItemId: 'inv-folvite', frequency: 'ONCE_DAILY', ...legacy }]);
+      expect(item.billingQuantity).toEqual({ quantity: 5, unit: 'STRIPS', review: null });
+    });
+  });
 });
 
 describe('replacement product quantity', () => {
@@ -145,10 +173,17 @@ describe('replacement product quantity', () => {
 });
 
 describe('billingQuantity', () => {
-  it('lets an explicit quantity win for a measured item', () => {
+  it('fills 1 pack for a measured item whatever quantity the prescription carries', () => {
     expect(billingQuantity({ quantity: 2 }, { unit: 'BOTTLES', packSize: 60, packUnit: 'ml' }, 'Hair Serum'))
-      .toEqual({ quantity: 2, unit: 'BOTTLES', review: null });
+      .toMatchObject({ quantity: 1, unit: 'BOTTLES', review: { reason: 'pack_item' } });
   });
+
+  it.each(['Gentle Skin Cleanser', 'Atoderm Creme', 'Cerave Facewash', 'Mintop Alcohol Free 60 ml Bottle', 'Eucerin Tube', 'Glycolic Peel Jar'])(
+    'reads %s as a pack, not a count of doses', (name) => {
+      expect(billingQuantity({ frequency: 'TWICE_DAILY', duration: 30, durationUnit: 'DAYS' }, { unit: 'PIECES', packSize: 1, packUnit: 'tablets' }, name))
+        .toMatchObject({ quantity: 1, review: { reason: 'pack_item' } });
+    },
+  );
 
   it('reads twice a week from instructions', () => {
     expect(billingQuantity(
