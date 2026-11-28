@@ -16,6 +16,7 @@ const lastVisit = {
   id: 'last',
   entryType: 'visit',
   encounterDate: '2026-10-10T05:00:00.000Z',
+  doctor: { firstName: 'Asha', lastName: 'Rao', name: 'Asha Rao' },
   complaints: [{ complaint: 'Acne on cheeks for 3 months' }],
   diagnosis: [{ diagnosis: 'Acne vulgaris' }],
   history: {
@@ -173,6 +174,29 @@ it('swaps the offer for the notice inside one container, which keeps Chrome from
   fireEvent.click(within(panel).getByRole('button', { name: 'Start from last visit' }));
   const notice = await screen.findByRole('region', { name: 'Carried forward' });
   expect(notice.closest('[data-last-visit-slot]')).toBe(slot);
+});
+
+it('names the doctor of the last visit in the offer and the notice, and does not call it the reader\'s own', async () => {
+  renderNewVisit();
+  const panel = await offer();
+  expect(panel.textContent).toContain('Dr. Asha Rao');
+  expect(panel.textContent).not.toMatch(/draft/i);
+  fireEvent.click(within(panel).getByRole('button', { name: 'Start from last visit' }));
+  const notice = await screen.findByRole('region', { name: 'Carried forward' });
+  expect(notice.textContent).toContain('Carried forward from the 10 Oct 2026 visit by Dr. Asha Rao:');
+  expect(notice.textContent).not.toMatch(/your|draft/i);
+});
+
+it('marks a visit that was never completed as a draft in the offer, the notice and the badges', async () => {
+  history = [{ ...savedDraft, status: 'IN_PROGRESS', doctor: { firstName: 'Asha', lastName: 'Rao', name: 'Asha Rao' } }, olderVisit];
+  renderNewVisit();
+  const panel = await offer();
+  expect(panel.textContent).toContain('Draft');
+  expect(panel.textContent).toContain('Dr. Asha Rao');
+  fireEvent.click(within(panel).getByRole('button', { name: 'Start from last visit' }));
+  const notice = await screen.findByRole('region', { name: 'Carried forward' });
+  expect(notice.textContent).toContain('Carried forward from the 12 Nov 2026 visit by Dr. Asha Rao (draft, not completed):');
+  expect(screen.queryAllByText(/from 12 Nov 2026 draft visit/i).length).toBeGreaterThan(0);
 });
 
 it('does not offer itself once the doctor has started this visit', async () => {
