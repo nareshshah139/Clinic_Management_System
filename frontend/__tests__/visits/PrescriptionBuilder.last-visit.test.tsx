@@ -118,6 +118,42 @@ it('undoes only what is still the carried text and keeps the doctor\'s own edits
   expect(screen.queryByRole('region', { name: 'Carried forward' })).toBeNull();
 });
 
+const treatmentBadge = () => document.querySelector('#consult-treatment [data-slot="badge"]')?.textContent ?? '';
+const instructionsFor = (drug: string) => screen.getByRole('textbox', { name: `Instructions for ${drug}` }) as HTMLTextAreaElement | HTMLInputElement;
+
+it('keeps a carried medicine the doctor edited, drops its mark, and removes only the untouched ones on Undo', async () => {
+  renderNewVisit();
+  fireEvent.click(within(await offer()).getByRole('button', { name: 'Start from last visit' }));
+  await screen.findByDisplayValue('Adapalene 0.1% Gel');
+  await settled();
+  expect(treatmentBadge()).toBe('2 medicines from 10 Oct 2026 visit');
+
+  fireEvent.change(instructionsFor('Adapalene 0.1% Gel'), { target: { value: 'Apply on forehead only' } });
+  expect(treatmentBadge()).toBe('1 medicine from 10 Oct 2026 visit');
+
+  fireEvent.click(within(await screen.findByRole('region', { name: 'Carried forward' })).getByRole('button', { name: 'Undo' }));
+  await settled();
+  expect(screen.queryByDisplayValue('Tab Doxycycline 100mg')).toBeNull();
+  expect(((await screen.findByDisplayValue('Adapalene 0.1% Gel')) as HTMLInputElement).value).toBe('Adapalene 0.1% Gel');
+  expect(instructionsFor('Adapalene 0.1% Gel').value).toBe('Apply on forehead only');
+  expect(treatmentBadge()).toBe('');
+});
+
+it('keeps a medicine the doctor added alongside the carried ones when Undo is pressed', async () => {
+  renderNewVisit();
+  fireEvent.click(within(await offer()).getByRole('button', { name: 'Start from last visit' }));
+  await screen.findByDisplayValue('Adapalene 0.1% Gel');
+  const rows = screen.getAllByPlaceholderText('Search medicine name...');
+  fireEvent.change(rows[rows.length - 1], { target: { value: 'Tab Cetirizine 10mg' } });
+  expect(treatmentBadge()).toBe('2 medicines from 10 Oct 2026 visit');
+
+  fireEvent.click(within(await screen.findByRole('region', { name: 'Carried forward' })).getByRole('button', { name: 'Undo' }));
+  await settled();
+  expect(screen.queryByDisplayValue('Tab Doxycycline 100mg')).toBeNull();
+  expect(screen.queryByDisplayValue('Adapalene 0.1% Gel')).toBeNull();
+  expect(((await screen.findByDisplayValue('Tab Cetirizine 10mg')) as HTMLInputElement).value).toBe('Tab Cetirizine 10mg');
+});
+
 it('does not offer itself once the doctor has started this visit', async () => {
   renderNewVisit();
   await offer();
