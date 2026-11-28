@@ -75,6 +75,49 @@ describe('PharmacyInvoiceService defensive stock confirmation', () => {
     jest.clearAllMocks();
   });
 
+  it('queues checkout transactions only within a branch and continues after a rejection', async () => {
+    const invalidBill = new BadRequestException('Invalid bill');
+    let rejectFirst!: (error: Error) => void;
+    const firstTransaction = new Promise((_resolve, reject) => {
+      rejectFirst = reject;
+    });
+    prisma.$transaction
+      .mockReturnValueOnce(firstTransaction)
+      .mockResolvedValueOnce({ id: 'other-branch' })
+      .mockResolvedValueOnce({ id: 'next-in-branch' });
+    const dto = {
+      patientId: 'patient',
+      paymentMethod: 'UPI' as const,
+      billingName: 'Test Patient',
+      billingPhone: '1234567890',
+      items: [],
+    };
+
+    const first = service.checkout(
+      { ...dto, requestKey: 'first' },
+      branchId,
+      userId,
+    );
+    const firstResult = expect(first).rejects.toBe(invalidBill);
+    const next = service.checkout(
+      { ...dto, requestKey: 'next' },
+      branchId,
+      userId,
+    );
+    const other = service.checkout(
+      { ...dto, requestKey: 'other' },
+      'branch-2',
+      userId,
+    );
+
+    await expect(other).resolves.toEqual({ id: 'other-branch' });
+    expect(prisma.$transaction).toHaveBeenCalledTimes(2);
+    rejectFirst(invalidBill);
+    await firstResult;
+    await expect(next).resolves.toEqual({ id: 'next-in-branch' });
+    expect(prisma.$transaction).toHaveBeenCalledTimes(3);
+  });
+
   it('blocks confirmation when only expired or insufficient stock is available', async () => {
     prisma.pharmacyInvoice.findFirst.mockResolvedValue(makeInvoice(5));
     tx.inventoryItem.findMany.mockResolvedValue([
