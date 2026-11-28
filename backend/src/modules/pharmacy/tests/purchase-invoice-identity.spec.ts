@@ -49,11 +49,9 @@ describe('Purchase identity and access', () => {
       expect(checked.items).toHaveLength(20);
     });
 
-    it('drops the model\'s own uncertain_bill_type flag for an unprinted bill type and keeps its other flags', () => {
+    it('keeps the model\'s own uncertain_bill_type flag when it returns no bill type', () => {
       const checked = scan({ billType: null, ocrFlags: ['uncertain_bill_type', 'uncertain_distributorName'] });
-      expect(checked.billType).toBe('CREDIT');
-      expect(checked.ocrFlags).toContain('uncertain_distributorName');
-      expect(checked.ocrFlags).not.toContain('uncertain_bill_type');
+      expect(checked.ocrFlags).toEqual(expect.arrayContaining(['uncertain_bill_type', 'uncertain_distributorName']));
     });
 
     it.each([['CASH', 'CASH'], ['cash', 'CASH'], ['CREDIT', 'CREDIT']])('keeps a printed bill type %s as %s without a check', (billType, expected) => {
@@ -62,8 +60,8 @@ describe('Purchase identity and access', () => {
       expect(checked.ocrFlags).not.toContain('uncertain_bill_type');
     });
 
-    it('keeps an approval bill as a check, because its payment terms are not established', () => {
-      expect(scan({ billType: 'APPROVAL' }).ocrFlags).toContain('uncertain_bill_type');
+    it.each([['APPROVAL'], ['UNCERTAIN'], ['N/A']])('flags a %s bill type for review, because its payment terms are not established', billType => {
+      expect(scan({ billType }).ocrFlags).toContain('uncertain_bill_type');
     });
 
     it('keeps Credit for an unprinted bill type that carries a due date', () => {
