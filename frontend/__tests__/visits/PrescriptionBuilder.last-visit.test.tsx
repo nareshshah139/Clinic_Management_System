@@ -45,6 +45,7 @@ beforeEach(() => {
   history = [emptyNewerVisit, lastVisit, olderVisit];
   global.fetch = jest.fn(async (url: string) => {
     if (String(url).includes('/visits/patient/') && String(url).includes('/history')) return json(history);
+    if (String(url).includes('/drugs/autocomplete')) return json([]);
     return json({});
   }) as unknown as typeof fetch;
 });
@@ -152,6 +153,16 @@ it('keeps a medicine the doctor added alongside the carried ones when Undo is pr
   expect(screen.queryByDisplayValue('Tab Doxycycline 100mg')).toBeNull();
   expect(screen.queryByDisplayValue('Adapalene 0.1% Gel')).toBeNull();
   expect(((await screen.findByDisplayValue('Tab Cetirizine 10mg')) as HTMLInputElement).value).toBe('Tab Cetirizine 10mg');
+});
+
+it('never sends the carry marker of a medicine row to the server', async () => {
+  const onClinicalDataChange = jest.fn();
+  render(<PrescriptionBuilder patientId="p-last" visitId={null} doctorId="d" onClinicalDataChange={onClinicalDataChange} />);
+  fireEvent.click(within(await offer()).getByRole('button', { name: 'Start from last visit' }));
+  await screen.findByDisplayValue('Adapalene 0.1% Gel');
+  const plan = onClinicalDataChange.mock.calls.at(-1)?.[0]?.treatmentPlan?.dermatology?.medicationPlan;
+  expect(plan.map((row: { drugName: string }) => row.drugName)).toEqual(['Tab Doxycycline 100mg', 'Adapalene 0.1% Gel']);
+  expect(JSON.stringify(plan)).not.toContain('carryId');
 });
 
 it('does not offer itself once the doctor has started this visit', async () => {

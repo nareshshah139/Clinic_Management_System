@@ -106,7 +106,7 @@ function restoreLegacyDosage<T>(dosage: T): T | '' {
 type LastPrescription = { visitId: string; date: number; items: PrescriptionItemForm[] };
 
 type CarrySlot = { id: string; kind: string; from: string | boolean; current: string | boolean; set: (next: any) => void; cleared: string | boolean };
-type CarriedFromLastVisit = { date: number; values: Record<string, string | boolean>; kinds: string[]; medicineKeys: string[] };
+type CarriedFromLastVisit = { date: number; values: Record<string, string | boolean>; kinds: string[]; rows: Record<string, string> };
 
 const rxItemKey = (m: { drugName: string; frequency: string; dosePattern?: string; timing?: string; duration: number | ''; durationUnit: string }) =>
   `${m.drugName.toLowerCase()}|${m.frequency}|${m.dosePattern || ''}|${m.timing || ''}|${m.duration}|${m.durationUnit}`;
@@ -139,6 +139,7 @@ interface PrescriptionItemForm extends RegimenRow {
   photosensitivityWarning?: boolean;
   foodInstructions?: string;
   pulseRegimen?: string;
+  carryId?: string;
 }
 
 const printedDuration = (it: { duration?: number | '' | null; durationUnit?: string }) =>
@@ -175,6 +176,8 @@ const toItemPayload = (it: PrescriptionItemForm) => ({
   foodInstructions: it.foodInstructions || undefined,
   pulseRegimen: it.pulseRegimen || undefined,
 });
+
+const rowSnapshot = (it: PrescriptionItemForm) => JSON.stringify(toItemPayload(it));
 
 interface Props {
   consultationType?: ConsultationType;
@@ -2021,7 +2024,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   ];
   const stillCarried = (...ids: string[]) => ids.some((id) => carried?.values[id] !== undefined && carried.values[id] === carrySlots.find((slot) => slot.id === id)?.current);
   const carriedDiagnosisStays = stillCarried('diagnosis');
-  const carriedMedicineCount = carried ? validItems.filter((it) => carried.medicineKeys.includes(rxItemKey(it))).length : 0;
+  const carriedRowStays = (it: PrescriptionItemForm) => Boolean(it.carryId && carried?.rows[it.carryId] === rowSnapshot(it));
+  const carriedMedicineCount = carried ? validItems.filter(carriedRowStays).length : 0;
   const carriedFrom = carried ? `${displayClinicDate(new Date(carried.date))} visit` : '';
 
   const startFromLastVisit = () => {
@@ -2032,18 +2036,21 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       slot.set(slot.from);
       values[slot.id] = slot.from;
     }
-    const { merged, added } = mergeCopiedItems(lastVisitMedicines);
+    const stamp = Date.now().toString(36);
+    const { merged, added } = mergeCopiedItems(lastVisitMedicines.map((medicine, index) => ({ ...medicine, carryId: `${stamp}-${index}` })));
     if (added) setItems(merged);
+    const inserted = merged.filter((it) => it.carryId?.startsWith(`${stamp}-`));
+    const rows = Object.fromEntries(inserted.map((it) => [it.carryId as string, rowSnapshot(it)]));
     const kinds = Array.from(new Set(carrySlots.filter((slot) => slot.id in values).map((slot) => slot.kind)));
-    if (lastVisitMedicines.length) kinds.push(`${lastVisitMedicines.length} ${lastVisitMedicines.length === 1 ? 'medicine' : 'medicines'}`);
-    setCarried({ date: lastVisit.date, values, kinds, medicineKeys: lastVisitMedicines.map(rxItemKey) });
+    if (inserted.length) kinds.push(`${inserted.length} ${inserted.length === 1 ? 'medicine' : 'medicines'}`);
+    setCarried({ date: lastVisit.date, values, kinds, rows });
   };
 
   const undoLastVisitCarry = () => {
     if (!carried) return;
     for (const slot of carrySlots) if (stillCarried(slot.id)) slot.set(slot.cleared);
     if (learnedPlan) setSuppressedAutofillSignature(learnedPlan.signature);
-    setItems(items.filter((it) => !carried.medicineKeys.includes(rxItemKey(it))));
+    setItems(items.filter((it) => !carriedRowStays(it)));
     setCarried(null);
   };
 
@@ -2737,7 +2744,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
         followUpInstructions: field('followUpInstructions', followUpInstructions),
         dermatology: {
           procedures: field('procedures', procedures.trim() ? [{ type: procedures.trim() }] : []),
-          medicationPlan: field('items', validItems.map(({ regimenState: _screenOnly, ...item }) => item)),
+          medicationPlan: field('items', validItems.map(({ regimenState: _screenOnly, carryId: _carried, ...item }) => item)),
         },
       },
       examination: {
