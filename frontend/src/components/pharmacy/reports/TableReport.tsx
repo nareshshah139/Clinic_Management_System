@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { reportErrorHint, useReport } from "../pharmacy-report-model";
 import { apiParams, type ReportEntry, type ReportParams } from "./report-catalog";
 import { ColumnChooser, useHiddenColumns } from "./ColumnChooser";
+import { STREAM, StreamMark, type Stream } from "./collection-colour";
 import { formatCell, formatRupee, visibleColumns } from "./report-format";
 import { ReportTable } from "./ReportTable";
 import { ReportToolbar } from "./ReportToolbar";
@@ -14,26 +15,36 @@ import type { PharmacyReport, ReportTile } from "./report-types";
 
 const isEmpty = (report: PharmacyReport) => report.sections.every((section) => section.rows.length === 0);
 
-export function ReportTiles({ tiles }: { tiles: ReportTile[] }) {
+export type StreamTile = ReportTile & { stream?: Stream };
+
+export function ReportTiles({ tiles }: { tiles: StreamTile[] }) {
   if (!tiles.length) return null;
   return (
     <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-      {tiles.map((tile) => (
-        <div
-          key={tile.label}
-          className={cn(
-            "rounded-lg border p-4",
-            tile.tone === "good" && "border-success-border bg-success-soft",
-            tile.tone === "bad" && "border-destructive-border bg-destructive-soft",
-            tile.tone === "warning" && "border-warning-border bg-warning-soft",
-          )}
-        >
-          <dt className="text-base font-medium">{tile.label}</dt>
-          <dd className="mt-1 text-2xl font-semibold tabular-nums">
-            {tile.kind === "money" && typeof tile.value === "number" ? formatRupee(tile.value) : formatCell(tile.value, tile.kind)}
-          </dd>
-        </div>
-      ))}
+      {tiles.map((tile) => {
+        const hue = tile.stream && !tile.tone ? STREAM[tile.stream] : undefined;
+        return (
+          <div
+            key={tile.label}
+            className={cn(
+              "rounded-lg border p-4",
+              tile.stream === "whole" && "col-span-2 lg:col-span-1",
+              hue?.tile,
+              tile.tone === "good" && "border-success-border bg-success-soft",
+              tile.tone === "bad" && "border-destructive-border bg-destructive-soft",
+              tile.tone === "warning" && "border-warning-border bg-warning-soft",
+            )}
+          >
+            <dt className={cn("text-base font-medium", tile.stream && "flex items-start gap-1.5", hue?.label)}>
+              {tile.stream && <StreamMark stream={tile.stream} className="mt-0.5" />}
+              {tile.label}
+            </dt>
+            <dd className={cn("mt-1 text-2xl font-semibold tabular-nums", hue && tile.stream !== "whole" && tile.value === 0 && "text-muted-foreground")}>
+              {tile.kind === "money" && typeof tile.value === "number" ? formatRupee(tile.value) : formatCell(tile.value, tile.kind)}
+            </dd>
+          </div>
+        );
+      })}
     </dl>
   );
 }

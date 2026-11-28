@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ReportInfoTip } from "../ReportInfoTip";
+import { columnColour, ModeMark, OWED, type TableColour } from "./collection-colour";
 import { formatCell, frozenOffsets, frozenWidth, headerBands, isNumeric, nextSort, sortRows, type SortState } from "./report-format";
 import type { ReportColumn, ReportSection } from "./report-types";
 
@@ -15,7 +16,7 @@ const WRAPPING = new Set(["nature", "description", "line", "action", "status"]);
  * GST bands as merged headings, the period's totals directly under the header, and sortable
  * headings. The header stays visible while the rows scroll.
  */
-export function ReportTable({ section, label }: { section: ReportSection; label?: string }) {
+export function ReportTable({ section, label, colour }: { section: ReportSection; label?: string; colour?: TableColour }) {
   const [sort, setSort] = useState<SortState>(null);
   const rows = useMemo(() => sortRows(section.rows, section.columns, sort), [section.rows, section.columns, sort]);
   const frame = useRef<HTMLDivElement>(null);
@@ -69,7 +70,8 @@ export function ReportTable({ section, label }: { section: ReportSection; label?
           )}
           <tr>
             {section.columns.map((column) => {
-              const cell = stick(column, cn("border-b bg-muted font-semibold", cellPad, align(column), column.group && column.label === "Base" && "border-l"));
+              const hue = columnColour(colour, column);
+              const cell = stick(column, cn("border-b font-semibold", hue?.head ?? "bg-muted", cellPad, align(column), column.group && column.label === "Base" && "border-l"));
               const active = sort?.key === column.key;
               const Icon = !active ? ArrowUpDown : sort!.direction === "asc" ? ArrowUp : ArrowDown;
               return (
@@ -99,10 +101,20 @@ export function ReportTable({ section, label }: { section: ReportSection; label?
           {section.totals && (
             <tr data-testid="report-totals-row">
               {section.columns.map((column) => {
-                const cell = stick(column, cn("border-b-2 bg-muted font-semibold", cellPad, align(column), column.group && column.label === "Base" && "border-l"));
+                const hue = columnColour(colour, column);
+                const cell = stick(column, cn("border-b-2 font-semibold", hue?.foot ?? "bg-muted", cellPad, align(column), column.group && column.label === "Base" && "border-l"));
                 const value = section.totals![column.key];
                 return (
-                  <td key={column.key} className={cn(cell.className, offsets.has(column.key) && "z-30", typeof value === "number" && value < 0 && "text-destructive")} style={cell.style}>
+                  <td
+                    key={column.key}
+                    className={cn(
+                      cell.className,
+                      offsets.has(column.key) && "z-30",
+                      typeof value === "number" && value < 0 && "text-destructive",
+                      hue?.due && typeof value === "number" && value > 0 && OWED,
+                    )}
+                    style={cell.style}
+                  >
                     {formatCell(value, column.kind)}
                   </td>
                 );
@@ -116,22 +128,35 @@ export function ReportTable({ section, label }: { section: ReportSection; label?
               key={row.key}
               data-tone={row.tone}
               className={cn(
-                "[&>td]:border-b [&>td]:bg-background hover:[&>td]:bg-accent-soft",
+                "[&>td]:border-b hover:[&>td]:bg-accent-soft",
                 row.tone === "muted" && "text-muted-foreground",
                 row.tone === "warning" && "[&>td]:bg-warning-soft",
               )}
             >
               {section.columns.map((column) => {
-                const cell = stick(column, cn(cellPad, align(column), column.group && column.label === "Base" && "border-l"));
+                const hue = columnColour(colour, column);
+                const cell = stick(column, cn("bg-background", cellPad, align(column), column.group && column.label === "Base" && "border-l", hue?.cell));
                 const value = row.cells[column.key];
                 return (
                   <td
                     key={column.key}
-                    className={cn(cell.className, typeof value === "number" && value < 0 && "text-destructive")}
+                    className={cn(
+                      cell.className,
+                      typeof value === "number" && value < 0 && "text-destructive",
+                      hue && value === 0 && "text-muted-foreground",
+                      hue?.due && typeof value === "number" && value > 0 && cn(OWED, "font-semibold"),
+                    )}
                     style={cell.style}
                     title={cell.style && typeof value === "string" ? value : undefined}
                   >
-                    {formatCell(value, column.kind)}
+                    {colour && column.key === "mode" ? (
+                      <span className="inline-flex items-center gap-2">
+                        <ModeMark mode={row.key} />
+                        {formatCell(value, column.kind)}
+                      </span>
+                    ) : (
+                      formatCell(value, column.kind)
+                    )}
                   </td>
                 );
               })}
