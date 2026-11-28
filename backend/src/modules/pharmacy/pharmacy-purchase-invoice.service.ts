@@ -2498,7 +2498,7 @@ export class PharmacyPurchaseInvoiceService {
   ): CreatePharmacyPurchaseInvoiceDto {
     const flags = [
       ...documentFlags,
-      ...this.stringArray(raw?.ocrFlags).filter((flag) => !/uncertain.*bill.?type/i.test(flag)),
+      ...this.stringArray(raw?.ocrFlags),
     ];
     const itemsRaw = Array.isArray(raw?.items) ? raw.items : [];
     const items = itemsRaw.map((item, index) =>
@@ -2510,7 +2510,8 @@ export class PharmacyPurchaseInvoiceService {
     const goodsReceivedDate = this.normalizeDateString(raw?.goodsReceivedDate);
     const dueDate = this.normalizeDateString(raw?.dueDate);
     const billType = this.normalizeBillType(raw?.billType, dueDate);
-    if (this.cleanString(raw?.billType).toUpperCase().includes('APPROVAL')) flags.push('uncertain_bill_type');
+    const printedTerms = this.cleanString(raw?.billType).toUpperCase();
+    if (printedTerms && !['CASH', 'CREDIT'].includes(printedTerms)) flags.push('uncertain_bill_type');
     const distributorGstin = this.cleanString(raw?.distributorGstin).toUpperCase();
 
     const required: Array<[string, unknown]> = [
