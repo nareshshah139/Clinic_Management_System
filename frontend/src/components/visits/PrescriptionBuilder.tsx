@@ -4912,11 +4912,13 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
             {/* Basic Information */}
             {/* Moved to bottom of builder; removed Doctor's Personal Notes field */}
 
-            {carried ? (
-              <CarriedForwardNotice date={carried.date} carried={carried.kinds} onUndo={undoLastVisitCarry} />
-            ) : lastVisit && !readOnly && !complaintRecorded && !diagnosisRecorded && !validItems.length ? (
-              <LastVisitOffer visit={lastVisit} medicineCount={lastVisitMedicines.length} onStart={startFromLastVisit} />
-            ) : null}
+            <div data-last-visit-slot className="[&:empty]:mb-0">
+              {carried ? (
+                <CarriedForwardNotice date={carried.date} carried={carried.kinds} onUndo={undoLastVisitCarry} />
+              ) : lastVisit && !readOnly && !complaintRecorded && !diagnosisRecorded && !validItems.length ? (
+                <LastVisitOffer visit={lastVisit} medicineCount={lastVisitMedicines.length} onStart={startFromLastVisit} />
+              ) : null}
+            </div>
 
             {/* Clinical Details */}
             <CollapsibleSection title="Vitals" section="clinical">
