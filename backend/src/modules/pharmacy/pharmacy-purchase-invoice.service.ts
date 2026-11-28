@@ -2510,10 +2510,8 @@ export class PharmacyPurchaseInvoiceService {
     const goodsReceivedDate = this.normalizeDateString(raw?.goodsReceivedDate);
     const dueDate = this.normalizeDateString(raw?.dueDate);
     const billType = this.normalizeBillType(raw?.billType, dueDate);
-    // A display default must never authorize automatic intake of unknown payment terms.
-    if (!['CASH', 'CREDIT'].includes(this.cleanString(raw?.billType).toUpperCase())) {
-      flags.push('uncertain_bill_type');
-    }
+    const printedTerms = this.cleanString(raw?.billType).toUpperCase();
+    if (printedTerms && !['CASH', 'CREDIT'].includes(printedTerms)) flags.push('uncertain_bill_type');
     const distributorGstin = this.cleanString(raw?.distributorGstin).toUpperCase();
 
     const required: Array<[string, unknown]> = [
@@ -2716,10 +2714,9 @@ export class PharmacyPurchaseInvoiceService {
     dueDate?: string,
   ): PharmacyPurchaseBillTypeDto {
     const raw = this.cleanString(value).toUpperCase();
-    if (raw.includes('CREDIT') || raw === 'CR' || dueDate) {
-      return PharmacyPurchaseBillTypeDto.CREDIT;
-    }
-    return PharmacyPurchaseBillTypeDto.CASH;
+    return raw.includes('CASH') && !raw.includes('CREDIT') && !dueDate
+      ? PharmacyPurchaseBillTypeDto.CASH
+      : PharmacyPurchaseBillTypeDto.CREDIT;
   }
 
   private normalizeDateString(value: unknown): string | undefined {

@@ -87,6 +87,7 @@ export const measuredNameWords = [
   'serum', 'lotion', 'cream', 'gel', 'shampoo', 'ointment', 'solution',
   'spray', 'foam', 'wash', 'syrup', 'suspension', 'drops', 'oil', 'soap',
   'sunscreen', 'conditioner', 'liniment', 'powder',
+  'cleanser', 'creme', 'facewash', 'bottle', 'tube', 'jar',
 ];
 export const quantityScale = 1_000_000;
 export const doseTolerance = 1e-9;
@@ -123,6 +124,9 @@ const positiveNumber = (value: unknown): number | null => {
 
 const explicitQuantity = (item: BillingPrescriptionItem) =>
   positiveNumber(item.quantity ?? item.prescribedQuantity ?? item.totalQuantity ?? item.qty);
+
+const withoutQuantity = (item: BillingPrescriptionItem): BillingPrescriptionItem =>
+  ({ ...item, quantity: null, prescribedQuantity: null, totalQuantity: null, qty: null });
 
 const sameRate = (a: number | null, b: number | null) =>
   a !== null && b !== null && Math.abs(a - b) < 1e-9;
@@ -171,7 +175,9 @@ const isMeasured = (
  * @cc [owner:nareshshah139,label:product] prescription-line-need
  * A line's need MUST be its explicit quantity in selling units, else its dose count, else
  * 1 selling unit when the line is measured or any invoice item billed for it is a measured
- * item. Lines with none of these MUST have an unknown need. Only a line with no explicit
+ * item. A measured line MUST NOT take its need from a quantity the prescription carries: the old
+ * prescription builder stamped quantity 5 on every medicine it added, so a stored quantity cannot say how
+ * many tubes or bottles. Lines with none of these MUST have an unknown need. Only a line with no explicit
  * quantity and no dose count may take its need from what it was billed as.
  */
 export function prescribedNeed(
@@ -179,6 +185,7 @@ export function prescribedNeed(
   drugName: string,
   billedAs: Array<BillingInventory | null> = [],
 ): LineNeed | null {
+  if (lineIsMeasured(item, drugName)) item = withoutQuantity(item);
   const explicit = explicitQuantity(item);
   if (explicit !== null) return { amount: explicit, unit: 'selling_units' };
   const { doses } = prescribedSchedule(item);
@@ -217,7 +224,7 @@ export function billingQuantity(
   drugName: string,
 ): BillingQuantity {
   const unit = inventory?.unit ?? null;
-  const explicit = explicitQuantity(item);
+  const explicit = lineIsMeasured(item, drugName) ? null : explicitQuantity(item);
   if (explicit !== null) return { quantity: explicit, unit, review: null };
 
   if (isMeasured(item, inventory, drugName)) {
