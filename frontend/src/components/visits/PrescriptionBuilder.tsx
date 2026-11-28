@@ -2037,7 +2037,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   if (carriedMedicineCount) pendingItems.push({ section: 'treatment', label: plural(carriedMedicineCount, 'medicine') });
   const pendingCarry: PendingCarry | null = carried && pendingItems.length ? { source: carried.source, items: pendingItems } : null;
   useImperativeHandle(pendingCarryRef, () => () => pendingCarry);
-  useLayoutEffect(() => { if (readOnly) setCarried(null); }, [readOnly]);
+  useLayoutEffect(() => { if (readOnly && carried) setCarried(null); }, [readOnly, carried]);
 
   const startFromLastVisit = () => {
     if (!lastVisit) return;
@@ -2364,11 +2364,15 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   }, [autofillUndoSnapshot, onChangeReviewDate, lastAutofillPlanSignature]);
 
   useEffect(() => {
-    if (!learnedPlan || learnedPlanSuppressed || learnedPlanCurrent) return;
+    if (readOnly && learnedPlan) setSuppressedAutofillSignature(learnedPlan.signature);
+  }, [readOnly, learnedPlan]);
+
+  useEffect(() => {
+    if (readOnly || !learnedPlan || learnedPlanSuppressed || learnedPlanCurrent) return;
     if (!treatmentIsEmpty && !treatmentMachineOwned) return;
     if (carriedDiagnosisStays || diagnosis !== deferredDiagnosis) return;
     applyLearnedPlan(learnedPlan);
-  }, [learnedPlan, learnedPlanSuppressed, learnedPlanCurrent, treatmentIsEmpty, treatmentMachineOwned, carriedDiagnosisStays, diagnosis, deferredDiagnosis, applyLearnedPlan]);
+  }, [readOnly, learnedPlan, learnedPlanSuppressed, learnedPlanCurrent, treatmentIsEmpty, treatmentMachineOwned, carriedDiagnosisStays, diagnosis, deferredDiagnosis, applyLearnedPlan]);
 
   // Throttle consecutive adds of the same drug (guards double/triple add)
   const lastDrugAddRef = useRef<{ key: string; at: number }>({ key: '', at: 0 });
@@ -4426,6 +4430,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
         dirtyClinicalFields: Array.from(dirtyClinicalFields.current),
         visitVersion: visitVersionRef.current,
         items,
+        carried,
         followUpInstructions,
         chiefComplaints,
         diagnosis,
@@ -4473,7 +4478,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       };
       localStorage.setItem(draftKey, JSON.stringify(data));
     } catch {}
-  }, [shouldPersistDraft, visitId, draftKey, procedureMetrics, exDermDx, familyHistoryTouched, language, items, followUpInstructions, chiefComplaints, diagnosis, pastHistory, personalHistory, medicationHistory, menstrualHistory, exObjective, procedures, procedurePlanned, investigations, customInvestigationOptions, vitalsHeightCm, vitalsWeightKg, vitalsBmi, vitalsBpSys, vitalsBpDia, vitalsPulse, skinConcerns, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, customSections, overrideTopMarginPx, overrideBottomMarginPx, activeProfileId, showRefillStamp, letterheadOption, breakBeforeMedications, breakBeforeInvestigations, breakBeforeFollowUp, breakBeforeSignature, avoidBreakInsideTables]);
+  }, [shouldPersistDraft, visitId, draftKey, procedureMetrics, exDermDx, familyHistoryTouched, language, items, carried, followUpInstructions, chiefComplaints, diagnosis, pastHistory, personalHistory, medicationHistory, menstrualHistory, exObjective, procedures, procedurePlanned, investigations, customInvestigationOptions, vitalsHeightCm, vitalsWeightKg, vitalsBmi, vitalsBpSys, vitalsBpDia, vitalsPulse, skinConcerns, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, customSections, overrideTopMarginPx, overrideBottomMarginPx, activeProfileId, showRefillStamp, letterheadOption, breakBeforeMedications, breakBeforeInvestigations, breakBeforeFollowUp, breakBeforeSignature, avoidBreakInsideTables]);
   useEffect(() => {
     const t = setTimeout(() => { saveDraftNow(); }, 600);
     return () => clearTimeout(t);
@@ -4493,6 +4498,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
             dosage: restoreLegacyDosage(item.dosage),
           })), data.dirtyClinicalFields ?? 'populated');
         }
+        if (typeof data?.carried?.source === 'string' && typeof data.carried.badge === 'string' && Array.isArray(data.carried.kinds) && data.carried.values && data.carried.rows) setCarried(data.carried);
         if (typeof data?.followUpInstructions === 'string') hydrateFollowUpInstructions(data.followUpInstructions, data.dirtyClinicalFields ?? 'populated');
         if (typeof data?.chiefComplaints === 'string') hydrateChiefComplaints(data.chiefComplaints, data.dirtyClinicalFields ?? 'populated');
         if (typeof data?.diagnosis === 'string') hydrateDiagnosis(data.diagnosis, data.dirtyClinicalFields ?? 'populated');
