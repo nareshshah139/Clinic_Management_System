@@ -21,6 +21,13 @@ expect 0 'OK 200 traces, 2400 steps' 'act2:replay matches the stand-in' -- npm r
 for m in no-version-check no-done-shortcut drop-discrepancy; do
   expect 1 'DIVERGED' "act2 mutant $m is caught" -- env MUTANT=$m npm run -s act2:replay
 done
+if [ "${SERVICE:-}" != "" ]; then
+  expect 0 'OK 200 traces, 2400 steps' 'act2:replay:service matches the NestJS service on Postgres' -- npm run -s act2:replay:service
+  expect 0 'OK 200 traces' 'act2 service mutant no-precheck survives (the claim still checks the version)' -- env MUTANT=no-precheck npm run -s act2:replay:service
+  for m in no-version-check no-done-shortcut drop-discrepancy; do
+    expect 1 'DIVERGED' "act2 service mutant $m is caught" -- env MUTANT=$m npm run -s act2:replay:service
+  done
+fi
 expect 0 'wrote act3/recorded.qnt' 'act3:convert' -- npm run -s act3:convert
 expect 1 '1 passing' 'act3:check passes the e2e run and fails the tampered one' -- npm run -s act3:check
 exit $fail

@@ -298,6 +298,7 @@ async function bootStack(opts = {}) {
       });
     });
     stack.api = `http://127.0.0.1:${backendPort}`;
+    if (opts.backendOnly) return stack;
 
     const frontend = path.join(temp, "frontend");
     fs.mkdirSync(frontend);
