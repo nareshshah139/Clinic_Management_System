@@ -87,8 +87,8 @@ export function useUnreviewedCarryPrompt(goToSection: (section: string) => void)
           {pending?.items.map((item) => <li key={item.label}>{item.label}</li>)}
         </ul>
         <DialogFooter>
-          <Button variant="outline" onClick={() => settle(false, pending?.items[0]?.section ?? null)}>Review items</Button>
-          <Button onClick={() => settle(true)}>Complete visit</Button>
+          <Button variant="outline" className="pointer-coarse:min-h-11" onClick={() => settle(false, pending?.items[0]?.section ?? null)}>Review items</Button>
+          <Button className="pointer-coarse:min-h-11" onClick={() => settle(true)}>Complete visit</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
