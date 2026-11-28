@@ -37,8 +37,9 @@ or product knowledge, preserve printed amounts, and flag incomplete page sets.
 The backend compares product name, pack size and HSN as well as supplier/invoice
 identity, batch, expiry, paid/free quantities, MRP, rate, row count and payable total
 across the reads. Disagreements remain review issues; neither answer silently wins.
-Unknown payment terms are blocked even if the model omits its uncertainty flag.
-The form's existing bill-type default is for display and cannot clear that flag.
+A bill that prints no payment terms is not a review check: its bill type defaults to Credit,
+and staff change it to Cash when needed. A printed Cash or Credit is kept as read. An
+approval bill, whose payment terms are not established, is returned as APPROVAL and stays a check.
 These changes require a backend deployment, with no database migration.
 
 ## Original documents
@@ -122,9 +123,10 @@ The **Finish invoice review** section stays above the editor on desktop and mobi
 Open **Review issues** on the selected saved invoice (imported exceptions open for
 editing immediately), then use this sequence:
 
-1. Open the original invoice. Choose verified Cash/Credit terms; “APPROVAL BILLS”
-   alone does not determine them. For Credit, enter the due date. Select the matching
-   saved supplier or enter its verified name/GSTIN; check the supplier, not buyer, GSTIN.
+1. Open the original invoice. Bill type is Credit unless the bill prints Cash terms; for an
+   approval bill, choose the verified Cash/Credit terms. For Credit, enter the due date.
+   Select the matching saved supplier or enter its verified name/GSTIN; check the supplier,
+   not buyer, GSTIN.
 2. Follow each **Go to…** link, correct the value and use **Confirm … checked**.
    A confirmation for a missing manufacturer/unit stays disabled until the field
    is filled. **Refresh Matches** can fill verified product/manufacturer/pack details;
