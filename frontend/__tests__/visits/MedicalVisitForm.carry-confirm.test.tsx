@@ -13,6 +13,14 @@ jest.mock('@/lib/api', () => ({ apiClient: {
 jest.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: jest.fn() }) }));
 jest.mock('@/components/visits/VisitPhotos', () => function Photos() { return null; });
 jest.mock('@/components/tours/DoctorTour', () => ({ DoctorTour: () => null }));
+jest.mock('pagedjs', () => ({
+  Previewer: class {
+    async preview(content: string, _css: unknown, container: HTMLElement) {
+      container.innerHTML = `<div class="pagedjs_page"><div class="pagedjs_page_content">${content}</div></div>`;
+      return { pages: 1 };
+    }
+  },
+}));
 
 jest.setTimeout(60_000);
 
@@ -60,18 +68,20 @@ const noDialog = () => expect(screen.queryByRole('alertdialog')).toBeNull();
 const instructionsFor = (drug: string) => screen.getByRole('textbox', { name: `Instructions for ${drug}` });
 
 async function openVisitForm() {
-  render(<MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v" userRole="ADMIN" />);
+  const view = render(<MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v" userRole="ADMIN" />);
   fireEvent.mouseDown(screen.getByRole('tab', { name: 'Consultation' }), { button: 0, ctrlKey: false });
   await screen.findByRole('textbox', { name: 'Diagnosis' });
+  return view;
 }
 
 async function carryLastVisit() {
-  await openVisitForm();
+  const view = await openVisitForm();
   const offer = await screen.findByRole('region', { name: 'Last visit' });
   fireEvent.click(within(offer).getByRole('button', { name: 'Start from last visit' }));
   await screen.findByRole('region', { name: 'Carried forward' });
   await screen.findByDisplayValue('Adapalene 0.1% Gel');
   await waitFor(() => expect(completeButton()).toBeEnabled());
+  return view;
 }
 
 const pressComplete = async () => { await act(async () => { fireEvent.click(completeButton()); }); };
@@ -291,5 +301,122 @@ describe('completing a visit with nothing left to review', () => {
 
     noDialog();
     await waitFor(() => expect(apiClient.completeVisit).toHaveBeenCalledTimes(1));
+  });
+});
+
+const olderAcneVisit = {
+  id: 'older-acne',
+  entryType: 'visit',
+  status: 'COMPLETED',
+  encounterDate: '2026-09-01T05:00:00.000Z',
+  createdAt: '2026-09-01T05:00:00.000Z',
+  doctorId: 'd',
+  diagnosis: [{ diagnosis: 'Acne vulgaris' }],
+  prescriptionItems: [{ drugName: 'Tab Minocycline 50mg', frequency: 'ONCE_DAILY', duration: 30, durationUnit: 'DAYS' }],
+};
+const settled = () => act(async () => { await new Promise((resolve) => setTimeout(resolve, 300)); });
+
+describe('a completed visit stays as the doctor left it', () => {
+  it('shows no learned-plan medicines in the locked treatment or the preview after the carried medicines were removed and a procedure plan was entered', async () => {
+    history = [lastVisit, olderAcneVisit];
+    await carryLastVisit();
+    fireEvent.click(screen.getByRole('button', { name: /^Remove Tab Doxycycline/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Remove Adapalene/ }));
+    fireEvent.change(field('Procedures planned'), { target: { value: 'Chemical peel, 3 sessions' } });
+    await settled();
+    expect(screen.queryByDisplayValue('Tab Minocycline 50mg')).toBeNull();
+    await waitFor(() => expect(completeButton()).toBeEnabled());
+    await completeAnyway();
+    await settled();
+
+    expect(screen.queryByDisplayValue(/Minocycline|Doxycycline|Adapalene/)).toBeNull();
+    expect(apiClient.createPrescription).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Print Preview' })[0]);
+    const printed = await waitFor(() => {
+      const root = document.getElementById('prescription-print-root');
+      expect(root?.textContent).toContain('Chemical peel');
+      return root as HTMLElement;
+    });
+    expect(printed.textContent).not.toMatch(/Minocycline|Doxycycline|Adapalene/);
+  });
+
+  it('does not fill medicines into the editor when that completed visit is then amended', async () => {
+    history = [lastVisit, olderAcneVisit];
+    await carryLastVisit();
+    fireEvent.click(screen.getByRole('button', { name: /^Remove Tab Doxycycline/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Remove Adapalene/ }));
+    fireEvent.change(field('Procedures planned'), { target: { value: 'Chemical peel, 3 sessions' } });
+    await waitFor(() => expect(completeButton()).toBeEnabled());
+    await completeAnyway();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit visit' }));
+    await settled();
+
+    expect(screen.queryByDisplayValue(/Minocycline|Doxycycline|Adapalene/)).toBeNull();
+  });
+});
+
+describe('resuming a saved draft', () => {
+  const reopenAfterSavingDraft = async (view: { unmount: () => void }, saved: Record<string, unknown>) => {
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save Draft' })); });
+    await waitFor(() => expect(apiClient.updateVisit).toHaveBeenCalled());
+    view.unmount();
+    visit = { ...openVisit, version: 2, history: lastVisit.history, ...saved };
+    await openVisitForm();
+    await waitFor(() => expect(completeButton()).toBeEnabled());
+  };
+  const savedComplaints = [{ complaint: 'Acne on cheeks for 3 months' }];
+
+  it('still asks before completing, and still names the visit the items came from', async () => {
+    const view = await carryLastVisit();
+    await reopenAfterSavingDraft(view, { complaints: savedComplaints, diagnosis: [{ diagnosis: 'Acne vulgaris' }] });
+    await pressComplete();
+
+    const confirm = await dialog();
+    expect(confirm.textContent).toContain('10 Oct 2026 visit by Dr. Asha Rao');
+    expect(within(confirm).getAllByRole('listitem').map((item) => item.textContent)).toEqual([
+      'Chief complaints', 'Diagnosis', 'Past history', 'Medication history', 'Family history', '2 medicines',
+    ]);
+    expect(apiClient.completeVisit).not.toHaveBeenCalled();
+  });
+
+  it('leaves out what the doctor edited before saving', async () => {
+    const view = await carryLastVisit();
+    fireEvent.change(field('Diagnosis'), { target: { value: 'Acne vulgaris, grade 3' } });
+    fireEvent.change(instructionsFor('Adapalene 0.1% Gel'), { target: { value: 'Apply on forehead only' } });
+    await reopenAfterSavingDraft(view, { complaints: savedComplaints, diagnosis: [{ diagnosis: 'Acne vulgaris, grade 3' }] });
+    await pressComplete();
+
+    expect(within(await dialog()).getAllByRole('listitem').map((item) => item.textContent)).toEqual([
+      'Chief complaints', 'Past history', 'Medication history', 'Family history', '1 medicine',
+    ]);
+  });
+
+  it('does not ask after the carry was undone before the draft was saved', async () => {
+    const view = await carryLastVisit();
+    fireEvent.click(within(screen.getByRole('region', { name: 'Carried forward' })).getByRole('button', { name: 'Undo' }));
+    fireEvent.change(field('Chief complaints'), { target: { value: 'Itchy rash on forearms' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Add Row' }));
+    fireEvent.change((await screen.findAllByPlaceholderText('Search medicine name...'))[0], { target: { value: 'ZYTEE GEL' } });
+    await reopenAfterSavingDraft(view, { complaints: [{ complaint: 'Itchy rash on forearms' }] });
+
+    expect(screen.queryByRole('region', { name: 'Carried forward' })).toBeNull();
+    await pressComplete();
+    noDialog();
+    await waitFor(() => expect(apiClient.completeVisit).toHaveBeenCalledTimes(1));
+  });
+
+  it('shows no carry notice when the visit is reopened after it was completed', async () => {
+    const view = await carryLastVisit();
+    await completeAnyway();
+    await settled();
+    view.unmount();
+    visit = { ...openVisit, status: 'COMPLETED', complaints: savedComplaints, diagnosis: [{ diagnosis: 'Acne vulgaris' }], history: lastVisit.history };
+    await openVisitForm();
+    await settled();
+
+    expect(screen.queryByRole('region', { name: 'Carried forward' })).toBeNull();
+    expect(screen.queryAllByText(/from 10 Oct 2026 visit/i)).toEqual([]);
   });
 });

@@ -359,3 +359,29 @@ it('prefers the issued prescription over the plan of the same visit', async () =
   expect(((await screen.findByDisplayValue('Tab Finasteride 1mg')) as HTMLInputElement).value).toBe('Tab Finasteride 1mg');
   expect(screen.queryByDisplayValue('Minoxidil 5% Solution')).toBeNull();
 });
+
+const procedureOnlyVisit = {
+  id: 'v-done',
+  status: 'COMPLETED',
+  version: 3,
+  complaints: [{ complaint: 'Acne flare' }],
+  diagnosis: [{ diagnosis: 'Acne vulgaris' }],
+  plan: { dermatology: { procedurePlanned: 'Chemical peel, 3 sessions' } },
+};
+
+it('never fills a locked completed visit with a learned plan, and not once it is amended either', async () => {
+  history = [olderAcneVisit];
+  const answer = global.fetch as jest.Mock;
+  global.fetch = jest.fn(async (url: string, init?: unknown) => (String(url).match(/\/visits\/v-done$/) ? json(procedureOnlyVisit) : answer(url, init))) as unknown as typeof fetch;
+  const view = render(<PrescriptionBuilder patientId="p-last" visitId="v-done" doctorId="d" readOnly />);
+  await screen.findByDisplayValue('Acne vulgaris');
+  await settled();
+  await settled();
+  expect(screen.queryByDisplayValue('Adapalene 0.1% Gel')).toBeNull();
+  expect(screen.queryByDisplayValue('Review in 4 weeks')).toBeNull();
+
+  view.rerender(<PrescriptionBuilder patientId="p-last" visitId="v-done" doctorId="d" />);
+  await settled();
+  expect(screen.queryByDisplayValue('Adapalene 0.1% Gel')).toBeNull();
+  expect(screen.queryByDisplayValue('Review in 4 weeks')).toBeNull();
+});
