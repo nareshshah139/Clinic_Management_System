@@ -22,6 +22,16 @@
     "voice:verify:quick": "quint verify spec/voiceBar.qnt --max-steps=8 --invariant=draftIsLatest,ownerIsActive",
     "voice:traces": "rm -rf extras/voice/traces && mkdir -p extras/voice/traces && quint run spec/voiceBar.qnt --backend=typescript --step=stepMbt --seed=7 --max-samples=200 --n-traces=200 --max-steps=20 --mbt --out-itf=extras/voice/traces/t_{seq}.itf.json",
     "voice:replay": "node extras/voice/replay.mjs",
+    "ocr:run": "quint run spec/purchaseBill.qnt --backend=typescript --seed=42 --max-samples=10000 --max-steps=12 --invariants postsAtMostOnce postedIffCommitted cancelledNeverPosted --hide bill",
+    "ocr:observe": "quint run spec/purchaseBill.qnt --backend=typescript --seed=42 --max-samples=10000 --max-steps=12 --invariants postsAtMostOnce postedIffCommitted cancelledNeverPosted --observation=reopenedThenPosted --hide bill",
+    "ocr:verify": "quint verify spec/purchaseBill.qnt --max-steps=12 --invariants postsAtMostOnce postedIffCommitted cancelledNeverPosted",
+    "ocr:design": "quint run spec/purchaseBill.qnt --backend=typescript --seed=42 --max-samples=10000 --max-steps=12 --invariants postedWhatWasSeen",
+    "ocr:design-verify": "quint verify spec/purchaseBill.qnt --max-steps=8 --invariants postedWhatWasSeen",
+    "ocr:client": "quint run spec/purchaseBill.qnt --backend=typescript --seed=42 --max-samples=10000 --max-steps=12 --step=stepClient --invariants postsAtMostOnce postedIffCommitted cancelledNeverPosted postedWhatWasSeen --hide bill",
+    "ocr:client-verify": "quint verify spec/purchaseBill.qnt --step=stepClient --max-steps=10 --invariants postsAtMostOnce postedIffCommitted cancelledNeverPosted postedWhatWasSeen",
+    "ocr:traces": "rm -rf extras/ocr/traces && mkdir -p extras/ocr/traces && quint run spec/purchaseBill.qnt --backend=typescript --step=stepCoded --seed=7 --max-samples=200 --n-traces=200 --max-steps=12 --mbt --invariants postsAtMostOnce postedIffCommitted cancelledNeverPosted --out-itf=extras/ocr/traces/t_{seq}.itf.json",
+    "ocr:replay": "node extras/ocr/replay.mjs",
+    "ocr:replay:service": "TARGET=service node extras/ocr/replay.mjs",
     "check": "sh check.sh"
   },
   "devDependencies": {
