@@ -106,7 +106,7 @@ function restoreLegacyDosage<T>(dosage: T): T | '' {
 type LastPrescription = { visitId: string; date: number; items: PrescriptionItemForm[] };
 
 type CarrySlot = { id: string; kind: string; section: string; from: string | boolean; current: string | boolean; set: (next: any) => void; cleared: string | boolean };
-type CarriedFromLastVisit = { source: string; badge: string; values: Record<string, string | boolean>; kinds: string[]; rows: Record<string, string> };
+type CarriedFromLastVisit = { patientId: string; source: string; badge: string; values: Record<string, string | boolean>; kinds: string[]; rows: Record<string, string> };
 
 const rxItemKey = (m: { drugName: string; frequency: string; dosePattern?: string; timing?: string; duration: number | ''; durationUnit: string }) =>
   `${m.drugName.toLowerCase()}|${m.frequency}|${m.dosePattern || ''}|${m.timing || ''}|${m.duration}|${m.durationUnit}`;
@@ -672,7 +672,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const [lastPrescription, setLastPrescription] = useState<LastPrescription | null>(null);
   const [lastRxOpenId, setLastRxOpenId] = useState<string | null>(null);
   const [lastVisit, setLastVisit] = useState<LastVisit | null>(null);
-  const [carried, setCarried] = useState<CarriedFromLastVisit | null>(null);
+  const [carriedState, setCarried] = useState<CarriedFromLastVisit | null>(null);
+  const carried = carriedState?.patientId === patientId ? carriedState : null;
   const [doctorPrescriptionsForLearning, setDoctorPrescriptionsForLearning] = useState<any[]>([]);
   const [learningSourcesStatus, setLearningSourcesStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [learningSourcesError, setLearningSourcesError] = useState('');
@@ -2054,7 +2055,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     const rows = Object.fromEntries(inserted.map((it) => [it.carryId as string, rowSnapshot(it)]));
     const kinds = Array.from(new Set(carrySlots.filter((slot) => slot.id in values).map((slot) => slot.kind)));
     if (inserted.length) kinds.push(`${inserted.length} ${inserted.length === 1 ? 'medicine' : 'medicines'}`);
-    setCarried({ source: visitSource(lastVisit), badge: `${displayClinicDate(new Date(lastVisit.date))} ${lastVisit.draft ? 'draft visit' : 'visit'}`, values, kinds, rows });
+    setCarried({ patientId, source: visitSource(lastVisit), badge: `${displayClinicDate(new Date(lastVisit.date))} ${lastVisit.draft ? 'draft visit' : 'visit'}`, values, kinds, rows });
   };
 
   const undoLastVisitCarry = () => {
@@ -2072,8 +2073,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     setSuppressedAutofillSignature(null);
     setAutofillUndoSnapshot(null);
   }, [patientId, doctorId, visitId]);
-
-  useEffect(() => { setCarried(null); }, [patientId]);
 
   useEffect(() => {
     let cancelled = false;
