@@ -50,6 +50,8 @@ import { loadPatientHistory, visitEntries } from './usePatientHistory';
 import { prescriptionLabel } from '@/lib/prescription-labels';
 import { pdfFileName } from '@/lib/pdf-file-name';
 import { useConfirm } from '@/components/ui/confirm-dialog';
+import { findLastVisit, type LastVisit } from '@/lib/last-visit';
+import { CarriedForwardNotice, LastVisitOffer, visitSource } from './LastVisitCarry';
 // ID format validation is relaxed; backend accepts string IDs (cuid/uuid/custom)
 
 const rx = rxLayout.prescription;
@@ -103,6 +105,12 @@ function restoreLegacyDosage<T>(dosage: T): T | '' {
 
 type LastPrescription = { visitId: string; date: number; items: PrescriptionItemForm[] };
 
+type CarrySlot = { id: string; kind: string; from: string | boolean; current: string | boolean; set: (next: any) => void; cleared: string | boolean };
+type CarriedFromLastVisit = { source: string; badge: string; values: Record<string, string | boolean>; kinds: string[]; rows: Record<string, string> };
+
+const rxItemKey = (m: { drugName: string; frequency: string; dosePattern?: string; timing?: string; duration: number | ''; durationUnit: string }) =>
+  `${m.drugName.toLowerCase()}|${m.frequency}|${m.dosePattern || ''}|${m.timing || ''}|${m.duration}|${m.durationUnit}`;
+
 interface PrescriptionItemForm extends RegimenRow {
   drugName: string;
   genericName?: string;
@@ -131,6 +139,7 @@ interface PrescriptionItemForm extends RegimenRow {
   photosensitivityWarning?: boolean;
   foodInstructions?: string;
   pulseRegimen?: string;
+  carryId?: string;
 }
 
 const printedDuration = (it: { duration?: number | '' | null; durationUnit?: string }) =>
@@ -167,6 +176,8 @@ const toItemPayload = (it: PrescriptionItemForm) => ({
   foodInstructions: it.foodInstructions || undefined,
   pulseRegimen: it.pulseRegimen || undefined,
 });
+
+const rowSnapshot = (it: PrescriptionItemForm) => JSON.stringify(toItemPayload(it));
 
 interface Props {
   consultationType?: ConsultationType;
@@ -659,6 +670,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const [patientHistoryForLearning, setPatientHistoryForLearning] = useState<any[]>([]);
   const [lastPrescription, setLastPrescription] = useState<LastPrescription | null>(null);
   const [lastRxOpenId, setLastRxOpenId] = useState<string | null>(null);
+  const [lastVisit, setLastVisit] = useState<LastVisit | null>(null);
+  const [carried, setCarried] = useState<CarriedFromLastVisit | null>(null);
   const [doctorPrescriptionsForLearning, setDoctorPrescriptionsForLearning] = useState<any[]>([]);
   const [learningSourcesStatus, setLearningSourcesStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [learningSourcesError, setLearningSourcesError] = useState('');
@@ -1461,7 +1474,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
             }
           }
           if (!res?.prescription?.id && !items.some(item => item.drugName.trim()) && Array.isArray(dermaPlan.medicationPlan)) {
-            hydrateItems(dermaPlan.medicationPlan.map(mapPrevRxItem).filter(Boolean) as PrescriptionItemForm[]);
+            hydrateItems(dermaPlan.medicationPlan.map(mapPlanRxItem).filter(Boolean) as PrescriptionItemForm[]);
           }
           if (!procedures && Array.isArray(dermaPlan.procedures) && dermaPlan.procedures.length > 0) {
             const procLine = dermaPlan.procedures.map((p: any) => p?.type).filter(Boolean).join(', ');
@@ -1910,6 +1923,11 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     };
   };
 
+  const mapPlanRxItem = (raw: any): PrescriptionItemForm | null => {
+    const row = mapPrevRxItem(raw);
+    return row && !raw?.frequency && !row.dosePattern ? { ...row, frequency: '' } : row;
+  };
+
   const normalizePrescriptionResponse = (res: any): any[] => {
     if (Array.isArray(res)) return res;
     if (res && typeof res === 'object') {
@@ -1963,19 +1981,24 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     return null;
   };
 
-  const copyLastPrescription = () => {
-    if (!lastPrescription) return;
-    const keyOf = (m: PrescriptionItemForm) => `${m.drugName.toLowerCase()}|${m.frequency}|${m.dosePattern || ''}|${m.timing || ''}|${m.duration}|${m.durationUnit}`;
+  const mergeCopiedItems = (source: PrescriptionItemForm[]) => {
     const base = items.filter((it) => (it.drugName || '').trim());
-    const existingKeys = new Set(base.map(keyOf));
+    const existingKeys = new Set(base.map(rxItemKey));
     const merged = [...base];
     let added = 0;
-    for (const m of lastPrescription.items) {
-      if (existingKeys.has(keyOf(m))) continue;
+    for (const m of source) {
+      if (existingKeys.has(rxItemKey(m))) continue;
       merged.push(clonePrescriptionItems([m])[0]);
-      existingKeys.add(keyOf(m));
+      existingKeys.add(rxItemKey(m));
       added += 1;
     }
+    if (added && !hasTrailingBlank(merged)) merged.push(createBlankItem());
+    return { merged, added };
+  };
+
+  const copyLastPrescription = () => {
+    if (!lastPrescription) return;
+    const { merged, added } = mergeCopiedItems(lastPrescription.items);
     if (!added) {
       toast({
         variant: 'warning',
@@ -1984,13 +2007,55 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       });
       return;
     }
-    if (!hasTrailingBlank(merged)) merged.push(createBlankItem());
     setItems(merged);
     toast({
       variant: 'success',
       title: 'Last prescription copied',
       description: `Added ${added} item${added === 1 ? '' : 's'} from the last prescription.`,
     });
+  };
+
+  const carrySlots: CarrySlot[] = [
+    { id: 'chiefComplaints', kind: 'chief complaints', from: lastVisit?.chiefComplaints ?? '', current: chiefComplaints, set: setChiefComplaints, cleared: '' },
+    { id: 'diagnosis', kind: 'diagnosis', from: lastVisit?.diagnosis ?? '', current: diagnosis, set: setDiagnosis, cleared: '' },
+    { id: 'pastHistory', kind: 'past history', from: lastVisit?.pastHistory ?? '', current: pastHistory, set: setPastHistory, cleared: '' },
+    { id: 'medicationHistory', kind: 'medication history', from: lastVisit?.medicationHistory ?? '', current: medicationHistory, set: setMedicationHistory, cleared: '' },
+    { id: 'menstrualHistory', kind: 'menstrual history', from: lastVisit?.menstrualHistory ?? '', current: menstrualHistory, set: setMenstrualHistory, cleared: '' },
+    { id: 'familyDM', kind: 'family history', from: lastVisit?.familyHistory.dm ?? false, current: familyHistoryDM, set: setFamilyHistoryDM, cleared: false },
+    { id: 'familyHTN', kind: 'family history', from: lastVisit?.familyHistory.htn ?? false, current: familyHistoryHTN, set: setFamilyHistoryHTN, cleared: false },
+    { id: 'familyThyroid', kind: 'family history', from: lastVisit?.familyHistory.thyroid ?? false, current: familyHistoryThyroid, set: setFamilyHistoryThyroid, cleared: false },
+    { id: 'familyOthers', kind: 'family history', from: lastVisit?.familyHistory.others ?? '', current: familyHistoryOthers, set: setFamilyHistoryOthers, cleared: '' },
+  ];
+  const stillCarried = (...ids: string[]) => ids.some((id) => carried?.values[id] !== undefined && carried.values[id] === carrySlots.find((slot) => slot.id === id)?.current);
+  const carriedDiagnosisStays = stillCarried('diagnosis');
+  const carriedRowStays = (it: PrescriptionItemForm) => Boolean(it.carryId && carried?.rows[it.carryId] === rowSnapshot(it));
+  const carriedMedicineCount = carried ? validItems.filter(carriedRowStays).length : 0;
+  const carriedFrom = carried?.badge ?? '';
+
+  const startFromLastVisit = () => {
+    if (!lastVisit) return;
+    const values: CarriedFromLastVisit['values'] = {};
+    for (const slot of carrySlots) {
+      if (!slot.from || (typeof slot.current === 'string' ? slot.current.trim() : slot.current)) continue;
+      slot.set(slot.from);
+      values[slot.id] = slot.from;
+    }
+    const stamp = Date.now().toString(36);
+    const { merged, added } = mergeCopiedItems(lastVisitMedicines.map((medicine, index) => ({ ...medicine, carryId: `${stamp}-${index}` })));
+    if (added) setItems(merged);
+    const inserted = merged.filter((it) => it.carryId?.startsWith(`${stamp}-`));
+    const rows = Object.fromEntries(inserted.map((it) => [it.carryId as string, rowSnapshot(it)]));
+    const kinds = Array.from(new Set(carrySlots.filter((slot) => slot.id in values).map((slot) => slot.kind)));
+    if (inserted.length) kinds.push(`${inserted.length} ${inserted.length === 1 ? 'medicine' : 'medicines'}`);
+    setCarried({ source: visitSource(lastVisit), badge: `${displayClinicDate(new Date(lastVisit.date))} ${lastVisit.draft ? 'draft visit' : 'visit'}`, values, kinds, rows });
+  };
+
+  const undoLastVisitCarry = () => {
+    if (!carried) return;
+    for (const slot of carrySlots) if (stillCarried(slot.id)) slot.set(slot.cleared);
+    if (learnedPlan) setSuppressedAutofillSignature(learnedPlan.signature);
+    setItems(items.filter((it) => !carriedRowStays(it)));
+    setCarried(null);
   };
 
   useEffect(() => {
@@ -2008,6 +2073,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       if (!patientId && !doctorId) {
         setPatientHistoryForLearning([]);
         setLastPrescription(null);
+        setLastVisit(null);
         setDoctorPrescriptionsForLearning([]);
         setLearningSourcesStatus('idle');
         setLearningSourcesError('');
@@ -2017,6 +2083,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       setLearningSourcesStatus('loading');
       setLearningSourcesError('');
       setLastPrescription(null);
+      setLastVisit(null);
+      setCarried(null);
 
       const [patientResult, doctorResult] = await Promise.allSettled([
         patientId ? Promise.resolve(patientId).then(loadPatientHistory).then(visitEntries) : Promise.resolve([]),
@@ -2035,6 +2103,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
 
       setPatientHistoryForLearning(nextPatientHistory);
       setLastPrescription(findLastPrescription(allVisits));
+      setLastVisit(findLastVisit(allVisits, visitId));
       setDoctorPrescriptionsForLearning(nextDoctorPrescriptions);
 
       if (patientResult.status === 'rejected' && doctorResult.status === 'rejected') {
@@ -2290,8 +2359,9 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   useEffect(() => {
     if (!learnedPlan || learnedPlanSuppressed || learnedPlanCurrent) return;
     if (!treatmentIsEmpty && !treatmentMachineOwned) return;
+    if (carriedDiagnosisStays || diagnosis !== deferredDiagnosis) return;
     applyLearnedPlan(learnedPlan);
-  }, [learnedPlan, learnedPlanSuppressed, learnedPlanCurrent, treatmentIsEmpty, treatmentMachineOwned, applyLearnedPlan]);
+  }, [learnedPlan, learnedPlanSuppressed, learnedPlanCurrent, treatmentIsEmpty, treatmentMachineOwned, carriedDiagnosisStays, diagnosis, deferredDiagnosis, applyLearnedPlan]);
 
   // Throttle consecutive adds of the same drug (guards double/triple add)
   const lastDrugAddRef = useRef<{ key: string; at: number }>({ key: '', at: 0 });
@@ -2540,6 +2610,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     return null;
   };
 
+  const lastVisitMedicines = (lastVisit?.medicines ?? []).map((row) => (lastVisit?.fromPlan ? mapPlanRxItem(row) : mapPrevRxItem(row))).filter(Boolean) as PrescriptionItemForm[];
+
   const removeItem = (index: number) => {
     recordHistory();
     setItems(prev => prev.filter((_, i) => i !== index));
@@ -2678,7 +2750,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
         followUpInstructions: field('followUpInstructions', followUpInstructions),
         dermatology: {
           procedures: field('procedures', procedures.trim() ? [{ type: procedures.trim() }] : []),
-          medicationPlan: field('items', validItems.map(({ regimenState: _screenOnly, ...item }) => item)),
+          medicationPlan: field('items', validItems.map(({ regimenState: _screenOnly, carryId: _carried, ...item }) => item)),
         },
       },
       examination: {
@@ -4846,6 +4918,14 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
             {/* Basic Information */}
             {/* Moved to bottom of builder; removed Doctor's Personal Notes field */}
 
+            <div data-last-visit-slot className="[&:empty]:mb-0">
+              {carried ? (
+                <CarriedForwardNotice source={carried.source} carried={carried.kinds} onUndo={undoLastVisitCarry} />
+              ) : lastVisit && !readOnly && !complaintRecorded && !diagnosisRecorded && !validItems.length ? (
+                <LastVisitOffer visit={lastVisit} medicineCount={lastVisitMedicines.length} onStart={startFromLastVisit} />
+              ) : null}
+            </div>
+
             {/* Clinical Details */}
             <CollapsibleSection title="Vitals" section="clinical">
               <div className="space-y-3">
@@ -4952,7 +5032,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               title="Chief Complaints" 
               section="chief-complaints" 
               highlight={hasChiefComplaints}
-              badge={hasChiefComplaints ? 'Has Data' : ''}
+              badge={stillCarried('chiefComplaints') ? `From ${carriedFrom}` : hasChiefComplaints ? 'Has Data' : ''}
             >
               <div className="opacity-100">
                 <label className="text-xs text-muted-foreground flex items-center gap-1">Chief Complaints{language !== 'EN' && (<Languages className="h-3 w-3 text-info-text" aria-label="Translated on print" />)}</label>
@@ -5001,7 +5081,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               title="Diagnosis" 
               section="diagnosis" 
               highlight={hasDiagnosis}
-              badge={hasDiagnosis ? 'Has Data' : ''}
+              badge={stillCarried('diagnosis') ? `From ${carriedFrom}` : hasDiagnosis ? 'Has Data' : ''}
             >
               <div className="opacity-100">
                 <label className="text-xs text-muted-foreground flex items-center gap-1">Diagnosis{language !== 'EN' && (<Languages className="h-3 w-3 text-info-text" aria-label="Translated on print" />)}</label>
@@ -5027,7 +5107,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               title="Patient History" 
               section="histories" 
               highlight={hasHistories}
-              badge={hasHistories ? "Has Data" : ""}
+              badge={stillCarried('pastHistory', 'medicationHistory', 'menstrualHistory', 'familyDM', 'familyHTN', 'familyThyroid', 'familyOthers') ? `From ${carriedFrom}` : hasHistories ? "Has Data" : ""}
             >
               <div className="opacity-100">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
@@ -5250,7 +5330,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
             </CollapsibleSection>
 
             {/* Treatment */}
-            <CollapsibleSection title="Treatment" section="treatment">
+            <CollapsibleSection title="Treatment" section="treatment" badge={carriedMedicineCount > 0 ? `${carriedMedicineCount} ${carriedMedicineCount === 1 ? 'medicine' : 'medicines'} from ${carriedFrom}` : ''}>
               <div className="space-y-3 overflow-visible">
                 {!learnedPlan ? (
                   <section aria-label="Treatment suggestions" title={learnedPlanDescription} className="flex min-w-0 items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm text-muted-foreground shadow-sm">
