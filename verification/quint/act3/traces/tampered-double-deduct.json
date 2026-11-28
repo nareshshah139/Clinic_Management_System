@@ -1,0 +1,51 @@
+{
+  "name": "tamperedDoubleDeduct",
+  "source": "e2e-partner.json with the last row edited: the completed-sale replay claims to deduct 2 more units",
+  "initialOnHand": 5,
+  "events": [
+    {
+      "call": "commitStock",
+      "expectedVersion": 0,
+      "http": 201,
+      "seen": {
+        "committed": 5,
+        "onHand": 0,
+        "version": 1
+      }
+    },
+    {
+      "call": "matchBatch",
+      "expectedVersion": 1,
+      "available": 4,
+      "http": 201,
+      "seen": {
+        "version": 2
+      }
+    },
+    {
+      "call": "commitStock",
+      "expectedVersion": 1,
+      "http": 409,
+      "seen": {
+        "onHand": 4
+      }
+    },
+    {
+      "call": "commitStock",
+      "expectedVersion": 2,
+      "http": 201,
+      "seen": {
+        "committed": 7,
+        "onHand": 2
+      }
+    },
+    {
+      "call": "commitStock",
+      "expectedVersion": 1,
+      "http": 201,
+      "seen": {
+        "onHand": 0
+      }
+    }
+  ]
+}

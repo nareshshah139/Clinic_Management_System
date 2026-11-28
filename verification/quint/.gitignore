@@ -1,0 +1,4 @@
+node_modules/
+act2/traces/
+act3/recorded.qnt
+_apalache-out/

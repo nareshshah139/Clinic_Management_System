@@ -1,0 +1,22 @@
+{
+  "name": "clinic-quint-demo",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "act1:open": "quint run spec/partnerSale.qnt --backend=typescript --seed=42 --max-samples=10000 --max-steps=12 --hide deducted returned",
+    "act1:verify-open": "quint verify spec/partnerSale.qnt --max-steps=6 --invariant=stockConserved",
+    "act1:decided": "quint run spec/partnerSale.qnt --backend=typescript --step=stepDecided --seed=42 --max-samples=5000 --max-steps=12 --hide deducted returned",
+    "act1:verify-decided": "quint verify spec/partnerSale.qnt --step=stepDecided --max-steps=8",
+    "act1:observe": "quint run spec/partnerSale.qnt --backend=typescript --step=stepDecided --seed=42 --max-samples=5000 --max-steps=12 --observation=cancelledPartially --hide deducted returned",
+    "act2:traces": "rm -rf act2/traces && mkdir -p act2/traces && quint run spec/partnerSale.qnt --backend=typescript --step=stepCoded --seed=7 --max-samples=200 --n-traces=200 --max-steps=12 --mbt --out-itf=act2/traces/t_{seq}.itf.json",
+    "act2:replay": "node act2/replay.mjs",
+    "act2:replay:service": "TARGET=service node act2/replay.mjs",
+    "act3:convert": "node act3/convert.mjs",
+    "act3:check": "quint test act3/recorded.qnt --backend=typescript --match=Test",
+    "check": "sh check.sh"
+  },
+  "devDependencies": {
+    "@informalsystems/quint": "0.35.0"
+  }
+}
