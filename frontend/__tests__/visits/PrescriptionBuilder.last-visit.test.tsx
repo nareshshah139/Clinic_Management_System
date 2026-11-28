@@ -15,7 +15,6 @@ const json = (body: unknown, status = 200) => ({
 const lastVisit = {
   id: 'last',
   entryType: 'visit',
-  status: 'COMPLETED',
   encounterDate: '2026-10-10T05:00:00.000Z',
   complaints: [{ complaint: 'Acne on cheeks for 3 months' }],
   diagnosis: [{ diagnosis: 'Acne vulgaris' }],
@@ -32,14 +31,13 @@ const lastVisit = {
 const olderVisit = {
   id: 'older',
   entryType: 'visit',
-  status: 'COMPLETED',
   encounterDate: '2026-08-01T05:00:00.000Z',
   complaints: [{ complaint: 'Dandruff' }],
   diagnosis: [{ diagnosis: 'Seborrheic dermatitis' }],
   prescriptionItems: [{ drugName: 'Ketoconazole Shampoo', frequency: 'ONCE_DAILY', duration: 14, durationUnit: 'DAYS' }],
 };
-const emptyNewerVisit = { id: 'empty', entryType: 'visit', status: 'IN_PROGRESS', encounterDate: '2026-11-01T05:00:00.000Z', complaints: [], diagnosis: [], prescriptionItems: [] };
-const currentVisit = { id: 'current', entryType: 'visit', status: 'IN_PROGRESS', encounterDate: '2026-11-24T05:00:00.000Z', complaints: [{ complaint: 'Typed today' }], diagnosis: [], prescriptionItems: [] };
+const emptyNewerVisit = { id: 'empty', entryType: 'visit', encounterDate: '2026-11-01T05:00:00.000Z', complaints: [], diagnosis: [], prescriptionItems: [] };
+const currentVisit = { id: 'current', entryType: 'visit', encounterDate: '2026-11-24T05:00:00.000Z', complaints: [{ complaint: 'Typed today' }], diagnosis: [], prescriptionItems: [] };
 
 let history: unknown[] = [];
 
@@ -56,7 +54,7 @@ afterEach(() => {
   localStorage.clear();
 });
 
-const renderNewVisit = () => render(<PrescriptionBuilder patientId="p-last" doctorId="d" />);
+const renderNewVisit = () => render(<PrescriptionBuilder patientId="p-last" visitId={null} doctorId="d" />);
 const field = (name: string) => screen.getByRole('textbox', { name }) as HTMLTextAreaElement | HTMLInputElement;
 const offer = () => screen.findByRole('region', { name: 'Last visit' });
 const settled = () => act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
@@ -81,7 +79,7 @@ it('starts the visit from the last one in one click: complaints, diagnosis, hist
   expect(field('Diagnosis').value).toBe('Acne vulgaris');
   expect(field('Past history').value).toBe('Eczema as a child');
   expect(field('Medication history').value).toBe('Isotretinoin in 2024');
-  expect(field('Others').value).toBe('Father: hypertension');
+  expect((screen.getByPlaceholderText('Others') as HTMLInputElement).value).toBe('Father: hypertension');
   expect((screen.getByRole('checkbox', { name: 'Diabetes' }) as HTMLInputElement).checked).toBe(true);
   expect((screen.getByRole('checkbox', { name: 'Hypertension' }) as HTMLInputElement).checked).toBe(false);
   expect(((await screen.findByDisplayValue('Tab Doxycycline 100mg')) as HTMLInputElement).value).toBe('Tab Doxycycline 100mg');
@@ -107,13 +105,15 @@ it('says what came from the last visit, on the notice and on each section, until
 it('undoes only what is still the carried text and keeps the doctor\'s own edits', async () => {
   renderNewVisit();
   fireEvent.click(within(await offer()).getByRole('button', { name: 'Start from last visit' }));
-  fireEvent.change(field('Diagnosis'), { target: { value: 'Acne vulgaris, grade 3' } });
+  fireEvent.change(field('Medication history'), { target: { value: 'Isotretinoin in 2024, stopped' } });
 
   fireEvent.click(within(await screen.findByRole('region', { name: 'Carried forward' })).getByRole('button', { name: 'Undo' }));
 
   expect(field('Chief complaints').value).toBe('');
+  expect(field('Diagnosis').value).toBe('');
   expect(field('Past history').value).toBe('');
-  expect(field('Diagnosis').value).toBe('Acne vulgaris, grade 3');
+  expect((screen.getByRole('checkbox', { name: 'Diabetes' }) as HTMLInputElement).checked).toBe(false);
+  expect(field('Medication history').value).toBe('Isotretinoin in 2024, stopped');
   expect(screen.queryByDisplayValue('Tab Doxycycline 100mg')).toBeNull();
   expect(screen.queryByRole('region', { name: 'Carried forward' })).toBeNull();
 });
