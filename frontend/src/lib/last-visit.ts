@@ -2,6 +2,8 @@ import { encounterTime } from '@/lib/patient-history';
 
 export type LastVisit = {
   date: number;
+  doctor: string;
+  draft: boolean;
   chiefComplaints: string;
   diagnosis: string;
   pastHistory: string;
@@ -31,11 +33,19 @@ const medicinesOf = (visit: Record<string, any>) => {
   return records(plan.dermatology?.medicationPlan ?? plan.medicationPlan);
 };
 
+const doctorOf = (visit: Record<string, any>) => {
+  const doctor = visit.doctor;
+  const name = typeof doctor === 'object' && doctor ? text(doctor.name) || `${text(doctor.firstName)} ${text(doctor.lastName)}`.trim() : text(doctor);
+  return name && !/^dr\b/i.test(name) ? `Dr. ${name}` : name;
+};
+
 function describeVisit(visit: Record<string, any>): LastVisit {
   const history = (parsed(visit.history) ?? {}) as Record<string, any>;
   const family = history.familyHistory ?? {};
   return {
     date: encounterTime(visit),
+    doctor: doctorOf(visit),
+    draft: typeof visit.status === 'string' && visit.status !== 'COMPLETED',
     chiefComplaints: joined(visit.complaints, 'complaint'),
     diagnosis: joined(visit.diagnosis, 'diagnosis'),
     pastHistory: text(history.pastHistory),

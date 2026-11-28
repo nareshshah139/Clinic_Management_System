@@ -51,7 +51,7 @@ import { prescriptionLabel } from '@/lib/prescription-labels';
 import { pdfFileName } from '@/lib/pdf-file-name';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { findLastVisit, type LastVisit } from '@/lib/last-visit';
-import { CarriedForwardNotice, LastVisitOffer } from './LastVisitCarry';
+import { CarriedForwardNotice, LastVisitOffer, visitSource } from './LastVisitCarry';
 // ID format validation is relaxed; backend accepts string IDs (cuid/uuid/custom)
 
 const rx = rxLayout.prescription;
@@ -106,7 +106,7 @@ function restoreLegacyDosage<T>(dosage: T): T | '' {
 type LastPrescription = { visitId: string; date: number; items: PrescriptionItemForm[] };
 
 type CarrySlot = { id: string; kind: string; from: string | boolean; current: string | boolean; set: (next: any) => void; cleared: string | boolean };
-type CarriedFromLastVisit = { date: number; values: Record<string, string | boolean>; kinds: string[]; rows: Record<string, string> };
+type CarriedFromLastVisit = { source: string; badge: string; values: Record<string, string | boolean>; kinds: string[]; rows: Record<string, string> };
 
 const rxItemKey = (m: { drugName: string; frequency: string; dosePattern?: string; timing?: string; duration: number | ''; durationUnit: string }) =>
   `${m.drugName.toLowerCase()}|${m.frequency}|${m.dosePattern || ''}|${m.timing || ''}|${m.duration}|${m.durationUnit}`;
@@ -2026,7 +2026,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const carriedDiagnosisStays = stillCarried('diagnosis');
   const carriedRowStays = (it: PrescriptionItemForm) => Boolean(it.carryId && carried?.rows[it.carryId] === rowSnapshot(it));
   const carriedMedicineCount = carried ? validItems.filter(carriedRowStays).length : 0;
-  const carriedFrom = carried ? `${displayClinicDate(new Date(carried.date))} visit` : '';
+  const carriedFrom = carried?.badge ?? '';
 
   const startFromLastVisit = () => {
     if (!lastVisit) return;
@@ -2043,7 +2043,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     const rows = Object.fromEntries(inserted.map((it) => [it.carryId as string, rowSnapshot(it)]));
     const kinds = Array.from(new Set(carrySlots.filter((slot) => slot.id in values).map((slot) => slot.kind)));
     if (inserted.length) kinds.push(`${inserted.length} ${inserted.length === 1 ? 'medicine' : 'medicines'}`);
-    setCarried({ date: lastVisit.date, values, kinds, rows });
+    setCarried({ source: visitSource(lastVisit), badge: `${displayClinicDate(new Date(lastVisit.date))} ${lastVisit.draft ? 'draft visit' : 'visit'}`, values, kinds, rows });
   };
 
   const undoLastVisitCarry = () => {
@@ -4914,7 +4914,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
 
             <div data-last-visit-slot className="[&:empty]:mb-0">
               {carried ? (
-                <CarriedForwardNotice date={carried.date} carried={carried.kinds} onUndo={undoLastVisitCarry} />
+                <CarriedForwardNotice source={carried.source} carried={carried.kinds} onUndo={undoLastVisitCarry} />
               ) : lastVisit && !readOnly && !complaintRecorded && !diagnosisRecorded && !validItems.length ? (
                 <LastVisitOffer visit={lastVisit} medicineCount={lastVisitMedicines.length} onStart={startFromLastVisit} />
               ) : null}
