@@ -1,3 +1,4 @@
+import { StrictMode } from 'react';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import MedicalVisitForm from '@/components/visits/MedicalVisitForm';
 import { apiClient } from '@/lib/api';
@@ -67,8 +68,9 @@ const dialog = () => screen.findByRole('alertdialog');
 const noDialog = () => expect(screen.queryByRole('alertdialog')).toBeNull();
 const instructionsFor = (drug: string) => screen.getByRole('textbox', { name: `Instructions for ${drug}` });
 
-async function openVisitForm() {
-  const view = render(<MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v" userRole="ADMIN" />);
+async function openVisitForm(strict = false) {
+  const form = <MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v" userRole="ADMIN" />;
+  const view = render(strict ? <StrictMode>{form}</StrictMode> : form);
   fireEvent.mouseDown(screen.getByRole('tab', { name: 'Consultation' }), { button: 0, ctrlKey: false });
   await screen.findByRole('textbox', { name: 'Diagnosis' });
   return view;
@@ -361,12 +363,12 @@ describe('a completed visit stays as the doctor left it', () => {
 });
 
 describe('resuming a saved draft', () => {
-  const reopenAfterSavingDraft = async (view: { unmount: () => void }, saved: Record<string, unknown>) => {
+  const reopenAfterSavingDraft = async (view: { unmount: () => void }, saved: Record<string, unknown>, strict = false) => {
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save Draft' })); });
     await waitFor(() => expect(apiClient.updateVisit).toHaveBeenCalled());
     view.unmount();
     visit = { ...openVisit, version: 2, history: lastVisit.history, ...saved };
-    await openVisitForm();
+    await openVisitForm(strict);
     await waitFor(() => expect(completeButton()).toBeEnabled());
   };
   const savedComplaints = [{ complaint: 'Acne on cheeks for 3 months' }];
@@ -382,6 +384,16 @@ describe('resuming a saved draft', () => {
       'Chief complaints', 'Diagnosis', 'Past history', 'Medication history', 'Family history', '2 medicines',
     ]);
     expect(apiClient.completeVisit).not.toHaveBeenCalled();
+  });
+
+  it('still asks when the visit is resumed under React strict mode, which runs every effect twice as the development server does', async () => {
+    const view = await carryLastVisit();
+    await reopenAfterSavingDraft(view, { complaints: savedComplaints, diagnosis: [{ diagnosis: 'Acne vulgaris' }] }, true);
+    await pressComplete();
+
+    expect(within(await dialog()).getAllByRole('listitem').map((item) => item.textContent)).toEqual([
+      'Chief complaints', 'Diagnosis', 'Past history', 'Medication history', 'Family history', '2 medicines',
+    ]);
   });
 
   it('leaves out what the doctor edited before saving', async () => {
