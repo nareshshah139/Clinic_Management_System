@@ -2020,6 +2020,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     { id: 'familyOthers', kind: 'family history', from: lastVisit?.familyHistory.others ?? '', current: familyHistoryOthers, set: setFamilyHistoryOthers, cleared: '' },
   ];
   const stillCarried = (...ids: string[]) => ids.some((id) => carried?.values[id] !== undefined && carried.values[id] === carrySlots.find((slot) => slot.id === id)?.current);
+  const carriedDiagnosisStays = stillCarried('diagnosis');
   const carriedMedicineCount = carried ? validItems.filter((it) => carried.medicineKeys.includes(rxItemKey(it))).length : 0;
   const carriedFrom = carried ? `${displayClinicDate(new Date(carried.date))} visit` : '';
 
@@ -2347,8 +2348,9 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   useEffect(() => {
     if (!learnedPlan || learnedPlanSuppressed || learnedPlanCurrent) return;
     if (!treatmentIsEmpty && !treatmentMachineOwned) return;
+    if (carriedDiagnosisStays) return;
     applyLearnedPlan(learnedPlan);
-  }, [learnedPlan, learnedPlanSuppressed, learnedPlanCurrent, treatmentIsEmpty, treatmentMachineOwned, applyLearnedPlan]);
+  }, [learnedPlan, learnedPlanSuppressed, learnedPlanCurrent, treatmentIsEmpty, treatmentMachineOwned, carriedDiagnosisStays, applyLearnedPlan]);
 
   // Throttle consecutive adds of the same drug (guards double/triple add)
   const lastDrugAddRef = useRef<{ key: string; at: number }>({ key: '', at: 0 });
