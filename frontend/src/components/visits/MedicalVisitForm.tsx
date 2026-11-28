@@ -1771,10 +1771,16 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
   const jumpToSection = (id: string) => {
     const target = document.getElementById(`consult-${id}`);
     if (!target) return;
+    const field = target.querySelector<HTMLElement>('[data-carried] input, [data-carried] textarea') ?? target.querySelector<HTMLElement>('input, textarea, button, [tabindex]');
     target.scrollIntoView({ block: 'start' });
-    const covered = (document.querySelector('[data-visit-bar]')?.getBoundingClientRect().bottom ?? 0) - target.getBoundingClientRect().top;
-    if (covered > 0) scrollParent(target).scrollBy({ top: -(covered + 8) });
-    (target.querySelector<HTMLElement>('[data-carried] input, [data-carried] textarea') ?? target.querySelector<HTMLElement>('input, textarea, button, [tabindex]'))?.focus({ preventScroll: true });
+    const pane = scrollParent(target);
+    const top = (document.querySelector('[data-visit-bar]')?.getBoundingClientRect().bottom ?? 0) + 8;
+    const bottom = pane === document.documentElement ? window.innerHeight : pane.getBoundingClientRect().bottom;
+    const cardTop = target.getBoundingClientRect().top;
+    if (cardTop < top) pane.scrollBy({ top: cardTop - top });
+    const fieldBox = field?.getBoundingClientRect();
+    if (fieldBox?.height && (fieldBox.bottom > bottom || fieldBox.top < top)) pane.scrollBy({ top: fieldBox.top - top });
+    field?.focus({ preventScroll: true });
   };
   const requiredSteps = steps.filter((step) => step.required);
   const optionalSteps = steps.filter((step) => !step.required);
