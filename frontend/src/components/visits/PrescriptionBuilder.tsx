@@ -51,7 +51,7 @@ import { prescriptionLabel } from '@/lib/prescription-labels';
 import { pdfFileName } from '@/lib/pdf-file-name';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { findLastVisit, type LastVisit } from '@/lib/last-visit';
-import { CarriedForwardNotice, LastVisitOffer, visitSource } from './LastVisitCarry';
+import { CarriedForwardNotice, LastVisitOffer, plural, visitSource, type PendingCarry } from './LastVisitCarry';
 // ID format validation is relaxed; backend accepts string IDs (cuid/uuid/custom)
 
 const rx = rxLayout.prescription;
@@ -105,7 +105,7 @@ function restoreLegacyDosage<T>(dosage: T): T | '' {
 
 type LastPrescription = { visitId: string; date: number; items: PrescriptionItemForm[] };
 
-type CarrySlot = { id: string; kind: string; from: string | boolean; current: string | boolean; set: (next: any) => void; cleared: string | boolean };
+type CarrySlot = { id: string; kind: string; section: string; from: string | boolean; current: string | boolean; set: (next: any) => void; cleared: string | boolean };
 type CarriedFromLastVisit = { source: string; badge: string; values: Record<string, string | boolean>; kinds: string[]; rows: Record<string, string> };
 
 const rxItemKey = (m: { drugName: string; frequency: string; dosePattern?: string; timing?: string; duration: number | ''; durationUnit: string }) =>
@@ -214,6 +214,7 @@ interface Props {
   holdVisitSave?: <T>(write: () => Promise<T>) => Promise<T | undefined>;
   readOnly?: boolean;
   syncPrescriptionRef?: React.Ref<(savedVisitId: string) => Promise<void>>;
+  pendingCarryRef?: React.Ref<() => PendingCarry | null>;
   onChangeChiefComplaints?: (value: string) => void;
   onChangeContentOffset?: (x: number, y: number) => void;
   designAids?: {
@@ -349,7 +350,7 @@ function printablePagesHtml(container: Element) {
  * and the disclaimer above the signature, even when the signature is hidden.
  * Switching to In-person MUST remove both from regenerated preview and exports.
  */
-function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, visitId, doctorId, doctorName, userRole = 'DOCTOR', onCreated, onClinicalDataChange, getClinicalSavePatch, onVisitSaved, onClinicalConflict, shouldPersistDraft, initialVisitSnapshot, onBeforeExport, holdVisitSave, readOnly = false, syncPrescriptionRef, onPreview, reviewDate, printBgUrl, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, contentOffsetXPx, contentOffsetYPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason, includeSections: includeSectionsProp, onChangeIncludeSections, ensureVisitId, onChangeChiefComplaints, onChangeContentOffset, designAids, paperPreset, grayscale, bleedSafe, frames, onChangeFrames, patient, onSummaryChange, vitalsExtra, investigationResults, toolbarTarget, applyExtraVitals }: Props) {
+function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, visitId, doctorId, doctorName, userRole = 'DOCTOR', onCreated, onClinicalDataChange, getClinicalSavePatch, onVisitSaved, onClinicalConflict, shouldPersistDraft, initialVisitSnapshot, onBeforeExport, holdVisitSave, readOnly = false, syncPrescriptionRef, pendingCarryRef, onPreview, reviewDate, printBgUrl, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, contentOffsetXPx, contentOffsetYPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason, includeSections: includeSectionsProp, onChangeIncludeSections, ensureVisitId, onChangeChiefComplaints, onChangeContentOffset, designAids, paperPreset, grayscale, bleedSafe, frames, onChangeFrames, patient, onSummaryChange, vitalsExtra, investigationResults, toolbarTarget, applyExtraVitals }: Props) {
   const visitVersionRef = useRef<number | undefined>(undefined);
   const initialVisitSnapshotRef = useRef(initialVisitSnapshot);
   const dirtyClinicalFields = useRef(new Set<string>());
@@ -2016,21 +2017,27 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   };
 
   const carrySlots: CarrySlot[] = [
-    { id: 'chiefComplaints', kind: 'chief complaints', from: lastVisit?.chiefComplaints ?? '', current: chiefComplaints, set: setChiefComplaints, cleared: '' },
-    { id: 'diagnosis', kind: 'diagnosis', from: lastVisit?.diagnosis ?? '', current: diagnosis, set: setDiagnosis, cleared: '' },
-    { id: 'pastHistory', kind: 'past history', from: lastVisit?.pastHistory ?? '', current: pastHistory, set: setPastHistory, cleared: '' },
-    { id: 'medicationHistory', kind: 'medication history', from: lastVisit?.medicationHistory ?? '', current: medicationHistory, set: setMedicationHistory, cleared: '' },
-    { id: 'menstrualHistory', kind: 'menstrual history', from: lastVisit?.menstrualHistory ?? '', current: menstrualHistory, set: setMenstrualHistory, cleared: '' },
-    { id: 'familyDM', kind: 'family history', from: lastVisit?.familyHistory.dm ?? false, current: familyHistoryDM, set: setFamilyHistoryDM, cleared: false },
-    { id: 'familyHTN', kind: 'family history', from: lastVisit?.familyHistory.htn ?? false, current: familyHistoryHTN, set: setFamilyHistoryHTN, cleared: false },
-    { id: 'familyThyroid', kind: 'family history', from: lastVisit?.familyHistory.thyroid ?? false, current: familyHistoryThyroid, set: setFamilyHistoryThyroid, cleared: false },
-    { id: 'familyOthers', kind: 'family history', from: lastVisit?.familyHistory.others ?? '', current: familyHistoryOthers, set: setFamilyHistoryOthers, cleared: '' },
+    { id: 'chiefComplaints', kind: 'chief complaints', section: 'chief-complaints', from: lastVisit?.chiefComplaints ?? '', current: chiefComplaints, set: setChiefComplaints, cleared: '' },
+    { id: 'diagnosis', kind: 'diagnosis', section: 'diagnosis', from: lastVisit?.diagnosis ?? '', current: diagnosis, set: setDiagnosis, cleared: '' },
+    { id: 'pastHistory', kind: 'past history', section: 'histories', from: lastVisit?.pastHistory ?? '', current: pastHistory, set: setPastHistory, cleared: '' },
+    { id: 'medicationHistory', kind: 'medication history', section: 'histories', from: lastVisit?.medicationHistory ?? '', current: medicationHistory, set: setMedicationHistory, cleared: '' },
+    { id: 'menstrualHistory', kind: 'menstrual history', section: 'histories', from: lastVisit?.menstrualHistory ?? '', current: menstrualHistory, set: setMenstrualHistory, cleared: '' },
+    { id: 'familyDM', kind: 'family history', section: 'histories', from: lastVisit?.familyHistory.dm ?? false, current: familyHistoryDM, set: setFamilyHistoryDM, cleared: false },
+    { id: 'familyHTN', kind: 'family history', section: 'histories', from: lastVisit?.familyHistory.htn ?? false, current: familyHistoryHTN, set: setFamilyHistoryHTN, cleared: false },
+    { id: 'familyThyroid', kind: 'family history', section: 'histories', from: lastVisit?.familyHistory.thyroid ?? false, current: familyHistoryThyroid, set: setFamilyHistoryThyroid, cleared: false },
+    { id: 'familyOthers', kind: 'family history', section: 'histories', from: lastVisit?.familyHistory.others ?? '', current: familyHistoryOthers, set: setFamilyHistoryOthers, cleared: '' },
   ];
   const stillCarried = (...ids: string[]) => ids.some((id) => carried?.values[id] !== undefined && carried.values[id] === carrySlots.find((slot) => slot.id === id)?.current);
   const carriedDiagnosisStays = stillCarried('diagnosis');
   const carriedRowStays = (it: PrescriptionItemForm) => Boolean(it.carryId && carried?.rows[it.carryId] === rowSnapshot(it));
   const carriedMedicineCount = carried ? validItems.filter(carriedRowStays).length : 0;
   const carriedFrom = carried?.badge ?? '';
+  const pendingItems = [...new Map(carrySlots.filter((slot) => stillCarried(slot.id)).map((slot) => [slot.kind, slot.section]))]
+    .map(([kind, section]) => ({ section, label: kind.charAt(0).toUpperCase() + kind.slice(1) }));
+  if (carriedMedicineCount) pendingItems.push({ section: 'treatment', label: plural(carriedMedicineCount, 'medicine') });
+  const pendingCarry: PendingCarry | null = carried && pendingItems.length ? { source: carried.source, items: pendingItems } : null;
+  useImperativeHandle(pendingCarryRef, () => () => pendingCarry);
+  useLayoutEffect(() => { if (readOnly) setCarried(null); }, [readOnly]);
 
   const startFromLastVisit = () => {
     if (!lastVisit) return;

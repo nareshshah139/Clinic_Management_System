@@ -279,13 +279,15 @@ describe('completing a visit with nothing left to review', () => {
     noDialog();
   });
 
-  it('saves changes to an already completed visit without asking', async () => {
-    visit = { ...openVisit, status: 'COMPLETED', complaints: [{ complaint: 'Itchy rash' }], plan: { dermatology: { medicationPlan: [{ drugName: 'ZYTEE GEL', frequency: 'ONCE_DAILY', duration: 7, durationUnit: 'DAYS' }] } } };
+  it('saves changes to a completed visit without asking, even when the last visit was carried in while editing it', async () => {
+    visit = { ...openVisit, status: 'COMPLETED' };
     (apiClient.updateVisit as jest.Mock).mockResolvedValue({ id: 'v', version: 2, status: 'COMPLETED' });
     await openVisitForm();
     fireEvent.click(await screen.findByRole('button', { name: 'Edit visit' }));
-    fireEvent.change(field('Diagnosis'), { target: { value: 'Contact dermatitis' } });
-    await act(async () => { fireEvent.click(await screen.findByRole('button', { name: 'Save changes' })); });
+    fireEvent.click(within(await screen.findByRole('region', { name: 'Last visit' })).getByRole('button', { name: 'Start from last visit' }));
+    await screen.findByRole('region', { name: 'Carried forward' });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save changes' })).toBeEnabled());
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save changes' })); });
 
     noDialog();
     await waitFor(() => expect(apiClient.completeVisit).toHaveBeenCalledTimes(1));

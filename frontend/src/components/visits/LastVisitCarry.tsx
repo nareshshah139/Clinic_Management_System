@@ -1,9 +1,13 @@
 'use client';
+import { useCallback, useRef, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { displayClinicDate } from '@/lib/date-display';
 import type { LastVisit } from '@/lib/last-visit';
 
-const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? '' : 's'}`;
+export const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? '' : 's'}`;
+
+export type PendingCarry = { source: string; items: { section: string; label: string }[] };
 
 export function LastVisitOffer({ visit, medicineCount, onStart }: { visit: LastVisit; medicineCount: number; onStart: () => void }) {
   const summary = [
@@ -36,4 +40,59 @@ export function CarriedForwardNotice({ source, carried, onUndo }: { source: stri
       <Button type="button" size="sm" variant="outline" className="shrink-0" onClick={onUndo}>Undo</Button>
     </section>
   );
+}
+
+export function useUnreviewedCarryPrompt(goToSection: (section: string) => void): [(pending: PendingCarry) => Promise<boolean>, ReactNode] {
+  const [pending, setPending] = useState<PendingCarry | null>(null);
+  const [open, setOpen] = useState(false);
+  const resolver = useRef<((complete: boolean) => void) | null>(null);
+  const review = useRef<string | null>(null);
+  const opener = useRef<HTMLElement | null>(null);
+
+  const ask = useCallback((next: PendingCarry) => {
+    resolver.current?.(false);
+    review.current = null;
+    opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setPending(next);
+    setOpen(true);
+    return new Promise<boolean>((resolve) => { resolver.current = resolve; });
+  }, []);
+
+  const settle = (complete: boolean, section: string | null = null) => {
+    review.current = section;
+    resolver.current?.(complete);
+    resolver.current = null;
+    setOpen(false);
+  };
+
+  const dialog = (
+    <Dialog open={open} onOpenChange={(next: boolean) => { if (!next) settle(false); }}>
+      <DialogContent
+        role="alertdialog"
+        showCloseButton={false}
+        className="sm:max-w-md"
+        onCloseAutoFocus={(event: Event) => {
+          event.preventDefault();
+          const section = review.current;
+          review.current = null;
+          if (section) goToSection(section);
+          else if (opener.current?.isConnected) opener.current.focus();
+        }}
+      >
+        <DialogHeader>
+          <DialogTitle>{"Some items from the last visit haven't been reviewed"}</DialogTitle>
+          <DialogDescription>{`Carried forward from the ${pending?.source ?? ''} and not edited since:`}</DialogDescription>
+        </DialogHeader>
+        <ul aria-label="Items not reviewed" className="list-disc space-y-1 pl-5 text-sm">
+          {pending?.items.map((item) => <li key={item.label}>{item.label}</li>)}
+        </ul>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => settle(false, pending?.items[0]?.section ?? null)}>Review items</Button>
+          <Button onClick={() => settle(true)}>Complete visit</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+
+  return [ask, dialog];
 }

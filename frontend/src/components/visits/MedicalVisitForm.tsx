@@ -4,6 +4,7 @@ import { displayClinicTime } from '@/lib/date-display';
 import { LoadingSkeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from 'react';
+import { flushSync } from 'react-dom';
 import dynamic from 'next/dynamic';
 import { PRESCRIPTION_TOP_MARGIN_PX, PRESCRIPTION_BOTTOM_MARGIN_PX, printBackgroundKey, savedPrintBackground } from '@/lib/prescription-letterhead';
 import { useDoctorLetterhead } from '@/hooks/useDoctorLetterhead';
@@ -57,6 +58,7 @@ import { usePatientHistory, loadPatientHistory as fetchPatientHistory, visitEntr
 import { encounterTime } from '@/lib/patient-history';
 import PatientHistoryVisitCard from '@/components/visits/PatientHistoryVisitCard';
 import PrescriptionBuilder, { type ConsultationSummary } from '@/components/visits/PrescriptionBuilder';
+import { useUnreviewedCarryPrompt, type PendingCarry } from '@/components/visits/LastVisitCarry';
 import type { ExtraVitalsPatch } from '@/lib/voice-fill-visit';
 import { COMPLETION_RULE, canCompleteVisit, completionSteps } from '@/lib/visit-completion';
 import type VisitPhotosPanel from '@/components/visits/VisitPhotos';
@@ -918,6 +920,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
   const latestPayload = useRef(buildPayload);
   latestPayload.current = buildPayload;
   const syncPrescriptionRef = useRef<(savedVisitId: string) => Promise<void>>(null);
+  const pendingCarryRef = useRef<() => PendingCarry | null>(null);
   const manualSaveInFlight = useRef(false);
   const autoSaveRunner = useRef<() => Promise<void>>(async () => {});
   const latestDraftWriter = useRef(persistDraftToStorage);
@@ -1437,6 +1440,11 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
     }
   };
 
+  const [askCarryReview, carryReviewDialog] = useUnreviewedCarryPrompt((section) => {
+    flushSync(() => setActiveTab('consultation'));
+    jumpToSection(section);
+  });
+
   /**
    * @cc [owner:nareshshah139,label:product] completion-saves-prescription
    * Completing a visit MUST first save prescription items that differ from the saved
@@ -1472,6 +1480,8 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
         toast({ variant: 'warning', title: 'Not ready to complete', description: COMPLETION_RULE });
         return;
       }
+      const unreviewed = editMode === 'open' ? pendingCarryRef.current?.() : null;
+      if (unreviewed && !await askCarryReview(unreviewed)) return;
     }
     return holdVisitSave(async () => {
       try {
@@ -1886,6 +1896,8 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
         </div>
       )}
 
+      {carryReviewDialog}
+
       <Dialog open={shortcutsOpen} onOpenChange={setShortcutsOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -2078,6 +2090,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, doctorName, userRole = 'D
                       holdVisitSave={holdVisitSave}
                       readOnly={!canEdit}
                       syncPrescriptionRef={syncPrescriptionRef}
+                      pendingCarryRef={pendingCarryRef}
                       onBeforeExport={async () => {
                         const savedId = await save(false, true);
                         if (!savedId) {
