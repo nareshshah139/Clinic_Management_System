@@ -8,7 +8,7 @@ export type LastVisit = {
   medicationHistory: string;
   menstrualHistory: string;
   familyHistory: { dm: boolean; htn: boolean; thyroid: boolean; others: string };
-  prescriptionItems: unknown[];
+  medicines: unknown[];
 };
 
 const parsed = (value: unknown): unknown => {
@@ -19,6 +19,16 @@ const text = (value: unknown) => (typeof value === 'string' ? value.trim() : '')
 const joined = (rows: unknown, key: string) => {
   const list = parsed(rows);
   return Array.isArray(list) ? list.map((row) => text(row?.[key])).filter(Boolean).join(', ') : '';
+};
+const records = (value: unknown) => {
+  const list = parsed(value);
+  return Array.isArray(list) ? list.filter((row) => row && typeof row === 'object') : [];
+};
+const medicinesOf = (visit: Record<string, any>) => {
+  const issued = records(visit.prescriptionItems);
+  if (issued.length) return issued;
+  const plan = (parsed(visit.plan) ?? {}) as Record<string, any>;
+  return records(plan.dermatology?.medicationPlan ?? plan.medicationPlan);
 };
 
 function describeVisit(visit: Record<string, any>): LastVisit {
@@ -32,7 +42,7 @@ function describeVisit(visit: Record<string, any>): LastVisit {
     medicationHistory: text(history.medicationHistory),
     menstrualHistory: text(history.menstrualHistory),
     familyHistory: { dm: family.dm === true, htn: family.htn === true, thyroid: family.thyroid === true, others: text(family.others) },
-    prescriptionItems: Array.isArray(visit.prescriptionItems) ? visit.prescriptionItems : [],
+    medicines: medicinesOf(visit),
   };
 }
 
@@ -40,7 +50,7 @@ const hasContent = (visit: LastVisit) =>
   Boolean(
     visit.chiefComplaints || visit.diagnosis || visit.pastHistory || visit.medicationHistory || visit.menstrualHistory ||
       visit.familyHistory.dm || visit.familyHistory.htn || visit.familyHistory.thyroid || visit.familyHistory.others ||
-      visit.prescriptionItems.length,
+      visit.medicines.length,
   );
 
 export function findLastVisit(visits: Array<Record<string, any>>, currentVisitId?: string | null): LastVisit | null {

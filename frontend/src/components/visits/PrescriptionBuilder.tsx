@@ -2007,7 +2007,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     });
   };
 
-  const lastVisitMedicines = (lastVisit?.prescriptionItems ?? []).map(mapPrevRxItem).filter(Boolean) as PrescriptionItemForm[];
+  const lastVisitMedicines = (lastVisit?.medicines ?? []).map(mapPrevRxItem).filter(Boolean) as PrescriptionItemForm[];
   const carrySlots: CarrySlot[] = [
     { id: 'chiefComplaints', kind: 'chief complaints', from: lastVisit?.chiefComplaints ?? '', current: chiefComplaints, set: setChiefComplaints, cleared: '' },
     { id: 'diagnosis', kind: 'diagnosis', from: lastVisit?.diagnosis ?? '', current: diagnosis, set: setDiagnosis, cleared: '' },
