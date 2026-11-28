@@ -92,13 +92,16 @@ const completeAnyway = async () => {
   await screen.findByText('Completed. Read only.');
 };
 
-const editEveryCarriedItem = () => {
+const editCarriedText = () => {
   fireEvent.change(field('Chief complaints'), { target: { value: 'Acne on cheeks, worse this month' } });
   fireEvent.change(field('Diagnosis'), { target: { value: 'Acne vulgaris, grade 3' } });
   fireEvent.change(field('Past history'), { target: { value: 'Eczema as a child, resolved' } });
   fireEvent.change(field('Medication history'), { target: { value: 'Isotretinoin in 2024, stopped' } });
   fireEvent.click(screen.getByRole('checkbox', { name: 'Diabetes' }));
   fireEvent.change(screen.getByPlaceholderText('Others'), { target: { value: 'Father: hypertension, on treatment' } });
+};
+const editEveryCarriedItem = () => {
+  editCarriedText();
   fireEvent.change(instructionsFor('Tab Doxycycline 100mg'), { target: { value: 'Take with water' } });
   fireEvent.change(instructionsFor('Adapalene 0.1% Gel'), { target: { value: 'Apply on forehead only' } });
 };
@@ -418,5 +421,100 @@ describe('resuming a saved draft', () => {
 
     expect(screen.queryByRole('region', { name: 'Carried forward' })).toBeNull();
     expect(screen.queryAllByText(/from 10 Oct 2026 visit/i)).toEqual([]);
+  });
+});
+
+describe('a learned plan never fills a completed visit', () => {
+  const acneNoMedicines = { ...lastVisit, prescriptionItems: [] };
+  const olderAcneWithMedicines = {
+    ...olderAcneVisit,
+    prescriptionItems: [
+      { drugName: 'Doxycycline 100mg Capsule', frequency: 'TWICE_DAILY', duration: 30, durationUnit: 'DAYS' },
+      { drugName: 'Adapalene 0.1% Gel', frequency: 'ONCE_DAILY', duration: 30, durationUnit: 'DAYS' },
+    ],
+  };
+  const completedProcedureVisit = { ...openVisit, status: 'COMPLETED', version: 3, complaints: [{ complaint: 'Acne scars' }], diagnosis: [{ diagnosis: 'Acne vulgaris' }], plan: { dermatology: { procedurePlanned: 'Chemical peel next visit' } } };
+  const planNames = () => Array.from(document.querySelectorAll<HTMLInputElement>('#consult-treatment input[id^="rx-row-"][id$="-drug"]')).map((input) => input.value).filter(Boolean);
+
+  it('leaves the locked treatment empty after completing a copied acne visit that had no medicines, with a procedure plan', async () => {
+    history = [acneNoMedicines, olderAcneWithMedicines];
+    await openVisitForm();
+    fireEvent.click(within(await screen.findByRole('region', { name: 'Last visit' })).getByRole('button', { name: 'Start from last visit' }));
+    await screen.findByRole('region', { name: 'Carried forward' });
+    fireEvent.change(field('Procedures planned'), { target: { value: 'Chemical peel next visit' } });
+    await waitFor(() => expect(completeButton()).toBeEnabled());
+    await completeAnyway();
+    await settled();
+
+    expect(planNames()).toEqual([]);
+    expect(apiClient.createPrescription).not.toHaveBeenCalled();
+  });
+
+  it('leaves the table empty when a completed visit is reloaded, and saves no medicines when it is then amended', async () => {
+    history = [olderAcneWithMedicines];
+    visit = completedProcedureVisit;
+    (apiClient.updateVisit as jest.Mock).mockResolvedValue({ id: 'v', version: 4, status: 'COMPLETED' });
+    await openVisitForm();
+    await settled();
+    expect(planNames()).toEqual([]);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit visit' }));
+    await settled();
+    expect(planNames()).toEqual([]);
+    await act(async () => { fireEvent.click(await screen.findByRole('button', { name: 'Save changes' })); });
+    await waitFor(() => expect(apiClient.completeVisit).toHaveBeenCalledTimes(1));
+    expect(apiClient.createPrescription).not.toHaveBeenCalled();
+  });
+});
+
+describe('Review items', () => {
+  it('leaves the card under no part of the sticky visit bar, however tall the bar is', async () => {
+    let cardTop = 700;
+    const barBottom = 420;
+    Element.prototype.scrollIntoView = jest.fn(() => { cardTop = 216; });
+    Element.prototype.scrollBy = jest.fn((options?: ScrollToOptions | number) => { cardTop -= typeof options === 'object' ? (options.top ?? 0) : 0; }) as typeof Element.prototype.scrollBy;
+    const rect = (top: number, height: number) => ({ top, bottom: top + height, height, left: 0, right: 0, width: 0, x: 0, y: top, toJSON: () => ({}) }) as DOMRect;
+    const original = Element.prototype.getBoundingClientRect;
+    Element.prototype.getBoundingClientRect = function (this: Element) {
+      if (this.hasAttribute('data-visit-bar')) return rect(0, barBottom);
+      if (this.id === 'consult-chief-complaints') return rect(cardTop, 200);
+      return original.call(this);
+    };
+    try {
+      await carryLastVisit();
+      await pressComplete();
+      await act(async () => { fireEvent.click(within(await dialog()).getByRole('button', { name: 'Review items' })); });
+      await waitFor(() => expect(field('Chief complaints')).toHaveFocus());
+
+      expect(cardTop).toBeGreaterThanOrEqual(barBottom);
+    } finally {
+      Element.prototype.getBoundingClientRect = original;
+    }
+  });
+
+  it('focuses the first carried medicine, not a button in the Treatment card, when only medicines are left', async () => {
+    history = [lastVisit, olderAcneVisit];
+    await carryLastVisit();
+    editCarriedText();
+    await pressComplete();
+    expect(within(await dialog()).getAllByRole('listitem').map((item) => item.textContent)).toEqual(['2 medicines']);
+    await act(async () => { fireEvent.click(within(await dialog()).getByRole('button', { name: 'Review items' })); });
+
+    await waitFor(() => expect(screen.getByDisplayValue('Tab Doxycycline 100mg')).toHaveFocus());
+  });
+
+  it('keeps the first opener when Ctrl+Shift+S is pressed again while the dialog is open', async () => {
+    await carryLastVisit();
+    completeButton().focus();
+    await pressComplete();
+    const confirm = await dialog();
+    await act(async () => { fireEvent.keyDown(document, { key: 's', ctrlKey: true, shiftKey: true }); });
+    expect(screen.getAllByRole('alertdialog')).toHaveLength(1);
+
+    await act(async () => { fireEvent.keyDown(confirm, { key: 'Escape' }); });
+
+    await waitFor(() => noDialog());
+    await waitFor(() => expect(completeButton()).toHaveFocus());
+    expect(apiClient.completeVisit).not.toHaveBeenCalled();
   });
 });
